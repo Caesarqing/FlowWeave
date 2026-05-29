@@ -1,0 +1,10 @@
+node_modules/
+
+dist/
+out/
+release/
+.flowweave/
+
+.DS_Store
+*.log
+artifacts-flowweave-*.png

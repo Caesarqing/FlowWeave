@@ -1,0 +1,67 @@
+{
+  "name": "flowweave",
+  "version": "0.1.0",
+  "description": "Visual bridge for Codex-style programming agents.",
+  "author": "FlowWeave",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:electron": "electron-vite dev",
+    "build": "tsc && vite build",
+    "build:electron": "npm run typecheck:node && electron-vite build",
+    "dist:dir": "npm run build:electron && electron-builder --dir",
+    "preview": "vite preview --host 127.0.0.1",
+    "tool:run": "tsx src/main/cli/agent-run.ts",
+    "agent:run": "tsx src/main/cli/agent-run.ts",
+    "scan:project": "tsx src/main/cli/scan-project.ts",
+    "test": "vitest run",
+    "typecheck:node": "tsc -p tsconfig.node.json --noEmit"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "@xyflow/react": "^12.9.3",
+    "fast-glob": "^3.3.3",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "three": "^0.184.0",
+    "vite": "^7.3.0",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.1",
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "tsx": "^4.22.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.6"
+  },
+  "overrides": {
+    "dompurify": "^3.4.0"
+  },
+  "build": {
+    "appId": "com.flowweave.app",
+    "productName": "FlowWeave",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}
