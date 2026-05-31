@@ -1,0 +1,264 @@
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
+import {
+  buildSequenceDiagramPrompt,
+  generateSequenceDiagrams,
+  parseSequenceDiagramBundleJson,
+  reviseSequenceDiagram
+} from "../../src/main/services/sequence-diagram.service";
+import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
+import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
+import type { CodeflowProject, SequenceDiagramBundle } from "../../src/types";
+
+describe("sequence-diagram.service", () => {
+  it("builds a prompt for architectural and detailed-design diagrams", async () => {
+    const root = await createFixtureFiles();
+    const facts = await buildProjectStructureFacts(projectFixture(root));
+    const prompt = buildSequenceDiagramPrompt(facts);
+
+    expect(prompt).toContain("Architectural Sequence Diagram");
+    expect(prompt).toContain("Detailed Design Sequence Diagram");
+    expect(prompt).toContain("ProjectStructureFacts");
+    expect(prompt).toContain("src/api/order.controller.ts");
+  });
+
+  it("parses sequence diagram JSON and filters invalid messages", async () => {
+    const root = await createFixtureFiles();
+    const project = projectFixture(root);
+    const facts = await buildProjectStructureFacts(project);
+    const bundle = parseSequenceDiagramBundleJson(
+      JSON.stringify({
+        architectural: diagramJson("architectural", [
+          { id: "request-payment", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "POST /orders" },
+          { id: "invalid", sequence: 2, from: "frontend-app", to: "missing", kind: "sync", label: "Invalid" }
+        ]),
+        detailedDesign: diagramJson("detailed-design", [
+          {
+            id: "controller-service",
+            sequence: 1,
+            from: "order-controller",
+            to: "order-service",
+            kind: "sync",
+            label: "createOrder",
+            methodName: "createOrder",
+            input: "CreateOrderDto",
+            output: "Order"
+          }
+        ])
+      }),
+      project,
+      facts
+    );
+
+    expect(bundle?.architectural.messages).toHaveLength(1);
+    expect(bundle?.architectural.messages[0]).toMatchObject({ id: "request-payment", from: "frontend-app", to: "api-gateway" });
+    expect(bundle?.detailedDesign.messages[0]).toMatchObject({ methodName: "createOrder", input: "CreateOrderDto", output: "Order" });
+  });
+
+  it("maps raw participant ids and titles to normalized message endpoints", async () => {
+    const root = await createFixtureFiles();
+    const project = projectFixture(root);
+    const facts = await buildProjectStructureFacts(project);
+    const bundle = parseSequenceDiagramBundleJson(
+      JSON.stringify({
+        architectural: {
+          id: "architectural-sequence",
+          title: "Architectural Sequence Diagram",
+          kind: "architectural",
+          summary: "Fixture diagram.",
+          participants: [
+            { id: "Frontend App", title: "Frontend App", kind: "actor", description: "Starts the flow." },
+            { id: "API Gateway", title: "API Gateway", kind: "gateway", description: "Receives requests." }
+          ],
+          messages: [
+            { id: "raw-id-message", sequence: 1, from: "Frontend App", to: "API Gateway", kind: "sync", label: "POST /orders" },
+            { id: "normalized-id-message", sequence: 2, from: "frontend-app", to: "api-gateway", kind: "return", label: "Order result" }
+          ],
+          evidence: []
+        },
+        detailedDesign: diagramJson("detailed-design", [
+          { id: "controller-service", sequence: 1, from: "OrderController", to: "OrderService", kind: "sync", label: "createOrder" }
+        ])
+      }),
+      project,
+      facts
+    );
+
+    expect(bundle?.architectural.participants.map((participant) => participant.id)).toEqual(["frontend-app", "api-gateway"]);
+    expect(bundle?.architectural.messages).toEqual([
+      expect.objectContaining({ id: "raw-id-message", from: "frontend-app", to: "api-gateway" }),
+      expect.objectContaining({ id: "normalized-id-message", from: "frontend-app", to: "api-gateway" })
+    ]);
+    expect(bundle?.detailedDesign.messages[0]).toMatchObject({ from: "order-controller", to: "order-service" });
+  });
+
+  it("does not overwrite an existing bundle when agent output is invalid", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-agent-"));
+    const root = await createFixtureFiles();
+    const flowweaveRoot = join(root, FLOWWEAVE_DIR);
+    await mkdir(flowweaveRoot, { recursive: true });
+    const existing = existingBundle(root);
+    await writeFile(join(flowweaveRoot, "sequence-diagrams.json"), `${JSON.stringify(existing, null, 2)}\n`, "utf8");
+
+    const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      [
+        "process.stdin.resume();",
+        "process.stdin.on('end', () => {",
+        "  console.log(JSON.stringify({ architectural: { kind: 'architectural', participants: [], messages: [] } }));",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Bad Sequence Agent",
+      command: process.execPath,
+      args: [scriptPath]
+    });
+
+    const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
+
+    expect(result.outcome).toBe("cached");
+    expect(result.warning).toContain("invalid");
+    expect(result.bundle.architectural.title).toBe("Existing Architectural");
+    expect(stored.generatedAt).toBe(existing.generatedAt);
+    expect(stored.architectural.title).toBe("Existing Architectural");
+  });
+
+  it("writes fallback diagrams when agent output is invalid and no bundle exists", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-fallback-agent-"));
+    const root = await createFixtureFiles();
+    const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      [
+        "process.stdin.resume();",
+        "process.stdin.on('end', () => {",
+        "  console.log(JSON.stringify({ architectural: { kind: 'architectural', participants: [], messages: [] } }));",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Fallback Sequence Agent",
+      command: process.execPath,
+      args: [scriptPath]
+    });
+
+    const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const stored = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
+
+    expect(result.outcome).toBe("fallback");
+    expect(result.warning).toContain("invalid");
+    expect(result.bundle.source).toBe("fallback");
+    expect(stored.source).toBe("fallback");
+  });
+
+  it("returns generated when valid output is parsed and written", async () => {
+    const root = await createFixtureFiles();
+    const result = await generateSequenceDiagrams(projectFixture(root), "mock");
+
+    expect(result.outcome).toBe("generated");
+    expect(result.bundle.source).toBe("agent");
+  });
+
+  it("revises the current diagram with the selected agent", async () => {
+    const root = await createFixtureFiles();
+    const project = projectFixture(root);
+    const generated = await generateSequenceDiagrams(project, "mock");
+    const revised = await reviseSequenceDiagram(project, "mock", "architectural", "split payment into authorize and capture");
+
+    expect(generated.bundle.architectural.summary).not.toBe(revised.architectural.summary);
+    expect(revised.architectural.summary).toContain("split payment into authorize and capture");
+  });
+});
+
+async function createFixtureFiles() {
+  const root = await mkdtemp(join(tmpdir(), "flowweave-sequence-"));
+  await mkdir(join(root, "src/api"), { recursive: true });
+  await mkdir(join(root, "src/service"), { recursive: true });
+  await writeFile(join(root, "src/api/order.controller.ts"), 'import { OrderService } from "../service/order.service";\nexport class OrderController { createOrder(dto: CreateOrderDto) { return new OrderService().createOrder(dto); } }\n', "utf8");
+  await writeFile(join(root, "src/service/order.service.ts"), "export class OrderService { createOrder(dto: unknown) { return { id: 'order-1', dto }; } }\n", "utf8");
+  return root;
+}
+
+function projectFixture(rootPath: string): CodeflowProject {
+  return {
+    version: 1,
+    projectName: "sequence-fixture",
+    rootPath,
+    generatedAt: "2026-05-31T00:00:00.000Z",
+    git: { isRepo: false },
+    summary: { totalFiles: 2, totalFolders: 3, languages: { TypeScript: 2 } },
+    files: [
+      {
+        id: "src",
+        name: "src",
+        path: "src",
+        type: "folder",
+        depth: 0,
+        children: [
+          {
+            id: "src/api",
+            name: "api",
+            path: "src/api",
+            type: "folder",
+            depth: 1,
+            children: [{ id: "src/api/order.controller.ts", name: "order.controller.ts", path: "src/api/order.controller.ts", type: "file", depth: 2, language: "TypeScript" }]
+          },
+          {
+            id: "src/service",
+            name: "service",
+            path: "src/service",
+            type: "folder",
+            depth: 1,
+            children: [{ id: "src/service/order.service.ts", name: "order.service.ts", path: "src/service/order.service.ts", type: "file", depth: 2, language: "TypeScript" }]
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function diagramJson(kind: "architectural" | "detailed-design", messages: unknown[]) {
+  const isArchitectural = kind === "architectural";
+  return {
+    id: isArchitectural ? "architectural-sequence" : "detailed-design-sequence",
+    title: isArchitectural ? "Architectural Sequence Diagram" : "Detailed Design Sequence Diagram",
+    kind,
+    summary: "Fixture diagram.",
+    participants: isArchitectural
+      ? [
+          { id: "frontend-app", title: "Frontend App", kind: "actor", description: "Starts the order flow." },
+          { id: "api-gateway", title: "API Gateway", kind: "gateway", description: "Receives order requests." }
+        ]
+      : [
+          { id: "order-controller", title: "OrderController", kind: "controller", description: "Handles HTTP requests.", filePath: "src/api/order.controller.ts", symbol: "OrderController" },
+          { id: "order-service", title: "OrderService", kind: "class", description: "Creates orders.", filePath: "src/service/order.service.ts", symbol: "OrderService" }
+        ],
+    messages,
+    evidence: []
+  };
+}
+
+function existingBundle(rootPath: string): SequenceDiagramBundle {
+  return {
+    version: 1,
+    projectName: "sequence-fixture",
+    rootPath,
+    generatedAt: "2026-05-31T01:00:00.000Z",
+    source: "agent",
+    architectural: {
+      ...diagramJson("architectural", [{ id: "existing-message", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "Existing call" }]),
+      title: "Existing Architectural"
+    },
+    detailedDesign: diagramJson("detailed-design", [{ id: "existing-detail", sequence: 1, from: "order-controller", to: "order-service", kind: "sync", label: "Existing method" }])
+  } as SequenceDiagramBundle;
+}

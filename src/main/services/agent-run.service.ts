@@ -1,16 +1,17 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { ExecutionMode, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunResult } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
 import { MockAgentAdapter } from "../agents/mock.adapter";
+import { deleteCustomAgent, getAgentAdapter as getRegistryAgentAdapter, isBuiltInAgentId, listAgentDefinitions, saveCustomAgent } from "./agent-registry.service";
 import { createCheckpoint } from "./git.service";
 import { prepareRunPaths, serializeAgentEvents, writeRunResult } from "./run-log.service";
 
 export type StartToolPlanOptions = {
   projectPath: string;
-  toolId: ToolId;
+  toolId: RuntimeAgentId;
   prompt?: string;
   guidancePath?: string;
   executionMode?: ExecutionMode;
@@ -35,7 +36,7 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
 
   await writeFile(paths.promptPath, prompt, "utf8");
 
-  const adapter = adapters[options.toolId];
+  const adapter = await getAgentAdapter(options.toolId);
   const executionMode = options.executionMode ?? "plan";
   const checkpointId = executionMode === "execute" ? await createCheckpoint(options.projectPath) : undefined;
   const result = await adapter.runPlan({
@@ -71,8 +72,19 @@ export async function detectTool(toolId: ToolId): Promise<ToolDetectionResult> {
   return adapters[toolId].detect();
 }
 
+export async function detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult> {
+  return (await getAgentAdapter(agentId)).detect();
+}
+
 export function getToolAdapter(toolId: ToolId): ToolAdapter {
   return adapters[toolId];
+}
+
+export function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdapter> {
+  if (agentId === "mock" || isBuiltInAgentId(agentId)) {
+    return Promise.resolve(adapters[agentId]);
+  }
+  return getRegistryAgentAdapter(agentId);
 }
 
 export async function openToolProject(toolId: ToolId, projectPath: string): Promise<ToolOpenResult> {
@@ -87,6 +99,18 @@ export async function openToolProject(toolId: ToolId, projectPath: string): Prom
   }
 
   return adapter.openProject(projectPath);
+}
+
+export function listAgents(): Promise<AgentDefinition[]> {
+  return listAgentDefinitions();
+}
+
+export function saveAgent(input: CustomAgentInput): Promise<AgentDefinition> {
+  return saveCustomAgent(input);
+}
+
+export function deleteAgent(agentId: AgentId): Promise<void> {
+  return deleteCustomAgent(agentId);
 }
 
 async function resolvePrompt(options: StartToolPlanOptions) {

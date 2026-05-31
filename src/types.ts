@@ -23,12 +23,78 @@ export type ProjectFile = {
 };
 
 export type ActivePage = "canvas" | "structure" | "docs" | "git-review" | "tools";
+export type UtilityPanel = "profile" | "settings";
+export type UiThemeId = "system" | "light" | "dark" | "terminal" | "hologrid";
 
 export type GraphNodeStatus = "mapped" | "needs-review" | "draft";
-export type GraphNodeType = "module" | "test" | "data" | "entrypoint";
+export type GraphNodeType = "module" | "entrypoint" | "api" | "service" | "data" | "external" | "worker" | "utility" | "test";
 export type GraphRisk = "normal" | "review" | "blocked";
-export type GraphEdgeRelation = "depends_on" | "calls" | "reads_writes" | "tests";
+export type GraphEdgeRelation = "depends_on" | "calls" | "reads_writes" | "external_api" | "publishes_event" | "subscribes_event" | "tests";
 export type CanvasNodeKind = "module" | "requirement" | "task" | "file" | "doc" | "agent" | "diff";
+
+export type ConnectionHandleSlot = {
+  id: string;
+  edgeId?: string;
+  offsetPercent: number;
+  collapsed?: boolean;
+  count: number;
+};
+
+export type ConnectionHandleLayout = {
+  source: ConnectionHandleSlot[];
+  target: ConnectionHandleSlot[];
+};
+
+export type SelectedEdgeState = {
+  edgeId: string;
+  source: string;
+  target: string;
+};
+
+export type ArchitectureModuleCategory =
+  | "api-boundary"
+  | "domain-service"
+  | "data-access"
+  | "external-integration"
+  | "job-worker"
+  | "shared-utility"
+  | "test-surface";
+
+export type StructureSymbolKind = "function" | "class" | "method" | "export" | "variable";
+
+export type StructureSymbol = {
+  name: string;
+  kind: StructureSymbolKind;
+  filePath: string;
+  role?: string;
+  exported?: boolean;
+  line?: number;
+};
+
+export type ExternalCallInsight = {
+  kind: "http" | "database" | "filesystem" | "process" | "queue" | "unknown";
+  target: string;
+  filePath: string;
+  symbol?: string;
+};
+
+export type FileInsight = {
+  path: string;
+  language?: string;
+  imports: string[];
+  exports: string[];
+  symbols: StructureSymbol[];
+  calls: string[];
+  externalCalls: ExternalCallInsight[];
+  role?: string;
+  moduleId?: string;
+};
+
+export type ArchitectureEvidence = {
+  filePath?: string;
+  symbol?: string;
+  detail: string;
+};
 
 export type GraphNode = {
   id: string;
@@ -52,6 +118,12 @@ export type GraphNode = {
   checkpointId?: string;
   changedFiles?: ChangedFile[];
   patch?: string;
+  category?: ArchitectureModuleCategory;
+  role?: string;
+  fileRoles?: Array<{ path: string; role: string }>;
+  symbols?: StructureSymbol[];
+  evidence?: ArchitectureEvidence[];
+  confidence?: number;
 };
 
 export type GraphEdge = {
@@ -60,6 +132,7 @@ export type GraphEdge = {
   target: string;
   relation: GraphEdgeRelation;
   guidanceNote?: string;
+  evidence?: ArchitectureEvidence[];
 };
 
 export type GitSummary = {
@@ -97,7 +170,123 @@ export type CodeflowCanvas = {
   edges: GraphEdge[];
 };
 
-export type ToolId = "codex-local" | "claude-code" | "cursor" | "mock";
+export type ArchitectureModule = {
+  id: string;
+  title: string;
+  category: ArchitectureModuleCategory;
+  nodeType: GraphNodeType;
+  role: string;
+  description: string;
+  files: string[];
+  fileRoles: Array<{ path: string; role: string }>;
+  symbols: StructureSymbol[];
+  evidence: ArchitectureEvidence[];
+  risk: GraphRisk;
+  confidence?: number;
+};
+
+export type ArchitectureRelationship = {
+  id: string;
+  source: string;
+  target: string;
+  relation: GraphEdgeRelation;
+  description: string;
+  evidence: ArchitectureEvidence[];
+};
+
+export type ProjectStructureFacts = {
+  projectName: string;
+  rootPath: string;
+  languages: Record<string, number>;
+  files: FileInsight[];
+};
+
+export type ArchitectureMap = {
+  version: 1;
+  projectName: string;
+  rootPath: string;
+  generatedAt: string;
+  source: "agent" | "fallback";
+  architectureStyle?: string;
+  modules: ArchitectureModule[];
+  relationships: ArchitectureRelationship[];
+  files: FileInsight[];
+  symbols: StructureSymbol[];
+};
+
+export type SequenceDiagramKind = "architectural" | "detailed-design";
+export type SequenceDiagramSource = "agent" | "fallback";
+export type SequenceParticipantKind =
+  | "actor"
+  | "component"
+  | "service"
+  | "gateway"
+  | "database"
+  | "external"
+  | "controller"
+  | "class"
+  | "interface"
+  | "repository"
+  | "worker"
+  | "utility";
+export type SequenceMessageKind = "sync" | "async" | "return" | "event" | "external";
+
+export type SequenceParticipant = {
+  id: string;
+  title: string;
+  kind: SequenceParticipantKind;
+  description: string;
+  filePath?: string;
+  symbol?: string;
+};
+
+export type SequenceMessage = {
+  id: string;
+  sequence: number;
+  from: string;
+  to: string;
+  kind: SequenceMessageKind;
+  label: string;
+  description?: string;
+  methodName?: string;
+  input?: string;
+  output?: string;
+  evidence?: ArchitectureEvidence[];
+};
+
+export type SequenceDiagram = {
+  id: string;
+  title: string;
+  kind: SequenceDiagramKind;
+  summary: string;
+  participants: SequenceParticipant[];
+  messages: SequenceMessage[];
+  evidence?: ArchitectureEvidence[];
+};
+
+export type SequenceDiagramBundle = {
+  version: 1;
+  projectName: string;
+  rootPath: string;
+  generatedAt: string;
+  source: SequenceDiagramSource;
+  architectural: SequenceDiagram;
+  detailedDesign: SequenceDiagram;
+};
+
+export type SequenceDiagramGenerationOutcome = "generated" | "cached" | "fallback";
+
+export type SequenceDiagramGenerationResult = {
+  bundle: SequenceDiagramBundle;
+  outcome: SequenceDiagramGenerationOutcome;
+  warning?: string;
+};
+
+export type BuiltInAgentId = "codex-local" | "claude-code" | "cursor";
+export type ToolId = BuiltInAgentId | "mock";
+export type CustomAgentId = `custom:${string}`;
+export type AgentId = BuiltInAgentId | CustomAgentId;
+export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
 
 export type CodeflowTask = {
@@ -155,7 +344,7 @@ export type ToolRunEvent =
   | { type: "error"; message: string; timestamp: string };
 
 export type ToolDetectionResult = {
-  toolId: ToolId;
+  toolId: RuntimeAgentId;
   available: boolean;
   method: "cli" | "app" | "mock" | "none";
   commandPath?: string;
@@ -164,8 +353,33 @@ export type ToolDetectionResult = {
   message?: string;
 };
 
+export type ToolUiStatus = ToolDetectionResult & {
+  checking: boolean;
+  lastRunStatus?: ToolRunStatus;
+  lastOutputPath?: string;
+};
+
+export type AgentDefinition = {
+  id: AgentId;
+  name: string;
+  kind: "cli" | "desktop";
+  command: string;
+  args: string[];
+  description: string;
+  builtIn: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CustomAgentInput = {
+  name: string;
+  command: string;
+  args?: string[];
+  description?: string;
+};
+
 export type ToolOpenResult = {
-  toolId: ToolId;
+  toolId: RuntimeAgentId;
   opened: boolean;
   method: "cli" | "app" | "mock" | "none";
   message?: string;
@@ -182,7 +396,7 @@ export type ToolRunRequest = {
 
 export type ToolRunResult = {
   id: string;
-  toolId: ToolId;
+  toolId: RuntimeAgentId;
   status: ToolRunStatus;
   projectPath: string;
   startedAt: string;
@@ -198,6 +412,29 @@ export type ToolRunResult = {
   events: ToolRunEvent[];
   executionMode: ExecutionMode;
   checkpointId?: string;
+};
+
+export type ToolRunSummary = {
+  id: string;
+  toolId: RuntimeAgentId;
+  status: ToolRunStatus;
+  executionMode: ExecutionMode;
+  startedAt: string;
+  completedAt: string;
+  summary?: string;
+  promptPath?: string;
+  planPath?: string;
+  logPath?: string;
+  resultPath?: string;
+  checkpointId?: string;
+};
+
+export type ToolRunArtifact = {
+  summary: ToolRunSummary;
+  prompt: string;
+  plan: string;
+  log: string;
+  result: string;
 };
 
 export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked" | "copied" | "unknown";
@@ -276,8 +513,18 @@ export type AgentAnalysisResult = {
   };
 };
 
+export type ArchitectureAnalysisResult = {
+  architectureMap: ArchitectureMap;
+  source: "agent" | "fallback";
+  agentOutput?: string;
+  graph: {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  };
+};
+
 export interface ToolAdapter {
-  id: ToolId;
+  id: RuntimeAgentId;
   name: string;
   kind: ToolKind;
   detect(): Promise<ToolDetectionResult>;
@@ -288,21 +535,33 @@ export interface ToolAdapter {
 export type FlowWeaveApi = {
   openProject(): Promise<FlowWeaveProjectOpenResult>;
   scanProject(projectPath: string): Promise<FlowWeaveProjectOpenResult>;
+  listAgents(): Promise<AgentDefinition[]>;
+  saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
+  deleteCustomAgent(agentId: AgentId): Promise<void>;
+  detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult>;
   detectTool(toolId: ToolId): Promise<ToolDetectionResult>;
   runToolPlan(options: {
     projectPath: string;
-    toolId: ToolId;
+    toolId: RuntimeAgentId;
     prompt?: string;
     guidancePath?: string;
     executionMode?: ExecutionMode;
     model?: string;
   }): Promise<ToolRunResult>;
+  listToolRuns(projectPath: string): Promise<ToolRunSummary[]>;
+  readToolRun(projectPath: string, runId: string): Promise<ToolRunArtifact>;
   openToolProject(toolId: ToolId, projectPath: string): Promise<ToolOpenResult>;
   gitStatus(projectPath: string): Promise<GitStatus>;
   gitDiff(projectPath: string, checkpointId?: string): Promise<GitDiffResult>;
   gitCheckpoint(projectPath: string): Promise<string>;
   gitRollback(projectPath: string, checkpointId: string): Promise<void>;
   analyzeProject(projectPath: string, toolId: ToolId): Promise<AgentAnalysisResult>;
+  analyzeArchitecture(projectPath: string, toolId: ToolId): Promise<ArchitectureAnalysisResult>;
+  analyzeArchitectureWithAgent(projectPath: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
+  readArchitectureMap(projectPath: string): Promise<ArchitectureMap | undefined>;
+  generateSequenceDiagrams(projectPath: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
+  reviseSequenceDiagram(projectPath: string, agentId: RuntimeAgentId, kind: SequenceDiagramKind, instruction: string): Promise<SequenceDiagramBundle>;
+  readSequenceDiagrams(projectPath: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectPath: string, filePath: string): Promise<string>;
   saveFlowWeaveDoc(projectPath: string, docId: string, content: string): Promise<string>;
   readCanvas(projectPath: string): Promise<CodeflowCanvas | undefined>;

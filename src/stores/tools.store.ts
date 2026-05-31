@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import type { ExecutionMode, ToolId } from "../types";
-import type { ToolUiStatus } from "../components/AgentPage";
+import type { ExecutionMode, ToolId, ToolUiStatus } from "../types";
 
 type ToolsState = {
   selectedToolId: ToolId;

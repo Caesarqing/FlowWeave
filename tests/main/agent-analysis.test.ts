@@ -6,9 +6,13 @@ import { analyzeProject, buildAnalysisPrompt } from "../../src/main/services/age
 import type { CodeflowProject } from "../../src/types";
 
 describe("agent-analysis.service", () => {
-  it("builds an analysis prompt from project metadata", () => {
-    const prompt = buildAnalysisPrompt(projectFixture("/tmp/project"));
+  it("builds an analysis prompt from project metadata", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-analysis-prompt-"));
+    await mkdir(join(root, "src/auth"), { recursive: true });
+    await writeFile(join(root, "src/auth/index.ts"), "export const auth = true;\n");
+    const prompt = await buildAnalysisPrompt(projectFixture(root));
 
+    expect(prompt).toContain("ProjectStructureFacts");
     expect(prompt).toContain("Return this exact JSON shape");
     expect(prompt).toContain("src/auth/index.ts");
   });
@@ -22,6 +26,7 @@ describe("agent-analysis.service", () => {
 
     expect(result.source).toBe("agent");
     expect(result.graph.nodes.length).toBeGreaterThan(0);
+    expect(result.moduleMap.modules[0].files).toContain("src/auth/index.ts");
   });
 });
 

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { DiffViewer } from "./DiffViewer";
-import { useGitStore } from "../stores/git.store";
+import { useWorkspaceStore } from "../stores/workspace.store";
 
 export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
-  const diff = useGitStore((state) => state.diff);
-  const checkpointId = useGitStore((state) => state.checkpointId);
-  const setDiff = useGitStore((state) => state.setDiff);
-  const setCheckpointId = useGitStore((state) => state.setCheckpointId);
+  const diff = useWorkspaceStore((state) => state.diff);
+  const checkpointId = useWorkspaceStore((state) => state.checkpointId);
+  const activeRun = useWorkspaceStore((state) => state.selectedRunArtifact?.summary);
+  const setDiff = useWorkspaceStore((state) => state.setDiff);
+  const setCheckpointId = useWorkspaceStore((state) => state.setCheckpointId);
   const [status, setStatus] = useState("点击刷新读取 Git diff。");
 
   async function refreshDiff() {
@@ -14,7 +15,7 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
       setStatus("请使用桌面版并先打开一个 Git 项目。");
       return;
     }
-    const result = await window.flowweave.gitDiff(projectPath);
+    const result = await window.flowweave.gitDiff(projectPath, activeRun?.checkpointId);
     setDiff(result);
     setStatus(result.isRepo ? `读取到 ${result.changedFiles.length} 个变更文件。` : "当前项目不是 Git 仓库。");
   }
@@ -55,6 +56,11 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
         <button className="ghost-button" type="button" onClick={() => void createCheckpoint()}>创建 Checkpoint</button>
         <button className="ghost-button" disabled={!checkpointId} type="button" onClick={() => void rollback()}>Rollback</button>
         <p className="project-status">{status}</p>
+        <div className="module-card">
+          <h3>Active Run</h3>
+          <p>{activeRun ? `${activeRun.id} · ${activeRun.toolId} · ${activeRun.status}` : "尚未从 Agent 运行进入审查。"}</p>
+          <p>{activeRun?.checkpointId ? `Checkpoint: ${activeRun.checkpointId}` : "No run checkpoint."}</p>
+        </div>
         <div className={`bridge-state ${diff?.safety.level ?? "ok"}`}>Safety: {diff?.safety.level ?? "unknown"}</div>
         <div className="file-list">
           {diff?.changedFiles.map((file) => (

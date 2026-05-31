@@ -4,7 +4,7 @@ import { BrandLogo } from "./BrandLogo";
 
 const pageTitles: Record<ActivePage, string> = {
   canvas: "Canvas",
-  structure: "Structure",
+  structure: "Sequence Diagram",
   docs: "Docs",
   "git-review": "Git Review",
   tools: "Agent"
@@ -21,7 +21,7 @@ export function TopBar({
   onSendToTool: () => void;
   projectLabel: string;
 }) {
-  const showCanvasActions = activePage === "canvas";
+  const showPageActions = activePage === "canvas" || activePage === "structure";
 
   return (
     <header className="top-bar">
@@ -33,7 +33,7 @@ export function TopBar({
         </div>
       </div>
 
-      {showCanvasActions ? (
+      {showPageActions ? (
         <div className="top-actions">
           <button aria-label="发送到默认 Agent 生成计划" className="ghost-button" title="发送到默认 Agent 生成计划" type="button" onClick={onSendToTool}>
             <Send size={16} />

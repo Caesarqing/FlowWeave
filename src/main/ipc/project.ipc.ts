@@ -2,8 +2,10 @@ import { dialog, ipcMain } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, normalize, sep } from "node:path";
 import { PROJECT_CHANNELS } from "../../common/ipc-channels";
-import type { CodeflowCanvas, ToolId } from "../../types";
+import type { CodeflowCanvas, RuntimeAgentId, ToolId } from "../../types";
 import { analyzeProject } from "../services/agent-analysis.service";
+import { analyzeArchitecture, readArchitectureMap } from "../services/architecture-analysis.service";
+import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram } from "../services/sequence-diagram.service";
 import { inferGraphFromProject } from "../services/task-generator.service";
 import { scanProject } from "../services/project-scanner.service";
 import { writeFlowWeaveProject } from "../storage/flowweave-store";
@@ -30,6 +32,34 @@ export function registerProjectIpc() {
   ipcMain.handle(PROJECT_CHANNELS.analyzeProject, async (_event, projectPath: string, toolId: ToolId) => {
     const project = await scanProject(projectPath);
     return analyzeProject(project, toolId);
+  });
+
+  ipcMain.handle(PROJECT_CHANNELS.analyzeArchitecture, async (_event, projectPath: string, toolId: ToolId) => {
+    const project = await scanProject(projectPath);
+    return analyzeArchitecture(project, toolId);
+  });
+
+  ipcMain.handle(PROJECT_CHANNELS.analyzeArchitectureWithAgent, async (_event, projectPath: string, agentId: RuntimeAgentId) => {
+    const project = await scanProject(projectPath);
+    return analyzeArchitecture(project, agentId);
+  });
+
+  ipcMain.handle(PROJECT_CHANNELS.readArchitectureMap, async (_event, projectPath: string) => {
+    return readArchitectureMap(projectPath);
+  });
+
+  ipcMain.handle(PROJECT_CHANNELS.generateSequenceDiagrams, async (_event, projectPath: string, agentId: RuntimeAgentId) => {
+    const project = await scanProject(projectPath);
+    return generateSequenceDiagrams(project, agentId);
+  });
+
+  ipcMain.handle(PROJECT_CHANNELS.reviseSequenceDiagram, async (_event, projectPath: string, agentId: RuntimeAgentId, kind: "architectural" | "detailed-design", instruction: string) => {
+    const project = await scanProject(projectPath);
+    return reviseSequenceDiagram(project, agentId, kind, instruction);
+  });
+
+  ipcMain.handle(PROJECT_CHANNELS.readSequenceDiagrams, async (_event, projectPath: string) => {
+    return readSequenceDiagrams(projectPath);
   });
 
   ipcMain.handle(PROJECT_CHANNELS.readFile, async (_event, projectPath: string, filePath: string) => {

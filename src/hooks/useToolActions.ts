@@ -1,84 +1,95 @@
-import { toolMeta, type ToolUiStatus } from "../components/AgentPage";
-import type { ExecutionMode, GraphEdge, GraphNode, ToolId } from "../types";
+import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolId, ToolUiStatus } from "../types";
 
 export function useToolActions({
   buildGuidanceMarkdown,
+  agents,
   executionMode,
   graphRelations,
   modules,
   projectLabel,
   projectPath,
   selectedNode,
+  onRunCompleted,
   setLastRunStatus,
-  setSelectedToolId,
+  setSelectedAgentId,
   setToolStatuses
 }: {
   buildGuidanceMarkdown: (projectLabel: string, nodes: GraphNode[], edges: GraphEdge[]) => string;
+  agents: AgentDefinition[];
   executionMode: ExecutionMode;
   graphRelations: GraphEdge[];
   modules: GraphNode[];
   projectLabel: string;
   projectPath: string;
   selectedNode?: GraphNode;
+  onRunCompleted?: (runId: string) => void | Promise<void>;
   setLastRunStatus: (value: string) => void;
-  setSelectedToolId: (toolId: ToolId) => void;
-  setToolStatuses: (updater: Record<ToolId, ToolUiStatus> | ((current: Record<ToolId, ToolUiStatus>) => Record<ToolId, ToolUiStatus>)) => void;
+  setSelectedAgentId: (agentId: AgentId) => void;
+  setToolStatuses: (updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)) => void;
 }) {
-  async function detectTool(toolId: ToolId) {
+  const agentNames = new Map<string, string>(agents.map((agent) => [agent.id, agent.name]));
+  const getAgentName = (agentId: RuntimeAgentId) => agentNames.get(agentId) ?? (agentId === "mock" ? "Mock Agent" : agentId);
+
+  async function detectAgent(agentId: RuntimeAgentId) {
     if (!window.flowweave) {
-      setToolStatuses((current) => ({ ...current, [toolId]: { ...current[toolId], available: false, checking: false } }));
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: false } }));
       setLastRunStatus("浏览器预览模式无法检测本地 Agent。请使用 npm run dev:electron 打开桌面版。");
       return;
     }
 
-    setToolStatuses((current) => ({ ...current, [toolId]: { ...current[toolId], checking: true } }));
-    setLastRunStatus(`正在检测 ${toolMeta[toolId].name}...`);
+    setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: true } }));
+    setLastRunStatus(`正在检测 ${getAgentName(agentId)}...`);
     try {
-      const result = await window.flowweave.detectTool(toolId);
-      setToolStatuses((current) => ({ ...current, [toolId]: { ...current[toolId], ...result, checking: false } }));
+      const result = await window.flowweave.detectAgent(agentId);
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...result, checking: false } }));
       setLastRunStatus(
         result.available
-          ? `${toolMeta[toolId].name} 已检测 · ${result.commandPath ?? result.appPath ?? result.version ?? "ready"}`
-          : `${toolMeta[toolId].name} 未检测到。`
+          ? `${getAgentName(agentId)} 已检测 · ${result.commandPath ?? result.appPath ?? result.version ?? "ready"}`
+          : `${getAgentName(agentId)} 未检测到。`
       );
     } catch (error) {
-      setToolStatuses((current) => ({ ...current, [toolId]: { ...current[toolId], available: false, checking: false } }));
-      setLastRunStatus(`${toolMeta[toolId].name} 检测失败：${formatErrorMessage(error)}`);
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: false } }));
+      setLastRunStatus(`${getAgentName(agentId)} 检测失败：${formatErrorMessage(error)}`);
     }
   }
 
-  async function openToolProject(toolId: ToolId) {
+  async function openToolProject(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectPath) {
       setLastRunStatus("请先在桌面版 Canvas 页读取一个本地项目。");
       return;
     }
 
+    if (!isOpenableToolId(agentId)) {
+      setLastRunStatus(`${getAgentName(agentId)} 是 CLI 对话型 Agent，不支持从 FlowWeave 打开项目。`);
+      return;
+    }
+
     try {
-      const result = await window.flowweave.openToolProject(toolId, projectPath);
-      setLastRunStatus(`${toolMeta[toolId].name} ${result.opened ? "已打开项目" : "打开失败"} · ${result.message ?? result.method}`);
+      const result = await window.flowweave.openToolProject(agentId, projectPath);
+      setLastRunStatus(`${getAgentName(agentId)} ${result.opened ? "已打开项目" : "打开失败"} · ${result.message ?? result.method}`);
     } catch (error) {
-      setLastRunStatus(`${toolMeta[toolId].name} 打开项目失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(`${getAgentName(agentId)} 打开项目失败：${formatErrorMessage(error)}`);
     }
   }
 
-  async function runToolPlan(toolId: ToolId) {
+  async function runToolPlan(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectPath || !selectedNode) {
       setLastRunStatus("请先在桌面版 Canvas 页读取一个本地项目。");
       return;
     }
 
-    setLastRunStatus(`正在让 ${toolMeta[toolId].name} 以 ${executionMode} 模式处理...`);
+    setLastRunStatus(`正在让 ${getAgentName(agentId)} 以 ${executionMode} 模式处理...`);
     try {
-      const detection = await window.flowweave.detectTool(toolId);
-      setToolStatuses((current) => ({ ...current, [toolId]: { ...current[toolId], ...detection, checking: false } }));
+      const detection = await window.flowweave.detectAgent(agentId);
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...detection, checking: false } }));
       if (!detection.available) {
-        setLastRunStatus(`${toolMeta[toolId].name} 未检测到，无法生成计划。`);
+        setLastRunStatus(`${getAgentName(agentId)} 未检测到，无法生成计划。`);
         return;
       }
 
       const result = await window.flowweave.runToolPlan({
         projectPath,
-        toolId,
+        toolId: agentId,
         executionMode,
         prompt: `FlowWeave plan request for module "${selectedNode.title}".
 
@@ -88,23 +99,28 @@ ${buildGuidanceMarkdown(projectLabel, modules, graphRelations)}
 Return an implementation plan, affected files, risks, and tests. Do not edit files from FlowWeave.`
       });
 
-      setSelectedToolId(toolId);
+      if (agentId !== "mock") setSelectedAgentId(agentId);
       setToolStatuses((current) => ({
         ...current,
-        [toolId]: {
-          ...current[toolId],
+        [agentId]: {
+          ...current[agentId],
           lastRunStatus: result.status,
           lastOutputPath: result.planPath ?? result.logPath ?? result.resultPath
         }
       }));
-      setLastRunStatus(`${toolMeta[toolId].name} ${executionMode} ${result.status} · ${result.planPath ?? result.logPath ?? "no output"}`);
+      setLastRunStatus(`${getAgentName(agentId)} ${executionMode} ${result.status} · ${result.planPath ?? result.logPath ?? "no output"}`);
+      await onRunCompleted?.(result.id);
     } catch (error) {
-      setToolStatuses((current) => ({ ...current, [toolId]: { ...current[toolId], lastRunStatus: "failed" } }));
-      setLastRunStatus(`${toolMeta[toolId].name} 生成计划失败：${formatErrorMessage(error)}`);
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], lastRunStatus: "failed" } }));
+      setLastRunStatus(`${getAgentName(agentId)} 生成计划失败：${formatErrorMessage(error)}`);
     }
   }
 
-  return { detectTool, openToolProject, runToolPlan };
+  return { detectAgent, openToolProject, runToolPlan };
+}
+
+function isOpenableToolId(agentId: RuntimeAgentId): agentId is ToolId {
+  return agentId === "codex-local" || agentId === "claude-code" || agentId === "cursor" || agentId === "mock";
 }
 
 function formatErrorMessage(error: unknown) {
