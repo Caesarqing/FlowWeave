@@ -1,11 +1,12 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { nodeTypeLabel, riskLabel } from "../utils/labels";
 import type { FlowWeaveNode } from "../utils/graph-converters";
+import { cn } from "../utils/classnames";
 
 export function ModuleFlowNode({ data, selected }: NodeProps<FlowWeaveNode>) {
   const node = data;
   return (
-    <div className={`flow-module-node ${selected ? "selected" : ""} ${node.risk}`}>
+    <div className={cn("flow-module-node", selected && "selected", node.risk)}>
       <Handle className="flow-handle" type="target" position={Position.Left} />
       <div className="node-meta-line">
         <span>{nodeTypeLabel[node.nodeType]}</span>

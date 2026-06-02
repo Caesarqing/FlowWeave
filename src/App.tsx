@@ -13,10 +13,12 @@ import { UtilityPanels } from "./components/UtilityPanels";
 import { useAppController } from "./hooks/useAppController";
 import { usePreferencesStore } from "./stores/preferences.store";
 import { useEffect } from "react";
+import { cn } from "./utils/classnames";
 
 export function App() {
   const app = useAppController();
   const reducedMotion = usePreferencesStore((state) => state.reducedMotion);
+  const locale = usePreferencesStore((state) => state.locale);
   const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
   const theme = usePreferencesStore((state) => state.theme);
   const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
@@ -36,6 +38,10 @@ export function App() {
     document.documentElement.dataset.motion = reducedMotion ? "reduced" : "system";
   }, [reducedMotion]);
 
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   return (
     <div className="app-shell">
       <Sidebar activePage={app.activePage} activeUtilityPanel={utilityPanel} onPageChange={app.onPageChange} onUtilityPanelChange={setUtilityPanel} />
@@ -43,7 +49,7 @@ export function App() {
       <section className="main-shell">
         <TopBar activePage={app.activePage} onExport={app.onExport} onSendToTool={app.onSendToTool} projectLabel={app.projectLabel} />
         {app.activePage === "canvas" ? (
-          <div className={`canvas-page ${app.canvas.selectedNode || app.canvas.connectionPanelMode ? "has-selection" : "no-selection"}`}>
+          <div className={cn("canvas-page", app.canvas.selectedNode || app.canvas.connectionPanelMode ? "has-selection" : "no-selection")}>
             <ProjectExplorer
               expandedPaths={app.canvas.expandedPaths}
               files={app.canvas.projectFiles}

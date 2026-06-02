@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight, FileCode2, Folder, GitPullRequestArrow, Send, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { GraphEdge, GraphNode, GraphNodeType, GraphRisk } from "../types";
+import { cn } from "../utils/classnames";
+import { useI18n } from "../utils/i18n";
 import { nodeTypeLabel, relationLabel, riskLabel } from "../utils/labels";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
 
@@ -28,6 +30,7 @@ export function ModulePanel({
   onModuleChange: (nodeId: string, patch: Partial<GraphNode>) => void;
   onWriteDraft: () => void;
 }) {
+  const { t } = useI18n();
   const [openSections, setOpenSections] = useState({
     files: true,
     symbols: false,
@@ -61,8 +64,8 @@ export function ModulePanel({
   return (
     <aside className="module-panel">
       <div className="panel-header">
-        <span>Module Context</span>
-        <span className={`risk-chip ${node.risk}`}>{riskLabel[node.risk]}</span>
+        <span>{t("module.context")}</span>
+        <span className={cn("risk-chip", node.risk)}>{riskLabel[node.risk]}</span>
       </div>
 
       <section className="module-card hero-card">
@@ -70,7 +73,7 @@ export function ModulePanel({
         <h2>{node.title}</h2>
         <p>{node.description}</p>
         {node.role ? <p className="module-role">{node.role}</p> : null}
-        {typeof node.confidence === "number" ? <span className="confidence-chip">Confidence {Math.round(node.confidence * 100)}%</span> : null}
+        {typeof node.confidence === "number" ? <span className="confidence-chip">{t("module.confidence", { value: Math.round(node.confidence * 100) })}</span> : null}
       </section>
 
       <section className="module-card module-edit-card">
@@ -115,7 +118,7 @@ export function ModulePanel({
         </button>
       </section>
 
-      <CollapsibleCard isOpen={openSections.files} title="包含文件" onToggle={() => toggleSection("files")}>
+      <CollapsibleCard isOpen={openSections.files} title={t("module.files")} onToggle={() => toggleSection("files")}>
         {fileTree.length > 0 ? (
           <div className="module-file-tree">
             {fileTree.map((item) => (
@@ -127,7 +130,7 @@ export function ModulePanel({
         )}
       </CollapsibleCard>
 
-      <CollapsibleCard isOpen={openSections.symbols} title="关键函数 / 类" onToggle={() => toggleSection("symbols")}>
+      <CollapsibleCard isOpen={openSections.symbols} title={t("module.keySymbols")} onToggle={() => toggleSection("symbols")}>
         <div className="detail-list">
           {node.symbols && node.symbols.length > 0 ? (
             node.symbols.map((symbol) => (
@@ -139,13 +142,13 @@ export function ModulePanel({
               </div>
             ))
           ) : (
-            <p>暂无关键函数或类。重新生成架构图可补充结构细节。</p>
+            <p>{t("module.noSymbols")}</p>
           )}
         </div>
       </CollapsibleCard>
 
       <section className="module-card">
-        <h3>连接关系</h3>
+        <h3>{t("module.relations")}</h3>
         <div className="relation-list">
           {relatedEdges.length > 0 ? (
             relatedEdges.map((edge) => (
@@ -164,12 +167,12 @@ export function ModulePanel({
               </div>
             ))
           ) : (
-            <p>还没有连接。拖拽节点左右连接点来定义修改依据。</p>
+            <p>{t("module.noConnections")}</p>
           )}
         </div>
       </section>
 
-      <CollapsibleCard isOpen={openSections.evidence} title="判断依据" onToggle={() => toggleSection("evidence")}>
+      <CollapsibleCard isOpen={openSections.evidence} title={t("module.evidence")} onToggle={() => toggleSection("evidence")}>
         {node.evidence && node.evidence.length > 0 ? (
           <div className="detail-list">
             {node.evidence.map((item) => (
@@ -185,23 +188,23 @@ export function ModulePanel({
       </CollapsibleCard>
 
       <section className="module-card guidance-card">
-        <h3>给 Agent 的指导草稿</h3>
+        <h3>{t("module.guidanceDraft")}</h3>
         <textarea value={node.guidanceDraft} onChange={(event) => onGuidanceChange(event.target.value)} />
         <label className="dialog-box">
-          <span>对话调整</span>
+          <span>{t("module.dialog")}</span>
           <textarea
             value={dialogText}
             onChange={(event) => onDialogTextChange(event.target.value)}
-            placeholder="例如：这个模块只允许修改 service 和测试，不要改 schema。"
+            placeholder={t("module.dialogPlaceholder")}
           />
         </label>
         <div className="dialog-actions">
           <button className="ghost-button" type="button" onClick={onApplyDialog}>
             <Send size={15} />
-            写入指导
+            {t("module.writeGuidance")}
           </button>
           <button className="send-button" type="button" onClick={onWriteDraft}>
-            保存状态
+            {t("module.saveStatus")}
           </button>
         </div>
       </section>
@@ -224,7 +227,7 @@ function CollapsibleCard({ children, isOpen, onToggle, title }: { children: Reac
 function FileTreeRow({ node }: { node: ModuleFileTreeNode }) {
   return (
     <>
-      <div className={`module-file-tree-row ${node.type}`} style={{ paddingLeft: `${node.depth * 14}px` }}>
+      <div className={cn("module-file-tree-row", node.type)} style={{ paddingLeft: `${node.depth * 14}px` }}>
         {node.type === "folder" ? (
           <>
             <ChevronDown size={12} />

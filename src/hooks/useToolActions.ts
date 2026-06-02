@@ -1,4 +1,5 @@
 import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolId, ToolUiStatus } from "../types";
+import { useI18n } from "../utils/i18n";
 
 export function useToolActions({
   buildGuidanceMarkdown,
@@ -27,13 +28,14 @@ export function useToolActions({
   setSelectedAgentId: (agentId: AgentId) => void;
   setToolStatuses: (updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)) => void;
 }) {
+  const { t } = useI18n();
   const agentNames = new Map<string, string>(agents.map((agent) => [agent.id, agent.name]));
   const getAgentName = (agentId: RuntimeAgentId) => agentNames.get(agentId) ?? (agentId === "mock" ? "Mock Agent" : agentId);
 
   async function detectAgent(agentId: RuntimeAgentId) {
     if (!window.flowweave) {
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: false } }));
-      setLastRunStatus("浏览器预览模式无法检测本地 Agent。请使用 npm run dev:electron 打开桌面版。");
+      setLastRunStatus(t("agent.bridgeWarning"));
       return;
     }
 
@@ -55,7 +57,7 @@ export function useToolActions({
 
   async function openToolProject(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectPath) {
-      setLastRunStatus("请先在桌面版 Canvas 页读取一个本地项目。");
+      setLastRunStatus(t("docs.needDesktop"));
       return;
     }
 
@@ -74,7 +76,7 @@ export function useToolActions({
 
   async function runToolPlan(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectPath || !selectedNode) {
-      setLastRunStatus("请先在桌面版 Canvas 页读取一个本地项目。");
+      setLastRunStatus(t("docs.needDesktop"));
       return;
     }
 

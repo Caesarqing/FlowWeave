@@ -77,9 +77,9 @@ type WorkspaceState = {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activePage: "canvas",
-  projectLabel: "未选择项目",
+  projectLabel: "No project selected",
   projectPath: "",
-  projectStatus: "请先打开一个本地后端项目，FlowWeave 会读取文件树并生成模块节点。",
+  projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
   modules: graphNodes,
   edges: graphEdges.map(createFlowEdge),
@@ -96,7 +96,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     cursor: createUnknownToolStatus("cursor"),
     mock: createUnknownToolStatus("mock")
   },
-  lastRunStatus: "选择项目后可让默认 Agent 生成计划。",
+  lastRunStatus: "Select a project before asking the default Agent to generate a plan.",
   runs: [],
   selectedRunId: "",
   runArtifactTab: "plan",

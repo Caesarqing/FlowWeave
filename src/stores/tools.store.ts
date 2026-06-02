@@ -21,7 +21,7 @@ export const useToolsStore = create<ToolsState>((set) => ({
     cursor: createUnknownToolStatus("cursor"),
     mock: createUnknownToolStatus("mock")
   },
-  lastRunStatus: "选择项目后可让默认 Agent 生成计划。",
+  lastRunStatus: "Select a project before asking the default Agent to generate a plan.",
   setSelectedToolId: (selectedToolId) => set({ selectedToolId }),
   setExecutionMode: (executionMode) => set({ executionMode }),
   setToolStatuses: (updater) => set((state) => ({ toolStatuses: typeof updater === "function" ? updater(state.toolStatuses) : updater })),

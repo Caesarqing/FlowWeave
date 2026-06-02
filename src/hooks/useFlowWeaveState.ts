@@ -1,5 +1,4 @@
 import {
-  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -56,12 +55,7 @@ export function useFlowWeaveState() {
       target: connection.target,
       relation: defaultRelation
     });
-    setEdges((currentEdges) =>
-      addEdge(
-        nextEdge,
-        currentEdges
-      )
-    );
+    setEdges((currentEdges) => appendEdge(currentEdges, nextEdge));
     setSelectedEdgeId(nextEdge.id);
     setConnectionPanelMode("edit");
   }
@@ -111,7 +105,7 @@ export function useFlowWeaveState() {
       relation: input.relation,
       guidanceNote: input.guidanceNote
     });
-    setEdges((currentEdges) => addEdge(nextEdge, currentEdges));
+    setEdges((currentEdges) => appendEdge(currentEdges, nextEdge));
     setSelectedEdgeId(nextEdge.id);
     setConnectionPanelMode("edit");
   }
@@ -197,4 +191,9 @@ export function useFlowWeaveState() {
     updateModuleFields,
     updateModule
   };
+}
+
+function appendEdge(currentEdges: ReturnType<typeof createFlowEdge>[], nextEdge: ReturnType<typeof createFlowEdge>) {
+  if (currentEdges.some((edge) => edge.id === nextEdge.id)) return currentEdges;
+  return [...currentEdges, nextEdge];
 }

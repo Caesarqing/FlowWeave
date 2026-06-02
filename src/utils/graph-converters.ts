@@ -1,5 +1,6 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
+import { cn } from "./classnames";
 import { relationLabel } from "./labels";
 import { relationStyle } from "./relation-styles";
 
@@ -9,6 +10,8 @@ export type FlowNodeData = GraphNode &
   Record<string, unknown> & {
     connectionHandles?: ConnectionHandleLayout;
     edgeConnected?: boolean;
+    selectedEdgeId?: string;
+    selectedEdgeColor?: string;
     selectedEdgeRole?: "source" | "target";
   };
 export type FlowWeaveNode = Node<FlowNodeData>;
@@ -33,7 +36,7 @@ export function createFlowEdge(edge: GraphEdge): Edge {
     markerEnd: { type: MarkerType.ArrowClosed, color },
     style: { stroke: color },
     data: { relation: edge.relation, guidanceNote: edge.guidanceNote },
-    className: `relation-edge ${edge.relation}`
+    className: cn("relation-edge", edge.relation)
   };
 }
 
@@ -66,7 +69,7 @@ export function decorateFlowGraph(nodes: FlowWeaveNode[], edges: Edge[], selecte
         label: relationLabel[relation],
         markerEnd: { type: MarkerType.ArrowClosed, color },
         style: { ...(edge.style ?? {}), stroke: color },
-        className: `relation-edge ${relation}${isSelected ? " selected" : ""}`,
+        className: cn("relation-edge", relation, isSelected && "selected"),
         data: { ...(edge.data ?? {}), relation }
       };
     }),
@@ -79,6 +82,8 @@ export function decorateFlowGraph(nodes: FlowWeaveNode[], edges: Edge[], selecte
           ...node.data,
           connectionHandles: handlesByNode.get(node.id) ?? createEmptyHandleLayout(node.id),
           edgeConnected: selectedPair.has(node.id),
+          selectedEdgeId,
+          selectedEdgeColor: selectedEdge ? relationStyle[((selectedEdge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on")].color : undefined,
           selectedEdgeRole
         }
       };
@@ -142,7 +147,8 @@ function createSlots(nodeId: string, side: "source" | "target", edges: Edge[]): 
     id: `${nodeId}-${side}-${index}-${edge.id}`,
     edgeId: edge.id,
     offsetPercent: Math.round(step * (index + 1)),
-    count: 1
+    count: 1,
+    relation: (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on"
   }));
 }
 

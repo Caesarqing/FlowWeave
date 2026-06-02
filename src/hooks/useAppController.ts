@@ -6,10 +6,12 @@ import { useModuleActions } from "./useModuleActions";
 import { useProjectActions } from "./useProjectActions";
 import { useSequenceDiagramState } from "./useSequenceDiagramState";
 import { useToolActions } from "./useToolActions";
+import { useI18n } from "../utils/i18n";
 
 const MAX_RENDERED_TREE_ROWS = 900;
 
 export function useAppController() {
+  const { t } = useI18n();
   const activePage = useWorkspaceStore((state) => state.activePage);
   const projectLabel = useWorkspaceStore((state) => state.projectLabel);
   const projectPath = useWorkspaceStore((state) => state.projectPath);
@@ -138,13 +140,13 @@ export function useAppController() {
   function exportGuidanceFiles() {
     if (activePage === "structure") {
       if (!sequence.bundle) {
-        sequence.setStatus("请先生成 Sequence Diagram，再导出指导文件。");
-        setLastRunStatus("请先生成 Sequence Diagram，再导出指导文件。");
+        sequence.setStatus("Generate a Sequence Diagram before exporting guidance files.");
+        setLastRunStatus("Generate a Sequence Diagram before exporting guidance files.");
         return;
       }
       downloadText("sequence-guidance.md", buildSequenceGuidanceMarkdown(projectLabel, sequence.bundle, sequence.activeKind));
       downloadText("sequence-task.json", buildSequenceTaskJson(projectLabel, sequence.bundle, sequence.activeKind));
-      setLastRunStatus("已导出 Sequence Diagram 指导文件。");
+      setLastRunStatus("Sequence Diagram guidance files exported.");
       return;
     }
     downloadText("guidance.md", buildGuidanceMarkdown(projectLabel, flow.modules, flow.graphRelations));
@@ -161,12 +163,12 @@ export function useAppController() {
 
   async function runSequenceToolPlan(agentId: import("../types").RuntimeAgentId) {
     if (!window.flowweave || !projectPath) {
-      setLastRunStatus("请先在桌面版读取一个本地项目。");
-      sequence.setStatus("请先在 Electron 桌面版打开项目。");
+      setLastRunStatus(t("docs.needDesktop"));
+      sequence.setStatus(t("docs.needDesktop"));
       return;
     }
     if (!sequence.bundle) {
-      const message = "请先生成 Sequence Diagram，再发送给默认 Agent 生成计划。";
+      const message = "Generate a Sequence Diagram before sending it to the default Agent.";
       setLastRunStatus(message);
       sequence.setStatus(message);
       return;
@@ -249,7 +251,7 @@ export function useAppController() {
 
   async function saveCustomAgent(input: import("../types").CustomAgentInput) {
     if (!window.flowweave) {
-      setLastRunStatus("浏览器预览模式无法保存本地 Agent。请使用 npm run dev:electron 打开桌面版。");
+      setLastRunStatus(t("agent.bridgeWarning"));
       return;
     }
     try {
@@ -263,13 +265,13 @@ export function useAppController() {
 
   async function deleteCustomAgent(agentId: import("../types").AgentId) {
     if (!window.flowweave) {
-      setLastRunStatus("浏览器预览模式无法删除本地 Agent。请使用 npm run dev:electron 打开桌面版。");
+      setLastRunStatus(t("agent.bridgeWarning"));
       return;
     }
     try {
       await window.flowweave.deleteCustomAgent(agentId);
       await refreshAgents();
-      setLastRunStatus("已删除自定义 Agent。");
+      setLastRunStatus("Custom Agent deleted.");
     } catch (error) {
       setLastRunStatus(`删除 Agent 失败：${formatErrorMessage(error)}`);
     }
@@ -331,7 +333,7 @@ export function useAppController() {
       selectedEdge: flow.selectedEdge,
       selectedEdgeId: flow.selectedEdgeId,
       selectedNode: flow.selectedNode,
-      analysisLabel: projectStatus.includes("架构图") ? "Architecture map" : "Connect nodes to define modification context"
+      analysisLabel: projectStatus.includes("架构图") || projectStatus.includes("Architecture") ? "Architecture map" : t("canvas.subtitle")
     },
     dialogText,
     isDesktopBridgeAvailable: Boolean(window.flowweave),

@@ -9,6 +9,7 @@ import type {
   SequenceMessage,
   SequenceParticipant
 } from "../types";
+import { useI18n } from "../utils/i18n";
 
 const diagramLabels: Record<SequenceDiagramKind, string> = {
   architectural: "Architectural",
@@ -45,12 +46,13 @@ export function useSequenceDiagramState({
   projectPath: string;
   selectedAgentId: RuntimeAgentId;
 }): SequenceDiagramState {
+  const { t } = useI18n();
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [activeKind, setActiveKind] = useState<SequenceDiagramKind>("architectural");
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [instruction, setInstruction] = useState("");
-  const [status, setStatus] = useState("打开项目后可生成 Sequence Diagram。");
+  const [status, setStatus] = useState("Open a project to generate a Sequence Diagram.");
   const [isBusy, setIsBusy] = useState(false);
   const fileCount = useMemo(() => countFiles(files), [files]);
   const diagram = activeKind === "architectural" ? bundle?.architectural : bundle?.detailedDesign;
@@ -63,13 +65,13 @@ export function useSequenceDiagramState({
     setSelectedParticipantId("");
     setBundle(undefined);
     if (!projectPath || !window.flowweave) {
-      setStatus(projectPath ? "需要 Electron 桌面版读取序列图产物。" : "请先打开项目。");
+      setStatus(projectPath ? "Use the Electron desktop app to read sequence diagram artifacts." : "Open a project first.");
       return;
     }
     void window.flowweave.readSequenceDiagrams(projectPath).then((nextBundle) => {
       if (!isMounted) return;
       setBundle(nextBundle);
-      setStatus(nextBundle ? `已读取 ${diagramLabels[activeKind]} 序列图。` : "还没有序列图产物，请点击生成。");
+      setStatus(nextBundle ? `Loaded ${diagramLabels[activeKind]} sequence diagram.` : "No sequence diagram artifact yet. Click generate.");
     });
     return () => {
       isMounted = false;
@@ -84,11 +86,11 @@ export function useSequenceDiagramState({
 
   async function generateDiagrams() {
     if (!window.flowweave || !projectPath) {
-      setStatus("请先在 Electron 桌面版打开项目。");
+      setStatus(t("docs.needDesktop"));
       return;
     }
     setIsBusy(true);
-    setStatus(`正在使用 ${selectedAgentId} 生成序列图...`);
+    setStatus(`Generating sequence diagrams with ${selectedAgentId}...`);
     try {
       const result = await window.flowweave.generateSequenceDiagrams(projectPath, selectedAgentId);
       const nextBundle = result.bundle;
@@ -97,7 +99,7 @@ export function useSequenceDiagramState({
       setSelectedParticipantId("");
       setStatus(generationStatusMessage(result));
     } catch (error) {
-      setStatus(`生成失败：${formatErrorMessage(error)}`);
+      setStatus(`Generation failed: ${formatErrorMessage(error)}`);
     } finally {
       setIsBusy(false);
     }
@@ -105,24 +107,24 @@ export function useSequenceDiagramState({
 
   async function reviseDiagram() {
     if (!window.flowweave || !projectPath) {
-      setStatus("请先在 Electron 桌面版打开项目。");
+      setStatus(t("docs.needDesktop"));
       return;
     }
     if (!instruction.trim()) {
-      setStatus("请输入需要调整的序列图要求。");
+      setStatus("Enter a sequence diagram revision request.");
       return;
     }
     setIsBusy(true);
-    setStatus(`正在修订 ${diagramLabels[activeKind]} 序列图...`);
+    setStatus(`Revising ${diagramLabels[activeKind]} sequence diagram...`);
     try {
       const nextBundle = await window.flowweave.reviseSequenceDiagram(projectPath, selectedAgentId, activeKind, instruction.trim());
       setBundle(nextBundle);
       setInstruction("");
       setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
       setSelectedParticipantId("");
-      setStatus("序列图已按输入要求更新。");
+      setStatus("Sequence diagram updated from the revision request.");
     } catch (error) {
-      setStatus(`修订失败，已保留旧图：${formatErrorMessage(error)}`);
+      setStatus(`Revision failed; kept the previous diagram: ${formatErrorMessage(error)}`);
     } finally {
       setIsBusy(false);
     }

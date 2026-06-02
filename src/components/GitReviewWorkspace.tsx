@@ -1,34 +1,37 @@
 import { useState } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { useWorkspaceStore } from "../stores/workspace.store";
+import { cn } from "../utils/classnames";
+import { useI18n } from "../utils/i18n";
 
 export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
+  const { t } = useI18n();
   const diff = useWorkspaceStore((state) => state.diff);
   const checkpointId = useWorkspaceStore((state) => state.checkpointId);
   const activeRun = useWorkspaceStore((state) => state.selectedRunArtifact?.summary);
   const setDiff = useWorkspaceStore((state) => state.setDiff);
   const setCheckpointId = useWorkspaceStore((state) => state.setCheckpointId);
-  const [status, setStatus] = useState("点击刷新读取 Git diff。");
+  const [status, setStatus] = useState(() => t("git.status"));
 
   async function refreshDiff() {
     if (!window.flowweave || !projectPath) {
-      setStatus("请使用桌面版并先打开一个 Git 项目。");
+      setStatus(t("git.needDesktop"));
       return;
     }
     const result = await window.flowweave.gitDiff(projectPath, activeRun?.checkpointId);
     setDiff(result);
-    setStatus(result.isRepo ? `读取到 ${result.changedFiles.length} 个变更文件。` : "当前项目不是 Git 仓库。");
+    setStatus(result.isRepo ? t("git.readFiles", { count: result.changedFiles.length }) : t("git.notRepo"));
   }
 
   async function createCheckpoint() {
     if (!window.flowweave || !projectPath) {
-      setStatus("请使用桌面版并先打开一个 Git 项目。");
+      setStatus(t("git.needDesktop"));
       return;
     }
     try {
       const id = await window.flowweave.gitCheckpoint(projectPath);
       setCheckpointId(id);
-      setStatus(`Checkpoint 已创建：${id}`);
+      setStatus(`Checkpoint: ${id}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     }
@@ -36,12 +39,12 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
 
   async function rollback() {
     if (!window.flowweave || !projectPath || !checkpointId) {
-      setStatus("请先创建或选择 checkpoint。");
+      setStatus(t("git.needCheckpoint"));
       return;
     }
     try {
       await window.flowweave.gitRollback(projectPath, checkpointId);
-      setStatus(`已回滚：${checkpointId}`);
+      setStatus(t("git.rollbackDone", { id: checkpointId }));
       await refreshDiff();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -52,16 +55,16 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
     <main className="workspace-page git-workspace">
       <section className="workspace-column">
         <div className="panel-header"><span>Git Review</span></div>
-        <button className="ghost-button" type="button" onClick={refreshDiff}>刷新 Diff</button>
-        <button className="ghost-button" type="button" onClick={() => void createCheckpoint()}>创建 Checkpoint</button>
+        <button className="ghost-button" type="button" onClick={refreshDiff}>{t("git.refresh")}</button>
+        <button className="ghost-button" type="button" onClick={() => void createCheckpoint()}>{t("git.createCheckpoint")}</button>
         <button className="ghost-button" disabled={!checkpointId} type="button" onClick={() => void rollback()}>Rollback</button>
         <p className="project-status">{status}</p>
         <div className="module-card">
-          <h3>Active Run</h3>
-          <p>{activeRun ? `${activeRun.id} · ${activeRun.toolId} · ${activeRun.status}` : "尚未从 Agent 运行进入审查。"}</p>
-          <p>{activeRun?.checkpointId ? `Checkpoint: ${activeRun.checkpointId}` : "No run checkpoint."}</p>
+          <h3>{t("git.activeRun")}</h3>
+          <p>{activeRun ? `${activeRun.id} · ${activeRun.toolId} · ${activeRun.status}` : t("git.noActiveRun")}</p>
+          <p>{activeRun?.checkpointId ? `Checkpoint: ${activeRun.checkpointId}` : t("git.noCheckpoint")}</p>
         </div>
-        <div className={`bridge-state ${diff?.safety.level ?? "ok"}`}>Safety: {diff?.safety.level ?? "unknown"}</div>
+        <div className={cn("bridge-state", diff?.safety.level ?? "ok")}>Safety: {diff?.safety.level ?? "unknown"}</div>
         <div className="file-list">
           {diff?.changedFiles.map((file) => (
             <div className="file-pill" key={file.path}>
@@ -72,7 +75,7 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
         </div>
       </section>
       <section className="workspace-main">
-        <div className="panel-header"><span>Diff</span></div>
+        <div className="panel-header"><span>{t("git.diff")}</span></div>
         <DiffViewer patch={diff?.patch ?? ""} />
       </section>
     </main>

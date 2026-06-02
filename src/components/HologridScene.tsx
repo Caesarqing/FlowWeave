@@ -1,118 +1,172 @@
 import { useEffect, useRef } from "react";
-import type * as ThreeNamespace from "three";
+
+type Point = {
+  x: number;
+  z: number;
+};
+
+type HologridPalette = {
+  gradientStart: string;
+  gradientMid: string;
+  gradientEnd: string;
+  lineCyan: string;
+  lineGreen: string;
+  node: string;
+  ring: string;
+};
+
+const gridPoints: Point[] = [];
+
+for (let x = -8; x <= 8; x += 2) {
+  for (let z = -8; z <= 8; z += 2) {
+    gridPoints.push({ x, z });
+  }
+}
 
 export function HologridScene() {
-  const mountRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const mountElement = mountRef.current;
-    if (!mountElement) return;
-    const mount = mountElement;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    let disposed = false;
-    let cleanupScene: (() => void) | undefined;
+    const context = canvas.getContext("2d", { alpha: true });
+    if (!context) return;
+    const sceneCanvas = canvas;
+    const ctx = context;
 
-    void import("three").then((THREE: typeof ThreeNamespace) => {
-      if (disposed || !mount.isConnected) return;
+    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frameId = 0;
+    let width = 0;
+    let height = 0;
+    let ratio = 1;
+    let palette = getPalette(sceneCanvas);
 
-      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80);
-      camera.position.set(0, 5.2, 8.6);
-      camera.lookAt(0, -0.35, 0);
+    function isReducedMotion() {
+      return reducedMotionQuery.matches || document.documentElement.dataset.motion === "reduced";
+    }
 
-      let renderer: ThreeNamespace.WebGLRenderer;
-      try {
-        renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
-      } catch {
-        return;
-      }
-      renderer.setClearColor(0x000000, 0);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-      mount.appendChild(renderer.domElement);
+    function resize() {
+      const rect = sceneCanvas.getBoundingClientRect();
+      width = Math.max(1, Math.floor(rect.width));
+      height = Math.max(1, Math.floor(rect.height));
+      ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+      sceneCanvas.width = Math.floor(width * ratio);
+      sceneCanvas.height = Math.floor(height * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      palette = getPalette(sceneCanvas);
+      draw(performance.now());
+    }
 
-      const grid = new THREE.GridHelper(18, 36, 0x3af7a4, 0x45d9ff);
-      const gridMaterial: ThreeNamespace.Material[] = grid.material instanceof Array ? grid.material : [grid.material];
-      gridMaterial.forEach((material) => {
-        material.transparent = true;
-        material.opacity = 0.18;
-        material.depthWrite = false;
-      });
-      grid.position.y = -1.6;
-      scene.add(grid);
-
-      const pointGeometry = new THREE.BufferGeometry();
-      const positions: number[] = [];
-      for (let x = -8; x <= 8; x += 2) {
-        for (let z = -8; z <= 8; z += 2) {
-          positions.push(x, -1.58, z);
-        }
-      }
-      pointGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      const pointMaterial = new THREE.PointsMaterial({
-        color: 0xb8fff2,
-        size: 0.035,
-        transparent: true,
-        opacity: 0.46,
-        depthWrite: false
-      });
-      const points = new THREE.Points(pointGeometry, pointMaterial);
-      scene.add(points);
-
-      const ringGeometry = new THREE.TorusGeometry(2.9, 0.008, 8, 96);
-      const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x45d9ff, transparent: true, opacity: 0.16, depthWrite: false });
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.set(0, -1.54, 0);
-      scene.add(ring);
-
-      let frameId = 0;
-
-      function resize() {
-        const { width, height } = mount.getBoundingClientRect();
-        if (width <= 0 || height <= 0) return;
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-        renderer.setSize(width, height, false);
-      }
-
-      function render(time = 0) {
-        if (!reducedMotion) {
-          const drift = time * 0.00012;
-          grid.rotation.y = drift;
-          points.rotation.y = drift;
-          ring.rotation.z = time * 0.00016;
-        }
-        renderer.render(scene, camera);
-        if (!reducedMotion) frameId = window.requestAnimationFrame(render);
-      }
-
-      const resizeObserver = new ResizeObserver(() => {
-        resize();
-        if (reducedMotion) render();
-      });
-      resizeObserver.observe(mount);
-      resize();
-      render();
-
-      cleanupScene = () => {
-        window.cancelAnimationFrame(frameId);
-        resizeObserver.disconnect();
-        if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
-        pointGeometry.dispose();
-        pointMaterial.dispose();
-        ringGeometry.dispose();
-        ringMaterial.dispose();
-        gridMaterial.forEach((material) => material.dispose());
-        renderer.dispose();
+    function project(x: number, z: number, drift: number) {
+      const rotatedX = x * Math.cos(drift) - z * Math.sin(drift);
+      const rotatedZ = x * Math.sin(drift) + z * Math.cos(drift);
+      const depth = rotatedZ + 14;
+      const scale = 320 / depth;
+      return {
+        alpha: Math.max(0.08, Math.min(0.52, 1 - depth / 24)),
+        x: width / 2 + rotatedX * scale,
+        y: height * 0.68 + (rotatedZ - 4) * scale * 0.28
       };
-    }).catch(() => undefined);
+    }
+
+    function draw(time: number) {
+      const reducedMotion = isReducedMotion();
+      const drift = reducedMotion ? 0.18 : time * 0.00012;
+      ctx.clearRect(0, 0, width, height);
+
+      const gradient = ctx.createRadialGradient(width * 0.5, height * 0.55, 0, width * 0.5, height * 0.55, Math.max(width, height) * 0.62);
+      gradient.addColorStop(0, palette.gradientStart);
+      gradient.addColorStop(0.42, palette.gradientMid);
+      gradient.addColorStop(1, palette.gradientEnd);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      drawGrid(drift);
+      drawNodes(drift, time, reducedMotion);
+      drawRing(time, reducedMotion);
+
+      if (!reducedMotion) frameId = window.requestAnimationFrame(draw);
+    }
+
+    function drawGrid(drift: number) {
+      ctx.lineWidth = 1;
+      for (let index = -8; index <= 8; index += 1) {
+        drawProjectedLine({ x: -8, z: index }, { x: 8, z: index }, drift, palette.lineCyan);
+        drawProjectedLine({ x: index, z: -8 }, { x: index, z: 8 }, drift, palette.lineGreen);
+      }
+    }
+
+    function drawProjectedLine(start: Point, end: Point, drift: number, color: string) {
+      const from = project(start.x, start.z, drift);
+      const to = project(end.x, end.z, drift);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = Math.min(from.alpha, to.alpha);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    function drawNodes(drift: number, time: number, reducedMotion: boolean) {
+      const pulse = reducedMotion ? 0 : Math.sin(time * 0.002) * 0.45;
+      for (const point of gridPoints) {
+        const projected = project(point.x, point.z, drift);
+        ctx.beginPath();
+        ctx.arc(projected.x, projected.y, 1.2 + pulse * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = palette.node;
+        ctx.globalAlpha = projected.alpha;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawRing(time: number, reducedMotion: boolean) {
+      const radiusX = Math.min(width, height) * 0.19;
+      const radiusY = radiusX * 0.22;
+      const offset = reducedMotion ? 0 : Math.sin(time * 0.0008) * 8;
+      ctx.beginPath();
+      ctx.ellipse(width / 2, height * 0.62 + offset, radiusX, radiusY, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = palette.ring;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(sceneCanvas);
+    reducedMotionQuery.addEventListener("change", resize);
+    const themeObserver = new MutationObserver(() => {
+      palette = getPalette(sceneCanvas);
+      if (isReducedMotion()) draw(performance.now());
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-motion"] });
+    resize();
 
     return () => {
-      disposed = true;
-      cleanupScene?.();
+      window.cancelAnimationFrame(frameId);
+      resizeObserver.disconnect();
+      themeObserver.disconnect();
+      reducedMotionQuery.removeEventListener("change", resize);
     };
   }, []);
 
-  return <div aria-hidden="true" className="hologrid-scene" ref={mountRef} />;
+  return <canvas aria-hidden="true" className="hologrid-scene" ref={canvasRef} />;
+}
+
+function getPalette(canvas: HTMLCanvasElement): HologridPalette {
+  const styles = window.getComputedStyle(canvas);
+  return {
+    gradientStart: cssVariable(styles, "--hologrid-gradient-start", "rgba(66, 245, 167, 0.055)"),
+    gradientMid: cssVariable(styles, "--hologrid-gradient-mid", "rgba(137, 236, 255, 0.03)"),
+    gradientEnd: cssVariable(styles, "--hologrid-gradient-end", "rgba(2, 3, 3, 0)"),
+    lineCyan: cssVariable(styles, "--hologrid-line-cyan", "rgba(137, 236, 255, 0.1)"),
+    lineGreen: cssVariable(styles, "--hologrid-line-green", "rgba(66, 245, 167, 0.085)"),
+    node: cssVariable(styles, "--hologrid-node", "rgba(184, 255, 242, 0.42)"),
+    ring: cssVariable(styles, "--hologrid-ring", "rgba(137, 236, 255, 0.13)")
+  };
+}
+
+function cssVariable(styles: CSSStyleDeclaration, name: string, fallback: string) {
+  return styles.getPropertyValue(name).trim() || fallback;
 }

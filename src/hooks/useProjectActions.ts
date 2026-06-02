@@ -1,4 +1,5 @@
 import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectFileNode, RuntimeAgentId } from "../types";
+import { useI18n } from "../utils/i18n";
 
 export function useProjectActions({
   maxRenderedTreeRows,
@@ -21,10 +22,11 @@ export function useProjectActions({
   setProjectPath: (value: string) => void;
   setProjectStatus: (value: string) => void;
 }) {
+  const { t } = useI18n();
   async function applyProjectOpenResult(result: FlowWeaveProjectOpenResult) {
     if (result.canceled) {
-      setProjectStatus("已取消项目读取。");
-      setLastRunStatus("已取消项目读取。");
+      setProjectStatus(t("status.cancelRead"));
+      setLastRunStatus(t("status.cancelRead"));
       return;
     }
 
@@ -36,28 +38,28 @@ export function useProjectActions({
     replaceProjectGraph(inferredModules, inferredEdges, result.project.files);
 
     const truncateNote = result.project.summary.truncated
-      ? ` 为保持流畅，文件树展示前 ${result.project.summary.displayedEntries ?? maxRenderedTreeRows} 项。`
+      ? t("status.projectTruncated", { count: result.project.summary.displayedEntries ?? maxRenderedTreeRows })
       : "";
-    const message = `已读取 ${result.project.summary.totalFiles} 个文件，生成 ${inferredModules.length} 个模块节点。${truncateNote}`;
+    const message = t("status.projectRead", { files: result.project.summary.totalFiles, modules: inferredModules.length, note: truncateNote });
     setProjectStatus(message);
     setLastRunStatus(message);
   }
 
   async function openProject() {
     if (!window.flowweave) {
-      const message = "当前是浏览器预览，无法打开本地目录。请使用 npm run dev:electron 启动桌面版。";
+      const message = t("status.browserNoOpen");
       setProjectStatus(message);
       setLastRunStatus(message);
       return;
     }
 
     setIsProjectLoading(true);
-    setProjectStatus("正在打开项目选择器...");
+    setProjectStatus(t("status.openingPicker"));
     try {
       const result = await window.flowweave.openProject();
       await applyProjectOpenResult(result);
     } catch (error) {
-      const message = `项目读取失败：${formatErrorMessage(error)}`;
+      const message = t("status.readFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
@@ -67,7 +69,7 @@ export function useProjectActions({
 
   async function refreshProject() {
     if (!window.flowweave) {
-      const message = "当前是浏览器预览，无法重新扫描本地目录。请使用 npm run dev:electron 启动桌面版。";
+      const message = t("status.browserNoRescan");
       setProjectStatus(message);
       setLastRunStatus(message);
       return;
@@ -79,12 +81,12 @@ export function useProjectActions({
     }
 
     setIsProjectLoading(true);
-    setProjectStatus("正在重新扫描当前项目...");
+    setProjectStatus(t("status.rescanning"));
     try {
       const result = await window.flowweave.scanProject(projectPath);
       await applyProjectOpenResult(result);
     } catch (error) {
-      const message = `重新扫描失败：${formatErrorMessage(error)}`;
+      const message = t("status.rescanFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
@@ -94,20 +96,20 @@ export function useProjectActions({
 
   async function analyzeProject(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectPath) {
-      setLastRunStatus("请先在桌面版 Canvas 页读取一个本地项目。");
+      setLastRunStatus(t("docs.needDesktop"));
       return;
     }
 
     setIsProjectLoading(true);
-    setProjectStatus("正在生成架构模块图...");
+    setProjectStatus(t("status.generatingGraph"));
     try {
       const result = await window.flowweave.analyzeArchitectureWithAgent(projectPath, agentId);
       replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
-      const message = result.source === "agent" ? `架构图生成完成，生成 ${result.graph.nodes.length} 个功能模块。` : `基础架构图生成完成，生成 ${result.graph.nodes.length} 个功能模块。`;
+      const message = result.source === "agent" ? t("status.analysisComplete", { count: result.graph.nodes.length }) : t("status.analysisFallback", { count: result.graph.nodes.length });
       setProjectStatus(message);
       setLastRunStatus(message);
     } catch (error) {
-      const message = `架构图生成失败：${formatErrorMessage(error)}`;
+      const message = t("status.analysisFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {

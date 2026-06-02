@@ -12,9 +12,9 @@ type ProjectState = {
 };
 
 export const useProjectStore = create<ProjectState>((set) => ({
-  projectLabel: "未选择项目",
+  projectLabel: "No project selected",
   projectPath: "",
-  projectStatus: "请先打开一个本地后端项目，FlowWeave 会读取文件树并生成模块节点。",
+  projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
   setProjectLabel: (projectLabel) => set({ projectLabel }),
   setProjectPath: (projectPath) => set({ projectPath }),

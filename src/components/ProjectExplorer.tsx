@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight, FileCode2, Folder, RefreshCw } from "lucide-react";
 import type { ProjectFileNode, ProjectFileRow } from "../types";
 import { flattenVisibleProjectFiles } from "../utils/file-utils";
+import { cn } from "../utils/classnames";
+import { useI18n } from "../utils/i18n";
 
 export function ProjectExplorer({
   expandedPaths,
@@ -26,35 +28,36 @@ export function ProjectExplorer({
   statusMessage: string;
 }) {
   const { rows, truncated } = flattenVisibleProjectFiles(files, expandedPaths, maxVisibleRows);
+  const { t } = useI18n();
 
   return (
     <aside className="left-panel">
       <div className="panel-header">
-        <span>Project Files</span>
+        <span>{t("project.files")}</span>
       </div>
       <div className="project-actions">
         <div className={`bridge-state ${isDesktopBridgeAvailable ? "ready" : "browser"}`}>
-          {isDesktopBridgeAvailable ? "Desktop bridge ready" : "Browser preview only"}
+          {isDesktopBridgeAvailable ? t("project.desktopReady") : t("project.browserOnly")}
         </div>
         <div className="project-path" title={projectPath || undefined}>
-          {projectPath || "尚未打开本地项目"}
+          {projectPath || t("project.noProject")}
         </div>
         <div className="project-action-row">
           <button className="ghost-button" disabled={isProjectLoading} type="button" onClick={onOpenProject}>
             <Folder size={14} />
-            打开项目
+            {t("project.open")}
           </button>
           <button className="ghost-button" disabled={isProjectLoading || !projectPath} type="button" onClick={onRefreshProject}>
             <RefreshCw size={14} />
-            重新扫描
+            {t("project.refresh")}
           </button>
         </div>
-        <p className="project-status">{isProjectLoading ? "正在读取项目..." : statusMessage}</p>
+        <p className="project-status">{isProjectLoading ? t("project.loading") : statusMessage}</p>
       </div>
       <div className="tree">
         {rows.map((file: ProjectFileRow) => (
           <button
-            className={`tree-row ${file.active ? "active" : ""} ${file.isTruncatedNotice ? "muted" : ""}`}
+            className={cn("tree-row", file.active && "active", file.isTruncatedNotice && "muted")}
             disabled={file.isTruncatedNotice}
             key={file.path}
             onClick={() => {
@@ -78,7 +81,7 @@ export function ProjectExplorer({
             <span>{file.name}</span>
           </button>
         ))}
-        {truncated ? <p className="tree-truncated">可见文件已截断，折叠部分目录后会恢复完整渲染。</p> : null}
+        {truncated ? <p className="tree-truncated">{t("project.truncated")}</p> : null}
       </div>
     </aside>
   );

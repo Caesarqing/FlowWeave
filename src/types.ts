@@ -25,6 +25,7 @@ export type ProjectFile = {
 export type ActivePage = "canvas" | "structure" | "docs" | "git-review" | "tools";
 export type UtilityPanel = "profile" | "settings";
 export type UiThemeId = "system" | "light" | "dark" | "terminal" | "hologrid";
+export type LocaleId = "en" | "zh-CN";
 
 export type GraphNodeStatus = "mapped" | "needs-review" | "draft";
 export type GraphNodeType = "module" | "entrypoint" | "api" | "service" | "data" | "external" | "worker" | "utility" | "test";
@@ -38,6 +39,7 @@ export type ConnectionHandleSlot = {
   offsetPercent: number;
   collapsed?: boolean;
   count: number;
+  relation?: GraphEdgeRelation;
 };
 
 export type ConnectionHandleLayout = {

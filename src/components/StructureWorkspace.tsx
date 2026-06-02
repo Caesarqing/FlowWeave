@@ -5,6 +5,7 @@ import { Code2, GitBranch, RefreshCcw, Send, Workflow } from "lucide-react";
 import type { SequenceDiagram, SequenceDiagramKind, SequenceMessage, SequenceParticipant } from "../types";
 import type { SequenceDiagramState } from "../hooks/useSequenceDiagramState";
 import { buildSequenceFlowNodes, getSequenceFlowBounds, type SequenceFlowNode } from "../utils/sequence-diagram-flow";
+import { useI18n } from "../utils/i18n";
 
 const diagramLabels: Record<SequenceDiagramKind, string> = {
   architectural: "Architectural",
@@ -26,6 +27,7 @@ const sequenceNodeTypes: NodeTypes = {
 };
 
 export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramState }) {
+  const { t } = useI18n();
   return (
     <main className="workspace-page structure-workspace sequence-workspace">
       <section className="workspace-main sequence-main">
@@ -35,7 +37,10 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
             <div>
               <strong>{sequence.diagram ? sequence.diagram.title : "Sequence Diagram"}</strong>
               <span>
-                {sequence.fileCount} source files · Agent-ready · {sequence.diagram ? `${sequence.diagram.messages.length} messages` : "no diagram"}
+                {t("structure.sourceFiles", {
+                  count: sequence.fileCount,
+                  messageCount: sequence.diagram ? t("structure.messages", { count: sequence.diagram.messages.length }) : t("structure.noDiagramShort")
+                })}
               </span>
             </div>
           </div>
@@ -50,7 +55,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
             </div>
             <button className="send-button" disabled={sequence.isBusy} type="button" onClick={() => void sequence.generateDiagrams()}>
               <RefreshCcw size={15} />
-              {sequence.isBusy ? "处理中..." : "生成 / 重新生成"}
+              {sequence.isBusy ? t("structure.generating") : t("structure.generate")}
             </button>
           </div>
         </div>
@@ -66,32 +71,32 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
         ) : (
           <div className="sequence-empty-state">
             <Workflow size={34} />
-            <strong>尚未生成 Sequence Diagram</strong>
-            <span>点击顶部生成按钮后，这里会显示可缩放、可拖拽的架构时序图和详细设计时序图。</span>
+            <strong>{t("structure.emptyTitle")}</strong>
+            <span>{t("structure.emptyBody")}</span>
           </div>
         )}
       </section>
 
       <section className="workspace-column sequence-detail-panel">
         <div className="panel-header">
-          <span>Details & Agent</span>
+          <span>{t("structure.details")}</span>
         </div>
         <div className="sequence-detail-stack">
           <SequenceDetails diagram={sequence.diagram} message={sequence.selectedMessage} participant={sequence.selectedParticipant} />
           <section className="module-card sequence-agent-card">
-            <small>Agent revision</small>
-            <h3>发送给 Agent 修订</h3>
+            <small>{t("structure.agentRevision")}</small>
+            <h3>{t("structure.sendRevision")}</h3>
             <label className="sequence-revision-box">
-              <span>修改要求</span>
+              <span>{t("structure.instruction")}</span>
               <textarea
                 value={sequence.instruction}
                 onChange={(event) => sequence.setInstruction(event.target.value)}
-                placeholder="例如：把支付网关调用拆成授权、扣款、回调三步，并标注 requestId 和 paymentId。"
+                placeholder={t("structure.instructionPlaceholder")}
               />
             </label>
             <button className="ghost-button sequence-wide-button" disabled={sequence.isBusy || !sequence.bundle} type="button" onClick={() => void sequence.reviseDiagram()}>
               <Send size={15} />
-              发送给 Agent 修订
+              {t("structure.sendRevision")}
             </button>
             <p className="sequence-status">{sequence.status}</p>
           </section>
@@ -205,11 +210,12 @@ function SequenceDetails({
   message?: SequenceMessage;
   participant?: SequenceParticipant;
 }) {
+  const { t } = useI18n();
   if (!diagram) {
     return (
       <section className="module-card">
-        <h3>No diagram</h3>
-        <p>生成序列图后可查看消息、参数、返回值和代码证据。</p>
+        <h3>{t("structure.noDiagram")}</h3>
+        <p>{t("structure.noDiagramBody")}</p>
       </section>
     );
   }
@@ -225,9 +231,9 @@ function SequenceDetails({
         <section className="module-card detail-list">
           <DetailRow label="From" value={participantTitle(diagram, message.from)} />
           <DetailRow label="To" value={participantTitle(diagram, message.to)} />
-          <DetailRow label="Method" value={message.methodName ?? "not specified"} />
-          <DetailRow label="Input" value={message.input ?? "not specified"} />
-          <DetailRow label="Output" value={message.output ?? "not specified"} />
+          <DetailRow label="Method" value={message.methodName ?? t("structure.notSpecified")} />
+          <DetailRow label="Input" value={message.input ?? t("structure.notSpecified")} />
+          <DetailRow label="Output" value={message.output ?? t("structure.notSpecified")} />
         </section>
         <EvidenceList evidence={message.evidence} />
       </>
@@ -243,8 +249,8 @@ function SequenceDetails({
           <p>{participant.description}</p>
         </section>
         <section className="module-card detail-list">
-          <DetailRow label="File" value={participant.filePath ?? "not mapped"} />
-          <DetailRow label="Symbol" value={participant.symbol ?? "not mapped"} />
+          <DetailRow label="File" value={participant.filePath ?? t("structure.notMapped")} />
+          <DetailRow label="Symbol" value={participant.symbol ?? t("structure.notMapped")} />
         </section>
       </>
     );
@@ -256,7 +262,7 @@ function SequenceDetails({
       <h3>{diagram.title}</h3>
       <p>{diagram.summary}</p>
       <p>
-        {diagram.participants.length} participants · {diagram.messages.length} messages
+        {t("structure.participantsMessages", { participants: diagram.participants.length, messages: diagram.messages.length })}
       </p>
     </section>
   );

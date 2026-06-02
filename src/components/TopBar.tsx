@@ -1,13 +1,14 @@
 import { Download, Send } from "lucide-react";
 import type { ActivePage } from "../types";
 import { BrandLogo } from "./BrandLogo";
+import { useI18n } from "../utils/i18n";
 
-const pageTitles: Record<ActivePage, string> = {
-  canvas: "Canvas",
-  structure: "Sequence Diagram",
-  docs: "Docs",
-  "git-review": "Git Review",
-  tools: "Agent"
+const pageTitleKeys: Record<ActivePage, string> = {
+  canvas: "nav.canvas",
+  structure: "nav.sequence",
+  docs: "nav.docs",
+  "git-review": "git.diff",
+  tools: "nav.agent"
 };
 
 export function TopBar({
@@ -22,26 +23,27 @@ export function TopBar({
   projectLabel: string;
 }) {
   const showPageActions = activePage === "canvas" || activePage === "structure";
+  const { t } = useI18n();
 
   return (
     <header className="top-bar">
       <div className="wordmark">
         <BrandLogo className="brand-logo-top" />
         <div>
-          <h1>{pageTitles[activePage]}</h1>
+          <h1>{t(pageTitleKeys[activePage])}</h1>
           <p>FlowWeave / {projectLabel}</p>
         </div>
       </div>
 
       {showPageActions ? (
         <div className="top-actions">
-          <button aria-label="发送到默认 Agent 生成计划" className="ghost-button" title="发送到默认 Agent 生成计划" type="button" onClick={onSendToTool}>
+          <button aria-label={t("top.send")} className="ghost-button" title={t("top.send")} type="button" onClick={onSendToTool}>
             <Send size={16} />
-            <span className="button-label">发送到默认 Agent 生成计划</span>
+            <span className="button-label">{t("top.send")}</span>
           </button>
-          <button aria-label="导出指导文件" className="export-button" title="导出指导文件" type="button" onClick={onExport}>
+          <button aria-label={t("top.export")} className="export-button" title={t("top.export")} type="button" onClick={onExport}>
             <Download size={16} />
-            <span className="button-label">导出指导文件</span>
+            <span className="button-label">{t("top.export")}</span>
           </button>
         </div>
       ) : null}

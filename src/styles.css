@@ -23,6 +23,21 @@
   --danger: #fb7185;
   --radius: 8px;
   --surface-glint: rgba(237, 246, 244, 0.045);
+  --graph-bg: #020303;
+  --graph-bg-mid: #030607;
+  --graph-glow-primary: rgba(66, 245, 167, 0.075);
+  --graph-glow-secondary: rgba(137, 236, 255, 0.07);
+  --graph-grid-static: rgba(137, 236, 255, 0.028);
+  --hologrid-opacity: 0.46;
+  --hologrid-gradient-start: rgba(66, 245, 167, 0.055);
+  --hologrid-gradient-mid: rgba(137, 236, 255, 0.03);
+  --hologrid-gradient-end: rgba(2, 3, 3, 0);
+  --hologrid-line-cyan: rgba(137, 236, 255, 0.1);
+  --hologrid-line-green: rgba(66, 245, 167, 0.085);
+  --hologrid-node: rgba(184, 255, 242, 0.42);
+  --hologrid-ring: rgba(137, 236, 255, 0.13);
+  --handle-bulk: #d8f7ff;
+  --handle-bulk-glow: rgba(216, 247, 255, 0.52);
 }
 
 :root[data-theme="light"] {
@@ -45,6 +60,21 @@
   --success: #0f9f65;
   --success-soft: rgba(15, 159, 101, 0.11);
   --surface-glint: rgba(255, 255, 255, 0.62);
+  --graph-bg: #f8fbfa;
+  --graph-bg-mid: #f0f7f5;
+  --graph-glow-primary: rgba(15, 159, 101, 0.08);
+  --graph-glow-secondary: rgba(15, 159, 189, 0.08);
+  --graph-grid-static: rgba(15, 79, 89, 0.055);
+  --hologrid-opacity: 0.34;
+  --hologrid-gradient-start: rgba(15, 159, 101, 0.055);
+  --hologrid-gradient-mid: rgba(15, 159, 189, 0.035);
+  --hologrid-gradient-end: rgba(248, 251, 250, 0);
+  --hologrid-line-cyan: rgba(15, 159, 189, 0.12);
+  --hologrid-line-green: rgba(15, 159, 101, 0.1);
+  --hologrid-node: rgba(15, 79, 89, 0.36);
+  --hologrid-ring: rgba(15, 159, 189, 0.16);
+  --handle-bulk: #172b33;
+  --handle-bulk-glow: rgba(23, 43, 51, 0.3);
 }
 
 :root[data-theme="terminal"] {
@@ -65,6 +95,20 @@
   --accent-glow: rgba(82, 255, 154, 0.18);
   --success: #52ff9a;
   --success-soft: rgba(82, 255, 154, 0.12);
+  --graph-bg: #010301;
+  --graph-bg-mid: #030703;
+  --graph-glow-primary: rgba(82, 255, 154, 0.09);
+  --graph-glow-secondary: rgba(163, 230, 53, 0.06);
+  --graph-grid-static: rgba(82, 255, 154, 0.032);
+  --hologrid-opacity: 0.42;
+  --hologrid-gradient-start: rgba(82, 255, 154, 0.06);
+  --hologrid-gradient-mid: rgba(163, 230, 53, 0.03);
+  --hologrid-line-cyan: rgba(163, 230, 53, 0.1);
+  --hologrid-line-green: rgba(82, 255, 154, 0.1);
+  --hologrid-node: rgba(210, 255, 218, 0.42);
+  --hologrid-ring: rgba(82, 255, 154, 0.14);
+  --handle-bulk: #eaffef;
+  --handle-bulk-glow: rgba(234, 255, 239, 0.42);
 }
 
 :root[data-theme="hologrid"] {
@@ -85,6 +129,20 @@
   --accent-glow: rgba(157, 234, 255, 0.2);
   --success: #5ef2c1;
   --success-soft: rgba(94, 242, 193, 0.12);
+  --graph-bg: #010409;
+  --graph-bg-mid: #030a12;
+  --graph-glow-primary: rgba(94, 242, 193, 0.065);
+  --graph-glow-secondary: rgba(157, 234, 255, 0.085);
+  --graph-grid-static: rgba(157, 234, 255, 0.035);
+  --hologrid-opacity: 0.5;
+  --hologrid-gradient-start: rgba(94, 242, 193, 0.045);
+  --hologrid-gradient-mid: rgba(157, 234, 255, 0.045);
+  --hologrid-line-cyan: rgba(157, 234, 255, 0.12);
+  --hologrid-line-green: rgba(94, 242, 193, 0.09);
+  --hologrid-node: rgba(220, 250, 255, 0.46);
+  --hologrid-ring: rgba(157, 234, 255, 0.15);
+  --handle-bulk: #e0f7ff;
+  --handle-bulk-glow: rgba(224, 247, 255, 0.48);
 }
 
 :root[data-theme="light"] .top-bar,
@@ -600,6 +658,16 @@ button:disabled {
   white-space: nowrap;
 }
 
+.canvas-page.has-selection .canvas-toolbar-actions button {
+  width: 36px;
+  max-width: 36px;
+  padding-inline: 0;
+}
+
+.canvas-page.has-selection .canvas-toolbar-actions .button-label {
+  display: none;
+}
+
 .add-node {
   padding: 0 10px;
 }
@@ -609,9 +677,9 @@ button:disabled {
   min-height: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at 24% 18%, rgba(66, 245, 167, 0.075), transparent 24%),
-    radial-gradient(circle at 78% 72%, rgba(137, 236, 255, 0.07), transparent 28%),
-    linear-gradient(135deg, #050809, #030607 62%, #020303);
+    radial-gradient(circle at 24% 18%, var(--graph-glow-primary), transparent 24%),
+    radial-gradient(circle at 78% 72%, var(--graph-glow-secondary), transparent 28%),
+    linear-gradient(135deg, var(--graph-bg-mid), var(--graph-bg) 64%, var(--graph-bg));
 }
 
 .graph-stage::before {
@@ -620,8 +688,8 @@ button:disabled {
   pointer-events: none;
   content: "";
   background-image:
-    linear-gradient(rgba(137, 236, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(137, 236, 255, 0.028) 1px, transparent 1px);
+    linear-gradient(var(--graph-grid-static) 1px, transparent 1px),
+    linear-gradient(90deg, var(--graph-grid-static) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(circle at center, black, transparent 78%);
 }
@@ -631,14 +699,11 @@ button:disabled {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.62;
-  mix-blend-mode: screen;
-}
-
-.hologrid-scene canvas {
   width: 100%;
   height: 100%;
   display: block;
+  opacity: var(--hologrid-opacity);
+  mix-blend-mode: normal;
 }
 
 .flow-canvas,
@@ -668,6 +733,14 @@ button:disabled {
   font-size: 10px;
 }
 
+.relation-edge.depends_on { color: #89ecff; }
+.relation-edge.calls { color: #42f5a7; }
+.relation-edge.reads_writes { color: #fbbf24; }
+.relation-edge.external_api { color: #a78bfa; }
+.relation-edge.publishes_event { color: #a3e635; }
+.relation-edge.subscribes_event { color: #22d3ee; }
+.relation-edge.tests { color: #fb7185; }
+
 .relation-edge.depends_on .react-flow__edge-path { stroke: #89ecff; }
 .relation-edge.calls .react-flow__edge-path { stroke: #42f5a7; }
 .relation-edge.reads_writes .react-flow__edge-path { stroke: #fbbf24; }
@@ -677,14 +750,27 @@ button:disabled {
 .relation-edge.tests .react-flow__edge-path { stroke: #fb7185; }
 
 .relation-edge.selected .react-flow__edge-path {
-  stroke-width: 3;
-  filter: drop-shadow(0 0 7px currentColor);
+  stroke-width: 4.5;
+  filter:
+    drop-shadow(0 0 5px currentColor)
+    drop-shadow(0 0 14px currentColor);
+  opacity: 1;
+}
+
+.relation-edge.selected {
+  z-index: 8;
 }
 
 .relation-edge.selected .react-flow__edge-textbg {
   fill: #020506;
-  stroke: rgba(137, 236, 255, 0.32);
-  stroke-width: 1px;
+  stroke: currentColor;
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 7px currentColor);
+}
+
+.relation-edge.selected .react-flow__edge-text {
+  fill: #f8ffff;
+  font-weight: 900;
 }
 
 .react-flow__controls,
@@ -758,15 +844,33 @@ button:disabled {
 }
 
 .flow-module-node.edge-connected {
-  border-color: rgba(66, 245, 167, 0.72);
+  border-color: var(--selected-edge-color, rgba(66, 245, 167, 0.92));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--selected-edge-color, #42f5a7) 14%, transparent), transparent 52%),
+    #090f11;
   box-shadow:
-    0 0 0 1px rgba(66, 245, 167, 0.22),
+    0 0 0 2px color-mix(in srgb, var(--selected-edge-color, #42f5a7) 46%, transparent),
     0 18px 42px rgba(0, 0, 0, 0.38),
-    0 0 26px rgba(66, 245, 167, 0.1);
+    0 0 34px color-mix(in srgb, var(--selected-edge-color, #42f5a7) 28%, transparent);
+  transform: translate3d(0, -2px, 24px);
 }
 
 .flow-module-node.edge-role-target {
-  border-color: rgba(137, 236, 255, 0.78);
+  border-color: var(--selected-edge-color, rgba(137, 236, 255, 0.92));
+}
+
+.flow-module-node.edge-connected::before {
+  width: 22px;
+  height: 22px;
+  border-color: var(--selected-edge-color, var(--accent));
+  filter: drop-shadow(0 0 8px var(--selected-edge-color, var(--accent)));
+}
+
+.flow-module-node.edge-role-target::before {
+  right: auto;
+  left: 8px;
+  border-right: 0;
+  border-left: 1px solid var(--selected-edge-color, var(--accent));
 }
 
 .flow-module-node.kind-requirement {
@@ -816,16 +920,45 @@ button:disabled {
 }
 
 .flow-handle.connected {
-  background: var(--success);
-  border-color: rgba(201, 255, 231, 0.92);
-  box-shadow: 0 0 11px rgba(66, 245, 167, 0.42);
+  background: var(--handle-color, var(--success));
+  border-color: color-mix(in srgb, var(--handle-color, var(--success)) 35%, #ffffff);
+  box-shadow: 0 0 11px color-mix(in srgb, var(--handle-color, var(--success)) 50%, transparent);
+}
+
+.flow-handle.handle-relation-depends_on { --handle-color: #89ecff; }
+.flow-handle.handle-relation-calls { --handle-color: #42f5a7; }
+.flow-handle.handle-relation-reads_writes { --handle-color: #fbbf24; }
+.flow-handle.handle-relation-external_api { --handle-color: #a78bfa; }
+.flow-handle.handle-relation-publishes_event { --handle-color: #a3e635; }
+.flow-handle.handle-relation-subscribes_event { --handle-color: #22d3ee; }
+.flow-handle.handle-relation-tests { --handle-color: #fb7185; }
+
+.flow-handle.selected-handle {
+  width: 15px;
+  height: 15px;
+  border-width: 2px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--handle-color, var(--accent)) 22%, transparent),
+    0 0 18px color-mix(in srgb, var(--handle-color, var(--accent)) 72%, transparent);
 }
 
 .flow-handle.bulk {
   width: 16px;
   height: 24px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--accent), var(--success));
+  background: linear-gradient(180deg, var(--handle-bulk), color-mix(in srgb, var(--handle-bulk) 42%, var(--accent)));
+  border-color: var(--handle-bulk);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--handle-bulk) 40%, transparent),
+    0 0 14px var(--handle-bulk-glow);
+}
+
+.flow-handle.bulk.selected-handle {
+  width: 20px;
+  height: 30px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--handle-bulk) 32%, transparent),
+    0 0 22px var(--handle-bulk-glow);
 }
 
 .flow-handle.idle {
@@ -1706,6 +1839,11 @@ button:disabled {
   background: var(--panel-soft);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
+}
+
+.segmented-control.compact {
+  grid-template-columns: repeat(2, minmax(76px, 1fr));
+  width: 100%;
 }
 
 .segmented-control button {

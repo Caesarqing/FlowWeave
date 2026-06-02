@@ -1,5 +1,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import type { CSSProperties } from "react";
 import type { ConnectionHandleSlot } from "../../types";
+import { cn } from "../../utils/classnames";
 import type { FlowWeaveNode } from "../../utils/graph-converters";
 
 const kindLabel: Record<string, string> = {
@@ -18,11 +20,17 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
 
   return (
     <div
-      className={`flow-module-node ${selected ? "selected" : ""} ${data.edgeConnected ? "edge-connected" : ""} ${
-        data.selectedEdgeRole ? `edge-role-${data.selectedEdgeRole}` : ""
-      } ${data.risk} kind-${data.kind}`}
+      className={cn(
+        "flow-module-node",
+        selected && "selected",
+        data.edgeConnected && "edge-connected",
+        data.selectedEdgeRole && `edge-role-${data.selectedEdgeRole}`,
+        data.risk,
+        `kind-${data.kind}`
+      )}
+      style={data.selectedEdgeColor ? ({ "--selected-edge-color": data.selectedEdgeColor } as CSSProperties) : undefined}
     >
-      <ConnectionHandles handles={targetHandles} position={Position.Left} type="target" />
+      <ConnectionHandles handles={targetHandles} position={Position.Left} selectedEdgeId={data.selectedEdgeId} type="target" />
       <div className="node-meta-line">
         <span>{data.category ?? kindLabel[data.kind]}</span>
         <strong>{data.risk}</strong>
@@ -33,7 +41,7 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
         <span>{data.files.length} files</span>
         <small>{data.symbols?.length ? `${data.symbols.length} symbols` : data.files[0] ?? data.subtitle}</small>
       </div>
-      <ConnectionHandles handles={sourceHandles} position={Position.Right} type="source" />
+      <ConnectionHandles handles={sourceHandles} position={Position.Right} selectedEdgeId={data.selectedEdgeId} type="source" />
     </div>
   );
 }
@@ -41,17 +49,25 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
 function ConnectionHandles({
   handles,
   position,
+  selectedEdgeId,
   type
 }: {
   handles: ConnectionHandleSlot[];
   position: Position.Left | Position.Right;
+  selectedEdgeId?: string;
   type: "source" | "target";
 }) {
   return (
     <>
       {handles.map((handle) => (
         <Handle
-          className={`flow-handle ${handle.collapsed ? "bulk" : ""} ${handle.count > 0 ? "connected" : "idle"}`}
+          className={cn(
+            "flow-handle",
+            handle.collapsed && "bulk",
+            handle.relation && `handle-relation-${handle.relation}`,
+            (handle.edgeId === selectedEdgeId || (Boolean(selectedEdgeId) && handle.collapsed && handle.count > 0)) && "selected-handle",
+            handle.count > 0 ? "connected" : "idle"
+          )}
           id={handle.id}
           key={handle.id}
           position={position}
