@@ -1,11 +1,9 @@
 import { create } from "zustand";
 import type { GraphEdgeRelation, UiThemeId, UtilityPanel } from "../types";
-import { relationOptions } from "../utils/relation-styles";
 
 const THEME_KEY = "flowweave.uiTheme";
 const DEFAULT_RELATION_KEY = "flowweave.defaultRelation";
 const REDUCED_MOTION_KEY = "flowweave.reducedMotion";
-const themeOptions: UiThemeId[] = ["system", "light", "dark", "terminal", "hologrid"];
 
 type PreferencesState = {
   defaultRelation: GraphEdgeRelation;
@@ -19,9 +17,9 @@ type PreferencesState = {
 };
 
 export const usePreferencesStore = create<PreferencesState>((set) => ({
-  defaultRelation: readEnumValue(DEFAULT_RELATION_KEY, relationOptions, "depends_on"),
+  defaultRelation: readStoredValue<GraphEdgeRelation>(DEFAULT_RELATION_KEY, "depends_on"),
   reducedMotion: readStoredValue<"true" | "false">(REDUCED_MOTION_KEY, "false") === "true",
-  theme: readEnumValue(THEME_KEY, themeOptions, "dark"),
+  theme: readStoredValue<UiThemeId>(THEME_KEY, "dark"),
   setDefaultRelation: (defaultRelation) => {
     writeStoredValue(DEFAULT_RELATION_KEY, defaultRelation);
     set({ defaultRelation });
@@ -45,9 +43,4 @@ function readStoredValue<T extends string>(key: string, fallback: T): T {
 function writeStoredValue(key: string, value: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, value);
-}
-
-function readEnumValue<T extends string>(key: string, allowedValues: readonly T[], fallback: T): T {
-  const storedValue = readStoredValue<T>(key, fallback);
-  return allowedValues.includes(storedValue) ? storedValue : fallback;
 }

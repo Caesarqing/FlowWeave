@@ -1,13 +1,13 @@
 import type { GraphEdgeRelation, GraphNode } from "../types";
 
 export const relationLabel: Record<GraphEdgeRelation, string> = {
-  depends_on: "depends on",
-  calls: "calls",
-  reads_writes: "reads/writes",
-  external_api: "external API",
-  publishes_event: "publishes",
-  subscribes_event: "subscribes",
-  tests: "tests"
+  depends_on: "依赖",
+  calls: "调用",
+  reads_writes: "读写数据",
+  external_api: "外部 API",
+  publishes_event: "发布事件",
+  subscribes_event: "订阅事件",
+  tests: "测试覆盖"
 };
 
 export const riskLabel: Record<GraphNode["risk"], string> = {

@@ -79,6 +79,7 @@ export function App() {
                 onClose={app.canvas.onClearConnectionSelection}
                 onCreateConnection={app.canvas.onAddConnection}
                 onDeleteEdge={app.canvas.deleteEdge}
+                onUpdateEdgeEndpoints={app.canvas.onUpdateEdgeEndpoints}
                 onUpdateEdgeGuidance={app.canvas.onUpdateEdgeGuidance}
                 onUpdateEdgeRelation={app.canvas.onUpdateEdgeRelation}
                 selectedEdge={app.canvas.selectedEdge}
@@ -89,8 +90,10 @@ export function App() {
                 edges={app.canvas.graphRelations}
                 node={app.canvas.selectedNode}
                 onApplyDialog={app.canvas.onApplyDialog}
+                onDeleteNode={app.canvas.deleteModuleNode}
                 onDialogTextChange={app.canvas.onDialogTextChange}
                 onGuidanceChange={app.canvas.onGuidanceChange}
+                onModuleChange={app.canvas.onUpdateModuleFields}
                 onWriteDraft={app.canvas.onWriteDraft}
               />
             ) : null}

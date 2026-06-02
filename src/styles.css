@@ -106,6 +106,9 @@
 
 :root[data-theme="light"] .connection-form select,
 :root[data-theme="light"] .connection-form textarea,
+:root[data-theme="light"] .module-edit-form input,
+:root[data-theme="light"] .module-edit-form select,
+:root[data-theme="light"] .module-edit-form textarea,
 :root[data-theme="light"] .settings-row select,
 :root[data-theme="light"] .guidance-card textarea,
 :root[data-theme="light"] .dialog-box textarea,
@@ -933,6 +936,8 @@ button:disabled {
 }
 
 .connection-form select,
+.module-edit-form input,
+.module-edit-form select,
 .settings-row select {
   width: 100%;
   height: 34px;
@@ -945,7 +950,8 @@ button:disabled {
   font-size: 12px;
 }
 
-.connection-form textarea {
+.connection-form textarea,
+.module-edit-form textarea {
   min-height: 92px;
   resize: vertical;
   padding: 9px;
@@ -957,6 +963,35 @@ button:disabled {
   line-height: 1.5;
 }
 
+.module-edit-card {
+  display: grid;
+  gap: 10px;
+}
+
+.module-edit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.module-edit-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.module-edit-wide {
+  grid-column: 1 / -1;
+}
+
+.module-edit-form textarea {
+  min-height: 72px;
+}
+
 .connection-endpoints {
   display: grid;
   gap: 7px;
@@ -964,8 +999,9 @@ button:disabled {
 
 .connection-endpoints span,
 .connection-legend span {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   min-width: 0;
   gap: 7px;
   color: var(--muted);
@@ -977,6 +1013,22 @@ button:disabled {
   color: var(--text);
   font-size: 10px;
   text-transform: uppercase;
+}
+
+.connection-legend span {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.connection-legend span strong,
+.connection-legend span small {
+  min-width: 0;
+}
+
+.connection-legend span small {
+  grid-column: 2;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .connection-legend h3 {
@@ -1179,6 +1231,29 @@ button:disabled {
   accent-color: var(--success);
 }
 
+.settings-relation-help {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.settings-relation-help span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-relation-help strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.settings-relation-help small {
+  line-height: 1.4;
+}
+
 .module-card {
   margin: 0 10px;
   padding: 12px;
@@ -1217,6 +1292,36 @@ button:disabled {
   color: var(--text);
   font-size: 12px;
   font-weight: 800;
+}
+
+.collapsible-card {
+  padding: 0;
+}
+
+.collapsible-card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.collapsible-card-header h3 {
+  margin: 0;
+}
+
+.collapsible-card-header svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.collapsible-card-body {
+  padding: 0 12px 12px;
 }
 
 .module-card p {
@@ -1285,6 +1390,56 @@ button:disabled {
 .detail-list {
   display: grid;
   gap: 7px;
+}
+
+.module-file-tree {
+  display: grid;
+  gap: 5px;
+}
+
+.module-file-tree-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.module-file-tree-row svg {
+  margin-top: 3px;
+  color: var(--dim);
+}
+
+.module-file-tree-row.file svg {
+  color: var(--accent);
+}
+
+.module-file-tree-row span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.module-file-tree-row strong,
+.module-file-tree-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.module-file-tree-row strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.module-file-tree-row small {
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .file-pill,

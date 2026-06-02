@@ -10,6 +10,7 @@ export function ConnectionPanel({
   onClose,
   onCreateConnection,
   onDeleteEdge,
+  onUpdateEdgeEndpoints,
   onUpdateEdgeGuidance,
   onUpdateEdgeRelation,
   selectedEdge
@@ -20,6 +21,7 @@ export function ConnectionPanel({
   onClose: () => void;
   onCreateConnection: (input: { source: string; target: string; relation: GraphEdgeRelation; guidanceNote?: string }) => void;
   onDeleteEdge: (edgeId: string) => void;
+  onUpdateEdgeEndpoints: (edgeId: string, source: string, target: string) => void;
   onUpdateEdgeGuidance: (edgeId: string, guidanceNote: string) => void;
   onUpdateEdgeRelation: (edgeId: string, relation: GraphEdgeRelation) => void;
   selectedEdge?: GraphEdge;
@@ -70,6 +72,22 @@ export function ConnectionPanel({
           </section>
           <section className="module-card connection-form">
             <label>
+              Source
+              <NodeSelect
+                modules={modules}
+                value={selectedEdge.source}
+                onChange={(nextSource) => onUpdateEdgeEndpoints(selectedEdge.id, nextSource, selectedEdge.target)}
+              />
+            </label>
+            <label>
+              Target
+              <NodeSelect
+                modules={modules}
+                value={selectedEdge.target}
+                onChange={(nextTarget) => onUpdateEdgeEndpoints(selectedEdge.id, selectedEdge.source, nextTarget)}
+              />
+            </label>
+            <label>
               关系类型
               <RelationSelect value={selectedEdge.relation} onChange={(nextRelation) => onUpdateEdgeRelation(selectedEdge.id, nextRelation)} />
             </label>
@@ -82,8 +100,8 @@ export function ConnectionPanel({
               }} />
             </label>
             <div className="connection-endpoints">
-              <span><strong>Source</strong>{sourceNode?.title ?? selectedEdge.source}</span>
-              <span><strong>Target</strong>{targetNode?.title ?? selectedEdge.target}</span>
+              <span><strong>Source</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)}</span>
+              <span><strong>Target</strong>{moduleOptionLabel(targetNode, selectedEdge.target)}</span>
             </div>
             <button className="ghost-button danger-button" type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
               <Trash2 size={15} />
@@ -124,12 +142,13 @@ export function ConnectionPanel({
       )}
 
       <section className="module-card connection-legend">
-        <h3><Link2 size={14} />关系颜色</h3>
+        <h3><Link2 size={14} />关系类型</h3>
         <div>
           {relationOptions.map((option) => (
             <span key={option}>
               <i style={{ background: relationStyle[option].color }} />
-              {relationStyle[option].accent}
+              <strong>{relationStyle[option].accent}</strong>
+              <small>{relationStyle[option].description}</small>
             </span>
           ))}
         </div>
@@ -155,9 +174,14 @@ function NodeSelect({ modules, value, onChange }: { modules: GraphNode[]; value:
     <select value={value} onChange={(event) => onChange(event.target.value)}>
       {modules.map((node) => (
         <option key={node.id} value={node.id}>
-          {node.title}
+          {moduleOptionLabel(node, node.id)}
         </option>
       ))}
     </select>
   );
+}
+
+function moduleOptionLabel(node: GraphNode | undefined, fallbackId: string) {
+  if (!node) return fallbackId;
+  return node.title === node.id ? node.title : `${node.title} (${node.id})`;
 }

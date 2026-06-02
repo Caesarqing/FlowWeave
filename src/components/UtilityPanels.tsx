@@ -80,6 +80,14 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             ))}
           </select>
         </label>
+        <div className="settings-relation-help">
+          {relationOptions.map((option) => (
+            <span key={option}>
+              <strong>{relationStyle[option].accent}</strong>
+              <small>{relationStyle[option].description}</small>
+            </span>
+          ))}
+        </div>
         <div className="settings-row static">
           <span>
             <strong>多连接点阈值</strong>

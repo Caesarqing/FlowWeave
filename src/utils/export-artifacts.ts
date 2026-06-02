@@ -1,4 +1,5 @@
 import type { GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle, SequenceDiagramKind } from "../types";
+import { relationStyle } from "./relation-styles";
 
 export function buildGuidanceMarkdown(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[]) {
   return `# FlowWeave Guidance
@@ -12,7 +13,7 @@ Use the module nodes and connection relations as the modification boundary. Pref
 
 ## Module Relations
 
-${edges.map((edge) => `- ${edge.source} -> ${edge.target} (${edge.relation})${edge.guidanceNote ? `: ${edge.guidanceNote}` : ""}`).join("\n")}
+${edges.map((edge) => `- ${edge.source} -> ${edge.target}: ${relationStyle[edge.relation].accent} (${edge.relation}) - ${relationStyle[edge.relation].description}${edge.guidanceNote ? ` Guidance: ${edge.guidanceNote}` : ""}`).join("\n")}
 
 ## Modules
 
@@ -59,6 +60,8 @@ export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: G
         source: edge.source,
         target: edge.target,
         relation: edge.relation,
+        relationLabel: relationStyle[edge.relation].accent,
+        relationDescription: relationStyle[edge.relation].description,
         guidanceNote: edge.guidanceNote
       }))
     },

@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import type { GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
 import { usePreferencesStore } from "../stores/preferences.store";
 import { useWorkspaceStore } from "../stores/workspace.store";
+import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../utils/canvas-graph-crud";
 import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 
 export function useFlowWeaveState() {
@@ -117,33 +118,44 @@ export function useFlowWeaveState() {
 
   function updateEdgeRelation(edgeId: string, relation: GraphEdgeRelation) {
     setEdges((currentEdges) =>
-      currentEdges.map((edge) =>
-        edge.id === edgeId
-          ? createFlowEdge({
-              ...graphEdgeFromFlow(edge),
-              relation
-            })
-          : edge
-      )
+      updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { relation }).map(createFlowEdge)
     );
   }
 
   function updateEdgeGuidance(edgeId: string, guidanceNote: string) {
     setEdges((currentEdges) =>
-      currentEdges.map((edge) =>
-        edge.id === edgeId
-          ? createFlowEdge({
-              ...graphEdgeFromFlow(edge),
-              guidanceNote
-            })
-          : edge
-      )
+      updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { guidanceNote }).map(createFlowEdge)
+    );
+  }
+
+  function updateEdgeEndpoints(edgeId: string, source: string, target: string) {
+    if (!source || !target || source === target) return;
+    setEdges((currentEdges) =>
+      updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { source, target }).map(createFlowEdge)
     );
   }
 
   function deleteEdge(edgeId: string) {
     setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
     if (edgeId === selectedEdgeId) clearConnectionSelection();
+  }
+
+  function updateModuleFields(nodeId: string, patch: Partial<GraphNode>) {
+    updateModule(nodeId, (node) => updateModuleInCanvasGraph([node], nodeId, patch)[0] ?? node);
+  }
+
+  function deleteModuleNode(nodeId: string) {
+    const graphEdges = useWorkspaceStore.getState().edges.map(graphEdgeFromFlow);
+    const deletedGraph = deleteModuleFromCanvasGraph(useWorkspaceStore.getState().modules, graphEdges, nodeId);
+    useWorkspaceStore.setState((state) => ({
+      modules: deletedGraph.modules,
+      nodes: state.nodes.filter((node) => node.id !== nodeId),
+      selectedNodeId: state.selectedNodeId === nodeId ? deletedGraph.modules[0]?.id ?? "" : state.selectedNodeId
+    }));
+    setEdges(deletedGraph.edges.map(createFlowEdge));
+    if (selectedEdgeId && graphEdges.some((edge) => edge.id === selectedEdgeId && (edge.source === nodeId || edge.target === nodeId))) {
+      clearConnectionSelection();
+    }
   }
 
   function handleEdgesChange(changes: EdgeChange[]) {
@@ -159,6 +171,7 @@ export function useFlowWeaveState() {
     clearConnectionSelection,
     connectionPanelMode,
     defaultRelation,
+    deleteModuleNode,
     deleteEdge,
     edges: decoratedGraph.edges,
     expandedPaths,
@@ -179,7 +192,9 @@ export function useFlowWeaveState() {
     setSelectedNodeId,
     togglePath,
     updateEdgeGuidance,
+    updateEdgeEndpoints,
     updateEdgeRelation,
+    updateModuleFields,
     updateModule
   };
 }
