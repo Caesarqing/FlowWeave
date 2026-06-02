@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { registerAgentIpc } from "./ipc/agent.ipc";
 import { registerGitIpc } from "./ipc/git.ipc";
 import { registerProjectIpc } from "./ipc/project.ipc";
+import { configureAgentRegistry } from "./services/agent-registry.service";
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -32,6 +33,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  configureAgentRegistry(app.getPath("userData"));
   registerProjectIpc();
   registerAgentIpc();
   registerGitIpc();

@@ -1,4 +1,4 @@
-import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectFileNode } from "../types";
+import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectFileNode, RuntimeAgentId } from "../types";
 
 export function useProjectActions({
   maxRenderedTreeRows,
@@ -92,22 +92,22 @@ export function useProjectActions({
     }
   }
 
-  async function analyzeProject(toolId: import("../types").ToolId) {
+  async function analyzeProject(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectPath) {
       setLastRunStatus("请先在桌面版 Canvas 页读取一个本地项目。");
       return;
     }
 
     setIsProjectLoading(true);
-    setProjectStatus("正在进行 AI 项目分析...");
+    setProjectStatus("正在生成架构模块图...");
     try {
-      const result = await window.flowweave.analyzeProject(projectPath, toolId);
+      const result = await window.flowweave.analyzeArchitectureWithAgent(projectPath, agentId);
       replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
-      const message = result.source === "agent" ? `Agent 分析完成，生成 ${result.graph.nodes.length} 个模块节点。` : `基础扫描完成，生成 ${result.graph.nodes.length} 个模块节点。`;
+      const message = result.source === "agent" ? `架构图生成完成，生成 ${result.graph.nodes.length} 个功能模块。` : `基础架构图生成完成，生成 ${result.graph.nodes.length} 个功能模块。`;
       setProjectStatus(message);
       setLastRunStatus(message);
     } catch (error) {
-      const message = `AI 分析失败：${formatErrorMessage(error)}`;
+      const message = `架构图生成失败：${formatErrorMessage(error)}`;
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {

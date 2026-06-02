@@ -8,7 +8,7 @@ import {
   type EdgeChange,
   type NodeChange
 } from "@xyflow/react";
-import { BrainCircuit, Plus } from "lucide-react";
+import { BrainCircuit, Link2, Plus } from "lucide-react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
 import { DocNode } from "./nodes/DocNode";
@@ -38,7 +38,10 @@ export function CanvasWorkspace({
   isAnalyzing,
   onConnect,
   onEdgesChange,
+  onOpenConnectionCreator,
   onNodesChange,
+  onPaneClick,
+  onSelectEdge,
   onSelectNode
 }: {
   edges: Edge[];
@@ -49,7 +52,10 @@ export function CanvasWorkspace({
   isAnalyzing: boolean;
   onConnect: (connection: Connection) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
+  onOpenConnectionCreator: () => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
+  onPaneClick: () => void;
+  onSelectEdge: (edgeId: string) => void;
   onSelectNode: (nodeId: string) => void;
 }) {
   return (
@@ -62,11 +68,15 @@ export function CanvasWorkspace({
         <div className="canvas-toolbar-actions">
           <button className="ghost-button" disabled={isAnalyzing} type="button" onClick={onAnalyzeProject}>
             <BrainCircuit size={15} />
-            {isAnalyzing ? "分析中..." : "AI 分析"}
+            <span className="button-label">{isAnalyzing ? "生成中..." : "生成架构图"}</span>
           </button>
           <button className="add-node" type="button" onClick={onAddNode}>
             <Plus size={15} />
-            新增模块节点
+            <span className="button-label">新增模块节点</span>
+          </button>
+          <button className="ghost-button" type="button" onClick={onOpenConnectionCreator}>
+            <Link2 size={15} />
+            <span className="button-label">新增连接</span>
           </button>
         </div>
       </div>
@@ -83,9 +93,11 @@ export function CanvasWorkspace({
           nodeTypes={nodeTypes}
           nodesDraggable
           onConnect={onConnect}
+          onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
           onEdgesChange={onEdgesChange}
           onNodesChange={onNodesChange}
           onNodeClick={(_, node) => onSelectNode(node.id)}
+          onPaneClick={onPaneClick}
           panOnDrag
         >
           <Background color="rgba(148, 163, 184, 0.18)" gap={28} size={1} />
