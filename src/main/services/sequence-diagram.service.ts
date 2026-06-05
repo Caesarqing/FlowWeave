@@ -109,7 +109,7 @@ export function buildSequenceDiagramPrompt(facts: ProjectStructureFacts, archite
   return `You are FlowWeave's sequence diagram analyst. Return only JSON.
 
 Goal:
-Create two project sequence diagrams from the code structure and architecture map.
+Create two project sequence diagrams from the code structure and architecture map so a user can understand the real end-to-end workflow and the concrete code-level call sequence.
 
 Project: ${facts.projectName}
 Languages: ${JSON.stringify(facts.languages)}
@@ -119,6 +119,14 @@ ${JSON.stringify(compactArchitectureMap(architectureMap), null, 2)}
 
 ProjectStructureFacts:
 ${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
+
+Analysis priorities:
+- Use only the supplied ArchitectureMap and ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
+- The architectural diagram should show the end-to-end workflow across macro participants such as actor, frontend/component, gateway/API boundary, service, database, external system, and worker.
+- The detailed-design diagram should show the code-level call sequence across real controllers, classes, interfaces, repositories, utilities, workers, and methods.
+- Order messages by the real execution flow: entry/request, validation or orchestration, domain work, data access, external calls or events, return/response.
+- Fill methodName, input, output, and evidence whenever the facts provide calls, symbols, imports, exports, or externalCalls.
+- When the code facts are incomplete, label the detail as inferred from imports/calls/file role instead of presenting it as certain.
 
 Return this exact JSON shape:
 {
@@ -165,7 +173,7 @@ Rules:
 - The architectural diagram uses macro participants: frontend app, gateway, services, databases, workers, and third-party systems.
 - The detailed-design diagram maps directly to code structure: Controller, Service, Repository, Interface, Class, and concrete method calls.
 - Detailed-design messages must include methodName, input, output, and evidence when the code facts provide them.
-- Every message must reference existing participant ids.
+- Every message must reference valid participant ids from its diagram.
 - Prefer 4-10 participants and 4-14 messages per diagram.
 - Return valid JSON only.`;
 }
@@ -192,6 +200,12 @@ ${JSON.stringify(compactArchitectureMap(architectureMap), null, 2)}
 
 ProjectStructureFacts:
 ${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
+
+Revision priorities:
+- Preserve reliable existing evidence and participant mappings unless the user instruction or code facts require a change.
+- Update participants and messages together when the requested change affects components, classes, methods, inputs, outputs, or ordering.
+- Keep the workflow truthful to the supplied ArchitectureMap and ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
+- Keep message order aligned with the real execution flow and fill methodName, input, output, and evidence for changed method calls when possible.
 
 Return this exact JSON shape:
 {

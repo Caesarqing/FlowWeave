@@ -24,7 +24,14 @@ describe("task-generator.service", () => {
     const task = createTaskArtifact(graphNodes, graphEdges);
     const markdown = createTaskMarkdown(task);
 
-    expect(task.targetTools).toEqual(["codex-local", "claude-code", "cursor"]);
+    expect(task.targetTools).toEqual([
+      "claude-code",
+      "claude-desktop",
+      "codex-local",
+      "codex-desktop",
+      "gemini-cli",
+      "cursor"
+    ]);
     expect(task.modules.every((module) => module.kind)).toBe(true);
     expect(task.relations.some((relation) => relation.relation === "reads_writes")).toBe(true);
     expect(markdown).toContain("### User API");

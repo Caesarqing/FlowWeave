@@ -13,11 +13,14 @@ type ToolsState = {
 };
 
 export const useToolsStore = create<ToolsState>((set) => ({
-  selectedToolId: "codex-local",
+  selectedToolId: "claude-code",
   executionMode: "plan",
   toolStatuses: {
-    "codex-local": createUnknownToolStatus("codex-local"),
     "claude-code": createUnknownToolStatus("claude-code"),
+    "claude-desktop": createUnknownToolStatus("claude-desktop"),
+    "codex-local": createUnknownToolStatus("codex-local"),
+    "codex-desktop": createUnknownToolStatus("codex-desktop"),
+    "gemini-cli": createUnknownToolStatus("gemini-cli"),
     cursor: createUnknownToolStatus("cursor"),
     mock: createUnknownToolStatus("mock")
   },

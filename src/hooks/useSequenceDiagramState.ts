@@ -11,9 +11,9 @@ import type {
 } from "../types";
 import { useI18n } from "../utils/i18n";
 
-const diagramLabels: Record<SequenceDiagramKind, string> = {
-  architectural: "Architectural",
-  "detailed-design": "Detailed Design"
+const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
+  architectural: "structure.architectural",
+  "detailed-design": "structure.detailedDesign"
 };
 
 export type SequenceDiagramState = {
@@ -52,7 +52,7 @@ export function useSequenceDiagramState({
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [instruction, setInstruction] = useState("");
-  const [status, setStatus] = useState("Open a project to generate a Sequence Diagram.");
+  const [status, setStatus] = useState(() => t("sequence.openProject"));
   const [isBusy, setIsBusy] = useState(false);
   const fileCount = useMemo(() => countFiles(files), [files]);
   const diagram = activeKind === "architectural" ? bundle?.architectural : bundle?.detailedDesign;
@@ -65,13 +65,13 @@ export function useSequenceDiagramState({
     setSelectedParticipantId("");
     setBundle(undefined);
     if (!projectPath || !window.flowweave) {
-      setStatus(projectPath ? "Use the Electron desktop app to read sequence diagram artifacts." : "Open a project first.");
+      setStatus(projectPath ? t("sequence.needDesktop") : t("sequence.openProject"));
       return;
     }
     void window.flowweave.readSequenceDiagrams(projectPath).then((nextBundle) => {
       if (!isMounted) return;
       setBundle(nextBundle);
-      setStatus(nextBundle ? `Loaded ${diagramLabels[activeKind]} sequence diagram.` : "No sequence diagram artifact yet. Click generate.");
+      setStatus(nextBundle ? t("sequence.loaded", { kind: t(diagramLabelKeys[activeKind]) }) : t("sequence.noneYet"));
     });
     return () => {
       isMounted = false;
@@ -90,16 +90,16 @@ export function useSequenceDiagramState({
       return;
     }
     setIsBusy(true);
-    setStatus(`Generating sequence diagrams with ${selectedAgentId}...`);
+    setStatus(t("sequence.generatingWith", { agent: selectedAgentId }));
     try {
       const result = await window.flowweave.generateSequenceDiagrams(projectPath, selectedAgentId);
       const nextBundle = result.bundle;
       setBundle(nextBundle);
       setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
       setSelectedParticipantId("");
-      setStatus(generationStatusMessage(result));
+      setStatus(generationStatusMessage(result, t));
     } catch (error) {
-      setStatus(`Generation failed: ${formatErrorMessage(error)}`);
+      setStatus(t("sequence.generationFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
     }
@@ -111,20 +111,20 @@ export function useSequenceDiagramState({
       return;
     }
     if (!instruction.trim()) {
-      setStatus("Enter a sequence diagram revision request.");
+      setStatus(t("sequence.enterRevision"));
       return;
     }
     setIsBusy(true);
-    setStatus(`Revising ${diagramLabels[activeKind]} sequence diagram...`);
+    setStatus(t("sequence.revising", { kind: t(diagramLabelKeys[activeKind]) }));
     try {
       const nextBundle = await window.flowweave.reviseSequenceDiagram(projectPath, selectedAgentId, activeKind, instruction.trim());
       setBundle(nextBundle);
       setInstruction("");
       setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
       setSelectedParticipantId("");
-      setStatus("Sequence diagram updated from the revision request.");
+      setStatus(t("sequence.revised"));
     } catch (error) {
-      setStatus(`Revision failed; kept the previous diagram: ${formatErrorMessage(error)}`);
+      setStatus(t("sequence.revisionFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
     }
@@ -175,13 +175,16 @@ function formatErrorMessage(error: unknown) {
   return String(error);
 }
 
-function generationStatusMessage(result: SequenceDiagramGenerationResult) {
-  const counts = `${result.bundle.architectural.messages.length} 条架构消息，${result.bundle.detailedDesign.messages.length} 条详细设计消息`;
+function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (key: string, params?: Record<string, string | number>) => string) {
+  const counts = t("sequence.messageCounts", {
+    architectural: result.bundle.architectural.messages.length,
+    detailed: result.bundle.detailedDesign.messages.length
+  });
   if (result.outcome === "cached") {
-    return `Agent 输出无效/失败，已保留上次序列图。${result.warning ? ` ${result.warning}` : ""}`;
+    return t("sequence.cached", { warning: result.warning ? ` ${result.warning}` : "" });
   }
   if (result.outcome === "fallback") {
-    return `Agent 输出无效/失败，已生成基础 fallback 序列图：${counts}。${result.warning ? ` ${result.warning}` : ""}`;
+    return t("sequence.fallback", { counts, warning: result.warning ? ` ${result.warning}` : "" });
   }
-  return `序列图生成完成：${counts}。`;
+  return t("sequence.generated", { counts });
 }

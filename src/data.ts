@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphNode, ProjectFile } from "./types";
+import type { GraphEdge, GraphNode, LocaleId, ProjectFile } from "./types";
 
 export const files: ProjectFile[] = [
   { name: "user-service", depth: 0, type: "folder" },
@@ -106,3 +106,99 @@ export const graphEdges: GraphEdge[] = [
   { id: "user-api-persistence", source: "user-api", target: "persistence", relation: "reads_writes" },
   { id: "user-api-tests", source: "user-api", target: "tests", relation: "tests" }
 ];
+
+const englishGraphNodes: GraphNode[] = [
+  {
+    id: "intent",
+    title: "Change Intent",
+    subtitle: "Request entry and agent instruction boundary",
+    kind: "module",
+    nodeType: "entrypoint",
+    risk: "normal",
+    description: "Codex reads the user goal, project constraints, and existing docs, then forms an editable task intent node here.",
+    files: [".codex/guidance.md", "AGENTS.md", "docs/architecture.md"],
+    guidanceDraft:
+      "Read AGENTS.md and docs/architecture.md first. Confirm this change only touches account recovery paths and does not refactor unrelated modules.",
+    status: "draft",
+    x: 380,
+    y: 60
+  },
+  {
+    id: "auth",
+    title: "Auth Module",
+    subtitle: "Session state, JWT, and permission guards",
+    kind: "module",
+    nodeType: "module",
+    risk: "normal",
+    description: "Owns identity checks and access control, forming the security boundary for password reset and email verification flows.",
+    files: ["apps/api/src/auth/auth.guard.ts", "apps/api/src/auth/jwt.strategy.ts", "apps/api/src/auth/token.service.ts"],
+    guidanceDraft:
+      "Review the Auth Module token lifecycle. When adding password reset tokens, keep the existing JWT strategy unchanged and add expiry and replay protection.",
+    status: "mapped",
+    x: 90,
+    y: 250
+  },
+  {
+    id: "user-api",
+    title: "User API",
+    subtitle: "Account recovery and profile endpoints",
+    kind: "module",
+    nodeType: "module",
+    risk: "review",
+    description: "Exposes user-related REST endpoints and is the main workspace for this FlowWeave change.",
+    files: ["apps/api/src/user/user.controller.ts", "apps/api/src/user/user.service.ts", "apps/api/src/user/user.dto.ts"],
+    guidanceDraft:
+      "Add reset password and verify email endpoints to User API. Keep the controller focused on request orchestration, put core logic in the service, and add DTO validation.",
+    status: "needs-review",
+    x: 380,
+    y: 250
+  },
+  {
+    id: "persistence",
+    title: "Persistence",
+    subtitle: "Users, tokens, and audit records",
+    kind: "module",
+    nodeType: "data",
+    risk: "normal",
+    description: "Maintains schema, migrations, and repository access that must stay aligned with agent-generated changes.",
+    files: ["apps/api/src/database/user.repository.ts", "prisma/schema.prisma", "prisma/migrations"],
+    guidanceDraft:
+      "Add passwordResetTokenHash and emailVerifiedAt to schema.prisma. Do not delete existing user data when generating migrations.",
+    status: "mapped",
+    x: 700,
+    y: 250
+  },
+  {
+    id: "tests",
+    title: "Test Surface",
+    subtitle: "Integration tests and regression checks",
+    kind: "module",
+    nodeType: "test",
+    risk: "normal",
+    description: "Records the test surface required after Codex changes so implementation guidance does not omit verification.",
+    files: ["tests/integration/user.api.spec.ts", "tests/auth/reset-token.spec.ts"],
+    guidanceDraft:
+      "Cover success, expired token, duplicate submission, and invalid email cases. Prefer the project's existing package scripts for test commands.",
+    status: "draft",
+    x: 530,
+    y: 455
+  }
+];
+
+const englishGraphEdges: GraphEdge[] = [
+  { id: "intent-auth", source: "intent", target: "auth", relation: "depends_on", guidanceNote: "The request first constrains the auth boundary." },
+  { id: "intent-user-api", source: "intent", target: "user-api", relation: "calls", guidanceNote: "User API is the entry point for this change." },
+  { id: "intent-persistence", source: "intent", target: "persistence", relation: "reads_writes", guidanceNote: "Persistence changes must stay aligned with API changes." },
+  { id: "auth-user-api", source: "auth", target: "user-api", relation: "depends_on" },
+  { id: "user-api-persistence", source: "user-api", target: "persistence", relation: "reads_writes" },
+  { id: "user-api-tests", source: "user-api", target: "tests", relation: "tests" }
+];
+
+export function createDefaultGraph(locale: LocaleId): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const nodes = locale === "zh-CN" ? graphNodes : englishGraphNodes;
+  const edges = locale === "zh-CN" ? graphEdges : englishGraphEdges;
+  return {
+    nodes: nodes.map((node) => ({ ...node, files: [...node.files], symbols: node.symbols ? [...node.symbols] : undefined })),
+    edges: edges.map((edge) => ({ ...edge, evidence: edge.evidence ? [...edge.evidence] : undefined }))
+  };
+}

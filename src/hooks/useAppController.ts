@@ -84,7 +84,7 @@ export function useAppController() {
         setSelectedRunArtifact(undefined);
       }
     } catch (error) {
-      setLastRunStatus(`读取运行历史失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.runHistoryFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsRunsLoading(false);
     }
@@ -98,7 +98,7 @@ export function useAppController() {
       setSelectedRunArtifact(artifact);
     } catch (error) {
       setSelectedRunArtifact(undefined);
-      setLastRunStatus(`读取运行产物失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.runArtifactFailed", { error: formatErrorMessage(error) }));
     }
   }
 
@@ -109,12 +109,12 @@ export function useAppController() {
       const result = await window.flowweave.gitDiff(projectPath, selectedRunArtifact?.summary.checkpointId);
       setDiff(result);
     } catch (error) {
-      setLastRunStatus(`读取 Git diff 失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.gitDiffFailed", { error: formatErrorMessage(error) }));
     }
   }
 
   const toolActions = useToolActions({
-    buildGuidanceMarkdown,
+    buildGuidanceMarkdown: (label, nodes, edges) => buildGuidanceMarkdown(label, nodes, edges, t),
     agents,
     executionMode,
     graphRelations: flow.graphRelations,
@@ -140,17 +140,17 @@ export function useAppController() {
   function exportGuidanceFiles() {
     if (activePage === "structure") {
       if (!sequence.bundle) {
-        sequence.setStatus("Generate a Sequence Diagram before exporting guidance files.");
-        setLastRunStatus("Generate a Sequence Diagram before exporting guidance files.");
+        sequence.setStatus(t("sequence.exportNeedsDiagram"));
+        setLastRunStatus(t("sequence.exportNeedsDiagram"));
         return;
       }
       downloadText("sequence-guidance.md", buildSequenceGuidanceMarkdown(projectLabel, sequence.bundle, sequence.activeKind));
       downloadText("sequence-task.json", buildSequenceTaskJson(projectLabel, sequence.bundle, sequence.activeKind));
-      setLastRunStatus("Sequence Diagram guidance files exported.");
+      setLastRunStatus(t("sequence.exported"));
       return;
     }
-    downloadText("guidance.md", buildGuidanceMarkdown(projectLabel, flow.modules, flow.graphRelations));
-    downloadText("task.json", buildTaskJson(projectLabel, flow.modules, flow.graphRelations));
+    downloadText("guidance.md", buildGuidanceMarkdown(projectLabel, flow.modules, flow.graphRelations, t));
+    downloadText("task.json", buildTaskJson(projectLabel, flow.modules, flow.graphRelations, t));
   }
 
   async function sendActivePageToTool() {
@@ -168,19 +168,19 @@ export function useAppController() {
       return;
     }
     if (!sequence.bundle) {
-      const message = "Generate a Sequence Diagram before sending it to the default Agent.";
+      const message = t("sequence.sendNeedsDiagram");
       setLastRunStatus(message);
       sequence.setStatus(message);
       return;
     }
 
     const agentName = agents.find((agent) => agent.id === agentId)?.name ?? (agentId === "mock" ? "Mock Agent" : agentId);
-    setLastRunStatus(`正在让 ${agentName} 以 ${executionMode} 模式处理 Sequence Diagram...`);
+    setLastRunStatus(t("status.sequenceAgentProcessing", { agent: agentName, mode: executionMode }));
     try {
       const detection = await window.flowweave.detectAgent(agentId);
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...detection, checking: false } }));
       if (!detection.available) {
-        setLastRunStatus(`${agentName} 未检测到，无法生成计划。`);
+        setLastRunStatus(t("status.agentCannotPlan", { agent: agentName }));
         return;
       }
 
@@ -201,11 +201,11 @@ export function useAppController() {
         }
       }));
       setLastRunStatus(`${agentName} ${executionMode} ${result.status} · ${result.planPath ?? result.logPath ?? "no output"}`);
-      sequence.setStatus(`已发送 ${sequence.diagram?.title ?? "Sequence Diagram"} 给默认 Agent 生成计划。`);
+      sequence.setStatus(t("sequence.sentToAgent", { title: sequence.diagram?.title ?? "Sequence Diagram" }));
       await refreshRuns(result.id);
     } catch (error) {
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], lastRunStatus: "failed" } }));
-      setLastRunStatus(`${agentName} 生成 Sequence Diagram 计划失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.sequencePlanFailed", { agent: agentName, error: formatErrorMessage(error) }));
     }
   }
 
@@ -245,7 +245,7 @@ export function useAppController() {
         setSelectedAgentId(nextAgentId);
       }
     } catch (error) {
-      setLastRunStatus(`读取 Agent 配置失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.agentConfigFailed", { error: formatErrorMessage(error) }));
     }
   }
 
@@ -257,9 +257,9 @@ export function useAppController() {
     try {
       const agent = await window.flowweave.saveCustomAgent(input);
       await refreshAgents(agent.id);
-      setLastRunStatus(`已添加 Agent：${agent.name}`);
+      setLastRunStatus(t("status.agentAdded", { agent: agent.name }));
     } catch (error) {
-      setLastRunStatus(`添加 Agent 失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.agentAddFailed", { error: formatErrorMessage(error) }));
     }
   }
 
@@ -273,7 +273,7 @@ export function useAppController() {
       await refreshAgents();
       setLastRunStatus("Custom Agent deleted.");
     } catch (error) {
-      setLastRunStatus(`删除 Agent 失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.agentDeleteFailed", { error: formatErrorMessage(error) }));
     }
   }
 
@@ -286,7 +286,7 @@ export function useAppController() {
   function selectAgent(agentId: import("../types").AgentId) {
     setSelectedAgentId(agentId);
     const agent = agents.find((item) => item.id === agentId);
-    setLastRunStatus(`默认 Agent 已切换为 ${agent?.name ?? agentId}`);
+    setLastRunStatus(t("status.defaultAgentChanged", { agent: agent?.name ?? agentId }));
   }
 
   return {
@@ -333,7 +333,7 @@ export function useAppController() {
       selectedEdge: flow.selectedEdge,
       selectedEdgeId: flow.selectedEdgeId,
       selectedNode: flow.selectedNode,
-      analysisLabel: projectStatus.includes("架构图") || projectStatus.includes("Architecture") ? "Architecture map" : t("canvas.subtitle")
+      analysisLabel: projectStatus.includes(t("status.analysisKeyword")) || projectStatus.includes("Architecture") ? t("canvas.analysisLabel") : t("canvas.subtitle")
     },
     dialogText,
     isDesktopBridgeAvailable: Boolean(window.flowweave),

@@ -1,7 +1,7 @@
-import { MonitorCog, Palette, Settings2, UserRound, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronDown, ChevronRight, Languages, MonitorCog, Palette, Settings2, SlidersHorizontal, UserRound, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { HANDLE_COLLAPSE_THRESHOLD } from "../utils/graph-converters";
-import { relationOptions, relationStyle } from "../utils/relation-styles";
+import { relationOptions } from "../utils/relation-styles";
 import { usePreferencesStore } from "../stores/preferences.store";
 import type { GraphEdgeRelation, UiThemeId, UtilityPanel } from "../types";
 import { cn } from "../utils/classnames";
@@ -67,12 +67,35 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   const setLocale = usePreferencesStore((state) => state.setLocale);
   const setReducedMotion = usePreferencesStore((state) => state.setReducedMotion);
   const { t } = useI18n();
+  const [openSections, setOpenSections] = useState({
+    canvas: true,
+    general: false
+  });
+
+  function toggleSection(section: keyof typeof openSections) {
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
+  }
 
   return (
     <section className="utility-panel" aria-label={t("settings.title")}>
       <PanelHeader icon={<Settings2 size={15} />} title={t("settings.title")} onClose={onClose} />
-      <div className="utility-section">
-        <h3><MonitorCog size={14} />{t("settings.canvas")}</h3>
+      <div className="settings-overview">
+        <div className="settings-overview-card primary">
+          <SlidersHorizontal size={16} />
+          <span>
+            <small>{t("settings.defaultRelation")}</small>
+            <strong>{t(`relation.${defaultRelation}Accent`)}</strong>
+          </span>
+        </div>
+        <div className="settings-overview-card">
+          <Languages size={16} />
+          <span>
+            <small>{t("settings.language")}</small>
+            <strong>{localeOptions.find((option) => option.id === locale)?.label ?? locale}</strong>
+          </span>
+        </div>
+      </div>
+      <SettingsSection icon={<MonitorCog size={14} />} isOpen={openSections.canvas} title={t("settings.canvas")} onToggle={() => toggleSection("canvas")}>
         <label className="settings-row">
           <span>
             <strong>{t("settings.defaultRelation")}</strong>
@@ -88,9 +111,9 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         </label>
         <div className="settings-relation-help">
           {relationOptions.map((option) => (
-            <span key={option}>
-              <strong>{relationStyle[option].accent}</strong>
-              <small>{relationStyle[option].description}</small>
+            <span className={cn(defaultRelation === option && "active")} key={option}>
+              <strong>{t(`relation.${option}Accent`)}</strong>
+              <small>{t(`relation.${option}Description`)}</small>
             </span>
           ))}
         </div>
@@ -101,9 +124,8 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           </span>
           <code>{HANDLE_COLLAPSE_THRESHOLD}</code>
         </div>
-      </div>
-      <div className="utility-section">
-        <h3>{t("settings.general")}</h3>
+      </SettingsSection>
+      <SettingsSection icon={<Settings2 size={14} />} isOpen={openSections.general} title={t("settings.general")} onToggle={() => toggleSection("general")}>
         <label className="settings-row">
           <span>
             <strong>{t("settings.language")}</strong>
@@ -124,8 +146,32 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           </span>
           <input checked={reducedMotion} type="checkbox" onChange={(event) => setReducedMotion(event.target.checked)} />
         </label>
-      </div>
+      </SettingsSection>
     </section>
+  );
+}
+
+function SettingsSection({
+  children,
+  icon,
+  isOpen,
+  onToggle,
+  title
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+  title: string;
+}) {
+  return (
+    <div className={cn("utility-section settings-section", !isOpen && "collapsed")}>
+      <button className="settings-section-header" type="button" onClick={onToggle} aria-expanded={isOpen}>
+        <span>{icon}{title}</span>
+        {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+      </button>
+      {isOpen ? <div className="settings-section-body">{children}</div> : null}
+    </div>
   );
 }
 

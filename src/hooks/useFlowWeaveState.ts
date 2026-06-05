@@ -11,8 +11,10 @@ import { usePreferencesStore } from "../stores/preferences.store";
 import { useWorkspaceStore } from "../stores/workspace.store";
 import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../utils/canvas-graph-crud";
 import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
+import { useI18n } from "../utils/i18n";
 
 export function useFlowWeaveState() {
+  const { t } = useI18n();
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>();
   const [connectionPanelMode, setConnectionPanelMode] = useState<"create" | "edit">();
   const defaultRelation = usePreferencesStore((state) => state.defaultRelation);
@@ -65,13 +67,13 @@ export function useFlowWeaveState() {
     const newModule: GraphNode = {
       id: `module-${index}`,
       title: `Module ${index}`,
-      subtitle: "手动补充模块",
+      subtitle: t("module.manualSubtitle"),
       kind: "module",
       nodeType: "module",
       risk: "normal",
-      description: "手动新增的后端模块节点，用于定义 Agent 可参考的文件边界。",
+      description: t("module.manualDescription"),
       files: ["src/new-module/index.ts"],
-      guidanceDraft: "请先确认该模块职责，再决定是否需要修改连接模块。",
+      guidanceDraft: t("module.manualGuidance"),
       status: "draft",
       x: 180 + index * 34,
       y: 520

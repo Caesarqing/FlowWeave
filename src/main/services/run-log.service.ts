@@ -121,7 +121,16 @@ function isSafeRunId(runId: string) {
 }
 
 function isRuntimeAgentId(value: unknown): value is RuntimeAgentId {
-  return value === "codex-local" || value === "claude-code" || value === "cursor" || value === "mock" || (typeof value === "string" && value.startsWith("custom:"));
+  return (
+    value === "claude-code" ||
+    value === "claude-desktop" ||
+    value === "codex-local" ||
+    value === "codex-desktop" ||
+    value === "gemini-cli" ||
+    value === "cursor" ||
+    value === "mock" ||
+    (typeof value === "string" && value.startsWith("custom:"))
+  );
 }
 
 function isToolRunStatus(value: unknown): value is ToolRunStatus {

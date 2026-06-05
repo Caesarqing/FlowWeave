@@ -1,29 +1,63 @@
-import { CheckCircle2, CircleAlert, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
+import { CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/workspace.store";
 import { cn } from "../utils/classnames";
+import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
 import { useI18n } from "../utils/i18n";
 
 const fallbackAgents: AgentDefinition[] = [
   {
-    id: "codex-local",
-    name: "Codex Local",
+    id: "claude-code",
+    name: "Claude Code CLI",
     kind: "cli",
-    command: "codex",
-    args: ["exec", "--sandbox", "read-only"],
-    description: "调用本地 Codex CLI 读取 FlowWeave 上下文，并生成可审查的实现计划。",
+    command: "claude",
+    args: ["--print", "--permission-mode", "plan"],
+    description: "Calls Claude Code in plan mode.",
     builtIn: true,
     createdAt: "builtin",
     updatedAt: "builtin"
   },
   {
-    id: "claude-code",
-    name: "Claude Code",
+    id: "claude-desktop",
+    name: "Claude Desktop",
+    kind: "desktop",
+    command: "/Applications/Claude.app",
+    args: [".flowweave/agent-bridge"],
+    description: "Opens Claude Desktop and waits for file bridge responses.",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
+    id: "codex-local",
+    name: "Codex CLI",
     kind: "cli",
-    command: "claude",
-    args: ["--print", "--permission-mode", "plan"],
-    description: "调用 Claude Code 的 plan 模式输出计划，不直接修改项目文件。",
+    command: "codex",
+    args: ["exec", "--sandbox", "read-only"],
+    description: "Calls the local Codex CLI with FlowWeave context.",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
+    id: "codex-desktop",
+    name: "Codex Desktop",
+    kind: "desktop",
+    command: "/Applications/Codex.app",
+    args: [".flowweave/agent-bridge"],
+    description: "Opens Codex Desktop and waits for file bridge responses.",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
+    id: "gemini-cli",
+    name: "Gemini CLI",
+    kind: "cli",
+    command: "gemini",
+    args: [],
+    description: "Calls the local Gemini CLI through stdin.",
     builtIn: true,
     createdAt: "builtin",
     updatedAt: "builtin"
@@ -34,12 +68,21 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "desktop",
     command: "cursor",
     args: [],
-    description: "检测 Cursor CLI 或桌面应用，主要用于打开项目和人工审查。",
+    description: "Detects Cursor for project review.",
     builtIn: true,
     createdAt: "builtin",
     updatedAt: "builtin"
   }
 ];
+
+const builtInAgentDescriptionKeys: Partial<Record<RuntimeAgentId, string>> = {
+  "claude-code": "agent.claudeDescription",
+  "claude-desktop": "agent.claudeDesktopDescription",
+  "codex-local": "agent.codexDescription",
+  "codex-desktop": "agent.codexDesktopDescription",
+  "gemini-cli": "agent.geminiDescription",
+  cursor: "agent.cursorDescription"
+};
 
 export function AgentPage({
   agents,
@@ -97,6 +140,7 @@ export function AgentPage({
   const selectedAgent = visibleAgents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0];
   const agentNames = useMemo(() => new Map<string, string>(visibleAgents.map((agent) => [agent.id, agent.name])), [visibleAgents]);
   const [isAddingAgent, setIsAddingAgent] = useState(false);
+  const [copiedAgentId, setCopiedAgentId] = useState<string>("");
 
   return (
     <main className="agents-page">
@@ -153,6 +197,7 @@ export function AgentPage({
           const status = toolStatuses[agent.id] ?? createUnknownStatus(agent.id);
           const available = status.available;
           const isSelected = selectedAgentId === agent.id;
+          const connectorPrompt = buildAgentConnectorPrompt({ agentId: agent.id, projectPath: projectPath || "/path/to/project" });
           return (
             <article className={cn("agent-card", isSelected && "selected default-agent-card")} key={agent.id}>
               <div className="agent-card-header">
@@ -161,21 +206,39 @@ export function AgentPage({
                   <h3>{agent.name}</h3>
                 </div>
                 <div className="agent-card-badges">
-                  {isSelected ? <span className="default-badge">Default</span> : null}
+                  {isSelected ? <span className="default-badge">{t("agent.default")}</span> : null}
                   <span className={cn("agent-status", available ? "ok" : status.checking ? undefined : "missing")}>
                     {available ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
                     {getToolStatusLabel(status, t)}
                   </span>
                 </div>
               </div>
-              <p>{agent.description}</p>
+              <p>{agentDescription(agent, t)}</p>
               <code>{commandLabel(agent)}</code>
+              <div className="agent-connector-box">
+                <div>
+                  <small>{t("agent.connectorPrompt")}</small>
+                  <span>{connectorPrompt.description}</span>
+                </div>
+                <code>{connectorPrompt.command}</code>
+                <button
+                  className="ghost-button"
+                  disabled={!projectPath}
+                  type="button"
+                  onClick={() => {
+                    void copyConnectorPrompt(connectorPrompt.command).then(() => setCopiedAgentId(agent.id));
+                  }}
+                >
+                  <Clipboard size={14} />
+                  {copiedAgentId === agent.id ? t("agent.copied") : t("agent.copyConnector")}
+                </button>
+              </div>
               <div className="agent-detail-list">
-                <span>Kind: {agent.kind}</span>
+                <span>{t("agent.kind")}: {agent.kind}</span>
                 <span>{t("agent.cli")}: {status.commandPath ?? t("agent.notDetected")}</span>
                 <span>{t("agent.app")}: {status.appPath ?? t("agent.notDetected")}</span>
                 <span>{t("agent.version")}: {status.version ?? t("agent.notDetected")}</span>
-                <span>{t("agent.lastOutput")}: {status.lastOutputPath ?? "none"}</span>
+                <span>{t("agent.lastOutput")}: {status.lastOutputPath ?? t("agent.none")}</span>
               </div>
               <div className="agent-actions">
                 <button className="ghost-button" type="button" onClick={() => onDetectAgent(agent.id)}>
@@ -297,7 +360,7 @@ function AddAgentCard({
     <article className="agent-card add-agent-card editing">
       <div className="agent-card-header">
         <div>
-          <small>custom cli</small>
+          <small>{t("agent.customCli")}</small>
           <h3>{t("agent.add")}</h3>
         </div>
         <button className="icon-button" title={t("agent.cancel")} type="button" onClick={onCancel}>
@@ -313,7 +376,7 @@ function AddAgentCard({
         <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="gemini" />
       </label>
       <label>
-        Args
+        {t("agent.args")}
         <input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="--model pro" />
       </label>
       <label>
@@ -340,7 +403,7 @@ function AddAgentCard({
   );
 }
 
-export function getToolStatusLabel(status: ToolUiStatus, t: (key: string) => string) {
+function getToolStatusLabel(status: ToolUiStatus, t: (key: string) => string) {
   if (status.checking) return t("agent.detecting");
   if (status.lastRunStatus === "completed") return t("agent.recentSuccess");
   if (status.lastRunStatus === "failed") return t("agent.recentFail");
@@ -348,6 +411,11 @@ export function getToolStatusLabel(status: ToolUiStatus, t: (key: string) => str
   if (status.available && status.method === "cli") return t("agent.methodCli");
   if (status.available && status.method === "mock") return t("agent.methodMock");
   return t("agent.undetected");
+}
+
+function agentDescription(agent: AgentDefinition, t: (key: string) => string) {
+  const descriptionKey = builtInAgentDescriptionKeys[agent.id];
+  return descriptionKey ? t(descriptionKey) : agent.description;
 }
 
 function commandLabel(agent: AgentDefinition) {
@@ -379,4 +447,8 @@ function formatRunTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+async function copyConnectorPrompt(value: string) {
+  await navigator.clipboard.writeText(value);
 }

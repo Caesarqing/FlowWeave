@@ -29,7 +29,7 @@ export function createTaskArtifact(modules: GraphNode[], edges = createDefaultEd
     id: `task-${Date.now()}`,
     title: "FlowWeave generated Codex task",
     generatedAt: new Date().toISOString(),
-    targetTools: ["codex-local", "claude-code", "cursor"],
+    targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
     modules: modules.map((module) => ({
       id: module.id,
       title: module.title,

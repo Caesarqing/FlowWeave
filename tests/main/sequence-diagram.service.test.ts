@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
 import {
+  buildSequenceDiagramRevisionPrompt,
   buildSequenceDiagramPrompt,
   generateSequenceDiagrams,
   parseSequenceDiagramBundleJson,
@@ -23,6 +24,42 @@ describe("sequence-diagram.service", () => {
     expect(prompt).toContain("Detailed Design Sequence Diagram");
     expect(prompt).toContain("ProjectStructureFacts");
     expect(prompt).toContain("src/api/order.controller.ts");
+    expect(prompt).toContain("end-to-end workflow");
+    expect(prompt).toContain("code-level call sequence");
+    expect(prompt).toContain("methodName");
+    expect(prompt).toContain("input");
+    expect(prompt).toContain("output");
+    expect(prompt).toContain("valid participant ids");
+    expect(prompt).toContain("Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems");
+  });
+
+  it("builds a revision prompt that preserves evidence and returns a complete diagram", async () => {
+    const root = await createFixtureFiles();
+    const project = projectFixture(root);
+    const facts = await buildProjectStructureFacts(project);
+    const current = diagramJson("detailed-design", [
+      {
+        id: "controller-service",
+        sequence: 1,
+        from: "order-controller",
+        to: "order-service",
+        kind: "sync",
+        label: "createOrder",
+        methodName: "createOrder",
+        input: "CreateOrderDto",
+        output: "Order",
+        evidence: [{ filePath: "src/api/order.controller.ts", symbol: "OrderController", detail: "calls OrderService.createOrder" }]
+      }
+    ]);
+    const prompt = buildSequenceDiagramRevisionPrompt(current, "include validation before creating the order", facts);
+
+    expect(prompt).toContain("Preserve reliable existing evidence");
+    expect(prompt).toContain("Return the complete updated diagram object");
+    expect(prompt).toContain('Keep kind exactly "detailed-design"');
+    expect(prompt).toContain("Update participants and messages together");
+    expect(prompt).toContain("methodName");
+    expect(prompt).toContain("input");
+    expect(prompt).toContain("output");
   });
 
   it("parses sequence diagram JSON and filters invalid messages", async () => {

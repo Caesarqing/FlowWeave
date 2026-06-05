@@ -18,7 +18,14 @@ describe("agent-registry.service", () => {
 
     const agents = await listAgentDefinitions();
 
-    expect(agents.map((agent) => agent.id)).toEqual(["codex-local", "claude-code", "cursor"]);
+    expect(agents.map((agent) => agent.id)).toEqual([
+      "claude-code",
+      "claude-desktop",
+      "codex-local",
+      "codex-desktop",
+      "gemini-cli",
+      "cursor"
+    ]);
     expect(agents.some((agent) => agent.id === "custom:mock")).toBe(false);
   });
 

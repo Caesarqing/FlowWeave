@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { GraphEdge, GraphNode } from "../../types";
+import { writeAgentConnectors } from "../services/agent-connector.service";
 import { createCanvasArtifact, createTaskArtifact, createTaskMarkdown } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "./flowweave-paths";
 import type { CodeflowProject, CodeflowWriteResult, ProjectFileNode } from "./schemas";
@@ -39,6 +40,16 @@ export async function writeFlowWeaveProject(
     writeJson(taskJsonPath, task),
     writeFile(contextFileTreePath, createFileTreeMarkdown(project.files), "utf8")
   ]);
+
+  await writeAgentConnectors({
+    project,
+    modules,
+    edges: canvas.edges,
+    canvasPath: canvasJsonPath,
+    taskMarkdownPath,
+    taskJsonPath,
+    contextFileTreePath
+  });
 
   return {
     projectJsonPath,

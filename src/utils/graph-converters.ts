@@ -1,7 +1,6 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
 import { cn } from "./classnames";
-import { relationLabel } from "./labels";
 import { relationStyle } from "./relation-styles";
 
 export const HANDLE_COLLAPSE_THRESHOLD = 6;
@@ -31,7 +30,7 @@ export function createFlowEdge(edge: GraphEdge): Edge {
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    label: relationLabel[edge.relation],
+    label: edge.relation,
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed, color },
     style: { stroke: color },
@@ -66,7 +65,7 @@ export function decorateFlowGraph(nodes: FlowWeaveNode[], edges: Edge[], selecte
         ...edge,
         sourceHandle: assignedHandles?.sourceHandle,
         targetHandle: assignedHandles?.targetHandle,
-        label: relationLabel[relation],
+        label: relation,
         markerEnd: { type: MarkerType.ArrowClosed, color },
         style: { ...(edge.style ?? {}), stroke: color },
         className: cn("relation-edge", relation, isSelected && "selected"),

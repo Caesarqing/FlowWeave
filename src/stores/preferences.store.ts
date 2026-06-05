@@ -24,7 +24,7 @@ type PreferencesState = {
 
 export const usePreferencesStore = create<PreferencesState>((set) => ({
   defaultRelation: readEnumValue(DEFAULT_RELATION_KEY, relationOptions, "depends_on"),
-  locale: readEnumValue(LOCALE_KEY, localeOptions, "en"),
+  locale: readEnumValue(LOCALE_KEY, localeOptions, "zh-CN"),
   reducedMotion: readStoredValue<"true" | "false">(REDUCED_MOTION_KEY, "false") === "true",
   theme: readEnumValue(THEME_KEY, themeOptions, "dark"),
   setDefaultRelation: (defaultRelation) => {

@@ -174,7 +174,7 @@ export function ConnectionPanel({
             <span key={option}>
               <i style={{ background: relationStyle[option].color }} />
               <strong>{t(`relation.${option}Accent`)}</strong>
-              <small>{relationStyle[option].description}</small>
+              <small>{t(`relation.${option}Description`)}</small>
             </span>
           ))}
         </div>

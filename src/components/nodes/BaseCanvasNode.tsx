@@ -3,18 +3,10 @@ import type { CSSProperties } from "react";
 import type { ConnectionHandleSlot } from "../../types";
 import { cn } from "../../utils/classnames";
 import type { FlowWeaveNode } from "../../utils/graph-converters";
-
-const kindLabel: Record<string, string> = {
-  module: "Module",
-  requirement: "Requirement",
-  task: "Task",
-  file: "File",
-  doc: "Doc",
-  agent: "Agent",
-  diff: "Diff"
-};
+import { useI18n } from "../../utils/i18n";
 
 export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
+  const { t } = useI18n();
   const targetHandles = data.connectionHandles?.target ?? [{ id: `${data.id}-target-idle`, offsetPercent: 50, count: 0 }];
   const sourceHandles = data.connectionHandles?.source ?? [{ id: `${data.id}-source-idle`, offsetPercent: 50, count: 0 }];
 
@@ -32,14 +24,14 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
     >
       <ConnectionHandles handles={targetHandles} position={Position.Left} selectedEdgeId={data.selectedEdgeId} type="target" />
       <div className="node-meta-line">
-        <span>{data.category ?? kindLabel[data.kind]}</span>
-        <strong>{data.risk}</strong>
+        <span>{data.category ?? t(`canvasNodeKind.${data.kind}`)}</span>
+        <strong>{t(`risk.${data.risk}`)}</strong>
       </div>
       <h3>{data.title}</h3>
       <p>{data.role ?? data.description}</p>
       <div className="node-footer">
-        <span>{data.files.length} files</span>
-        <small>{data.symbols?.length ? `${data.symbols.length} symbols` : data.files[0] ?? data.subtitle}</small>
+        <span>{t("module.fileCount", { count: data.files.length })}</span>
+        <small>{data.symbols?.length ? t("module.symbolCount", { count: data.symbols.length }) : data.files[0] ?? data.subtitle}</small>
       </div>
       <ConnectionHandles handles={sourceHandles} position={Position.Right} selectedEdgeId={data.selectedEdgeId} type="source" />
     </div>

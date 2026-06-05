@@ -284,7 +284,7 @@ export type SequenceDiagramGenerationResult = {
   warning?: string;
 };
 
-export type BuiltInAgentId = "codex-local" | "claude-code" | "cursor";
+export type BuiltInAgentId = "claude-code" | "claude-desktop" | "codex-local" | "codex-desktop" | "gemini-cli" | "cursor";
 export type ToolId = BuiltInAgentId | "mock";
 export type CustomAgentId = `custom:${string}`;
 export type AgentId = BuiltInAgentId | CustomAgentId;

@@ -24,6 +24,11 @@ describe("architecture-analysis.service", () => {
     expect(prompt).toContain("functional architecture module map");
     expect(prompt).toContain("ProjectStructureFacts");
     expect(prompt).toContain("src/api/user.controller.ts");
+    expect(prompt).toContain("Use only the supplied ProjectStructureFacts");
+    expect(prompt).toContain("human-readable explanation");
+    expect(prompt).toContain("fileRoles");
+    expect(prompt).toContain("workflow");
+    expect(prompt).toContain("Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems");
   });
 
   it("parses agent JSON into canvas graph with symbols and evidence", async () => {

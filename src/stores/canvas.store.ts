@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type { Edge, NodeChange } from "@xyflow/react";
 import type { GraphEdge, GraphNode, ProjectFileNode } from "../types";
-import { graphEdges, graphNodes } from "../data";
 import { createFlowEdge, createFlowNode, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 
 type CanvasState = {
@@ -21,12 +20,12 @@ type CanvasState = {
 };
 
 export const useCanvasStore = create<CanvasState>((set) => ({
-  modules: graphNodes,
-  edges: graphEdges.map(createFlowEdge),
-  nodes: graphNodes.map(createFlowNode),
+  modules: [],
+  edges: [],
+  nodes: [],
   projectFiles: [],
   expandedPaths: new Set(),
-  selectedNodeId: graphNodes[0]?.id ?? "",
+  selectedNodeId: "",
   setGraph: (modules, edges, files) =>
     set({
       modules,

@@ -4,6 +4,7 @@ import { join, normalize, sep } from "node:path";
 import { PROJECT_CHANNELS } from "../../common/ipc-channels";
 import type { CodeflowCanvas, RuntimeAgentId, ToolId } from "../../types";
 import { analyzeProject } from "../services/agent-analysis.service";
+import { refreshAgentConnectorsFromProject, writeAgentConnectors } from "../services/agent-connector.service";
 import { analyzeArchitecture, readArchitectureMap } from "../services/architecture-analysis.service";
 import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram } from "../services/sequence-diagram.service";
 import { inferGraphFromProject } from "../services/task-generator.service";
@@ -36,12 +37,16 @@ export function registerProjectIpc() {
 
   ipcMain.handle(PROJECT_CHANNELS.analyzeArchitecture, async (_event, projectPath: string, toolId: ToolId) => {
     const project = await scanProject(projectPath);
-    return analyzeArchitecture(project, toolId);
+    const result = await analyzeArchitecture(project, toolId);
+    await writeAgentConnectors({ project, modules: result.graph.nodes, edges: result.graph.edges });
+    return result;
   });
 
   ipcMain.handle(PROJECT_CHANNELS.analyzeArchitectureWithAgent, async (_event, projectPath: string, agentId: RuntimeAgentId) => {
     const project = await scanProject(projectPath);
-    return analyzeArchitecture(project, agentId);
+    const result = await analyzeArchitecture(project, agentId);
+    await writeAgentConnectors({ project, modules: result.graph.nodes, edges: result.graph.edges });
+    return result;
   });
 
   ipcMain.handle(PROJECT_CHANNELS.readArchitectureMap, async (_event, projectPath: string) => {
@@ -50,12 +55,16 @@ export function registerProjectIpc() {
 
   ipcMain.handle(PROJECT_CHANNELS.generateSequenceDiagrams, async (_event, projectPath: string, agentId: RuntimeAgentId) => {
     const project = await scanProject(projectPath);
-    return generateSequenceDiagrams(project, agentId);
+    const result = await generateSequenceDiagrams(project, agentId);
+    await refreshAgentConnectorsFromProject(projectPath);
+    return result;
   });
 
   ipcMain.handle(PROJECT_CHANNELS.reviseSequenceDiagram, async (_event, projectPath: string, agentId: RuntimeAgentId, kind: "architectural" | "detailed-design", instruction: string) => {
     const project = await scanProject(projectPath);
-    return reviseSequenceDiagram(project, agentId, kind, instruction);
+    const result = await reviseSequenceDiagram(project, agentId, kind, instruction);
+    await refreshAgentConnectorsFromProject(projectPath);
+    return result;
   });
 
   ipcMain.handle(PROJECT_CHANNELS.readSequenceDiagrams, async (_event, projectPath: string) => {
@@ -85,6 +94,10 @@ export function registerProjectIpc() {
     await mkdir(canvasDir, { recursive: true });
     const canvasPath = join(canvasDir, "main.canvas.json");
     await writeFile(canvasPath, `${JSON.stringify(canvas, null, 2)}\n`, "utf8");
+    await refreshAgentConnectorsFromProject(projectPath).catch(async () => {
+      const project = await scanProject(projectPath);
+      await writeAgentConnectors({ project, modules: canvas.nodes, edges: canvas.edges, canvasPath });
+    });
     return canvasPath;
   });
 }

@@ -40,18 +40,18 @@ export function useToolActions({
     }
 
     setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: true } }));
-    setLastRunStatus(`正在检测 ${getAgentName(agentId)}...`);
+    setLastRunStatus(t("status.detectingAgent", { agent: getAgentName(agentId) }));
     try {
       const result = await window.flowweave.detectAgent(agentId);
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...result, checking: false } }));
       setLastRunStatus(
         result.available
-          ? `${getAgentName(agentId)} 已检测 · ${result.commandPath ?? result.appPath ?? result.version ?? "ready"}`
-          : `${getAgentName(agentId)} 未检测到。`
+          ? t("status.agentDetected", { agent: getAgentName(agentId), detail: result.commandPath ?? result.appPath ?? result.version ?? "ready" })
+          : t("status.agentMissing", { agent: getAgentName(agentId) })
       );
     } catch (error) {
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: false } }));
-      setLastRunStatus(`${getAgentName(agentId)} 检测失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.agentDetectFailed", { agent: getAgentName(agentId), error: formatErrorMessage(error) }));
     }
   }
 
@@ -62,30 +62,39 @@ export function useToolActions({
     }
 
     if (!isOpenableToolId(agentId)) {
-      setLastRunStatus(`${getAgentName(agentId)} 是 CLI 对话型 Agent，不支持从 FlowWeave 打开项目。`);
+      setLastRunStatus(t("status.agentOpenUnsupported", { agent: getAgentName(agentId) }));
       return;
     }
 
     try {
       const result = await window.flowweave.openToolProject(agentId, projectPath);
-      setLastRunStatus(`${getAgentName(agentId)} ${result.opened ? "已打开项目" : "打开失败"} · ${result.message ?? result.method}`);
+      setLastRunStatus(
+        t(result.opened ? "status.agentProjectOpened" : "status.agentProjectOpenFailed", {
+          agent: getAgentName(agentId),
+          detail: result.message ?? result.method
+        })
+      );
     } catch (error) {
-      setLastRunStatus(`${getAgentName(agentId)} 打开项目失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.agentProjectOpenError", { agent: getAgentName(agentId), error: formatErrorMessage(error) }));
     }
   }
 
   async function runToolPlan(agentId: RuntimeAgentId) {
-    if (!window.flowweave || !projectPath || !selectedNode) {
+    if (!window.flowweave || !projectPath) {
       setLastRunStatus(t("docs.needDesktop"));
       return;
     }
+    if (!selectedNode) {
+      setLastRunStatus(t("status.noProject"));
+      return;
+    }
 
-    setLastRunStatus(`正在让 ${getAgentName(agentId)} 以 ${executionMode} 模式处理...`);
+    setLastRunStatus(t("status.agentProcessing", { agent: getAgentName(agentId), mode: executionMode }));
     try {
       const detection = await window.flowweave.detectAgent(agentId);
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...detection, checking: false } }));
       if (!detection.available) {
-        setLastRunStatus(`${getAgentName(agentId)} 未检测到，无法生成计划。`);
+        setLastRunStatus(t("status.agentCannotPlan", { agent: getAgentName(agentId) }));
         return;
       }
 
@@ -114,7 +123,7 @@ Return an implementation plan, affected files, risks, and tests. Do not edit fil
       await onRunCompleted?.(result.id);
     } catch (error) {
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], lastRunStatus: "failed" } }));
-      setLastRunStatus(`${getAgentName(agentId)} 生成计划失败：${formatErrorMessage(error)}`);
+      setLastRunStatus(t("status.agentPlanFailed", { agent: getAgentName(agentId), error: formatErrorMessage(error) }));
     }
   }
 
@@ -122,7 +131,15 @@ Return an implementation plan, affected files, risks, and tests. Do not edit fil
 }
 
 function isOpenableToolId(agentId: RuntimeAgentId): agentId is ToolId {
-  return agentId === "codex-local" || agentId === "claude-code" || agentId === "cursor" || agentId === "mock";
+  return (
+    agentId === "claude-code" ||
+    agentId === "claude-desktop" ||
+    agentId === "codex-local" ||
+    agentId === "codex-desktop" ||
+    agentId === "gemini-cli" ||
+    agentId === "cursor" ||
+    agentId === "mock"
+  );
 }
 
 function formatErrorMessage(error: unknown) {

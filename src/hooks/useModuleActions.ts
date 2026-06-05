@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { GraphNode } from "../types";
+import { useI18n } from "../utils/i18n";
 
 export function useModuleActions({
   addModuleNode,
@@ -18,6 +19,7 @@ export function useModuleActions({
   togglePath: (path: string) => void;
   updateModule: (nodeId: string, update: (node: GraphNode) => GraphNode) => void;
 }) {
+  const { t } = useI18n();
   function selectNode(nodeId: string) {
     setSelectedNodeId(nodeId);
     setDialogText("");
@@ -37,7 +39,7 @@ export function useModuleActions({
     if (!selectedNode || !dialogText.trim()) return;
     updateModule(selectedNode.id, (node) => ({
       ...node,
-      guidanceDraft: `${node.guidanceDraft}\n\n对话调整：${dialogText.trim()}`,
+      guidanceDraft: `${node.guidanceDraft}\n\n${t("module.dialog")}: ${dialogText.trim()}`,
       status: "needs-review"
     }));
     setDialogText("");

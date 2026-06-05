@@ -16,7 +16,6 @@ import type {
   ToolRunSummary,
   ToolUiStatus
 } from "../types";
-import { graphEdges, graphNodes } from "../data";
 import { createFlowEdge, createFlowNode, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 
 export type RunArtifactTab = "prompt" | "plan" | "log" | "result";
@@ -81,18 +80,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   projectPath: "",
   projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
-  modules: graphNodes,
-  edges: graphEdges.map(createFlowEdge),
-  nodes: graphNodes.map(createFlowNode),
+  modules: [],
+  edges: [],
+  nodes: [],
   projectFiles: [],
   expandedPaths: new Set(),
-  selectedNodeId: graphNodes[0]?.id ?? "",
+  selectedNodeId: "",
   agents: [],
-  selectedAgentId: "codex-local",
+  selectedAgentId: "claude-code",
   executionMode: "plan",
   toolStatuses: {
-    "codex-local": createUnknownToolStatus("codex-local"),
     "claude-code": createUnknownToolStatus("claude-code"),
+    "claude-desktop": createUnknownToolStatus("claude-desktop"),
+    "codex-local": createUnknownToolStatus("codex-local"),
+    "codex-desktop": createUnknownToolStatus("codex-desktop"),
+    "gemini-cli": createUnknownToolStatus("gemini-cli"),
     cursor: createUnknownToolStatus("cursor"),
     mock: createUnknownToolStatus("mock")
   },

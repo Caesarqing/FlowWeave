@@ -15,12 +15,20 @@ describe("codex-local.adapter", () => {
       "/tmp/project",
       "--sandbox",
       "read-only",
-      "--ask-for-approval",
-      "never",
       "--output-last-message",
       "/tmp/project/.flowweave/runs/run-1/last-message.md",
       "-"
     ]);
+  });
+
+  it("does not include unsupported approval flags", () => {
+    expect(
+      buildCodexPlanArgs({
+        executionMode: "plan",
+        lastMessagePath: "/tmp/last.md",
+        projectPath: "/tmp/project"
+      })
+    ).not.toEqual(expect.arrayContaining(["--ask-for-approval", "never"]));
   });
 
   it("inserts the model before exec options", () => {

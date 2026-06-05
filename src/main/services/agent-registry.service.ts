@@ -6,23 +6,14 @@ import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
 import { CustomCliAdapter } from "../agents/custom-cli.adapter";
+import { ClaudeDesktopAdapter, CodexDesktopAdapter } from "../agents/desktop-bridge.adapter";
+import { GeminiCliAdapter } from "../agents/gemini-cli.adapter";
 import { MockAgentAdapter } from "../agents/mock.adapter";
 
 const BUILT_IN_AGENTS: AgentDefinition[] = [
   {
-    id: "codex-local",
-    name: "Codex Local",
-    kind: "cli",
-    command: "codex",
-    args: ["exec", "--sandbox", "read-only"],
-    description: "调用本地 Codex CLI 读取 FlowWeave 上下文，并生成可审查的实现计划。",
-    builtIn: true,
-    createdAt: "builtin",
-    updatedAt: "builtin"
-  },
-  {
     id: "claude-code",
-    name: "Claude Code",
+    name: "Claude Code CLI",
     kind: "cli",
     command: "claude",
     args: ["--print", "--permission-mode", "plan"],
@@ -32,10 +23,54 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     updatedAt: "builtin"
   },
   {
+    id: "claude-desktop",
+    name: "Claude Desktop",
+    kind: "desktop",
+    command: "/Applications/Claude.app",
+    args: [".flowweave/agent-bridge"],
+    description: "检测并打开 Claude 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
+    id: "codex-local",
+    name: "Codex CLI",
+    kind: "cli",
+    command: "codex",
+    args: ["exec", "--sandbox", "read-only"],
+    description: "调用本地 Codex CLI 读取 FlowWeave 上下文，并生成可审查的实现计划。",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
+    id: "codex-desktop",
+    name: "Codex Desktop",
+    kind: "desktop",
+    command: "/Applications/Codex.app",
+    args: [".flowweave/agent-bridge"],
+    description: "检测并打开 Codex 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
+    id: "gemini-cli",
+    name: "Gemini CLI",
+    kind: "cli",
+    command: "gemini",
+    args: [],
+    description: "调用本地 Gemini CLI，通过 stdin 传入 FlowWeave prompt 并记录 stdout/stderr。",
+    builtIn: true,
+    createdAt: "builtin",
+    updatedAt: "builtin"
+  },
+  {
     id: "cursor",
     name: "Cursor",
     kind: "desktop",
-    command: "cursor <project> / Cursor.app",
+    command: "cursor/code <project> / Cursor.app",
     args: [],
     description: "检测 Cursor CLI 或桌面应用，生成计划文件并打开项目供用户在 Cursor 中审查执行。",
     builtIn: true,
@@ -103,8 +138,11 @@ export async function getAgentDefinition(agentId: RuntimeAgentId): Promise<Agent
 
 export async function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdapter> {
   if (agentId === "mock") return new MockAgentAdapter();
-  if (agentId === "codex-local") return new CodexLocalAdapter();
   if (agentId === "claude-code") return new ClaudeCodeAdapter();
+  if (agentId === "claude-desktop") return new ClaudeDesktopAdapter();
+  if (agentId === "codex-local") return new CodexLocalAdapter();
+  if (agentId === "codex-desktop") return new CodexDesktopAdapter();
+  if (agentId === "gemini-cli") return new GeminiCliAdapter();
   if (agentId === "cursor") return new CursorAdapter();
 
   const definition = await getAgentDefinition(agentId);
@@ -115,7 +153,14 @@ export async function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdap
 }
 
 export function isBuiltInAgentId(agentId: RuntimeAgentId): agentId is BuiltInAgentId {
-  return agentId === "codex-local" || agentId === "claude-code" || agentId === "cursor";
+  return (
+    agentId === "claude-code" ||
+    agentId === "claude-desktop" ||
+    agentId === "codex-local" ||
+    agentId === "codex-desktop" ||
+    agentId === "gemini-cli" ||
+    agentId === "cursor"
+  );
 }
 
 export function isCustomAgentId(agentId: string): agentId is CustomAgentId {

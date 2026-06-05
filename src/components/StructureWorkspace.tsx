@@ -7,17 +7,17 @@ import type { SequenceDiagramState } from "../hooks/useSequenceDiagramState";
 import { buildSequenceFlowNodes, getSequenceFlowBounds, type SequenceFlowNode } from "../utils/sequence-diagram-flow";
 import { useI18n } from "../utils/i18n";
 
-const diagramLabels: Record<SequenceDiagramKind, string> = {
-  architectural: "Architectural",
-  "detailed-design": "Detailed Design"
+const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
+  architectural: "structure.architectural",
+  "detailed-design": "structure.detailedDesign"
 };
 
-const messageKindLabels: Record<SequenceMessage["kind"], string> = {
-  sync: "Sync",
-  async: "Async",
-  return: "Return",
-  event: "Event",
-  external: "External"
+const messageKindLabelKeys: Record<SequenceMessage["kind"], string> = {
+  sync: "structure.messageSync",
+  async: "structure.messageAsync",
+  return: "structure.messageReturn",
+  event: "structure.messageEvent",
+  external: "structure.messageExternal"
 };
 
 const sequenceNodeTypes: NodeTypes = {
@@ -35,7 +35,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
           <div className="sequence-toolbar-title">
             <Workflow size={17} />
             <div>
-              <strong>{sequence.diagram ? sequence.diagram.title : "Sequence Diagram"}</strong>
+              <strong>{sequence.diagram ? sequence.diagram.title : t("nav.sequence")}</strong>
               <span>
                 {t("structure.sourceFiles", {
                   count: sequence.fileCount,
@@ -45,11 +45,11 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
             </div>
           </div>
           <div className="sequence-toolbar-actions">
-            <div className="segmented-control" aria-label="Sequence diagram type">
+            <div className="segmented-control" aria-label={t("structure.diagramType")}>
               {(["architectural", "detailed-design"] as SequenceDiagramKind[]).map((kind) => (
                 <button className={sequence.activeKind === kind ? "active" : ""} key={kind} type="button" onClick={() => sequence.setActiveKind(kind)}>
                   {kind === "architectural" ? <GitBranch size={14} /> : <Code2 size={14} />}
-                  {diagramLabels[kind]}
+                  {t(diagramLabelKeys[kind])}
                 </button>
               ))}
             </div>
@@ -182,6 +182,7 @@ function SequenceLifelineNode({ data }: NodeProps<SequenceFlowNode>) {
 }
 
 function SequenceMessageNode({ data }: NodeProps<SequenceFlowNode>) {
+  const { t } = useI18n();
   if (!("message" in data)) return null;
   return (
     <div
@@ -192,7 +193,7 @@ function SequenceMessageNode({ data }: NodeProps<SequenceFlowNode>) {
       <div className="sequence-flow-message-card">
         <span className="sequence-message-order">{data.message.sequence}</span>
         <strong>{data.message.label}</strong>
-        <span className="sequence-message-kind">{messageKindLabels[data.message.kind]}</span>
+        <span className="sequence-message-kind">{t(messageKindLabelKeys[data.message.kind])}</span>
       </div>
       <span className="sequence-flow-route">
         {data.fromTitle} {"->"} {data.toTitle}
@@ -224,16 +225,16 @@ function SequenceDetails({
     return (
       <>
         <section className="module-card">
-          <small>{messageKindLabels[message.kind]} message</small>
+          <small>{t("structure.messageKindLabel", { kind: t(messageKindLabelKeys[message.kind]) })}</small>
           <h3>{message.label}</h3>
           {message.description ? <p>{message.description}</p> : null}
         </section>
         <section className="module-card detail-list">
-          <DetailRow label="From" value={participantTitle(diagram, message.from)} />
-          <DetailRow label="To" value={participantTitle(diagram, message.to)} />
-          <DetailRow label="Method" value={message.methodName ?? t("structure.notSpecified")} />
-          <DetailRow label="Input" value={message.input ?? t("structure.notSpecified")} />
-          <DetailRow label="Output" value={message.output ?? t("structure.notSpecified")} />
+          <DetailRow label={t("structure.from")} value={participantTitle(diagram, message.from)} />
+          <DetailRow label={t("structure.to")} value={participantTitle(diagram, message.to)} />
+          <DetailRow label={t("structure.method")} value={message.methodName ?? t("structure.notSpecified")} />
+          <DetailRow label={t("structure.input")} value={message.input ?? t("structure.notSpecified")} />
+          <DetailRow label={t("structure.output")} value={message.output ?? t("structure.notSpecified")} />
         </section>
         <EvidenceList evidence={message.evidence} />
       </>
@@ -249,8 +250,8 @@ function SequenceDetails({
           <p>{participant.description}</p>
         </section>
         <section className="module-card detail-list">
-          <DetailRow label="File" value={participant.filePath ?? t("structure.notMapped")} />
-          <DetailRow label="Symbol" value={participant.symbol ?? t("structure.notMapped")} />
+          <DetailRow label={t("structure.file")} value={participant.filePath ?? t("structure.notMapped")} />
+          <DetailRow label={t("structure.symbol")} value={participant.symbol ?? t("structure.notMapped")} />
         </section>
       </>
     );
@@ -258,7 +259,7 @@ function SequenceDetails({
 
   return (
     <section className="module-card">
-      <small>Diagram</small>
+      <small>{t("structure.diagram")}</small>
       <h3>{diagram.title}</h3>
       <p>{diagram.summary}</p>
       <p>
@@ -269,21 +270,22 @@ function SequenceDetails({
 }
 
 function EvidenceList({ evidence }: { evidence?: SequenceMessage["evidence"] }) {
+  const { t } = useI18n();
   if (!evidence || evidence.length === 0) {
     return (
       <section className="module-card">
-        <h3>Evidence</h3>
-        <p>暂无代码证据。</p>
+        <h3>{t("structure.evidence")}</h3>
+        <p>{t("structure.noEvidence")}</p>
       </section>
     );
   }
   return (
     <section className="module-card">
-      <h3>Evidence</h3>
+      <h3>{t("structure.evidence")}</h3>
       <div className="detail-list">
         {evidence.map((item) => (
           <div className="detail-row" key={`${item.filePath ?? ""}-${item.symbol ?? ""}-${item.detail}`}>
-            <strong>{item.symbol ?? item.filePath ?? "Evidence"}</strong>
+            <strong>{item.symbol ?? item.filePath ?? t("structure.evidence")}</strong>
             <span>
               {item.filePath ? `${item.filePath} · ` : ""}
               {item.detail}

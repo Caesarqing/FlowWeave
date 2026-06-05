@@ -23,6 +23,10 @@ export function Sidebar({
         <div className="nav-mark">
           <BrandLogo className="brand-logo-nav" />
         </div>
+        <button className={cn(activePage === "tools" && "active")} type="button" onClick={() => onPageChange("tools")}>
+          <Bot size={18} />
+          <span>{t("nav.agent")}</span>
+        </button>
         <button className={cn(activePage === "canvas" && "active")} type="button" onClick={() => onPageChange("canvas")}>
           <Network size={18} />
           <span>{t("nav.canvas")}</span>
@@ -38,10 +42,6 @@ export function Sidebar({
         <button className={cn(activePage === "git-review" && "active")} type="button" onClick={() => onPageChange("git-review")}>
           <GitPullRequestArrow size={18} />
           <span>{t("nav.git")}</span>
-        </button>
-        <button className={cn(activePage === "tools" && "active")} type="button" onClick={() => onPageChange("tools")}>
-          <Bot size={18} />
-          <span>{t("nav.agent")}</span>
         </button>
       </div>
       <div className="nav-utility" aria-label="FlowWeave utility actions">

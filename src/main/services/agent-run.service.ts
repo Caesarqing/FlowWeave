@@ -4,6 +4,8 @@ import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, Runtime
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
+import { ClaudeDesktopAdapter, CodexDesktopAdapter } from "../agents/desktop-bridge.adapter";
+import { GeminiCliAdapter } from "../agents/gemini-cli.adapter";
 import { MockAgentAdapter } from "../agents/mock.adapter";
 import { deleteCustomAgent, getAgentAdapter as getRegistryAgentAdapter, isBuiltInAgentId, listAgentDefinitions, saveCustomAgent } from "./agent-registry.service";
 import { createCheckpoint } from "./git.service";
@@ -23,8 +25,11 @@ export type StartToolPlanResult = ToolRunResult & {
 };
 
 const adapters: Record<ToolId, ToolAdapter> = {
-  "codex-local": new CodexLocalAdapter(),
   "claude-code": new ClaudeCodeAdapter(),
+  "claude-desktop": new ClaudeDesktopAdapter(),
+  "codex-local": new CodexLocalAdapter(),
+  "codex-desktop": new CodexDesktopAdapter(),
+  "gemini-cli": new GeminiCliAdapter(),
   cursor: new CursorAdapter(),
   mock: new MockAgentAdapter()
 };

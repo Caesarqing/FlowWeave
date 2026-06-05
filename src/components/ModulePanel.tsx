@@ -3,7 +3,6 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { GraphEdge, GraphNode, GraphNodeType, GraphRisk } from "../types";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
-import { nodeTypeLabel, relationLabel, riskLabel } from "../utils/labels";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
 
 const nodeTypeOptions: GraphNodeType[] = ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"];
@@ -56,7 +55,7 @@ export function ModulePanel({
   }
 
   function deleteNode() {
-    if (window.confirm(`删除模块「${node.title}」？相关连接也会同时删除。`)) {
+    if (window.confirm(t("module.deleteConfirm", { title: node.title }))) {
       onDeleteNode(node.id);
     }
   }
@@ -65,11 +64,11 @@ export function ModulePanel({
     <aside className="module-panel">
       <div className="panel-header">
         <span>{t("module.context")}</span>
-        <span className={cn("risk-chip", node.risk)}>{riskLabel[node.risk]}</span>
+        <span className={cn("risk-chip", node.risk)}>{t(`risk.${node.risk}`)}</span>
       </div>
 
       <section className="module-card hero-card">
-        <small>{node.category ?? nodeTypeLabel[node.nodeType]}</small>
+        <small>{node.category ?? t(`nodeType.${node.nodeType}`)}</small>
         <h2>{node.title}</h2>
         <p>{node.description}</p>
         {node.role ? <p className="module-role">{node.role}</p> : null}
@@ -77,44 +76,44 @@ export function ModulePanel({
       </section>
 
       <section className="module-card module-edit-card">
-        <h3>模块变更</h3>
+        <h3>{t("module.change")}</h3>
         <div className="module-edit-form">
           <label>
-            标题
+            {t("module.title")}
             <input value={node.title} onChange={(event) => onModuleChange(node.id, { title: event.target.value })} />
           </label>
           <label>
-            类型
+            {t("module.type")}
             <select value={node.nodeType} onChange={(event) => onModuleChange(node.id, { nodeType: event.target.value as GraphNodeType })}>
               {nodeTypeOptions.map((option) => (
                 <option key={option} value={option}>
-                  {nodeTypeLabel[option]}
+                  {t(`nodeType.${option}`)}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            风险
+            {t("module.risk")}
             <select value={node.risk} onChange={(event) => onModuleChange(node.id, { risk: event.target.value as GraphRisk })}>
               {riskOptions.map((option) => (
                 <option key={option} value={option}>
-                  {riskLabel[option]}
+                  {t(`risk.${option}`)}
                 </option>
               ))}
             </select>
           </label>
           <label className="module-edit-wide">
-            描述
+            {t("module.description")}
             <textarea value={node.description} onChange={(event) => onModuleChange(node.id, { description: event.target.value })} />
           </label>
           <label className="module-edit-wide">
-            文件列表
+            {t("module.fileList")}
             <textarea value={node.files.join("\n")} onChange={(event) => updateFiles(event.target.value)} />
           </label>
         </div>
         <button className="ghost-button danger-button sequence-wide-button" type="button" onClick={deleteNode}>
           <Trash2 size={15} />
-          删除模块
+          {t("module.delete")}
         </button>
       </section>
 
@@ -126,7 +125,7 @@ export function ModulePanel({
             ))}
           </div>
         ) : (
-          <p>暂无文件。可在模块变更中按行补充文件路径。</p>
+          <p>{t("module.noFiles")}</p>
         )}
       </CollapsibleCard>
 
@@ -157,7 +156,7 @@ export function ModulePanel({
                 <span>
                   {edge.source} <ChevronRight size={12} /> {edge.target}
                 </span>
-                <strong>{relationLabel[edge.relation]}</strong>
+                <strong>{t(`relation.${edge.relation}Accent`)}</strong>
                 {edge.guidanceNote ? <em>{edge.guidanceNote}</em> : null}
                 {edge.evidence?.map((item) => (
                   <small key={`${edge.id}-${item.filePath ?? ""}-${item.symbol ?? ""}-${item.detail}`}>
@@ -177,13 +176,13 @@ export function ModulePanel({
           <div className="detail-list">
             {node.evidence.map((item) => (
               <div className="detail-row" key={`${item.filePath ?? ""}-${item.symbol ?? ""}-${item.detail}`}>
-                <strong>{item.symbol ?? item.filePath ?? "Evidence"}</strong>
+                <strong>{item.symbol ?? item.filePath ?? t("module.evidence")}</strong>
                 <span>{item.filePath ? `${item.filePath} · ` : ""}{item.detail}</span>
               </div>
             ))}
           </div>
         ) : (
-          <p>暂无判断依据。重新生成架构图可补充 evidence。</p>
+          <p>{t("module.noEvidence")}</p>
         )}
       </CollapsibleCard>
 
@@ -225,28 +224,28 @@ function CollapsibleCard({ children, isOpen, onToggle, title }: { children: Reac
 }
 
 function FileTreeRow({ node }: { node: ModuleFileTreeNode }) {
+  const [isOpen, setIsOpen] = useState(true);
+  const hasChildren = node.type === "folder" && node.children.length > 0;
+
   return (
     <>
       <div className={cn("module-file-tree-row", node.type)} style={{ paddingLeft: `${node.depth * 14}px` }}>
-        {node.type === "folder" ? (
-          <>
-            <ChevronDown size={12} />
-            <Folder size={14} />
-          </>
+        {hasChildren ? (
+          <button className="module-file-tree-toggle" type="button" onClick={() => setIsOpen((current) => !current)} aria-label={node.name} aria-expanded={isOpen}>
+            {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </button>
+        ) : node.type === "folder" ? (
+          <span className="tree-indent-spacer" />
         ) : (
-          <>
-            <span className="tree-indent-spacer" />
-            <FileCode2 size={14} />
-          </>
+          <span className="tree-indent-spacer" />
         )}
+        {node.type === "folder" ? <Folder size={14} /> : <FileCode2 size={14} />}
         <span>
           <strong>{node.name}</strong>
           {node.role ? <small>{node.role}</small> : null}
         </span>
       </div>
-      {node.children.map((child) => (
-        <FileTreeRow key={child.id} node={child} />
-      ))}
+      {isOpen ? node.children.map((child) => <FileTreeRow key={child.id} node={child} />) : null}
     </>
   );
 }

@@ -73,13 +73,20 @@ export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
   return `You are FlowWeave's architecture analyst. Return only JSON.
 
 Goal:
-Create a functional architecture module map for a visual Canvas. Nodes must represent feature/architecture modules, not individual files or folders.
+Create a functional architecture module map for a visual Canvas that helps a user understand the real code structure and workflow of this project. Nodes must represent feature/architecture modules, not individual files or folders.
 
 Project: ${facts.projectName}
 Languages: ${JSON.stringify(facts.languages)}
 
 ProjectStructureFacts:
 ${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
+
+Analysis priorities:
+- Use only the supplied ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
+- Explain the project as a human-readable explanation for someone trying to understand how the code works.
+- Identify real entry points, core business/domain modules, data access, external integrations, background workers, shared utilities, and test surfaces from paths, imports, exports, symbols, calls, and externalCalls.
+- Describe the practical workflow: how a request, job, event, or command enters the system, which modules process it, where state is read or written, and where external systems are touched.
+- Prefer concrete code evidence over broad guesses. When evidence is partial, say that the detail is inferred from imports, calls, externalCalls, symbols, or file roles.
 
 Return this exact JSON shape:
 {
@@ -111,7 +118,10 @@ Rules:
 - Merge files by responsibility: API boundaries, domain services, data access, external integrations, workers, utilities, tests.
 - Do not create one node per file.
 - Every module must include concrete files and at least one evidence item when possible.
+- For fileRoles, describe what each file does inside the module, such as request handling, orchestration, validation, persistence, integration, configuration, or tests.
+- For symbols, choose key functions, classes, methods, or exports that explain how the module works; include a role that tells the user why the symbol matters.
 - Every relationship must explain how modules connect using imports, calls, symbols, or external call hints.
+- Relationship descriptions should describe real workflow collaboration, e.g. API boundary calls domain service, service reads/writes data access, service calls external integration, worker consumes queue work, or tests cover a target module.
 - Use only relation and category enum values shown above.`;
 }
 

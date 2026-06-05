@@ -1,14 +1,12 @@
 import { access } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { join } from "node:path";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
-import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
-import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { nowIso } from "./time";
 
-export class CodexLocalAdapter implements ToolAdapter {
-  id = "codex-local" as const;
-  name = "Codex Local";
+export class GeminiCliAdapter implements ToolAdapter {
+  id = "gemini-cli" as const;
+  name = "Gemini CLI";
   kind = "cli" as const;
 
   async detect() {
@@ -19,7 +17,7 @@ export class CodexLocalAdapter implements ToolAdapter {
       method: result.installed ? ("cli" as const) : ("none" as const),
       commandPath: result.commandPath,
       version: result.version,
-      message: result.installed ? "Codex CLI detected." : "Codex CLI was not found in PATH or known app locations."
+      message: result.installed ? "Gemini CLI detected." : "Gemini CLI was not found in PATH or known locations."
     };
   }
 
@@ -35,10 +33,9 @@ export class CodexLocalAdapter implements ToolAdapter {
         startedAt: timestamp,
         completedAt: timestamp,
         executionMode: request.executionMode,
-        events: [{ type: "error", message: "Codex CLI is not installed or not available.", timestamp }]
+        events: [{ type: "error", message: "Gemini CLI is not installed or not available.", timestamp }]
       };
     }
-    const commandPath = resolvedCommand.commandPath;
 
     if (request.guidancePath) {
       await access(request.guidancePath);
@@ -46,17 +43,8 @@ export class CodexLocalAdapter implements ToolAdapter {
 
     const startedAt = nowIso();
     const events: ToolRunEvent[] = [];
-    const lastMessagePath = join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id, "last-message.md");
-    const prompt = request.executionMode === "plan"
-      ? `${request.prompt}\n\nDry run only: inspect the request and report what you would change. Do not edit files.`
-      : request.prompt;
-
-    const args = buildCodexPlanArgs({
-      executionMode: request.executionMode,
-      lastMessagePath,
-      model: request.model,
-      projectPath: request.projectPath
-    });
+    const commandPath = resolvedCommand.commandPath;
+    const prompt = buildGeminiPrompt(request.prompt, request.executionMode);
 
     return new Promise<ToolRunResult>((resolve) => {
       const pushEvent = (event: ToolRunEvent) => {
@@ -66,7 +54,7 @@ export class CodexLocalAdapter implements ToolAdapter {
 
       pushEvent({ type: "status", status: "running", timestamp: startedAt });
 
-      const child = spawn(commandPath, args, {
+      const child = spawn(commandPath, buildGeminiArgs(request.model), {
         cwd: request.projectPath,
         stdio: ["pipe", "pipe", "pipe"]
       });
@@ -110,7 +98,6 @@ export class CodexLocalAdapter implements ToolAdapter {
           startedAt,
           completedAt,
           exitCode: code,
-          lastMessagePath,
           executionMode: request.executionMode,
           events
         });
@@ -119,31 +106,17 @@ export class CodexLocalAdapter implements ToolAdapter {
   }
 }
 
-export function buildCodexPlanArgs({
-  executionMode,
-  lastMessagePath,
-  model,
-  projectPath
-}: {
-  executionMode: "plan" | "execute";
-  lastMessagePath: string;
-  model?: string;
-  projectPath: string;
-}) {
-  const args = [
-    "exec",
-    "--cd",
-    projectPath,
-    "--sandbox",
-    executionMode === "plan" ? "read-only" : "workspace-write",
-    "--output-last-message",
-    lastMessagePath,
-    "-"
-  ];
-
+export function buildGeminiArgs(model?: string) {
+  const args: string[] = [];
   if (model) {
-    args.splice(1, 0, "--model", model);
+    args.push("--model", model);
   }
-
   return args;
+}
+
+export function buildGeminiPrompt(prompt: string, executionMode: "plan" | "execute") {
+  if (executionMode === "execute") return prompt;
+  return `${prompt}
+
+Dry run only: inspect the request and return the implementation plan, affected files, risks, and tests. Do not edit files.`;
 }

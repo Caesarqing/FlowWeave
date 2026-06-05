@@ -14,14 +14,14 @@ import { useAppController } from "./hooks/useAppController";
 import { usePreferencesStore } from "./stores/preferences.store";
 import { useEffect } from "react";
 import { cn } from "./utils/classnames";
+import { BrandLogo } from "./components/BrandLogo";
+import { useI18n } from "./utils/i18n";
 
 export function App() {
-  const app = useAppController();
   const reducedMotion = usePreferencesStore((state) => state.reducedMotion);
   const locale = usePreferencesStore((state) => state.locale);
-  const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
   const theme = usePreferencesStore((state) => state.theme);
-  const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
+  const { t } = useI18n();
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: light)");
@@ -42,9 +42,39 @@ export function App() {
     document.documentElement.lang = locale;
   }, [locale]);
 
+  if (!window.flowweave) {
+    return (
+      <main className="desktop-only-shell">
+        <section className="desktop-only-panel" aria-labelledby="desktop-only-title">
+          <BrandLogo className="desktop-only-logo" />
+          <div>
+            <p className="desktop-only-kicker">FlowWeave Desktop</p>
+            <h1 id="desktop-only-title">{t("desktopOnly.title")}</h1>
+          </div>
+          <p>{t("desktopOnly.body")}</p>
+          <code>{t("desktopOnly.command")}</code>
+          <span>{t("desktopOnly.help")}</span>
+        </section>
+      </main>
+    );
+  }
+
+  return <DesktopApp />;
+}
+
+function DesktopApp() {
+  const app = useAppController();
+  const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
+  const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
+
+  function changePage(page: Parameters<typeof app.onPageChange>[0]) {
+    setUtilityPanel(undefined);
+    app.onPageChange(page);
+  }
+
   return (
     <div className="app-shell">
-      <Sidebar activePage={app.activePage} activeUtilityPanel={utilityPanel} onPageChange={app.onPageChange} onUtilityPanelChange={setUtilityPanel} />
+      <Sidebar activePage={app.activePage} activeUtilityPanel={utilityPanel} onPageChange={changePage} onUtilityPanelChange={setUtilityPanel} />
       <UtilityPanels activePanel={utilityPanel} onClose={() => setUtilityPanel(undefined)} />
       <section className="main-shell">
         <TopBar activePage={app.activePage} onExport={app.onExport} onSendToTool={app.onSendToTool} projectLabel={app.projectLabel} />
@@ -72,6 +102,7 @@ export function App() {
               onConnect={app.canvas.onConnect}
               onEdgesChange={app.canvas.onEdgesChange}
               onNodesChange={app.canvas.onNodesChange}
+              onOpenProject={app.canvas.onOpenProject}
               onOpenConnectionCreator={app.canvas.onOpenConnectionCreator}
               onPaneClick={app.canvas.onClearConnectionSelection}
               onSelectEdge={app.canvas.onSelectEdge}

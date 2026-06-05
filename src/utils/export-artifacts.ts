@@ -1,7 +1,8 @@
 import type { GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle, SequenceDiagramKind } from "../types";
-import { relationStyle } from "./relation-styles";
 
-export function buildGuidanceMarkdown(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[]) {
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+export function buildGuidanceMarkdown(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
   return `# FlowWeave Guidance
 
 Project: ${projectLabel}
@@ -13,7 +14,7 @@ Use the module nodes and connection relations as the modification boundary. Pref
 
 ## Module Relations
 
-${edges.map((edge) => `- ${edge.source} -> ${edge.target}: ${relationStyle[edge.relation].accent} (${edge.relation}) - ${relationStyle[edge.relation].description}${edge.guidanceNote ? ` Guidance: ${edge.guidanceNote}` : ""}`).join("\n")}
+${edges.map((edge) => `- ${edge.source} -> ${edge.target}: ${relationTitle(edge, t)} (${edge.relation}) - ${relationDescription(edge, t)}${edge.guidanceNote ? ` Guidance: ${edge.guidanceNote}` : ""}`).join("\n")}
 
 ## Modules
 
@@ -37,12 +38,12 @@ ${node.guidanceDraft}
 `;
 }
 
-export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[]) {
+export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
   return JSON.stringify(
     {
       project: projectLabel,
       source: "FlowWeave",
-      targetTools: ["codex-local", "claude-code", "cursor"],
+      targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
       outputFiles: ["guidance.md", "task.json", "plan.md"],
       modules: nodes.map((node) => ({
         id: node.id,
@@ -60,14 +61,22 @@ export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: G
         source: edge.source,
         target: edge.target,
         relation: edge.relation,
-        relationLabel: relationStyle[edge.relation].accent,
-        relationDescription: relationStyle[edge.relation].description,
+        relationLabel: relationTitle(edge, t),
+        relationDescription: relationDescription(edge, t),
         guidanceNote: edge.guidanceNote
       }))
     },
     null,
     2
   );
+}
+
+function relationTitle(edge: GraphEdge, t?: Translate) {
+  return t ? t(`relation.${edge.relation}Accent`) : edge.relation;
+}
+
+function relationDescription(edge: GraphEdge, t?: Translate) {
+  return t ? t(`relation.${edge.relation}Description`) : "";
 }
 
 export function buildSequenceGuidanceMarkdown(projectLabel: string, bundle: SequenceDiagramBundle, activeKind: SequenceDiagramKind) {
@@ -111,7 +120,7 @@ export function buildSequenceTaskJson(projectLabel: string, bundle: SequenceDiag
       artifact: "sequence-diagram",
       activeKind,
       generatedAt: bundle.generatedAt,
-      targetTools: ["codex-local", "claude-code", "cursor"],
+      targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
       outputFiles: ["sequence-guidance.md", "sequence-task.json", "plan.md"],
       diagrams: {
         architectural: serializeSequenceDiagram(bundle.architectural),

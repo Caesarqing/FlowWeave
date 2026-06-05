@@ -49,12 +49,10 @@ describe("canvas graph CRUD helpers", () => {
 });
 
 describe("canvas relation metadata", () => {
-  it("has clear Chinese names and descriptions for every relation", () => {
+  it("has stable color styling for every relation", () => {
     for (const option of relationOptions) {
-      expect(relationStyle[option].accent).not.toContain("淡蓝");
-      expect(relationStyle[option].description.length).toBeGreaterThan(8);
+      expect(relationStyle[option].color).toMatch(/^#[0-9a-f]{6}$/i);
     }
-    expect(relationStyle.depends_on.accent).toBe("依赖");
   });
 });
 
