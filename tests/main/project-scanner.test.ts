@@ -1,6 +1,8 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import { scanProject } from "../../src/main/services/project-scanner.service";
@@ -30,5 +32,34 @@ describe("project-scanner.service", () => {
 
     expect(JSON.stringify(project.files)).not.toContain(FLOWWEAVE_DIR);
     expect(project.summary.totalFiles).toBe(1);
+  });
+
+  it("ignores nested dependencies and symbolic links outside the project", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-safe-"));
+    const outside = await mkdtemp(join(tmpdir(), "flowweave-scan-outside-"));
+    await mkdir(join(root, "backend", "node_modules", "package"), { recursive: true });
+    await writeFile(join(root, "backend", "node_modules", "package", "index.ts"), "export const dependency = true;\n");
+    await writeFile(join(outside, "secret.ts"), "export const secret = true;\n");
+    await symlink(outside, join(root, "linked"));
+    await writeFile(join(root, "main.ts"), "export const main = true;\n");
+
+    const project = await scanProject(root);
+    const serialized = JSON.stringify(project.files);
+
+    expect(serialized).not.toContain("node_modules");
+    expect(serialized).not.toContain("linked");
+    expect(serialized).not.toContain("secret.ts");
+    expect(serialized).toContain("main.ts");
+  });
+
+  it("recognizes a git repository without an origin remote", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-git-"));
+    await promisify(execFile)("git", ["init", root]);
+    await writeFile(join(root, "main.ts"), "export const main = true;\n");
+
+    const project = await scanProject(root);
+
+    expect(project.git.isRepo).toBe(true);
+    expect(project.git.remote).toBeUndefined();
   });
 });

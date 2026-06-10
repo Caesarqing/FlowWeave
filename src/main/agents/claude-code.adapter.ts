@@ -33,6 +33,7 @@ export class ClaudeCodeAdapter implements ToolAdapter {
         startedAt: timestamp,
         completedAt: timestamp,
         executionMode: request.executionMode,
+        purpose: request.purpose,
         events: [{ type: "error", message: "Claude Code is not installed or not available.", timestamp }]
       };
     }
@@ -44,7 +45,7 @@ export class ClaudeCodeAdapter implements ToolAdapter {
 
     const startedAt = nowIso();
     const events: ToolRunEvent[] = [];
-    const prompt = buildClaudePrompt(request.prompt, request.executionMode);
+    const prompt = request.prompt;
     const args = buildClaudeArgs(request.executionMode, request.model);
 
     return new Promise<ToolRunResult>((resolve) => {
@@ -80,6 +81,7 @@ export class ClaudeCodeAdapter implements ToolAdapter {
           startedAt,
           completedAt: timestamp,
           executionMode: request.executionMode,
+          purpose: request.purpose,
           events
         });
       });
@@ -97,6 +99,7 @@ export class ClaudeCodeAdapter implements ToolAdapter {
           completedAt,
           exitCode: code,
           executionMode: request.executionMode,
+          purpose: request.purpose,
           events
         });
       });
@@ -119,8 +122,8 @@ export function buildClaudeArgs(executionMode: "plan" | "execute", model?: strin
   return args;
 }
 
-export function buildClaudePrompt(prompt: string, executionMode: "plan" | "execute") {
-  if (executionMode === "execute") return prompt;
+export function buildClaudePrompt(prompt: string, executionMode: "plan" | "execute", purpose?: import("../../types").ToolRunPurpose) {
+  if (executionMode === "execute" || purpose === "artifact-analysis") return prompt;
   return `${prompt}
 
 Dry run only: inspect the request and return the implementation plan, affected files, risks, and tests. Do not edit files.`;

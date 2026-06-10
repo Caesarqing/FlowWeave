@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { translate } from "../../src/utils/i18n";
 import { localizeCanvasEdgeLabels } from "../../src/components/CanvasWorkspace";
-import { useCanvasStore } from "../../src/stores/canvas.store";
 import { useWorkspaceStore } from "../../src/stores/workspace.store";
 
 describe("i18n translations", () => {
@@ -59,13 +58,10 @@ describe("i18n translations", () => {
     expect(chineseEdge.label).toBe("调用");
   });
 
-  it("starts Canvas stores without a demo graph", () => {
+  it("starts the unified Workspace store without a demo graph", () => {
     expect(useWorkspaceStore.getState().selectedAgentId).toBe("claude-code");
     expect(useWorkspaceStore.getState().nodes).toEqual([]);
     expect(useWorkspaceStore.getState().edges).toEqual([]);
     expect(useWorkspaceStore.getState().modules).toEqual([]);
-    expect(useCanvasStore.getState().nodes).toEqual([]);
-    expect(useCanvasStore.getState().edges).toEqual([]);
-    expect(useCanvasStore.getState().modules).toEqual([]);
   });
 });

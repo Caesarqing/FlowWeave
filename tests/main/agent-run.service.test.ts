@@ -3,22 +3,32 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
-import { startToolPlan } from "../../src/main/services/agent-run.service";
+import { buildRunPrompt, startToolPlan } from "../../src/main/services/agent-run.service";
+import { registerProject } from "../../src/main/services/project-registry.service";
+import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 
 describe("agent-run.service", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
+  it("does not append implementation-plan instructions to artifact analysis prompts", () => {
+    expect(buildRunPrompt("Return architecture JSON.", "plan", "artifact-analysis")).toBe("Return architecture JSON.");
+    expect(buildRunPrompt("Implement auth.", "execute", "implementation-plan")).toBe("Implement auth.");
+    expect(buildRunPrompt("Review auth.", "plan", "implementation-plan")).toContain("Do not edit files.");
+  });
+
   it("generates prompt, plan, log, and result files with the mock tool", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-"));
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
 
     const result = await startToolPlan({
-      projectPath,
+      projectId,
       toolId: "mock",
       prompt: "Review auth module.",
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "implementation-plan"
     });
 
     expect(result.status).toBe("completed");
@@ -33,6 +43,7 @@ describe("agent-run.service", () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-run-"));
     const runId = "run-1700000000000";
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
     vi.spyOn(Date, "now").mockReturnValue(1700000000000);
 
     setTimeout(() => {
@@ -40,21 +51,33 @@ describe("agent-run.service", () => {
       void mkdir(bridgeDir, { recursive: true }).then(() =>
         writeFile(
           join(bridgeDir, "response.json"),
-          JSON.stringify({ status: "completed", summary: "desktop response", plan: "# Desktop Run Plan" }),
+          JSON.stringify({
+            runId,
+            projectId,
+            status: "completed",
+            summary: "desktop response",
+            content: "# Desktop Run Plan",
+            completedAt: "2026-06-09T12:00:00.000Z"
+          }),
           "utf8"
         )
       );
     }, 20);
 
     const result = await startToolPlan({
-      projectPath,
+      projectId,
       toolId: "codex-desktop",
       prompt: "Review desktop bridge.",
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "implementation-plan"
     });
 
-    expect(result.status).toBe("completed");
-    await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Desktop Run Plan");
-    await expect(readFile(result.resultPath ?? "", "utf8")).resolves.toContain('"toolId": "codex-desktop"');
+    expect(result.status).toBe("pending");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const summaries = await listRunSummaries(projectPath);
+    const artifact = await readRunArtifact(projectPath, result.id);
+    expect(summaries[0].status).toBe("completed");
+    expect(artifact.plan).toContain("Desktop Run Plan");
+    expect(artifact.result).toContain('"toolId": "codex-desktop"');
   });
 });

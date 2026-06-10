@@ -1,0 +1,6 @@
+{
+  "name": "flowweave",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Codex Desktop skill for processing FlowWeave pending bridge requests."
+}

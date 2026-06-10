@@ -10,7 +10,7 @@ import {
   readArchitectureMap
 } from "../../src/main/services/architecture-analysis.service";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
-import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
+import { listRunSummaries } from "../../src/main/services/run-log.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject } from "../../src/types";
@@ -85,7 +85,7 @@ describe("architecture-analysis.service", () => {
     expect(graph.edges[0]).toMatchObject({ relation: "calls", guidanceNote: "Controller calls service." });
   });
 
-  it("falls back when agent output is invalid and persists architecture artifacts", async () => {
+  it("persists validated mock architecture artifacts", async () => {
     const root = await createFixtureFiles();
     const project = projectFixture(root);
     const facts = await buildProjectStructureFacts(project);
@@ -96,13 +96,15 @@ describe("architecture-analysis.service", () => {
     const stored = await readArchitectureMap(root);
     const fileInsights = await readFile(join(root, FLOWWEAVE_DIR, "file-insights.json"), "utf8");
 
-    expect(result.source).toBe("agent");
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error(result.error.message);
     expect(result.graph.nodes.length).toBeGreaterThan(0);
     expect(stored?.modules.length).toBeGreaterThan(0);
+    expect(stored?.metadata?.agentId).toBe("mock");
     expect(fileInsights).toContain("src/api/user.controller.ts");
   });
 
-  it("records custom agent architecture analysis as run artifacts", async () => {
+  it("rejects custom agents without a verifiable read-only analysis mode", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-architecture-agent-"));
     const root = await createFixtureFiles();
     const scriptPath = join(configRoot, "architecture-agent.mjs");
@@ -141,13 +143,11 @@ describe("architecture-analysis.service", () => {
 
     const result = await analyzeArchitecture(projectFixture(root), agent.id);
     const summaries = await listRunSummaries(root);
-    const artifact = await readRunArtifact(root, summaries[0].id);
 
-    expect(result.source).toBe("agent");
-    expect(result.graph.nodes[0]).toMatchObject({ id: "user-api", title: "User API" });
-    expect(summaries[0]).toMatchObject({ toolId: agent.id, status: "completed" });
-    expect(artifact.prompt).toContain("ProjectStructureFacts");
-    expect(artifact.result).toContain(`"toolId": "${agent.id}"`);
+    expect(result.outcome).toBe("failed");
+    if (result.outcome !== "failed") throw new Error("Expected analysis failure.");
+    expect(result.error.message).toContain("verifiable read-only");
+    expect(summaries).toHaveLength(0);
   });
 });
 

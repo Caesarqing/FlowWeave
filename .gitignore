@@ -3,6 +3,7 @@ node_modules/
 dist/
 out/
 release/
+build/
 .flowweave/
 
 .DS_Store

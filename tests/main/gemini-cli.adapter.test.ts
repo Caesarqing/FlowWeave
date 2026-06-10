@@ -16,7 +16,12 @@ describe("gemini-cli.adapter", () => {
   });
 
   it("builds model args when a model is provided", () => {
-    expect(buildGeminiArgs("gemini-2.5-pro")).toEqual(["--model", "gemini-2.5-pro"]);
+    expect(buildGeminiArgs("plan", "gemini-2.5-pro")).toEqual([
+      "--approval-mode",
+      "plan",
+      "--model",
+      "gemini-2.5-pro"
+    ]);
   });
 
   it("adds dry-run guidance in plan mode", () => {
@@ -53,9 +58,11 @@ describe("gemini-cli.adapter", () => {
 
     const result = await adapter.runPlan({
       id: "run-gemini",
+      projectId: "project-00000000-0000-0000-0000-000000000000",
       projectPath,
       prompt: "Analyze billing",
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "implementation-plan"
     });
 
     expect(result.status).toBe("completed");

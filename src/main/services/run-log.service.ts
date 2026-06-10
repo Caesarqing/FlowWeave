@@ -1,7 +1,8 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, ToolRunResult, ToolRunStatus, ToolRunSummary } from "../../types";
+import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, ToolRunPurpose, ToolRunResult, ToolRunStatus, ToolRunSummary } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { getDesktopBridgeDir, readDesktopBridgeResponse } from "../agents/desktop-bridge.adapter";
 
 export type RunPaths = {
   runDir: string;
@@ -82,12 +83,28 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
   if (!resultText.trim()) return undefined;
 
   try {
-    const result = JSON.parse(resultText) as Partial<ToolRunResult>;
+    let result = JSON.parse(resultText) as Partial<ToolRunResult>;
+    if (result.status === "pending") {
+      try {
+        result = await importDesktopBridgeResponse(projectPath, runId, result);
+      } catch (error) {
+        const completedAt = new Date().toISOString();
+        result = {
+          ...result,
+          status: "failed",
+          completedAt,
+          exitCode: 1,
+          summary: `Desktop bridge response rejected: ${formatError(error)}`
+        };
+        await writeFile(join(getRunDir(projectPath, runId), "result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+      }
+    }
     return {
       id: result.id ?? runId,
       toolId: isRuntimeAgentId(result.toolId) ? result.toolId : "mock",
       status: isToolRunStatus(result.status) ? result.status : "failed",
       executionMode: isExecutionMode(result.executionMode) ? result.executionMode : "plan",
+      purpose: isPurpose(result.purpose) ? result.purpose : "implementation-plan",
       startedAt: result.startedAt ?? "",
       completedAt: result.completedAt ?? result.startedAt ?? "",
       summary: result.summary,
@@ -100,6 +117,41 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
   } catch {
     return undefined;
   }
+}
+
+async function importDesktopBridgeResponse(
+  projectPath: string,
+  runId: string,
+  result: Partial<ToolRunResult>
+): Promise<Partial<ToolRunResult>> {
+  const response = await readDesktopBridgeResponse(getDesktopBridgeDir(projectPath, runId));
+  if (!response) return result;
+  if (!response.sourcePath.endsWith("response.json")) {
+    throw new Error(`Desktop bridge response.json is required for pending run ${runId}.`);
+  }
+  if (response.runId !== runId) {
+    throw new Error(`Desktop bridge response runId does not match pending run ${runId}.`);
+  }
+  if (!result.projectId || response.projectId !== result.projectId) {
+    throw new Error(`Desktop bridge response projectId does not match pending run ${runId}.`);
+  }
+  const completedAt = response.completedAt ?? new Date().toISOString();
+  if (Number.isNaN(Date.parse(completedAt))) {
+    throw new Error(`Desktop bridge response completedAt is invalid for run ${runId}.`);
+  }
+  const runDir = getRunDir(projectPath, runId);
+  const updated: Partial<ToolRunResult> = {
+    ...result,
+    status: response.status,
+    completedAt,
+    exitCode: response.status === "completed" ? 0 : 1,
+    summary: response.summary
+  };
+  await Promise.all([
+    writeFile(join(runDir, "plan.md"), response.content, "utf8"),
+    writeFile(join(runDir, "result.json"), `${JSON.stringify(updated, null, 2)}\n`, "utf8")
+  ]);
+  return updated;
 }
 
 function getRunDir(projectPath: string, runId: string) {
@@ -141,7 +193,15 @@ function isExecutionMode(value: unknown): value is ExecutionMode {
   return value === "plan" || value === "execute";
 }
 
+function isPurpose(value: unknown): value is ToolRunPurpose {
+  return value === "implementation-plan" || value === "artifact-analysis";
+}
+
 function sortableTime(value: string) {
   const time = Date.parse(value);
   return Number.isNaN(time) ? 0 : time;
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }

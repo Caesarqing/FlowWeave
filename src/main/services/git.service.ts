@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ChangedFile, ChangedFileStatus, GitStatus } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
@@ -60,10 +60,17 @@ export async function getDiff(projectPath: string, checkpointId?: string): Promi
 }
 
 export async function restoreCheckpoint(projectPath: string, checkpointId: string): Promise<void> {
+  if (!/^flowweave-\d+$/.test(checkpointId)) throw new Error(`Invalid FlowWeave checkpoint id: ${checkpointId}`);
   await assertGitRepo(projectPath);
   const [stashRef, marker] = await Promise.all([findStashRef(projectPath, checkpointId), readCheckpointMarker(projectPath, checkpointId)]);
-  if (!stashRef && !marker) {
+  if (!marker) {
     throw new Error(`FlowWeave checkpoint not found: ${checkpointId}`);
+  }
+  if (marker.checkpointId !== checkpointId || marker.projectPath !== resolve(projectPath)) {
+    throw new Error(`FlowWeave checkpoint does not belong to this project: ${checkpointId}`);
+  }
+  if (marker.hasStash !== Boolean(stashRef)) {
+    throw new Error(`FlowWeave checkpoint state is invalid: ${checkpointId}`);
   }
   await git(projectPath, ["reset", "--hard"]);
   await git(projectPath, ["clean", "-fd"]);
@@ -129,7 +136,7 @@ async function writeCheckpointMarker(projectPath: string, checkpointId: string, 
   await mkdir(checkpointDir, { recursive: true });
   await writeFile(
     join(checkpointDir, `${checkpointId}.json`),
-    `${JSON.stringify({ checkpointId, hasStash, createdAt: new Date().toISOString() }, null, 2)}\n`,
+    `${JSON.stringify({ checkpointId, projectPath: resolve(projectPath), hasStash, createdAt: new Date().toISOString() }, null, 2)}\n`,
     "utf8"
   );
 }
@@ -137,7 +144,7 @@ async function writeCheckpointMarker(projectPath: string, checkpointId: string, 
 async function readCheckpointMarker(projectPath: string, checkpointId: string) {
   const checkpointPath = join(projectPath, FLOWWEAVE_DIR, "checkpoints", `${checkpointId}.json`);
   return readFile(checkpointPath, "utf8")
-    .then((content) => JSON.parse(content) as { checkpointId: string; hasStash: boolean; createdAt: string })
+    .then((content) => JSON.parse(content) as { checkpointId: string; projectPath?: string; hasStash: boolean; createdAt: string })
     .catch(() => undefined);
 }
 

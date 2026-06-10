@@ -1,6 +1,6 @@
 /// <reference types="electron-vite/node" />
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, nativeImage } from "electron";
 import { join } from "node:path";
 import { registerAgentIpc } from "./ipc/agent.ipc";
 import { registerGitIpc } from "./ipc/git.ipc";
@@ -8,18 +8,22 @@ import { registerProjectIpc } from "./ipc/project.ipc";
 import { configureAgentRegistry } from "./services/agent-registry.service";
 
 function createWindow() {
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, "logo.png")
+    : join(app.getAppPath(), "logo", "logo.png");
   const window = new BrowserWindow({
     width: 1440,
     height: 920,
     minWidth: 1120,
     minHeight: 720,
     title: "FlowWeave",
+    icon: iconPath,
     backgroundColor: "#080a13",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: join(__dirname, "../preload/index.mjs"),
-      sandbox: false
+      preload: join(__dirname, "../preload/index.cjs"),
+      sandbox: true
     }
   });
 
@@ -33,6 +37,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === "darwin" && app.dock) {
+    const iconPath = app.isPackaged
+      ? join(process.resourcesPath, "logo.png")
+      : join(app.getAppPath(), "logo", "logo.png");
+    app.dock.setIcon(nativeImage.createFromPath(iconPath));
+  }
   configureAgentRegistry(app.getPath("userData"));
   registerProjectIpc();
   registerAgentIpc();

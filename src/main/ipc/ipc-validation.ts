@@ -30,3 +30,11 @@ export function requireStringArray(channel: string, value: unknown, name: string
   }
   return value;
 }
+
+export function requireSafeId(channel: string, value: unknown, name: string): string {
+  const id = requireString(channel, value, name);
+  if (id.includes("..") || id.includes("/") || id.includes("\\") || !/^[a-z0-9][a-z0-9._-]*$/i.test(id)) {
+    throw new Error(`[${channel}] Invalid "${name}": expected a safe identifier.`);
+  }
+  return id;
+}

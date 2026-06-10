@@ -9,15 +9,10 @@ import { nowIso } from "./time";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 
 const execFileAsync = promisify(execFile);
-const BRIDGE_TIMEOUT_MS = 120_000;
-const BRIDGE_POLL_INTERVAL_MS = 250;
-
 export type DesktopBridgeConfig = {
   id: Extract<BuiltInAgentId, "claude-desktop" | "codex-desktop">;
   name: string;
   appPath: string;
-  responseTimeoutMs: number;
-  pollIntervalMs: number;
 };
 
 type DesktopBridgeSkillReference = {
@@ -29,6 +24,7 @@ type DesktopBridgeSkillReference = {
 
 type DesktopBridgeRequest = {
   runId: string;
+  projectId: string;
   agentId: DesktopBridgeConfig["id"];
   projectPath: string;
   executionMode: ExecutionMode;
@@ -41,7 +37,10 @@ type DesktopBridgeRequest = {
 type DesktopBridgeResponse = {
   status: Extract<ToolRunStatus, "completed" | "failed">;
   summary: string;
-  plan: string;
+  content: string;
+  runId?: string;
+  projectId?: string;
+  completedAt?: string;
   sourcePath: string;
 };
 
@@ -50,15 +49,11 @@ export class DesktopBridgeAdapter implements ToolAdapter {
   name: string;
   kind = "desktop" as const;
   private appPath: string;
-  private responseTimeoutMs: number;
-  private pollIntervalMs: number;
 
   constructor(config: DesktopBridgeConfig) {
     this.id = config.id;
     this.name = config.name;
     this.appPath = config.appPath;
-    this.responseTimeoutMs = config.responseTimeoutMs;
-    this.pollIntervalMs = config.pollIntervalMs;
   }
 
   async detect() {
@@ -96,7 +91,6 @@ export class DesktopBridgeAdapter implements ToolAdapter {
     const startedAt = nowIso();
     const events: ToolRunEvent[] = [];
     const bridgeDir = getDesktopBridgeDir(request.projectPath, request.id);
-    const runPlanPath = join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id, "plan.md");
     const promptPath = join(bridgeDir, "prompt.md");
     const instructionsPath = join(bridgeDir, "instructions.md");
     const requestPath = join(bridgeDir, "request.json");
@@ -121,7 +115,11 @@ export class DesktopBridgeAdapter implements ToolAdapter {
     if (detection.available) {
       await this.openProject(request.projectPath)
         .then(() => {
-          pushEvent({ type: "stdout", content: `${this.name} opened. Waiting for bridge response in ${bridgeDir}.`, timestamp: nowIso() });
+          pushEvent({
+            type: "stdout",
+            content: `${this.name} opened. Use FlowWeave context to process the current pending request.`,
+            timestamp: nowIso()
+          });
         })
         .catch((error: Error) => {
           pushEvent({ type: "stderr", content: `Failed to open ${this.name}: ${error.message}`, timestamp: nowIso() });
@@ -130,50 +128,21 @@ export class DesktopBridgeAdapter implements ToolAdapter {
       pushEvent({ type: "stderr", content: detection.message ?? `${this.name} app is not available.`, timestamp: nowIso() });
     }
 
-    const response = await waitForDesktopBridgeResponse(bridgeDir, this.responseTimeoutMs, this.pollIntervalMs);
-    if (response) {
-      await writeFile(runPlanPath, response.plan, "utf8");
-      const completedAt = nowIso();
-      pushEvent({ type: "stdout", content: `Bridge response loaded from ${response.sourcePath}.`, timestamp: completedAt });
-      pushEvent({ type: "status", status: response.status, timestamp: completedAt });
-      return {
-        id: request.id,
-        toolId: this.id,
-        status: response.status,
-        projectPath: request.projectPath,
-        startedAt,
-        completedAt,
-        exitCode: response.status === "completed" ? 0 : 1,
-        planPath: runPlanPath,
-        executionMode: request.executionMode,
-        summary: response.summary,
-        events
-      };
-    }
-
     const completedAt = nowIso();
-    const timeoutPlan = buildDesktopBridgeTimeoutPlan({
-      agentName: this.name,
-      bridgeDir,
-      requestPath,
-      promptPath,
-      instructionsPath,
-      detectionMessage: detection.message ?? ""
-    });
-    await writeFile(runPlanPath, timeoutPlan, "utf8");
-    pushEvent({ type: "error", message: `${this.name} bridge timed out after ${this.responseTimeoutMs}ms.`, timestamp: completedAt });
-    pushEvent({ type: "status", status: "failed", timestamp: completedAt });
+    pushEvent({ type: "status", status: "pending", timestamp: completedAt });
     return {
       id: request.id,
       toolId: this.id,
-      status: "failed",
+      status: "pending",
       projectPath: request.projectPath,
       startedAt,
       completedAt,
-      exitCode: 1,
-      planPath: runPlanPath,
+      exitCode: undefined,
       executionMode: request.executionMode,
-      summary: `${this.name} bridge timed out. Request files remain in ${bridgeDir}.`,
+      purpose: request.purpose,
+      summary: detection.available
+        ? `Pending ${this.name} response. Use FlowWeave context to process the current pending request.`
+        : `${this.name} is not installed. The pending bridge request remains available for manual processing.`,
       events
     };
   }
@@ -184,9 +153,7 @@ export class ClaudeDesktopAdapter extends DesktopBridgeAdapter {
     super({
       id: "claude-desktop",
       name: "Claude Desktop",
-      appPath: "/Applications/Claude.app",
-      responseTimeoutMs: resolveDesktopBridgeTimeoutMs(),
-      pollIntervalMs: resolveDesktopBridgePollIntervalMs()
+      appPath: "/Applications/Claude.app"
     });
   }
 }
@@ -196,9 +163,7 @@ export class CodexDesktopAdapter extends DesktopBridgeAdapter {
     super({
       id: "codex-desktop",
       name: "Codex Desktop",
-      appPath: "/Applications/Codex.app",
-      responseTimeoutMs: resolveDesktopBridgeTimeoutMs(),
-      pollIntervalMs: resolveDesktopBridgePollIntervalMs()
+      appPath: "/Applications/Codex.app"
     });
   }
 }
@@ -221,7 +186,7 @@ Read request.json and prompt.md from this directory.
 Inspect the project at the request projectPath.
 Write one response file in the same directory:
 
-- response.json with { "status": "completed" | "failed", "summary": string, "plan": string }
+- response.json with { "runId": string, "projectId": string, "status": "completed" | "failed", "summary": string, "content": string, "completedAt": ISO timestamp }
 - or response.md with the plan markdown
 
 Prefer response.json when possible. In plan mode, do not modify project files.`;
@@ -240,6 +205,7 @@ export function buildDesktopBridgeRequest({
 }): DesktopBridgeRequest {
   return {
     runId: request.id,
+    projectId: request.projectId,
     agentId,
     projectPath: request.projectPath,
     executionMode: request.executionMode,
@@ -250,16 +216,6 @@ export function buildDesktopBridgeRequest({
   };
 }
 
-export async function waitForDesktopBridgeResponse(bridgeDir: string, timeoutMs: number, pollIntervalMs: number) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    const response = await readDesktopBridgeResponse(bridgeDir);
-    if (response) return response;
-    await delay(pollIntervalMs);
-  }
-  return undefined;
-}
-
 export async function readDesktopBridgeResponse(bridgeDir: string): Promise<DesktopBridgeResponse | undefined> {
   const jsonPath = join(bridgeDir, "response.json");
   const jsonContent = await readFile(jsonPath, "utf8").catch(() => "");
@@ -268,13 +224,16 @@ export async function readDesktopBridgeResponse(bridgeDir: string): Promise<Desk
     if (parsed.status !== "completed" && parsed.status !== "failed") {
       throw new Error(`Invalid desktop bridge response status in ${jsonPath}.`);
     }
-    if (!parsed.plan?.trim()) {
-      throw new Error(`Desktop bridge response plan is required in ${jsonPath}.`);
+    if (!parsed.content?.trim()) {
+      throw new Error(`Desktop bridge response content is required in ${jsonPath}.`);
     }
     return {
       status: parsed.status,
       summary: parsed.summary?.trim() || `${parsed.status} desktop bridge response.`,
-      plan: parsed.plan,
+      content: parsed.content,
+      runId: parsed.runId,
+      projectId: parsed.projectId,
+      completedAt: parsed.completedAt,
       sourcePath: jsonPath
     };
   }
@@ -285,7 +244,7 @@ export async function readDesktopBridgeResponse(bridgeDir: string): Promise<Desk
     return {
       status: "completed",
       summary: "Desktop bridge response loaded from response.md.",
-      plan: markdown,
+      content: markdown,
       sourcePath: markdownPath
     };
   }
@@ -326,59 +285,4 @@ function buildDesktopBridgeSkillReferences(projectPath: string, promptPath: stri
       description: "Optional local Codex plugin directory reference. Content is not copied by FlowWeave."
     }
   ];
-}
-
-function buildDesktopBridgeTimeoutPlan({
-  agentName,
-  bridgeDir,
-  requestPath,
-  promptPath,
-  instructionsPath,
-  detectionMessage
-}: {
-  agentName: string;
-  bridgeDir: string;
-  requestPath: string;
-  promptPath: string;
-  instructionsPath: string;
-  detectionMessage: string;
-}) {
-  return `# ${agentName} Desktop Bridge Pending
-
-FlowWeave wrote a desktop bridge request but did not receive response.json or response.md before the timeout.
-
-## Bridge Files
-
-- Bridge directory: ${bridgeDir}
-- Request: ${requestPath}
-- Prompt: ${promptPath}
-- Instructions: ${instructionsPath}
-
-## Detection
-
-${detectionMessage}
-
-To complete this run manually, have the desktop agent read request.json and prompt.md, then write response.json or response.md in the bridge directory.`;
-}
-
-function resolveDesktopBridgeTimeoutMs() {
-  return readPositiveIntegerEnv("FLOWWEAVE_AGENT_BRIDGE_TIMEOUT_MS", BRIDGE_TIMEOUT_MS);
-}
-
-function resolveDesktopBridgePollIntervalMs() {
-  return readPositiveIntegerEnv("FLOWWEAVE_AGENT_BRIDGE_POLL_INTERVAL_MS", BRIDGE_POLL_INTERVAL_MS);
-}
-
-function readPositiveIntegerEnv(name: string, fallback: number) {
-  const value = process.env[name];
-  if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-  return parsed;
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

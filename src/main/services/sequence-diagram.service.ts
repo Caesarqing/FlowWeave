@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  AnalysisFailure,
   ArchitectureMap,
   ArchitectureEvidence,
   CodeflowProject,
@@ -19,44 +20,92 @@ import type {
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readArchitectureMap } from "./architecture-analysis.service";
 import { startToolPlan } from "./agent-run.service";
-import { buildProjectStructureFacts } from "./structure-extractor.service";
+import { createScanFingerprint, registerProject } from "./project-registry.service";
+import { buildProjectStructureFacts, selectRepresentativeStructureFacts } from "./structure-extractor.service";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
 const MAX_PROMPT_FILES = 180;
 const MAX_SYMBOLS_PER_FILE = 14;
+const REPRESENTATIVE_FILE_LIMIT = 50;
+const sequenceFlights = new Map<string, Promise<SequenceDiagramGenerationResult>>();
 
 export async function generateSequenceDiagrams(project: CodeflowProject, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult> {
+  const flightKey = `${project.rootPath}:${agentId}`;
+  const existing = sequenceFlights.get(flightKey);
+  if (existing) return existing;
+  const flight = generateSequenceDiagramsOnce(project, agentId).finally(() => sequenceFlights.delete(flightKey));
+  sequenceFlights.set(flightKey, flight);
+  return flight;
+}
+
+async function generateSequenceDiagramsOnce(project: CodeflowProject, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult> {
   const facts = await buildProjectStructureFacts(project);
-  const architectureMap = await readArchitectureMap(project.rootPath);
-  const fallback = createFallbackSequenceBundle(project, facts, architectureMap, "fallback");
-  const prompt = buildSequenceDiagramPrompt(facts, architectureMap);
+  const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
+  const storedArchitecture = await readArchitectureMap(project.rootPath);
+  const architectureMap = storedArchitecture?.source === "agent" && storedArchitecture.metadata ? storedArchitecture : undefined;
+  const inputFingerprint = project.scanFingerprint ?? createScanFingerprint({ representativeFacts, architecture: architectureMap?.metadata?.inputFingerprint });
+  const prompt = buildSequenceDiagramPrompt(representativeFacts, architectureMap);
 
   if (agentId === "mock") {
-    const parsed = parseSequenceDiagramBundleJson(mockSequenceBundleJson(fallback), project, facts, architectureMap);
-    const bundle = parsed ?? fallback;
+    const inferred = createFallbackSequenceBundle(project, representativeFacts, architectureMap, "agent");
+    const parsed = parseSequenceDiagramBundleJson(mockSequenceBundleJson(inferred), project, facts, architectureMap);
+    if (!parsed) return failedSequenceResult(agentId, "invalid-output", "Mock agent returned invalid sequence diagram JSON.", []);
+    const quality = validateSequenceBundle(parsed, representativeFacts);
+    if (!quality.valid) return failedSequenceResult(agentId, "quality-rejected", quality.reasons.join("; "), []);
+    const bundle = withSequenceMetadata(parsed, agentId, "mock", inputFingerprint, quality);
     await writeSequenceDiagramBundle(project.rootPath, bundle);
-    return { bundle, outcome: parsed ? "generated" : "fallback", warning: parsed ? undefined : "Mock sequence diagram output was invalid; wrote fallback diagrams." };
+    return { bundle, outcome: "generated" };
   }
 
+  const projectId = await registerProject(project.rootPath);
+  const runIds: string[] = [];
   try {
     const result = await startToolPlan({
-      projectPath: project.rootPath,
+      projectId,
       toolId: agentId,
       prompt,
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "artifact-analysis"
     });
+    runIds.push(result.id);
     if (result.status !== "completed") {
-      throw new Error(result.stderr ?? result.summary ?? "Agent sequence diagram generation failed");
+      return cachedOrFailed(project.rootPath, failedSequenceError(agentId, "agent-failed", result.stderr ?? result.summary ?? "Agent sequence diagram generation failed.", runIds));
     }
     const output = collectStdout(result.events);
     const parsed = parseSequenceDiagramBundleJson(output, project, facts, architectureMap);
-    if (parsed) {
-      await writeSequenceDiagramBundle(project.rootPath, parsed);
-      return { bundle: parsed, outcome: "generated" };
+    const quality = parsed ? validateSequenceBundle(parsed, representativeFacts) : undefined;
+    if (parsed && quality?.valid) {
+      const bundle = withSequenceMetadata(parsed, agentId, result.id, inputFingerprint, quality);
+      await writeSequenceDiagramBundle(project.rootPath, bundle);
+      return { bundle, outcome: "generated" };
     }
-    return readCachedOrWriteFallback(project.rootPath, fallback, "Agent returned invalid sequence diagram JSON.");
+    const firstFailure = parsed ? quality?.reasons.join("; ") ?? "Sequence quality validation failed." : "Agent returned invalid sequence diagram JSON.";
+    const retry = await startToolPlan({
+      projectId,
+      toolId: agentId,
+      prompt: buildSequenceRepairPrompt(prompt, output, firstFailure),
+      executionMode: "plan",
+      purpose: "artifact-analysis"
+    });
+    runIds.push(retry.id);
+    if (retry.status !== "completed") {
+      return cachedOrFailed(project.rootPath, failedSequenceError(agentId, "agent-failed", retry.stderr ?? retry.summary ?? "Sequence repair run failed.", runIds, firstFailure));
+    }
+    const retryOutput = collectStdout(retry.events);
+    const retryParsed = parseSequenceDiagramBundleJson(retryOutput, project, facts, architectureMap);
+    const retryQuality = retryParsed ? validateSequenceBundle(retryParsed, representativeFacts) : undefined;
+    if (!retryParsed || !retryQuality?.valid) {
+      const retryFailure = retryParsed ? retryQuality?.reasons.join("; ") ?? "Sequence quality validation failed." : "Repair run returned invalid sequence diagram JSON.";
+      return cachedOrFailed(
+        project.rootPath,
+        failedSequenceError(agentId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure)
+      );
+    }
+    const bundle = withSequenceMetadata(retryParsed, agentId, retry.id, inputFingerprint, retryQuality);
+    await writeSequenceDiagramBundle(project.rootPath, bundle);
+    return { bundle, outcome: "generated" };
   } catch (error) {
-    return readCachedOrWriteFallback(project.rootPath, fallback, `Agent sequence diagram generation failed: ${formatErrorMessage(error)}`);
+    return cachedOrFailed(project.rootPath, failedSequenceError(agentId, "agent-failed", formatErrorMessage(error), runIds));
   }
 }
 
@@ -68,7 +117,8 @@ export async function reviseSequenceDiagram(
 ): Promise<SequenceDiagramBundle> {
   const facts = await buildProjectStructureFacts(project);
   const architectureMap = await readArchitectureMap(project.rootPath);
-  const current = (await readSequenceDiagrams(project.rootPath)) ?? createFallbackSequenceBundle(project, facts, architectureMap, "fallback");
+  const current = await readSequenceDiagrams(project.rootPath);
+  if (!current) throw new Error("No trusted sequence diagram exists to revise.");
   const currentDiagram = selectDiagram(current, kind);
   const prompt = buildSequenceDiagramRevisionPrompt(currentDiagram, instruction, facts, architectureMap);
 
@@ -80,10 +130,11 @@ export async function reviseSequenceDiagram(
   }
 
   const result = await startToolPlan({
-    projectPath: project.rootPath,
+    projectId: await registerProject(project.rootPath),
     toolId: agentId,
     prompt,
-    executionMode: "plan"
+    executionMode: "plan",
+    purpose: "artifact-analysis"
   });
   if (result.status !== "completed") {
     throw new Error(result.stderr ?? result.summary ?? "Agent sequence diagram revision failed");
@@ -479,13 +530,115 @@ function selectDiagram(bundle: SequenceDiagramBundle, kind: SequenceDiagramKind)
   return kind === "architectural" ? bundle.architectural : bundle.detailedDesign;
 }
 
-async function readCachedOrWriteFallback(projectPath: string, fallback: SequenceDiagramBundle, warning: string): Promise<SequenceDiagramGenerationResult> {
+async function cachedOrFailed(
+  projectPath: string,
+  error: AnalysisFailure
+): Promise<SequenceDiagramGenerationResult> {
   const cached = await readSequenceDiagrams(projectPath);
   if (cached) {
-    return { bundle: cached, outcome: "cached", warning };
+    return { bundle: cached, outcome: "cached", error };
   }
-  await writeSequenceDiagramBundle(projectPath, fallback);
-  return { bundle: fallback, outcome: "fallback", warning };
+  return { outcome: "failed", error };
+}
+
+function validateSequenceBundle(
+  bundle: SequenceDiagramBundle,
+  facts: ProjectStructureFacts
+): { valid: boolean; reasons: string[]; fileCoverage: number; evidenceCoverage: number } {
+  const files = new Set(facts.files.map((file) => file.path));
+  const diagrams = [bundle.architectural, bundle.detailedDesign];
+  const evidence = diagrams.flatMap((diagram) => [
+    ...(diagram.evidence ?? []),
+    ...diagram.messages.flatMap((message) => message.evidence ?? [])
+  ]);
+  const coveredFiles = new Set(evidence.map((item) => item.filePath).filter((file): file is string => typeof file === "string" && files.has(file)));
+  const validEvidence = evidence.filter((item) => Boolean(item.filePath) && files.has(item.filePath as string));
+  const fileCoverage = facts.files.length === 0 ? 0 : coveredFiles.size / facts.files.length;
+  const evidenceCoverage = evidence.length === 0 ? 0 : validEvidence.length / evidence.length;
+  const reasons: string[] = [];
+
+  for (const diagram of diagrams) {
+    const participantIds = new Set(diagram.participants.map((participant) => participant.id));
+    if (diagram.messages.length === 0) reasons.push(`${diagram.kind} has no messages.`);
+    for (const message of diagram.messages) {
+      if (!participantIds.has(message.from) || !participantIds.has(message.to)) {
+        reasons.push(`${diagram.kind} message ${message.id} has an invalid endpoint.`);
+      }
+      if (!message.evidence?.some((item) => item.filePath && files.has(item.filePath))) {
+        reasons.push(`${diagram.kind} message ${message.id} has no valid source evidence.`);
+      }
+    }
+  }
+  const firstMessage = bundle.architectural.messages[0];
+  const firstParticipant = bundle.architectural.participants.find((participant) => participant.id === firstMessage?.from);
+  const firstPath = firstParticipant?.filePath?.toLowerCase();
+  if (!firstPath || !/(^|\/)(main|index|app|server|bootstrap)\.|ipc|controller|route|handler/.test(firstPath)) {
+    reasons.push("Architectural sequence does not start from a verified source entry.");
+  }
+  if (evidenceCoverage < 0.7) reasons.push(`Evidence coverage ${evidenceCoverage.toFixed(2)} is below 0.70.`);
+  return { valid: reasons.length === 0, reasons: [...new Set(reasons)], fileCoverage, evidenceCoverage };
+}
+
+function withSequenceMetadata(
+  bundle: SequenceDiagramBundle,
+  agentId: RuntimeAgentId,
+  runId: string,
+  inputFingerprint: string,
+  quality: { fileCoverage: number; evidenceCoverage: number }
+): SequenceDiagramBundle {
+  const generatedAt = new Date().toISOString();
+  return {
+    ...bundle,
+    version: 2,
+    source: "agent",
+    generatedAt,
+    metadata: {
+      agentId,
+      runId,
+      generatedAt,
+      inputFingerprint,
+      fileCoverage: quality.fileCoverage,
+      evidenceCoverage: quality.evidenceCoverage
+    }
+  };
+}
+
+function failedSequenceResult(
+  agentId: RuntimeAgentId,
+  code: "agent-failed" | "invalid-output" | "quality-rejected",
+  message: string,
+  runIds: string[]
+): SequenceDiagramGenerationResult {
+  return { outcome: "failed", error: failedSequenceError(agentId, code, message, runIds) };
+}
+
+function failedSequenceError(
+  agentId: RuntimeAgentId,
+  code: "agent-failed" | "invalid-output" | "quality-rejected",
+  message: string,
+  runIds: string[],
+  firstFailure?: string,
+  retryFailure?: string
+) {
+  return {
+    code,
+    message,
+    agentId,
+    runId: runIds.at(-1),
+    attemptRunIds: runIds,
+    firstFailure,
+    retryFailure
+  } as const;
+}
+
+function buildSequenceRepairPrompt(originalPrompt: string, output: string, failure: string) {
+  return `${originalPrompt}
+
+The previous response failed validation: ${failure}
+Return one corrected JSON object only. Do not include Markdown fences or explanatory text.
+
+Previous response:
+${output.slice(0, 40_000)}`;
 }
 
 async function writeSequenceDiagramBundle(projectPath: string, bundle: SequenceDiagramBundle) {

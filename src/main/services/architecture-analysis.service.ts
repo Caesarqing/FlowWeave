@@ -21,44 +21,96 @@ import type {
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { startToolPlan } from "./agent-run.service";
-import { buildProjectStructureFacts } from "./structure-extractor.service";
+import { createScanFingerprint, registerProject } from "./project-registry.service";
+import { buildProjectStructureFacts, selectRepresentativeStructureFacts } from "./structure-extractor.service";
 
 const MAX_PROMPT_FILES = 260;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 18;
+const REPRESENTATIVE_FILE_LIMIT = 60;
+const architectureFlights = new Map<string, Promise<ArchitectureAnalysisResult>>();
 
 export async function analyzeArchitecture(project: CodeflowProject, toolId: RuntimeAgentId): Promise<ArchitectureAnalysisResult> {
+  const flightKey = `${project.rootPath}:${toolId}`;
+  const existing = architectureFlights.get(flightKey);
+  if (existing) return existing;
+  const flight = analyzeArchitectureOnce(project, toolId)
+    .then(async (result) => {
+      if (result.outcome === "generated") return result;
+      const previous = await readArchitectureMap(project.rootPath);
+      return {
+        ...result,
+        previous: previous?.source === "agent" ? previous.metadata : undefined
+      };
+    })
+    .finally(() => architectureFlights.delete(flightKey));
+  architectureFlights.set(flightKey, flight);
+  return flight;
+}
+
+async function analyzeArchitectureOnce(project: CodeflowProject, toolId: RuntimeAgentId): Promise<ArchitectureAnalysisResult> {
   const facts = await buildProjectStructureFacts(project);
-  const fallbackMap = createFallbackArchitectureMap(project, facts, "fallback");
-  const prompt = buildArchitecturePrompt(facts);
+  const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
+  const inputFingerprint = project.scanFingerprint ?? createScanFingerprint(representativeFacts);
+  const prompt = buildArchitecturePrompt(representativeFacts);
 
   if (toolId === "mock") {
-    const agentOutput = mockArchitectureJson(fallbackMap);
+    const agentOutput = mockArchitectureJson(createFallbackArchitectureMap(project, representativeFacts, "agent"));
     const parsed = parseArchitectureJson(agentOutput, project, facts);
-    const architectureMap = parsed ?? createFallbackArchitectureMap(project, facts, "fallback");
+    if (!parsed) return failedArchitectureResult(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", []);
+    const quality = validateArchitectureMap(parsed, representativeFacts);
+    if (!quality.valid) return failedArchitectureResult(toolId, "quality-rejected", quality.reasons.join("; "), []);
+    const architectureMap = withArchitectureMetadata(parsed, toolId, "mock", inputFingerprint, quality);
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
-    return architectureMapToResult(architectureMap, agentOutput);
+    return architectureMapToResult(architectureMap, "mock");
   }
 
+  const projectId = await registerProject(project.rootPath);
+  const runIds: string[] = [];
   try {
-    const runResult = await startToolPlan({
-      projectPath: project.rootPath,
+    const firstRun = await startToolPlan({
+      projectId,
       toolId,
       prompt,
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "artifact-analysis"
     });
-    if (runResult.status !== "completed") {
-      throw new Error(runResult.stderr ?? runResult.summary ?? "Agent architecture analysis failed");
+    runIds.push(firstRun.id);
+    if (firstRun.status !== "completed") {
+      return failedArchitectureResult(toolId, "agent-failed", firstRun.stderr ?? firstRun.summary ?? "Agent architecture analysis failed.", runIds);
     }
-    const agentOutput = runResult.events
-      .filter((event) => event.type === "stdout")
-      .map((event) => event.content)
-      .join("\n");
-    const architectureMap = parseArchitectureJson(agentOutput, project, facts) ?? fallbackMap;
+    const firstOutput = collectStdout(firstRun.events);
+    const firstParsed = parseArchitectureJson(firstOutput, project, facts);
+    const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
+    if (firstParsed && firstQuality?.valid) {
+      const architectureMap = withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality);
+      await writeArchitectureArtifacts(project.rootPath, architectureMap);
+      return architectureMapToResult(architectureMap, firstRun.id);
+    }
+
+    const firstFailure = firstParsed ? firstQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Agent returned invalid architecture JSON.";
+    const retry = await startToolPlan({
+      projectId,
+      toolId,
+      prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
+      executionMode: "plan",
+      purpose: "artifact-analysis"
+    });
+    runIds.push(retry.id);
+    if (retry.status !== "completed") {
+      return failedArchitectureResult(toolId, "agent-failed", retry.stderr ?? retry.summary ?? "Architecture repair run failed.", runIds, firstFailure);
+    }
+    const retryOutput = collectStdout(retry.events);
+    const retryParsed = parseArchitectureJson(retryOutput, project, facts);
+    const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
+    if (!retryParsed || !retryQuality?.valid) {
+      const retryFailure = retryParsed ? retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Repair run returned invalid architecture JSON.";
+      return failedArchitectureResult(toolId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure);
+    }
+    const architectureMap = withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality);
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
-    return architectureMapToResult(architectureMap, agentOutput);
+    return architectureMapToResult(architectureMap, retry.id);
   } catch (error) {
-    await writeArchitectureArtifacts(project.rootPath, fallbackMap);
-    return architectureMapToResult(fallbackMap, String(error));
+    return failedArchitectureResult(toolId, "agent-failed", formatError(error), runIds);
   }
 }
 
@@ -156,12 +208,12 @@ export function parseArchitectureJson(output: string, project: CodeflowProject, 
   }
 }
 
-export function architectureMapToResult(architectureMap: ArchitectureMap, agentOutput?: string): ArchitectureAnalysisResult {
+export function architectureMapToResult(architectureMap: ArchitectureMap, runId: string): ArchitectureAnalysisResult {
   return {
+    outcome: "generated",
     architectureMap,
-    source: architectureMap.source,
-    agentOutput,
-    graph: architectureMapToGraph(architectureMap)
+    graph: architectureMapToGraph(architectureMap),
+    runId
   };
 }
 
@@ -232,6 +284,110 @@ async function writeArchitectureArtifacts(projectPath: string, architectureMap: 
     writeFile(join(root, "file-insights.json"), `${JSON.stringify(architectureMap.files, null, 2)}\n`, "utf8"),
     writeFile(join(root, "module-map.json"), `${JSON.stringify(architectureMapToModuleMap(architectureMap), null, 2)}\n`, "utf8")
   ]);
+}
+
+function validateArchitectureMap(
+  architectureMap: ArchitectureMap,
+  representativeFacts: ProjectStructureFacts
+): { valid: boolean; reasons: string[]; fileCoverage: number; evidenceCoverage: number } {
+  const factByFile = new Map(representativeFacts.files.map((file) => [file.path, file]));
+  const coveredFiles = new Set(architectureMap.modules.flatMap((module) => module.files).filter((file) => factByFile.has(file)));
+  const evidence = [
+    ...architectureMap.modules.flatMap((module) => module.evidence),
+    ...architectureMap.relationships.flatMap((relationship) => relationship.evidence)
+  ];
+  const validEvidence = evidence.filter((item) => typeof item.filePath === "string" && factByFile.has(item.filePath));
+  const fileCoverage = representativeFacts.files.length === 0 ? 0 : coveredFiles.size / representativeFacts.files.length;
+  const evidenceCoverage = evidence.length === 0 ? 0 : validEvidence.length / evidence.length;
+  const moduleIds = new Set(architectureMap.modules.map((module) => module.id));
+  const reasons: string[] = [];
+
+  for (const module of architectureMap.modules) {
+    if (module.files.some((file) => !factByFile.has(file))) reasons.push(`Module ${module.id} references an unknown file.`);
+    if (module.evidence.length === 0) reasons.push(`Module ${module.id} has no evidence.`);
+    for (const symbol of module.symbols) {
+      const fact = factByFile.get(symbol.filePath);
+      if (!fact?.symbols.some((candidate) => candidate.name === symbol.name)) {
+        reasons.push(`Symbol ${symbol.name} does not belong to ${symbol.filePath}.`);
+      }
+    }
+  }
+  for (const relationship of architectureMap.relationships) {
+    if (!moduleIds.has(relationship.source) || !moduleIds.has(relationship.target)) {
+      reasons.push(`Relationship ${relationship.id} has an invalid endpoint.`);
+    }
+    if (relationship.evidence.length === 0) reasons.push(`Relationship ${relationship.id} has no evidence.`);
+    if (relationship.evidence.some((item) => !item.filePath || !factByFile.has(item.filePath))) {
+      reasons.push(`Relationship ${relationship.id} contains invalid evidence.`);
+    }
+  }
+  if (fileCoverage < 0.3) reasons.push(`Representative file coverage ${fileCoverage.toFixed(2)} is below 0.30.`);
+  if (evidenceCoverage < 0.7) reasons.push(`Evidence coverage ${evidenceCoverage.toFixed(2)} is below 0.70.`);
+  return { valid: reasons.length === 0, reasons: [...new Set(reasons)], fileCoverage, evidenceCoverage };
+}
+
+function withArchitectureMetadata(
+  architectureMap: ArchitectureMap,
+  agentId: RuntimeAgentId,
+  runId: string,
+  inputFingerprint: string,
+  quality: { fileCoverage: number; evidenceCoverage: number }
+): ArchitectureMap {
+  const generatedAt = new Date().toISOString();
+  return {
+    ...architectureMap,
+    version: 2,
+    source: "agent",
+    generatedAt,
+    metadata: {
+      agentId,
+      runId,
+      generatedAt,
+      inputFingerprint,
+      fileCoverage: quality.fileCoverage,
+      evidenceCoverage: quality.evidenceCoverage
+    }
+  };
+}
+
+function failedArchitectureResult(
+  agentId: RuntimeAgentId,
+  code: "agent-failed" | "invalid-output" | "quality-rejected",
+  message: string,
+  runIds: string[],
+  firstFailure?: string,
+  retryFailure?: string
+): ArchitectureAnalysisResult {
+  return {
+    outcome: "failed",
+    error: {
+      code,
+      message,
+      agentId,
+      runId: runIds.at(-1),
+      attemptRunIds: runIds,
+      firstFailure,
+      retryFailure
+    }
+  };
+}
+
+function buildArchitectureRepairPrompt(originalPrompt: string, output: string, failure: string): string {
+  return `${originalPrompt}
+
+The previous response failed validation: ${failure}
+Return one corrected JSON object only. Do not include Markdown fences or explanatory text.
+
+Previous response:
+${output.slice(0, 40_000)}`;
+}
+
+function collectStdout(events: Array<{ type: string; content?: string }>) {
+  return events.filter((event) => event.type === "stdout").map((event) => event.content ?? "").join("\n");
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectStructureFacts, source: ArchitectureMap["source"]): ArchitectureMap {

@@ -112,14 +112,14 @@ The preload bridge exposes:
 - `saveCustomAgent(input)`: saves a custom local CLI Agent for all projects.
 - `deleteCustomAgent(agentId)`: removes a custom Agent. Built-ins are ignored.
 - `detectAgent(agentId)`: detects a built-in or custom Agent.
-- `listToolRuns(projectPath)`: returns run summaries newest first.
-- `readToolRun(projectPath, runId)`: returns summary plus prompt, plan, log, and result text.
-- `analyzeArchitecture(projectPath, toolId)`: returns an `ArchitectureAnalysisResult` and persists architecture artifacts.
-- `analyzeArchitectureWithAgent(projectPath, agentId)`: same architecture analysis path, accepting built-in or custom Agent ids.
-- `readArchitectureMap(projectPath)`: reads the latest `.flowweave/architecture-map.json` when available.
-- `generateSequenceDiagrams(projectPath, agentId)`: returns `{ bundle, outcome, warning? }`; valid Agent output persists new diagrams, invalid output keeps cached diagrams or writes a fallback bundle.
-- `reviseSequenceDiagram(projectPath, agentId, kind, instruction)`: revises one sequence diagram from the current persisted bundle.
-- `readSequenceDiagrams(projectPath)`: reads the latest `.flowweave/sequence-diagrams.json` when available.
+- `listToolRuns(projectId)`: returns run summaries newest first.
+- `readToolRun(projectId, runId)`: returns summary plus prompt, plan, log, and result text.
+- `analyzeArchitecture(projectId, toolId)`: returns `generated | failed`; only validated results persist.
+- `analyzeArchitectureWithAgent(projectId, agentId)`: same trusted architecture analysis path.
+- `readArchitectureMap(projectId)`: reads the latest trusted architecture artifact.
+- `generateSequenceDiagrams(projectId, agentId)`: returns `generated | cached | failed`; invalid output never writes a fallback bundle.
+- `reviseSequenceDiagram(projectId, agentId, kind, instruction)`: revises one existing trusted diagram.
+- `readSequenceDiagrams(projectId)`: reads the latest sequence bundle.
 
 These APIs are local-only. Architecture analysis can call the selected local Agent in plan mode but does not ask FlowWeave to edit project files.
 
@@ -128,7 +128,6 @@ These APIs are local-only. Architecture analysis can call the selected local Age
 Core verification commands:
 
 - `npm test`
-- `npm run typecheck:node`
+- `npm run typecheck`
 - `npm run build`
-- `npm run build:electron`
 - `npm run dist:dir`

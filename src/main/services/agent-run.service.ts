@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
@@ -10,13 +10,15 @@ import { MockAgentAdapter } from "../agents/mock.adapter";
 import { deleteCustomAgent, getAgentAdapter as getRegistryAgentAdapter, isBuiltInAgentId, listAgentDefinitions, saveCustomAgent } from "./agent-registry.service";
 import { createCheckpoint } from "./git.service";
 import { prepareRunPaths, serializeAgentEvents, writeRunResult } from "./run-log.service";
+import { resolveProjectPath } from "./project-registry.service";
 
 export type StartToolPlanOptions = {
-  projectPath: string;
+  projectId: string;
   toolId: RuntimeAgentId;
-  prompt?: string;
+  prompt: string;
   guidancePath?: string;
-  executionMode?: ExecutionMode;
+  executionMode: ExecutionMode;
+  purpose: ToolRunPurpose;
   model?: string;
 };
 
@@ -35,21 +37,24 @@ const adapters: Record<ToolId, ToolAdapter> = {
 };
 
 export async function startToolPlan(options: StartToolPlanOptions): Promise<StartToolPlanResult> {
+  const projectPath = resolveProjectPath(options.projectId);
   const runId = `run-${Date.now()}`;
-  const paths = await prepareRunPaths(options.projectPath, runId);
-  const prompt = await resolvePrompt(options);
+  const paths = await prepareRunPaths(projectPath, runId);
+  const prompt = buildRunPrompt(await resolvePrompt(options), options.executionMode, options.purpose);
 
   await writeFile(paths.promptPath, prompt, "utf8");
 
   const adapter = await getAgentAdapter(options.toolId);
-  const executionMode = options.executionMode ?? "plan";
-  const checkpointId = executionMode === "execute" ? await createCheckpoint(options.projectPath) : undefined;
+  const executionMode = options.executionMode;
+  const checkpointId = executionMode === "execute" ? await createCheckpoint(projectPath) : undefined;
   const result = await adapter.runPlan({
     id: runId,
-    projectPath: options.projectPath,
+    projectId: options.projectId,
+    projectPath,
     prompt,
     guidancePath: options.guidancePath,
     executionMode,
+    purpose: options.purpose,
     model: options.model
   });
 
@@ -59,11 +64,13 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
 
   const finalResult: StartToolPlanResult = {
     ...result,
+    projectId: options.projectId,
     promptPath: paths.promptPath,
     planPath: result.planPath ?? paths.planPath,
     logPath: paths.logPath,
     resultPath: paths.resultPath,
     executionMode,
+    purpose: options.purpose,
     checkpointId,
     summary: result.summary ?? firstUsefulLine(planText),
     stderr: collectStderr(result.events)
@@ -71,6 +78,13 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
 
   await writeRunResult(paths.resultPath, finalResult, {});
   return finalResult;
+}
+
+export function buildRunPrompt(prompt: string, executionMode: ExecutionMode, purpose: ToolRunPurpose) {
+  if (executionMode === "execute" || purpose === "artifact-analysis") return prompt;
+  return `${prompt}
+
+Dry run only: inspect the request and return an implementation plan, affected files, risks, and tests. Do not edit files.`;
 }
 
 export async function detectTool(toolId: ToolId): Promise<ToolDetectionResult> {
@@ -119,7 +133,7 @@ export function deleteAgent(agentId: AgentId): Promise<void> {
 }
 
 async function resolvePrompt(options: StartToolPlanOptions) {
-  if (options.prompt?.trim()) {
+  if (options.prompt.trim()) {
     return options.prompt;
   }
 
@@ -128,7 +142,7 @@ async function resolvePrompt(options: StartToolPlanOptions) {
     return `Use this FlowWeave guidance file (${basename(options.guidancePath)}) to produce an implementation plan.\n\n${guidance}`;
   }
 
-  return "Inspect the FlowWeave task context and produce an implementation plan.";
+  throw new Error("FlowWeave run prompt is required.");
 }
 
 async function resolvePlanText(result: ToolRunResult, logText: string) {

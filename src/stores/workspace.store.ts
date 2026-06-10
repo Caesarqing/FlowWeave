@@ -14,7 +14,10 @@ import type {
   ExecutionMode,
   ToolRunArtifact,
   ToolRunSummary,
-  ToolUiStatus
+  ToolUiStatus,
+  ProjectArtifactStatuses,
+  ProjectAgentConnectionStatus,
+  AsyncOperationState
 } from "../types";
 import { createFlowEdge, createFlowNode, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 
@@ -23,7 +26,12 @@ export type RunArtifactTab = "prompt" | "plan" | "log" | "result";
 type WorkspaceState = {
   activePage: ActivePage;
   projectLabel: string;
+  projectId: string;
   projectPath: string;
+  scanFingerprint: string;
+  artifactStatuses?: ProjectArtifactStatuses;
+  agentConnection?: ProjectAgentConnectionStatus;
+  agentConnectionOperation: AsyncOperationState;
   projectStatus: string;
   isProjectLoading: boolean;
   modules: GraphNode[];
@@ -47,7 +55,12 @@ type WorkspaceState = {
   gitStatus?: GitStatus;
   setActivePage: (activePage: ActivePage) => void;
   setProjectLabel: (projectLabel: string) => void;
+  setProjectId: (projectId: string) => void;
   setProjectPath: (projectPath: string) => void;
+  setScanFingerprint: (scanFingerprint: string) => void;
+  setArtifactStatuses: (value: ProjectArtifactStatuses | ((current?: ProjectArtifactStatuses) => ProjectArtifactStatuses | undefined)) => void;
+  setAgentConnection: (agentConnection?: ProjectAgentConnectionStatus) => void;
+  setAgentConnectionOperation: (agentConnectionOperation: AsyncOperationState) => void;
   setProjectStatus: (projectStatus: string) => void;
   setIsProjectLoading: (isProjectLoading: boolean) => void;
   setGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[]) => void;
@@ -77,7 +90,12 @@ type WorkspaceState = {
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activePage: "canvas",
   projectLabel: "No project selected",
+  projectId: "",
   projectPath: "",
+  scanFingerprint: "",
+  artifactStatuses: undefined,
+  agentConnection: undefined,
+  agentConnectionOperation: { status: "idle" },
   projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
   modules: [],
@@ -106,7 +124,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   checkpointId: "",
   setActivePage: (activePage) => set({ activePage }),
   setProjectLabel: (projectLabel) => set({ projectLabel }),
+  setProjectId: (projectId) => set({ projectId }),
   setProjectPath: (projectPath) => set({ projectPath }),
+  setScanFingerprint: (scanFingerprint) => set({ scanFingerprint }),
+  setArtifactStatuses: (value) => set((state) => ({
+    artifactStatuses: typeof value === "function" ? value(state.artifactStatuses) : value
+  })),
+  setAgentConnection: (agentConnection) => set({ agentConnection }),
+  setAgentConnectionOperation: (agentConnectionOperation) => set({ agentConnectionOperation }),
   setProjectStatus: (projectStatus) => set({ projectStatus }),
   setIsProjectLoading: (isProjectLoading) => set({ isProjectLoading }),
   setGraph: (modules, edges, files) =>
@@ -168,11 +193,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const state = get();
     if (!state.projectPath || state.modules.length === 0) return undefined;
     return {
-      version: 1,
+      version: 2,
       id: "main",
       title: "Main Canvas",
       projectPath: state.projectPath,
       generatedAt: new Date().toISOString(),
+      scanFingerprint: state.scanFingerprint,
+      artifactState: "current",
       nodes: state.modules,
       edges: state.edges.map(graphEdgeFromFlow)
     };

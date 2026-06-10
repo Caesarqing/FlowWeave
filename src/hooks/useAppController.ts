@@ -6,6 +6,9 @@ import { useModuleActions } from "./useModuleActions";
 import { useProjectActions } from "./useProjectActions";
 import { useSequenceDiagramState } from "./useSequenceDiagramState";
 import { useToolActions } from "./useToolActions";
+import { useAgentConnection } from "./useAgentConnection";
+import { useCanvasPersistence } from "./useCanvasPersistence";
+import { useRunHistory } from "./useRunHistory";
 import { useI18n } from "../utils/i18n";
 
 const MAX_RENDERED_TREE_ROWS = 900;
@@ -14,7 +17,10 @@ export function useAppController() {
   const { t } = useI18n();
   const activePage = useWorkspaceStore((state) => state.activePage);
   const projectLabel = useWorkspaceStore((state) => state.projectLabel);
+  const projectId = useWorkspaceStore((state) => state.projectId);
   const projectPath = useWorkspaceStore((state) => state.projectPath);
+  const scanFingerprint = useWorkspaceStore((state) => state.scanFingerprint);
+  const artifactStatuses = useWorkspaceStore((state) => state.artifactStatuses);
   const projectStatus = useWorkspaceStore((state) => state.projectStatus);
   const isProjectLoading = useWorkspaceStore((state) => state.isProjectLoading);
   const agents = useWorkspaceStore((state) => state.agents);
@@ -29,7 +35,10 @@ export function useAppController() {
   const isRunsLoading = useWorkspaceStore((state) => state.isRunsLoading);
   const setActivePage = useWorkspaceStore((state) => state.setActivePage);
   const setProjectLabel = useWorkspaceStore((state) => state.setProjectLabel);
+  const setProjectId = useWorkspaceStore((state) => state.setProjectId);
   const setProjectPath = useWorkspaceStore((state) => state.setProjectPath);
+  const setScanFingerprint = useWorkspaceStore((state) => state.setScanFingerprint);
+  const setArtifactStatuses = useWorkspaceStore((state) => state.setArtifactStatuses);
   const setProjectStatus = useWorkspaceStore((state) => state.setProjectStatus);
   const setIsProjectLoading = useWorkspaceStore((state) => state.setIsProjectLoading);
   const setAgents = useWorkspaceStore((state) => state.setAgents);
@@ -37,16 +46,12 @@ export function useAppController() {
   const setExecutionMode = useWorkspaceStore((state) => state.setExecutionMode);
   const setToolStatuses = useWorkspaceStore((state) => state.setToolStatuses);
   const setLastRunStatus = useWorkspaceStore((state) => state.setLastRunStatus);
-  const setRuns = useWorkspaceStore((state) => state.setRuns);
-  const setSelectedRunId = useWorkspaceStore((state) => state.setSelectedRunId);
-  const setSelectedRunArtifact = useWorkspaceStore((state) => state.setSelectedRunArtifact);
   const setRunArtifactTab = useWorkspaceStore((state) => state.setRunArtifactTab);
-  const setIsRunsLoading = useWorkspaceStore((state) => state.setIsRunsLoading);
-  const setDiff = useWorkspaceStore((state) => state.setDiff);
   const [dialogText, setDialogText] = useState("");
   const flow = useFlowWeaveState();
   const sequence = useSequenceDiagramState({
     files: flow.projectFiles,
+    projectId,
     projectPath,
     selectedAgentId
   });
@@ -58,61 +63,32 @@ export function useAppController() {
       }),
     [flow.modules, flow.graphRelations]
   );
+  const agentConnection = useAgentConnection(projectId, projectPath);
+  useCanvasPersistence(
+    projectId,
+    projectPath,
+    scanFingerprint,
+    artifactStatuses?.canvas,
+    canvasSnapshot,
+    flow.modules,
+    flow.graphRelations
+  );
+  const { openGitReviewFromRun, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
     maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
+    projectId,
     projectPath,
     projectFiles: flow.projectFiles,
     replaceProjectGraph: flow.replaceProjectGraph,
     setIsProjectLoading,
     setLastRunStatus,
     setProjectLabel,
+    setProjectId,
     setProjectPath,
+    setScanFingerprint,
+    setArtifactStatuses,
     setProjectStatus
   });
-  async function refreshRuns(selectRunId?: string) {
-    if (!window.flowweave || !projectPath) return;
-    setIsRunsLoading(true);
-    try {
-      const nextRuns = await window.flowweave.listToolRuns(projectPath);
-      setRuns(nextRuns);
-      const preferredRunId = selectRunId || selectedRunId;
-      const nextRunId = nextRuns.some((run) => run.id === preferredRunId) ? preferredRunId : nextRuns[0]?.id || "";
-      if (nextRunId) {
-        await selectRun(nextRunId);
-      } else {
-        setSelectedRunId("");
-        setSelectedRunArtifact(undefined);
-      }
-    } catch (error) {
-      setLastRunStatus(t("status.runHistoryFailed", { error: formatErrorMessage(error) }));
-    } finally {
-      setIsRunsLoading(false);
-    }
-  }
-
-  async function selectRun(runId: string) {
-    if (!window.flowweave || !projectPath) return;
-    setSelectedRunId(runId);
-    try {
-      const artifact = await window.flowweave.readToolRun(projectPath, runId);
-      setSelectedRunArtifact(artifact);
-    } catch (error) {
-      setSelectedRunArtifact(undefined);
-      setLastRunStatus(t("status.runArtifactFailed", { error: formatErrorMessage(error) }));
-    }
-  }
-
-  async function openGitReviewFromRun() {
-    setActivePage("git-review");
-    if (!window.flowweave || !projectPath) return;
-    try {
-      const result = await window.flowweave.gitDiff(projectPath, selectedRunArtifact?.summary.checkpointId);
-      setDiff(result);
-    } catch (error) {
-      setLastRunStatus(t("status.gitDiffFailed", { error: formatErrorMessage(error) }));
-    }
-  }
-
   const toolActions = useToolActions({
     buildGuidanceMarkdown: (label, nodes, edges) => buildGuidanceMarkdown(label, nodes, edges, t),
     agents,
@@ -120,6 +96,7 @@ export function useAppController() {
     graphRelations: flow.graphRelations,
     modules: flow.modules,
     projectLabel,
+    projectId,
     projectPath,
     selectedNode: flow.selectedNode,
     onRunCompleted: refreshRuns,
@@ -162,7 +139,7 @@ export function useAppController() {
   }
 
   async function runSequenceToolPlan(agentId: import("../types").RuntimeAgentId) {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
       sequence.setStatus(t("docs.needDesktop"));
       return;
@@ -185,9 +162,10 @@ export function useAppController() {
       }
 
       const result = await window.flowweave.runToolPlan({
-        projectPath,
+        projectId,
         toolId: agentId,
         executionMode,
+        purpose: "implementation-plan",
         prompt: buildSequencePlanPrompt(projectLabel, sequence.bundle, sequence.activeKind)
       });
 
@@ -208,26 +186,6 @@ export function useAppController() {
       setLastRunStatus(t("status.sequencePlanFailed", { agent: agentName, error: formatErrorMessage(error) }));
     }
   }
-
-  useEffect(() => {
-    if (!window.flowweave || !projectPath || flow.modules.length === 0) return;
-    const timeout = window.setTimeout(() => {
-      void window.flowweave?.saveCanvas(projectPath, {
-        version: 1,
-        id: "main",
-        title: "Main Canvas",
-        projectPath,
-        generatedAt: new Date().toISOString(),
-        nodes: flow.modules,
-        edges: flow.graphRelations
-      });
-    }, 500);
-    return () => window.clearTimeout(timeout);
-  }, [canvasSnapshot, projectPath]);
-
-  useEffect(() => {
-    void refreshRuns();
-  }, [projectPath]);
 
   useEffect(() => {
     if (!window.flowweave) return;
@@ -291,6 +249,8 @@ export function useAppController() {
 
   return {
     activePage,
+    agentConnection,
+    artifactStatuses,
     canvas: {
       connectionPanelMode: flow.connectionPanelMode,
       defaultRelation: flow.defaultRelation,
@@ -341,6 +301,8 @@ export function useAppController() {
     onPageChange: setActivePage,
     onSendToTool: sendActivePageToTool,
     projectLabel,
+    projectId,
+    scanFingerprint,
     sequence,
     tools: {
       agents,

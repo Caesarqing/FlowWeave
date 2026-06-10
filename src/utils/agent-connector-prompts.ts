@@ -17,8 +17,10 @@ export type AgentConnectorPrompt = {
 
 export function buildAgentConnectorPrompt(input: AgentConnectorPromptInput): AgentConnectorPrompt {
   const kind = agentConnectorKind(input.agentId);
-  const connectorPath = `${input.projectPath}/.flowweave/agent-connectors/${kind}.md`;
-  const command = buildConnectorCommand(kind, connectorPath);
+  const connectorPath = `${input.projectPath}/.flowweave/agent-context.md`;
+  const command = input.agentId === "codex-desktop" || input.agentId === "claude-desktop"
+    ? "使用 FlowWeave 上下文处理当前待办"
+    : buildConnectorCommand(kind, connectorPath);
   return {
     kind,
     title: connectorTitle(kind),

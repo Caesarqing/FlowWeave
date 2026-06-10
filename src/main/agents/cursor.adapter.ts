@@ -128,6 +128,7 @@ ${request.prompt}
       exitCode: detection.available ? 0 : 1,
       planPath,
       executionMode: request.executionMode,
+      purpose: request.purpose,
       summary: detection.available ? "Cursor plan generated. Open the project in Cursor to review." : detection.message,
       events
     };

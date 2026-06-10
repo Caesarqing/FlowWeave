@@ -8,16 +8,10 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "dev:electron": "electron-vite dev",
-    "build": "npm run build:electron",
-    "build:electron": "tsc && npm run typecheck:node && electron-vite build",
-    "dist:dir": "npm run build:electron && electron-builder --dir",
-    "preview": "electron-vite preview",
-    "tool:run": "tsx src/main/cli/agent-run.ts",
-    "agent:run": "tsx src/main/cli/agent-run.ts",
-    "scan:project": "tsx src/main/cli/scan-project.ts",
+    "build": "npm run typecheck && electron-vite build && node scripts/check-bundle-size.mjs",
+    "dist:dir": "npm run build && electron-builder --dir",
     "test": "vitest run",
-    "typecheck:node": "tsc -p tsconfig.node.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -54,9 +48,15 @@
       "out/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "logo/logo.png",
+        "to": "logo.png"
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "build/icon.icns",
+      "icon": "logo/logo.png",
       "target": [
         "dir"
       ]

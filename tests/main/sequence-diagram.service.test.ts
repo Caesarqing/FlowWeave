@@ -162,13 +162,14 @@ describe("sequence-diagram.service", () => {
     const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
     expect(result.outcome).toBe("cached");
-    expect(result.warning).toContain("invalid");
+    if (result.outcome !== "cached") throw new Error("Expected cached sequence result.");
+    expect(result.error.message).toContain("read-only");
     expect(result.bundle.architectural.title).toBe("Existing Architectural");
     expect(stored.generatedAt).toBe(existing.generatedAt);
     expect(stored.architectural.title).toBe("Existing Architectural");
   });
 
-  it("writes fallback diagrams when agent output is invalid and no bundle exists", async () => {
+  it("does not write fallback diagrams when agent output is invalid and no bundle exists", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-fallback-agent-"));
     const root = await createFixtureFiles();
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
@@ -190,12 +191,11 @@ describe("sequence-diagram.service", () => {
     });
 
     const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
-    const stored = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
-    expect(result.outcome).toBe("fallback");
-    expect(result.warning).toContain("invalid");
-    expect(result.bundle.source).toBe("fallback");
-    expect(stored.source).toBe("fallback");
+    expect(result.outcome).toBe("failed");
+    if (result.outcome !== "failed") throw new Error("Expected sequence failure.");
+    expect(result.error.message).toContain("read-only");
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("returns generated when valid output is parsed and written", async () => {
@@ -203,6 +203,7 @@ describe("sequence-diagram.service", () => {
     const result = await generateSequenceDiagrams(projectFixture(root), "mock");
 
     expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error(result.error.message);
     expect(result.bundle.source).toBe("agent");
   });
 
@@ -210,6 +211,7 @@ describe("sequence-diagram.service", () => {
     const root = await createFixtureFiles();
     const project = projectFixture(root);
     const generated = await generateSequenceDiagrams(project, "mock");
+    if (generated.outcome !== "generated") throw new Error(generated.error.message);
     const revised = await reviseSequenceDiagram(project, "mock", "architectural", "split payment into authorize and capture");
 
     expect(generated.bundle.architectural.summary).not.toBe(revised.architectural.summary);

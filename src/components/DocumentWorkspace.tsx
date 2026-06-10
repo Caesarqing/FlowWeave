@@ -3,19 +3,19 @@ import { useI18n } from "../utils/i18n";
 
 const docTypes = ["PRD", "README", "API Doc", "Task Spec"];
 
-export function DocumentWorkspace({ projectPath }: { projectPath: string }) {
+export function DocumentWorkspace({ projectId }: { projectId: string }) {
   const { t } = useI18n();
   const [docId, setDocId] = useState("task-spec");
   const [content, setContent] = useState(() => t("docs.initialContent"));
   const [status, setStatus] = useState(() => t("docs.notSaved"));
 
   async function saveDoc() {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
     }
     try {
-      const path = await window.flowweave.saveFlowWeaveDoc(projectPath, docId, content);
+      const path = await window.flowweave.saveFlowWeaveDoc(projectId, docId, content);
       setStatus(t("docs.saved", { path }));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));

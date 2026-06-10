@@ -9,11 +9,15 @@ import { buildProjectStructureFacts } from "./structure-extractor.service";
 
 export async function analyzeProject(project: CodeflowProject, toolId: RuntimeAgentId): Promise<AgentAnalysisResult> {
   const architecture = await analyzeArchitecture(project, toolId);
+  if (architecture.outcome === "failed") {
+    throw new Error(
+      `Architecture analysis failed for ${architecture.error.agentId} run ${architecture.error.runId ?? "unknown"}: ${architecture.error.message}`
+    );
+  }
   return {
     projectMap: architectureMapToProjectMap(architecture.architectureMap),
     moduleMap: architectureMapToModuleMap(architecture.architectureMap),
-    source: architecture.source,
-    agentOutput: architecture.agentOutput,
+    source: "agent",
     graph: architecture.graph
   };
 }

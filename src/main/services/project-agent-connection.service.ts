@@ -42,7 +42,7 @@ export async function getProjectAgentConnection(projectPath: string): Promise<Pr
   const paths = connectionPaths(projectPath);
   const config = await readConnectionConfig(paths.configPath);
   if (!config) {
-    return createStatus(projectPath, undefined, "needs-confirmation", "External Agent connection has not been configured.");
+    return createStatus(projectPath, undefined, "disabled", "External Agent connection has not been configured.");
   }
   if (!config.enabled) {
     return createStatus(projectPath, config, "disabled", "External Agent connection is disabled for this project.");
@@ -58,7 +58,7 @@ export async function getProjectAgentConnection(projectPath: string): Promise<Pr
     return createStatus(projectPath, config, "needs-refresh", "FlowWeave project artifacts changed after the Agent context was generated.");
   }
 
-  return createStatus(projectPath, config, "connected", "Project instructions and FlowWeave Agent context are ready.");
+  return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.");
 }
 
 export async function enableProjectAgentConnection(projectPath: string): Promise<ProjectAgentConnectionStatus> {
@@ -135,7 +135,7 @@ async function writeProjectAgentConnection(
     updatedAt: new Date().toISOString()
   };
   await writeJsonAtomic(paths.configPath, config);
-  return createStatus(projectPath, config, "connected", "Project instructions and FlowWeave Agent context are ready.");
+  return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.");
 }
 
 function connectionPaths(projectPath: string) {
@@ -174,7 +174,7 @@ function createStatus(
   return {
     state,
     enabled: config?.enabled ?? false,
-    needsConfirmation: state === "needs-confirmation",
+    needsConfirmation: !config,
     projectPath,
     contextPath: paths.contextPath,
     configPath: paths.configPath,
@@ -257,6 +257,7 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
     "- You may modify project files when the user asks you to implement a change.",
     "- After modifying files, report the changed file paths and the verification you ran.",
     "- Ask the user to return to FlowWeave to review Git diff, refresh the project scan, or rollback when needed.",
+    "- When asked to process the current FlowWeave pending request, inspect `.flowweave/agent-bridge/*/request.json`, choose the newest request without a response, and follow its `instructionsPath`.",
     "",
     "## FlowWeave Artifacts",
     "",
@@ -330,6 +331,7 @@ function buildManagedInstructionBlock() {
     "",
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
+    "When the user says `使用 FlowWeave 上下文处理当前待办`, process the newest pending request under `.flowweave/agent-bridge` and write the required response atomically.",
     FLOWWEAVE_BLOCK_END
   ].join("\n");
 }

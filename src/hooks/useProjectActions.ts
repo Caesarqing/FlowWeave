@@ -1,25 +1,35 @@
-import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectFileNode, RuntimeAgentId } from "../types";
+import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectArtifactStatuses, ProjectFileNode, RuntimeAgentId } from "../types";
 import { useI18n } from "../utils/i18n";
 
 export function useProjectActions({
   maxRenderedTreeRows,
+  projectId,
   projectPath,
   projectFiles,
   replaceProjectGraph,
   setIsProjectLoading,
   setLastRunStatus,
   setProjectLabel,
+  setProjectId,
   setProjectPath,
+  setScanFingerprint,
+  setArtifactStatuses,
   setProjectStatus
 }: {
   maxRenderedTreeRows: number;
+  projectId: string;
   projectPath: string;
   projectFiles: ProjectFileNode[];
   replaceProjectGraph: (nodes: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[]) => void;
   setIsProjectLoading: (value: boolean) => void;
   setLastRunStatus: (value: string) => void;
   setProjectLabel: (value: string) => void;
+  setProjectId: (value: string) => void;
   setProjectPath: (value: string) => void;
+  setScanFingerprint: (value: string) => void;
+  setArtifactStatuses: (
+    value: ProjectArtifactStatuses | ((current?: ProjectArtifactStatuses) => ProjectArtifactStatuses | undefined)
+  ) => void;
   setProjectStatus: (value: string) => void;
 }) {
   const { t } = useI18n();
@@ -30,11 +40,14 @@ export function useProjectActions({
       return;
     }
 
-    const persistedCanvas = await window.flowweave?.readCanvas(result.project.rootPath);
+    const persistedCanvas = await window.flowweave?.readCanvas(result.projectId);
     const inferredModules = persistedCanvas?.nodes ?? result.graph.nodes;
     const inferredEdges = persistedCanvas?.edges ?? result.graph.edges;
     setProjectLabel(result.project.projectName);
+    setProjectId(result.projectId);
     setProjectPath(result.project.rootPath);
+    setScanFingerprint(result.scanFingerprint);
+    setArtifactStatuses(result.artifacts);
     replaceProjectGraph(inferredModules, inferredEdges, result.project.files);
 
     const truncateNote = result.project.summary.truncated
@@ -75,7 +88,7 @@ export function useProjectActions({
       return;
     }
 
-    if (!projectPath) {
+    if (!projectId) {
       await openProject();
       return;
     }
@@ -83,7 +96,7 @@ export function useProjectActions({
     setIsProjectLoading(true);
     setProjectStatus(t("status.rescanning"));
     try {
-      const result = await window.flowweave.scanProject(projectPath);
+      const result = await window.flowweave.scanProject(projectId);
       await applyProjectOpenResult(result);
     } catch (error) {
       const message = t("status.rescanFailed", { error: formatErrorMessage(error) });
@@ -95,7 +108,7 @@ export function useProjectActions({
   }
 
   async function analyzeProject(agentId: RuntimeAgentId) {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
       return;
     }
@@ -103,9 +116,13 @@ export function useProjectActions({
     setIsProjectLoading(true);
     setProjectStatus(t("status.generatingGraph"));
     try {
-      const result = await window.flowweave.analyzeArchitectureWithAgent(projectPath, agentId);
+      const result = await window.flowweave.analyzeArchitectureWithAgent(projectId, agentId);
+      if (result.outcome === "failed") {
+        throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
+      }
       replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
-      const message = result.source === "agent" ? t("status.analysisComplete", { count: result.graph.nodes.length }) : t("status.analysisFallback", { count: result.graph.nodes.length });
+      setArtifactStatuses((current) => current ? { ...current, architecture: "current" } : current);
+      const message = t("status.analysisComplete", { count: result.graph.nodes.length });
       setProjectStatus(message);
       setLastRunStatus(message);
     } catch (error) {

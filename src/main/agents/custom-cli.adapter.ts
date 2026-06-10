@@ -27,6 +27,9 @@ export class CustomCliAdapter implements ToolAdapter {
   }
 
   async runPlan(request: ToolRunRequest, onEvent?: (event: ToolRunEvent) => void): Promise<ToolRunResult> {
+    if (request.executionMode === "plan") {
+      throw new Error(`Custom CLI "${this.definition.name}" does not declare a verifiable read-only Plan mode.`);
+    }
     const detection = await this.detect();
     const startedAt = nowIso();
     const events: ToolRunEvent[] = [];
@@ -46,6 +49,7 @@ export class CustomCliAdapter implements ToolAdapter {
         startedAt,
         completedAt: startedAt,
         executionMode: request.executionMode,
+        purpose: request.purpose,
         events
       };
     }
@@ -81,6 +85,7 @@ export class CustomCliAdapter implements ToolAdapter {
           startedAt,
           completedAt: timestamp,
           executionMode: request.executionMode,
+          purpose: request.purpose,
           events
         });
       });
@@ -98,6 +103,7 @@ export class CustomCliAdapter implements ToolAdapter {
           completedAt,
           exitCode: code,
           executionMode: request.executionMode,
+          purpose: request.purpose,
           events
         });
       });

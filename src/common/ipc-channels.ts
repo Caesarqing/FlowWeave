@@ -11,7 +11,12 @@ export const PROJECT_CHANNELS = {
   readFile: "project:read-file",
   saveDoc: "project:save-doc",
   readCanvas: "project:read-canvas",
-  saveCanvas: "project:save-canvas"
+  saveCanvas: "project:save-canvas",
+  getAgentConnection: "project:get-agent-connection",
+  enableAgentConnection: "project:enable-agent-connection",
+  refreshAgentConnection: "project:refresh-agent-connection",
+  disableAgentConnection: "project:disable-agent-connection",
+  openAgentConnection: "project:open-agent-connection"
 } as const;
 
 export const TOOL_CHANNELS = {

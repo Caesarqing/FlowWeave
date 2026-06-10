@@ -7,7 +7,13 @@ async function main() {
   const projectPath = resolve(process.argv[2] ?? process.cwd());
   const project = await scanProject(projectPath);
   const graph = await inferGraphFromProject(project);
-  const written = await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges);
+  const written = await writeFlowWeaveProject(
+    projectPath,
+    project,
+    graph.nodes,
+    graph.edges,
+    project.scanFingerprint ?? ""
+  );
 
   process.stdout.write(
     `${JSON.stringify(

@@ -1,21 +1,23 @@
 import "@xyflow/react/dist/style.css";
-import { CanvasWorkspace } from "./components/CanvasWorkspace";
 import { ConnectionPanel } from "./components/ConnectionPanel";
-import { DocumentWorkspace } from "./components/DocumentWorkspace";
-import { GitReviewWorkspace } from "./components/GitReviewWorkspace";
 import { ModulePanel } from "./components/ModulePanel";
 import { ProjectExplorer } from "./components/ProjectExplorer";
 import { Sidebar } from "./components/Sidebar";
-import { StructureWorkspace } from "./components/StructureWorkspace";
-import { AgentPage } from "./components/AgentPage";
 import { TopBar } from "./components/TopBar";
 import { UtilityPanels } from "./components/UtilityPanels";
+import { ArtifactStatusBar } from "./components/ArtifactStatusBar";
 import { useAppController } from "./hooks/useAppController";
 import { usePreferencesStore } from "./stores/preferences.store";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { cn } from "./utils/classnames";
 import { BrandLogo } from "./components/BrandLogo";
 import { useI18n } from "./utils/i18n";
+
+const CanvasWorkspace = lazy(() => import("./components/CanvasWorkspace").then((module) => ({ default: module.CanvasWorkspace })));
+const StructureWorkspace = lazy(() => import("./components/StructureWorkspace").then((module) => ({ default: module.StructureWorkspace })));
+const DocumentWorkspace = lazy(() => import("./components/DocumentWorkspace").then((module) => ({ default: module.DocumentWorkspace })));
+const GitReviewWorkspace = lazy(() => import("./components/GitReviewWorkspace").then((module) => ({ default: module.GitReviewWorkspace })));
+const AgentPage = lazy(() => import("./components/AgentPage").then((module) => ({ default: module.AgentPage })));
 
 export function App() {
   const reducedMotion = usePreferencesStore((state) => state.reducedMotion);
@@ -78,6 +80,8 @@ function DesktopApp() {
       <UtilityPanels activePanel={utilityPanel} onClose={() => setUtilityPanel(undefined)} />
       <section className="main-shell">
         <TopBar activePage={app.activePage} onExport={app.onExport} onSendToTool={app.onSendToTool} projectLabel={app.projectLabel} />
+        <ArtifactStatusBar scanFingerprint={app.scanFingerprint} statuses={app.artifactStatuses} />
+        <Suspense fallback={<main className="workspace-page" aria-busy="true" />}>
         {app.activePage === "canvas" ? (
           <div className={cn("canvas-page", app.canvas.selectedNode || app.canvas.connectionPanelMode ? "has-selection" : "no-selection")}>
             <ProjectExplorer
@@ -138,9 +142,9 @@ function DesktopApp() {
         ) : app.activePage === "structure" ? (
           <StructureWorkspace sequence={app.sequence} />
           ) : app.activePage === "docs" ? (
-          <DocumentWorkspace projectPath={app.canvas.projectPath} />
+          <DocumentWorkspace projectId={app.projectId} />
         ) : app.activePage === "git-review" ? (
-          <GitReviewWorkspace projectPath={app.canvas.projectPath} />
+          <GitReviewWorkspace projectId={app.projectId} />
         ) : (
           <AgentPage
             agents={app.tools.agents}
@@ -169,6 +173,7 @@ function DesktopApp() {
             toolStatuses={app.tools.toolStatuses}
           />
         )}
+        </Suspense>
       </section>
     </div>
   );

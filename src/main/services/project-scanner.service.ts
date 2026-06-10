@@ -1,39 +1,22 @@
 import { execFile } from "node:child_process";
-import { basename, extname } from "node:path";
+import { lstat, realpath } from "node:fs/promises";
+import { basename, extname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import fg from "fast-glob";
 import type { CodeflowProject, GitSummary, ProjectFileNode, ProjectScanSummary } from "../storage/schemas";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { createStructureFingerprint } from "./project-registry.service";
 
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_IGNORE = [
-  ".git/**",
-  "node_modules/**",
-  "dist/**",
-  "out/**",
-  "build/**",
-  "release/**",
-  ".cache/**",
-  ".parcel-cache/**",
-  ".pytest_cache/**",
-  ".ruff_cache/**",
-  ".mypy_cache/**",
-  "__pycache__/**",
-  ".venv/**",
-  "venv/**",
-  "env/**",
-  "target/**",
-  "vendor/**",
-  "Pods/**",
-  "DerivedData/**",
-  "*.app/**",
-  ".next/**",
-  `${FLOWWEAVE_DIR}/**`,
-  "coverage/**",
-  ".turbo/**",
-  ".vercel/**",
-  ".DS_Store"
+  "**/.git/**", "**/node_modules/**", "**/dist/**", "**/out/**", "**/build/**",
+  "**/release/**", "**/.cache/**", "**/.parcel-cache/**", "**/.pytest_cache/**",
+  "**/.ruff_cache/**", "**/.mypy_cache/**", "**/__pycache__/**", "**/.venv/**",
+  "**/venv/**", "**/env/**", "**/target/**", "**/vendor/**", "**/Pods/**",
+  "**/DerivedData/**", "**/*.app/**", "**/.next/**", `**/${FLOWWEAVE_DIR}/**`,
+  "**/coverage/**", "**/.turbo/**", "**/.vercel/**", "**/.runtime/**",
+  "**/logs/**", "**/*.log", "**/.DS_Store"
 ];
 
 const DEFAULT_MAX_DEPTH = 8;
@@ -80,10 +63,12 @@ export async function scanProject(rootPath: string, options: ScanProjectOptions 
     markDirectories: true,
     onlyFiles: false,
     stats: false,
-    unique: true
+    unique: true,
+    followSymbolicLinks: false
   });
 
-  const filteredEntries = entries.filter((entry) => {
+  const nonSymlinkEntries = await filterSafeEntries(rootPath, entries);
+  const filteredEntries = nonSymlinkEntries.filter((entry) => {
     const depth = entry.split("/").filter(Boolean).length - 1;
     return depth <= maxDepth;
   });
@@ -95,7 +80,7 @@ export async function scanProject(rootPath: string, options: ScanProjectOptions 
   summary.truncated = filteredEntries.length > visibleEntries.length;
   const git = await readGitSummary(rootPath);
 
-  return {
+  const project: CodeflowProject = {
     version: 1,
     projectName: basename(rootPath),
     rootPath,
@@ -103,7 +88,35 @@ export async function scanProject(rootPath: string, options: ScanProjectOptions 
     git,
     summary,
     files
-  };
+  } satisfies CodeflowProject;
+  project.scanFingerprint = createStructureFingerprint(
+    project.projectName,
+    project.summary.languages,
+    flattenFiles(project.files)
+  );
+  return project;
+}
+
+async function filterSafeEntries(rootPath: string, entries: string[]): Promise<string[]> {
+  const canonicalRoot = await realpath(rootPath);
+  const results = await Promise.all(entries.map(async (entry) => {
+    const relativeEntry = entry.endsWith("/") ? entry.slice(0, -1) : entry;
+    const absoluteEntry = join(rootPath, ...relativeEntry.split("/"));
+    const info = await lstat(absoluteEntry);
+    if (info.isSymbolicLink()) return undefined;
+    const canonicalEntry = await realpath(absoluteEntry);
+    const fromRoot = relative(canonicalRoot, canonicalEntry);
+    if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) return undefined;
+    return entry;
+  }));
+  return results.filter((entry): entry is string => Boolean(entry));
+}
+
+function flattenFiles(nodes: ProjectFileNode[]): Array<{ path: string; language?: string }> {
+  return nodes.flatMap((node) => [
+    ...(node.type === "file" ? [{ path: node.path, language: node.language }] : []),
+    ...flattenFiles(node.children ?? [])
+  ]);
 }
 
 function buildTree(entries: string[]): ProjectFileNode[] {
@@ -174,17 +187,18 @@ function detectLanguage(filePath: string) {
 
 async function readGitSummary(rootPath: string): Promise<GitSummary> {
   try {
-    const [{ stdout: branch }, { stdout: remote }, { stdout: status }] = await Promise.all([
-      execFileAsync("git", ["-C", rootPath, "branch", "--show-current"]),
-      execFileAsync("git", ["-C", rootPath, "remote", "get-url", "origin"]),
-      execFileAsync("git", ["-C", rootPath, "status", "--short"])
+    const { stdout: inside } = await execFileAsync("git", ["-C", rootPath, "rev-parse", "--is-inside-work-tree"]);
+    if (inside.trim() !== "true") return { isRepo: false };
+    const [branch, remote, status] = await Promise.all([
+      execFileAsync("git", ["-C", rootPath, "branch", "--show-current"]).catch(() => ({ stdout: "" })),
+      execFileAsync("git", ["-C", rootPath, "remote", "get-url", "origin"]).catch(() => ({ stdout: "" })),
+      execFileAsync("git", ["-C", rootPath, "status", "--short"]).catch(() => ({ stdout: "" }))
     ]);
-
     return {
       isRepo: true,
-      branch: branch.trim() || "detached",
-      remote: remote.trim() || undefined,
-      status: status.trim()
+      branch: branch.stdout.trim() || "detached",
+      remote: remote.stdout.trim() || undefined,
+      status: status.stdout.trim()
     };
   } catch {
     return { isRepo: false };

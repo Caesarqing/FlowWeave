@@ -15,11 +15,11 @@ describe("project Agent connection", () => {
   it("starts with confirmation required and generates all project-native entries", async () => {
     const projectPath = await createProject();
 
-    expect((await getProjectAgentConnection(projectPath)).state).toBe("needs-confirmation");
+    expect(await getProjectAgentConnection(projectPath)).toMatchObject({ state: "disabled", needsConfirmation: true });
 
     const status = await enableProjectAgentConnection(projectPath);
 
-    expect(status.state).toBe("connected");
+    expect(status.state).toBe("ready");
     expect(status.platforms).toEqual(["codex", "claude", "gemini", "cursor"]);
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), ".flowweave/project.json");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "You may modify project files");
@@ -82,7 +82,7 @@ describe("project Agent connection", () => {
 
     await refreshProjectAgentConnectionIfEnabled(projectPath);
 
-    expect((await getProjectAgentConnection(projectPath)).state).toBe("connected");
+    expect((await getProjectAgentConnection(projectPath)).state).toBe("ready");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Updated Module");
   });
 });

@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { extname, join } from "node:path";
+import { extname, isAbsolute, join, relative, sep } from "node:path";
 import type * as TypeScript from "typescript";
 import type {
   CodeflowProject,
@@ -22,6 +22,7 @@ type TypeScriptApi = typeof TypeScript;
 export async function buildProjectStructureFacts(project: CodeflowProject): Promise<ProjectStructureFacts> {
   const paths = flattenProjectFilePaths(project.files)
     .filter((path) => CODE_EXTENSIONS.has(extname(path).toLowerCase()))
+    .sort((left, right) => representativePathScore(right) - representativePathScore(left) || left.localeCompare(right))
     .slice(0, MAX_INSIGHT_FILES);
 
   const files = await Promise.all(paths.map((path) => readFileInsight(project.rootPath, project.files, path)));
@@ -36,6 +37,10 @@ export async function buildProjectStructureFacts(project: CodeflowProject): Prom
 
 async function readFileInsight(rootPath: string, projectFiles: ProjectFileNode[], filePath: string): Promise<FileInsight | undefined> {
   const absolutePath = join(rootPath, ...filePath.split("/"));
+  const [canonicalRoot, canonicalFile] = await Promise.all([realpath(rootPath), realpath(absolutePath).catch(() => undefined)]);
+  if (!canonicalFile) return undefined;
+  const pathFromRoot = relative(canonicalRoot, canonicalFile);
+  if (pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`) || isAbsolute(pathFromRoot)) return undefined;
   const content = await readFile(absolutePath, "utf8").catch(() => "");
   if (!content || Buffer.byteLength(content, "utf8") > MAX_FILE_BYTES) {
     return undefined;
@@ -47,6 +52,30 @@ async function readFileInsight(rootPath: string, projectFiles: ProjectFileNode[]
   }
 
   return extractLightweightInsight(filePath, content, language, projectFiles);
+}
+
+export function selectRepresentativeStructureFacts(facts: ProjectStructureFacts, maxFiles: number): FileInsight[] {
+  return [...facts.files]
+    .sort((left, right) => representativeScore(right) - representativeScore(left) || left.path.localeCompare(right.path))
+    .slice(0, maxFiles);
+}
+
+function representativeScore(file: FileInsight) {
+  const path = file.path.toLowerCase();
+  let score = file.symbols.length * 3 + file.calls.length * 2 + file.externalCalls.length * 5 + file.imports.length;
+  if (/(^|\/)(main|index|app|server|bootstrap)\.[^.]+$/.test(path)) score += 40;
+  if (/(ipc|controller|service|worker|gateway|adapter|repository|store|dispatcher|scheduler)/.test(path)) score += 25;
+  if (/(test|spec|fixture|example|generated)/.test(path)) score -= 20;
+  return score;
+}
+
+function representativePathScore(filePath: string) {
+  const path = filePath.toLowerCase();
+  let score = 0;
+  if (/(^|\/)(main|index|app|server|bootstrap)\.[^.]+$/.test(path)) score += 40;
+  if (/(ipc|controller|service|worker|gateway|adapter|repository|store|dispatcher|scheduler)/.test(path)) score += 25;
+  if (/(test|spec|fixture|example|generated)/.test(path)) score -= 20;
+  return score;
 }
 
 export function extractTypeScriptInsight(filePath: string, content: string, language = detectLanguage(filePath)): FileInsight {

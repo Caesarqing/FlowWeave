@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
-import type { ExecutionMode, ToolId } from "../../types";
+import type { ExecutionMode, ToolId, ToolRunPurpose } from "../../types";
 import { detectTool, startToolPlan } from "../services/agent-run.service";
+import { registerProject } from "../services/project-registry.service";
 
 async function main() {
   const projectPath = resolve(readOption("--project") ?? process.cwd());
@@ -8,6 +9,9 @@ async function main() {
   const prompt = readOption("--prompt");
   const guidancePath = readOption("--guidance");
   const executionMode: ExecutionMode = process.argv.includes("--execute") ? "execute" : "plan";
+  const purpose: ToolRunPurpose = process.argv.includes("--artifact-analysis")
+    ? "artifact-analysis"
+    : "implementation-plan";
   const checkOnly = process.argv.includes("--check");
 
   if (checkOnly) {
@@ -16,12 +20,17 @@ async function main() {
     return;
   }
 
+  if (!prompt?.trim()) {
+    throw new Error("--prompt is required when starting an agent run.");
+  }
+  const projectId = await registerProject(projectPath);
   const result = await startToolPlan({
-    projectPath,
+    projectId,
     toolId,
     prompt,
     guidancePath: guidancePath ? resolve(guidancePath) : undefined,
-    executionMode
+    executionMode,
+    purpose
   });
 
   process.stdout.write(

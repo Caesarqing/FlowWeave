@@ -8,6 +8,7 @@ export function useToolActions({
   graphRelations,
   modules,
   projectLabel,
+  projectId,
   projectPath,
   selectedNode,
   onRunCompleted,
@@ -21,6 +22,7 @@ export function useToolActions({
   graphRelations: GraphEdge[];
   modules: GraphNode[];
   projectLabel: string;
+  projectId: string;
   projectPath: string;
   selectedNode?: GraphNode;
   onRunCompleted?: (runId: string) => void | Promise<void>;
@@ -56,7 +58,7 @@ export function useToolActions({
   }
 
   async function openToolProject(agentId: RuntimeAgentId) {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
       return;
     }
@@ -67,7 +69,7 @@ export function useToolActions({
     }
 
     try {
-      const result = await window.flowweave.openToolProject(agentId, projectPath);
+      const result = await window.flowweave.openToolProject(agentId, projectId);
       setLastRunStatus(
         t(result.opened ? "status.agentProjectOpened" : "status.agentProjectOpenFailed", {
           agent: getAgentName(agentId),
@@ -80,7 +82,7 @@ export function useToolActions({
   }
 
   async function runToolPlan(agentId: RuntimeAgentId) {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
       return;
     }
@@ -99,15 +101,18 @@ export function useToolActions({
       }
 
       const result = await window.flowweave.runToolPlan({
-        projectPath,
+        projectId,
         toolId: agentId,
         executionMode,
+        purpose: "implementation-plan",
         prompt: `FlowWeave plan request for module "${selectedNode.title}".
 
 Use this module graph as the modification boundary:
 ${buildGuidanceMarkdown(projectLabel, modules, graphRelations)}
 
-Return an implementation plan, affected files, risks, and tests. Do not edit files from FlowWeave.`
+${executionMode === "plan"
+  ? "Return an implementation plan, affected files, risks, and tests. Do not edit files."
+  : "Implement the requested module changes, report affected files, risks, and tests."}`
       });
 
       if (agentId !== "mock") setSelectedAgentId(agentId);

@@ -35,6 +35,7 @@ export class CodexLocalAdapter implements ToolAdapter {
         startedAt: timestamp,
         completedAt: timestamp,
         executionMode: request.executionMode,
+        purpose: request.purpose,
         events: [{ type: "error", message: "Codex CLI is not installed or not available.", timestamp }]
       };
     }
@@ -47,9 +48,7 @@ export class CodexLocalAdapter implements ToolAdapter {
     const startedAt = nowIso();
     const events: ToolRunEvent[] = [];
     const lastMessagePath = join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id, "last-message.md");
-    const prompt = request.executionMode === "plan"
-      ? `${request.prompt}\n\nDry run only: inspect the request and report what you would change. Do not edit files.`
-      : request.prompt;
+    const prompt = request.prompt;
 
     const args = buildCodexPlanArgs({
       executionMode: request.executionMode,
@@ -94,6 +93,7 @@ export class CodexLocalAdapter implements ToolAdapter {
           startedAt,
           completedAt: timestamp,
           executionMode: request.executionMode,
+          purpose: request.purpose,
           events
         });
       });
@@ -112,6 +112,7 @@ export class CodexLocalAdapter implements ToolAdapter {
           exitCode: code,
           lastMessagePath,
           executionMode: request.executionMode,
+          purpose: request.purpose,
           events
         });
       });

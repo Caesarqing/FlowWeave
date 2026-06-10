@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { startToolPlan } from "../../src/main/services/agent-run.service";
+import { registerProject } from "../../src/main/services/project-registry.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 
@@ -44,12 +45,14 @@ describe("run-log.service", () => {
   it("exposes artifacts written by startToolPlan", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-start-"));
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
 
     const result = await startToolPlan({
-      projectPath,
+      projectId,
       toolId: "mock",
       prompt: "Review auth module.",
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "implementation-plan"
     });
 
     const summaries = await listRunSummaries(projectPath);

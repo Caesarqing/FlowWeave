@@ -15,7 +15,8 @@ describe("task-generator.service", () => {
   it("creates a canvas artifact from FlowWeave modules", () => {
     const canvas = createCanvasArtifact("/tmp/project", graphNodes, graphEdges);
 
-    expect(canvas.version).toBe(1);
+    expect(canvas.version).toBe(2);
+    expect(canvas.artifactState).toBe("current");
     expect(canvas.nodes).toHaveLength(graphNodes.length);
     expect(canvas.edges.some((edge) => edge.source === "user-api" && edge.target === "tests")).toBe(true);
   });

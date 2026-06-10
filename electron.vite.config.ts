@@ -13,7 +13,11 @@ export default defineConfig({
   preload: {
     build: {
       rollupOptions: {
-        input: resolve(__dirname, "src/preload/index.ts")
+        input: resolve(__dirname, "src/preload/index.ts"),
+        output: {
+          format: "cjs",
+          entryFileNames: "index.cjs"
+        }
       }
     }
   },
@@ -28,7 +32,20 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: resolve(__dirname, "index.html")
+        input: resolve(__dirname, "index.html"),
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/monaco-editor") || id.includes("node_modules/@monaco-editor")) return "monaco";
+            if (id.includes("node_modules/@xyflow")) return "react-flow";
+            if (
+              id.includes("node_modules/react/") ||
+              id.includes("node_modules/react-dom/") ||
+              id.includes("node_modules/zustand/") ||
+              id.includes("node_modules/lucide-react/")
+            ) return "vendor";
+            return undefined;
+          }
+        }
       }
     }
   }

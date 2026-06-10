@@ -37,6 +37,7 @@ export class MockAgentAdapter implements ToolAdapter {
       completedAt: nowIso(),
       exitCode: 0,
       executionMode: request.executionMode,
+      purpose: request.purpose,
       summary: "Mock plan generated.",
       events
     };

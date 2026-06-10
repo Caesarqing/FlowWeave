@@ -38,7 +38,7 @@ describe("git.service", () => {
     const filePath = join(root, "app.ts");
     await writeFile(filePath, "export const app = 99;\n");
 
-    await expect(restoreCheckpoint(root, "flowweave-missing")).rejects.toThrow("FlowWeave checkpoint not found");
+    await expect(restoreCheckpoint(root, "flowweave-123456")).rejects.toThrow("FlowWeave checkpoint not found");
     await expect(readFile(filePath, "utf8")).resolves.toContain("app = 99");
   });
 });

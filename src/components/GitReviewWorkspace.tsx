@@ -4,7 +4,7 @@ import { useWorkspaceStore } from "../stores/workspace.store";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 
-export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
+export function GitReviewWorkspace({ projectId }: { projectId: string }) {
   const { t } = useI18n();
   const diff = useWorkspaceStore((state) => state.diff);
   const checkpointId = useWorkspaceStore((state) => state.checkpointId);
@@ -14,22 +14,22 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
   const [status, setStatus] = useState(() => t("git.status"));
 
   async function refreshDiff() {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setStatus(t("git.needDesktop"));
       return;
     }
-    const result = await window.flowweave.gitDiff(projectPath, activeRun?.checkpointId);
+    const result = await window.flowweave.gitDiff(projectId, activeRun?.checkpointId);
     setDiff(result);
     setStatus(result.isRepo ? t("git.readFiles", { count: result.changedFiles.length }) : t("git.notRepo"));
   }
 
   async function createCheckpoint() {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setStatus(t("git.needDesktop"));
       return;
     }
     try {
-      const id = await window.flowweave.gitCheckpoint(projectPath);
+      const id = await window.flowweave.gitCheckpoint(projectId);
       setCheckpointId(id);
       setStatus(`Checkpoint: ${id}`);
     } catch (error) {
@@ -38,12 +38,12 @@ export function GitReviewWorkspace({ projectPath }: { projectPath: string }) {
   }
 
   async function rollback() {
-    if (!window.flowweave || !projectPath || !checkpointId) {
+    if (!window.flowweave || !projectId || !checkpointId) {
       setStatus(t("git.needCheckpoint"));
       return;
     }
     try {
-      await window.flowweave.gitRollback(projectPath, checkpointId);
+      await window.flowweave.gitRollback(projectId, checkpointId);
       setStatus(t("git.rollbackDone", { id: checkpointId }));
       await refreshDiff();
     } catch (error) {

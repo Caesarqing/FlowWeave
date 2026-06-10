@@ -10,14 +10,17 @@ const MAX_INFERRED_EDGES = 140;
 export function createCanvasArtifact(
   projectPath: string,
   modules: GraphNode[],
-  edges = createDefaultEdges(modules)
+  edges = createDefaultEdges(modules),
+  scanFingerprint = ""
 ): CodeflowCanvas {
   return {
-    version: 1,
+    version: 2,
     id: "main",
     title: "Main Canvas",
     projectPath,
     generatedAt: new Date().toISOString(),
+    scanFingerprint,
+    artifactState: "current",
     nodes: modules,
     edges
   };

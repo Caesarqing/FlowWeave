@@ -160,16 +160,30 @@ export type CodeflowProject = {
   git: GitSummary;
   summary: ProjectScanSummary;
   files: ProjectFileNode[];
+  scanFingerprint?: string;
 };
 
 export type CodeflowCanvas = {
-  version: 1;
+  version: 1 | 2;
   id: string;
   title: string;
   projectPath: string;
   generatedAt: string;
+  scanFingerprint?: string;
+  artifactState?: ProjectArtifactState;
   nodes: GraphNode[];
   edges: GraphEdge[];
+};
+
+export type ProjectArtifactState = "current" | "stale" | "missing" | "failed";
+
+export type ProjectArtifactStatuses = {
+  project: ProjectArtifactState;
+  canvas: ProjectArtifactState;
+  task: ProjectArtifactState;
+  context: ProjectArtifactState;
+  architecture: ProjectArtifactState;
+  sequences: ProjectArtifactState;
 };
 
 export type ArchitectureModule = {
@@ -204,11 +218,12 @@ export type ProjectStructureFacts = {
 };
 
 export type ArchitectureMap = {
-  version: 1;
+  version: 1 | 2;
   projectName: string;
   rootPath: string;
   generatedAt: string;
   source: "agent" | "fallback";
+  metadata?: ArtifactGenerationMetadata;
   architectureStyle?: string;
   modules: ArchitectureModule[];
   relationships: ArchitectureRelationship[];
@@ -267,22 +282,39 @@ export type SequenceDiagram = {
 };
 
 export type SequenceDiagramBundle = {
-  version: 1;
+  version: 1 | 2;
   projectName: string;
   rootPath: string;
   generatedAt: string;
   source: SequenceDiagramSource;
+  metadata?: ArtifactGenerationMetadata;
   architectural: SequenceDiagram;
   detailedDesign: SequenceDiagram;
 };
 
-export type SequenceDiagramGenerationOutcome = "generated" | "cached" | "fallback";
-
-export type SequenceDiagramGenerationResult = {
-  bundle: SequenceDiagramBundle;
-  outcome: SequenceDiagramGenerationOutcome;
-  warning?: string;
+export type ArtifactGenerationMetadata = {
+  agentId: RuntimeAgentId;
+  runId: string;
+  generatedAt: string;
+  inputFingerprint: string;
+  fileCoverage: number;
+  evidenceCoverage: number;
 };
+
+export type AnalysisFailure = {
+  code: "agent-failed" | "invalid-output" | "quality-rejected";
+  message: string;
+  agentId: RuntimeAgentId;
+  runId?: string;
+  attemptRunIds?: string[];
+  firstFailure?: string;
+  retryFailure?: string;
+};
+
+export type SequenceDiagramGenerationResult =
+  | { outcome: "generated"; bundle: SequenceDiagramBundle }
+  | { outcome: "cached"; bundle: SequenceDiagramBundle; error: AnalysisFailure }
+  | { outcome: "failed"; error: AnalysisFailure };
 
 export type BuiltInAgentId = "claude-code" | "claude-desktop" | "codex-local" | "codex-desktop" | "gemini-cli" | "cursor";
 export type ToolId = BuiltInAgentId | "mock";
@@ -290,6 +322,30 @@ export type CustomAgentId = `custom:${string}`;
 export type AgentId = BuiltInAgentId | CustomAgentId;
 export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
+export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
+export type AsyncOperationStatus = "idle" | "running" | "succeeded" | "failed";
+export type AsyncOperationState = { status: AsyncOperationStatus; error?: string };
+
+export type ProjectAgentPlatform = "codex" | "claude" | "gemini" | "cursor";
+export type ProjectAgentConnectionConfig = {
+  version: 1;
+  enabled: boolean;
+  platforms: ProjectAgentPlatform[];
+  updatedAt: string;
+};
+export type ProjectAgentConnectionState = "ready" | "needs-refresh" | "disabled" | "failed";
+export type ProjectAgentConnectionStatus = {
+  state: ProjectAgentConnectionState;
+  enabled: boolean;
+  needsConfirmation: boolean;
+  projectPath: string;
+  contextPath: string;
+  configPath: string;
+  generatedFiles: string[];
+  platforms: ProjectAgentPlatform[];
+  updatedAt?: string;
+  message: string;
+};
 
 export type CodeflowTask = {
   version: 1;
@@ -328,6 +384,9 @@ export type FlowWeaveProjectOpenResult =
   | { canceled: true }
   | {
       canceled: false;
+      projectId: string;
+      scanFingerprint: string;
+      artifacts: ProjectArtifactStatuses;
       project: CodeflowProject;
       graph: {
         nodes: GraphNode[];
@@ -389,15 +448,18 @@ export type ToolOpenResult = {
 
 export type ToolRunRequest = {
   id: string;
+  projectId: string;
   projectPath: string;
   prompt: string;
   guidancePath?: string;
   executionMode: ExecutionMode;
+  purpose: ToolRunPurpose;
   model?: string;
 };
 
 export type ToolRunResult = {
   id: string;
+  projectId?: string;
   toolId: RuntimeAgentId;
   status: ToolRunStatus;
   projectPath: string;
@@ -413,6 +475,7 @@ export type ToolRunResult = {
   stderr?: string;
   events: ToolRunEvent[];
   executionMode: ExecutionMode;
+  purpose: ToolRunPurpose;
   checkpointId?: string;
 };
 
@@ -421,6 +484,7 @@ export type ToolRunSummary = {
   toolId: RuntimeAgentId;
   status: ToolRunStatus;
   executionMode: ExecutionMode;
+  purpose: ToolRunPurpose;
   startedAt: string;
   completedAt: string;
   summary?: string;
@@ -515,15 +579,18 @@ export type AgentAnalysisResult = {
   };
 };
 
-export type ArchitectureAnalysisResult = {
-  architectureMap: ArchitectureMap;
-  source: "agent" | "fallback";
-  agentOutput?: string;
-  graph: {
-    nodes: GraphNode[];
-    edges: GraphEdge[];
-  };
-};
+export type ArchitectureAnalysisResult =
+  | {
+      outcome: "generated";
+      architectureMap: ArchitectureMap;
+      graph: { nodes: GraphNode[]; edges: GraphEdge[] };
+      runId: string;
+    }
+  | {
+      outcome: "failed";
+      error: AnalysisFailure;
+      previous?: ArtifactGenerationMetadata;
+    };
 
 export interface ToolAdapter {
   id: RuntimeAgentId;
@@ -536,36 +603,42 @@ export interface ToolAdapter {
 
 export type FlowWeaveApi = {
   openProject(): Promise<FlowWeaveProjectOpenResult>;
-  scanProject(projectPath: string): Promise<FlowWeaveProjectOpenResult>;
+  scanProject(projectId: string): Promise<FlowWeaveProjectOpenResult>;
   listAgents(): Promise<AgentDefinition[]>;
   saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
   deleteCustomAgent(agentId: AgentId): Promise<void>;
   detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult>;
   detectTool(toolId: ToolId): Promise<ToolDetectionResult>;
   runToolPlan(options: {
-    projectPath: string;
+    projectId: string;
     toolId: RuntimeAgentId;
-    prompt?: string;
+    prompt: string;
     guidancePath?: string;
-    executionMode?: ExecutionMode;
+    executionMode: ExecutionMode;
+    purpose: ToolRunPurpose;
     model?: string;
   }): Promise<ToolRunResult>;
-  listToolRuns(projectPath: string): Promise<ToolRunSummary[]>;
-  readToolRun(projectPath: string, runId: string): Promise<ToolRunArtifact>;
-  openToolProject(toolId: ToolId, projectPath: string): Promise<ToolOpenResult>;
-  gitStatus(projectPath: string): Promise<GitStatus>;
-  gitDiff(projectPath: string, checkpointId?: string): Promise<GitDiffResult>;
-  gitCheckpoint(projectPath: string): Promise<string>;
-  gitRollback(projectPath: string, checkpointId: string): Promise<void>;
-  analyzeProject(projectPath: string, toolId: ToolId): Promise<AgentAnalysisResult>;
-  analyzeArchitecture(projectPath: string, toolId: ToolId): Promise<ArchitectureAnalysisResult>;
-  analyzeArchitectureWithAgent(projectPath: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
-  readArchitectureMap(projectPath: string): Promise<ArchitectureMap | undefined>;
-  generateSequenceDiagrams(projectPath: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
-  reviseSequenceDiagram(projectPath: string, agentId: RuntimeAgentId, kind: SequenceDiagramKind, instruction: string): Promise<SequenceDiagramBundle>;
-  readSequenceDiagrams(projectPath: string): Promise<SequenceDiagramBundle | undefined>;
-  readProjectFile(projectPath: string, filePath: string): Promise<string>;
-  saveFlowWeaveDoc(projectPath: string, docId: string, content: string): Promise<string>;
-  readCanvas(projectPath: string): Promise<CodeflowCanvas | undefined>;
-  saveCanvas(projectPath: string, canvas: CodeflowCanvas): Promise<string>;
+  listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
+  readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
+  openToolProject(toolId: ToolId, projectId: string): Promise<ToolOpenResult>;
+  gitStatus(projectId: string): Promise<GitStatus>;
+  gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;
+  gitCheckpoint(projectId: string): Promise<string>;
+  gitRollback(projectId: string, checkpointId: string): Promise<void>;
+  analyzeProject(projectId: string, toolId: ToolId): Promise<AgentAnalysisResult>;
+  analyzeArchitecture(projectId: string, toolId: ToolId): Promise<ArchitectureAnalysisResult>;
+  analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
+  readArchitectureMap(projectId: string): Promise<ArchitectureMap | undefined>;
+  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
+  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, kind: SequenceDiagramKind, instruction: string): Promise<SequenceDiagramBundle>;
+  readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
+  readProjectFile(projectId: string, filePath: string): Promise<string>;
+  saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;
+  readCanvas(projectId: string): Promise<CodeflowCanvas | undefined>;
+  saveCanvas(projectId: string, canvas: CodeflowCanvas): Promise<string>;
+  getProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
+  enableProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
+  refreshProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
+  disableProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
+  openProjectAgentConnection(projectId: string): Promise<void>;
 };

@@ -16,13 +16,17 @@ describe("agent connector prompts", () => {
     const prompts = ids.map((agentId) => buildAgentConnectorPrompt({ agentId, projectPath: "/tmp/project" }));
 
     expect(prompts.map((prompt) => prompt.connectorPath)).toEqual([
-      "/tmp/project/.flowweave/agent-connectors/claude.md",
-      "/tmp/project/.flowweave/agent-connectors/claude.md",
-      "/tmp/project/.flowweave/agent-connectors/codex.md",
-      "/tmp/project/.flowweave/agent-connectors/codex.md",
-      "/tmp/project/.flowweave/agent-connectors/gemini.md",
-      "/tmp/project/.flowweave/agent-connectors/cursor.md"
+      "/tmp/project/.flowweave/agent-context.md",
+      "/tmp/project/.flowweave/agent-context.md",
+      "/tmp/project/.flowweave/agent-context.md",
+      "/tmp/project/.flowweave/agent-context.md",
+      "/tmp/project/.flowweave/agent-context.md",
+      "/tmp/project/.flowweave/agent-context.md"
     ]);
-    expect(prompts.every((prompt) => prompt.command.includes("You may modify project files directly."))).toBe(true);
+    expect(prompts[1].command).toBe("使用 FlowWeave 上下文处理当前待办");
+    expect(prompts[3].command).toBe("使用 FlowWeave 上下文处理当前待办");
+    expect([prompts[0], prompts[2], prompts[4], prompts[5]].every((prompt) =>
+      prompt.command.includes("You may modify project files directly.")
+    )).toBe(true);
   });
 });

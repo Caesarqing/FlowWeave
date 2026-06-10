@@ -1,7 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import type { GraphEdge, GraphNode } from "../../types";
-import { writeAgentConnectors } from "../services/agent-connector.service";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import type { CodeflowCanvas, GraphEdge, GraphNode } from "../../types";
 import { createCanvasArtifact, createTaskArtifact, createTaskMarkdown } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "./flowweave-paths";
 import type { CodeflowProject, CodeflowWriteResult, ProjectFileNode } from "./schemas";
@@ -10,70 +10,122 @@ export async function writeFlowWeaveProject(
   rootPath: string,
   project: CodeflowProject,
   modules: GraphNode[],
-  edges?: GraphEdge[]
+  edges: GraphEdge[] | undefined,
+  scanFingerprint: string,
+  canvas?: CodeflowCanvas
 ): Promise<CodeflowWriteResult> {
+  return writeProjectArtifacts(rootPath, project, modules, edges, scanFingerprint, { mode: "write", canvas });
+}
+
+export async function writeFlowWeaveProjectPreservingCanvas(
+  rootPath: string,
+  project: CodeflowProject,
+  modules: GraphNode[],
+  edges: GraphEdge[] | undefined,
+  scanFingerprint: string
+): Promise<CodeflowWriteResult> {
+  return writeProjectArtifacts(rootPath, project, modules, edges, scanFingerprint, { mode: "preserve" });
+}
+
+async function writeProjectArtifacts(
+  rootPath: string,
+  project: CodeflowProject,
+  modules: GraphNode[],
+  edges: GraphEdge[] | undefined,
+  scanFingerprint: string,
+  canvasUpdate: { mode: "write"; canvas?: CodeflowCanvas } | { mode: "preserve" }
+) {
   const flowweaveRoot = join(rootPath, FLOWWEAVE_DIR);
   const canvasDir = join(flowweaveRoot, "canvas");
   const tasksDir = join(flowweaveRoot, "tasks");
   const contextDir = join(flowweaveRoot, "context");
-
   await Promise.all([
     mkdir(canvasDir, { recursive: true }),
     mkdir(tasksDir, { recursive: true }),
     mkdir(contextDir, { recursive: true })
   ]);
 
-  const canvas = createCanvasArtifact(rootPath, modules, edges);
+  const nextCanvas = canvasUpdate.mode === "write"
+    ? canvasUpdate.canvas ?? createCanvasArtifact(rootPath, modules, edges, scanFingerprint)
+    : undefined;
   const task = createTaskArtifact(modules, edges);
-  const taskMarkdown = createTaskMarkdown(task);
+  const updates = [
+    { path: join(flowweaveRoot, "project.json"), content: jsonText({ ...project, scanFingerprint }) },
+    { path: join(tasksDir, "current.task.md"), content: createTaskMarkdown(task) },
+    { path: join(tasksDir, "current.task.json"), content: jsonText(task) },
+    { path: join(contextDir, "file-tree.md"), content: createFileTreeMarkdown(project.files) }
+  ];
+  if (nextCanvas) updates.splice(1, 0, { path: join(canvasDir, "main.canvas.json"), content: jsonText(nextCanvas) });
 
-  const projectJsonPath = join(flowweaveRoot, "project.json");
-  const canvasJsonPath = join(canvasDir, "main.canvas.json");
-  const taskMarkdownPath = join(tasksDir, `${task.id}.task.md`);
-  const taskJsonPath = join(tasksDir, `${task.id}.task.json`);
-  const contextFileTreePath = join(contextDir, "file-tree.md");
-
-  await Promise.all([
-    writeJson(projectJsonPath, project),
-    writeJson(canvasJsonPath, canvas),
-    writeFile(taskMarkdownPath, taskMarkdown, "utf8"),
-    writeJson(taskJsonPath, task),
-    writeFile(contextFileTreePath, createFileTreeMarkdown(project.files), "utf8")
-  ]);
-
-  await writeAgentConnectors({
-    project,
-    modules,
-    edges: canvas.edges,
-    canvasPath: canvasJsonPath,
-    taskMarkdownPath,
-    taskJsonPath,
-    contextFileTreePath
-  });
+  await writeBatchAtomic(updates);
+  await removeHistoricalTasks(tasksDir);
 
   return {
-    projectJsonPath,
-    canvasJsonPath,
-    taskMarkdownPath,
-    taskJsonPath,
-    contextFileTreePath
+    projectJsonPath: join(flowweaveRoot, "project.json"),
+    canvasJsonPath: join(canvasDir, "main.canvas.json"),
+    taskMarkdownPath: join(tasksDir, "current.task.md"),
+    taskJsonPath: join(tasksDir, "current.task.json"),
+    contextFileTreePath: join(contextDir, "file-tree.md")
   };
 }
 
-function writeJson(filePath: string, data: unknown) {
-  return writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+async function writeBatchAtomic(updates: Array<{ path: string; content: string }>) {
+  const temporary = updates.map((update) => ({
+    ...update,
+    temporaryPath: join(dirname(update.path), `.${basename(update.path)}.${randomUUID()}.tmp`),
+    backupPath: join(dirname(update.path), `.${basename(update.path)}.${randomUUID()}.bak`),
+    replaced: false,
+    backedUp: false
+  }));
+  try {
+    await Promise.all(temporary.map((update) => writeFile(update.temporaryPath, update.content, "utf8")));
+    for (const update of temporary) {
+      if (await pathExists(update.path)) {
+        await rename(update.path, update.backupPath);
+        update.backedUp = true;
+      }
+      await rename(update.temporaryPath, update.path);
+      update.replaced = true;
+    }
+    await Promise.all(temporary.map((update) => rm(update.backupPath, { force: true })));
+  } catch (error) {
+    for (const update of [...temporary].reverse()) {
+      if (update.replaced) await rm(update.path, { force: true });
+      if (update.backedUp) await rename(update.backupPath, update.path);
+      await rm(update.temporaryPath, { force: true });
+    }
+    throw error;
+  }
+}
+
+async function pathExists(path: string) {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function removeHistoricalTasks(tasksDir: string) {
+  const names = await readdir(tasksDir);
+  await Promise.all(names
+    .filter((name) => name !== "current.task.json" && name !== "current.task.md")
+    .filter((name) => name.endsWith(".task.json") || name.endsWith(".task.md"))
+    .map((name) => rm(join(tasksDir, name), { force: true })));
+}
+
+function jsonText(value: unknown) {
+  return `${JSON.stringify(value, null, 2)}\n`;
 }
 
 function createFileTreeMarkdown(nodes: ProjectFileNode[]) {
   const lines = ["# Project File Tree", ""];
-
   function visit(node: ProjectFileNode) {
-    const indent = "  ".repeat(node.depth);
-    const marker = node.type === "folder" ? "/" : "";
-    lines.push(`${indent}- ${node.name}${marker}`);
+    lines.push(`${"  ".repeat(node.depth)}- ${node.name}${node.type === "folder" ? "/" : ""}`);
     node.children?.forEach(visit);
   }
-
   nodes.forEach(visit);
   lines.push("");
   return lines.join("\n");

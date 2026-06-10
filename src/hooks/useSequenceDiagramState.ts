@@ -10,6 +10,7 @@ import type {
   SequenceParticipant
 } from "../types";
 import { useI18n } from "../utils/i18n";
+import { useWorkspaceStore } from "../stores/workspace.store";
 
 const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
   architectural: "structure.architectural",
@@ -39,14 +40,17 @@ export type SequenceDiagramState = {
 
 export function useSequenceDiagramState({
   files,
+  projectId,
   projectPath,
   selectedAgentId
 }: {
   files: ProjectFileNode[];
+  projectId: string;
   projectPath: string;
   selectedAgentId: RuntimeAgentId;
 }): SequenceDiagramState {
   const { t } = useI18n();
+  const setArtifactStatuses = useWorkspaceStore((state) => state.setArtifactStatuses);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [activeKind, setActiveKind] = useState<SequenceDiagramKind>("architectural");
   const [selectedMessageId, setSelectedMessageId] = useState("");
@@ -64,11 +68,11 @@ export function useSequenceDiagramState({
     setSelectedMessageId("");
     setSelectedParticipantId("");
     setBundle(undefined);
-    if (!projectPath || !window.flowweave) {
+    if (!projectId || !window.flowweave) {
       setStatus(projectPath ? t("sequence.needDesktop") : t("sequence.openProject"));
       return;
     }
-    void window.flowweave.readSequenceDiagrams(projectPath).then((nextBundle) => {
+    void window.flowweave.readSequenceDiagrams(projectId).then((nextBundle) => {
       if (!isMounted) return;
       setBundle(nextBundle);
       setStatus(nextBundle ? t("sequence.loaded", { kind: t(diagramLabelKeys[activeKind]) }) : t("sequence.noneYet"));
@@ -76,7 +80,7 @@ export function useSequenceDiagramState({
     return () => {
       isMounted = false;
     };
-  }, [projectPath]);
+  }, [projectId, projectPath]);
 
   useEffect(() => {
     if (!diagram) return;
@@ -85,16 +89,22 @@ export function useSequenceDiagramState({
   }, [activeKind, bundle?.generatedAt]);
 
   async function generateDiagrams() {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
     }
     setIsBusy(true);
     setStatus(t("sequence.generatingWith", { agent: selectedAgentId }));
     try {
-      const result = await window.flowweave.generateSequenceDiagrams(projectPath, selectedAgentId);
+      const result = await window.flowweave.generateSequenceDiagrams(projectId, selectedAgentId);
+      if (result.outcome === "failed") {
+        throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
+      }
       const nextBundle = result.bundle;
       setBundle(nextBundle);
+      if (result.outcome === "generated") {
+        setArtifactStatuses((current) => current ? { ...current, sequences: "current" } : current);
+      }
       setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
       setSelectedParticipantId("");
       setStatus(generationStatusMessage(result, t));
@@ -106,7 +116,7 @@ export function useSequenceDiagramState({
   }
 
   async function reviseDiagram() {
-    if (!window.flowweave || !projectPath) {
+    if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
     }
@@ -117,7 +127,7 @@ export function useSequenceDiagramState({
     setIsBusy(true);
     setStatus(t("sequence.revising", { kind: t(diagramLabelKeys[activeKind]) }));
     try {
-      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectPath, selectedAgentId, activeKind, instruction.trim());
+      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, activeKind, instruction.trim());
       setBundle(nextBundle);
       setInstruction("");
       setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
@@ -176,15 +186,15 @@ function formatErrorMessage(error: unknown) {
 }
 
 function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (key: string, params?: Record<string, string | number>) => string) {
+  if (result.outcome === "failed") {
+    return t("sequence.generationFailed", { error: result.error.message });
+  }
   const counts = t("sequence.messageCounts", {
     architectural: result.bundle.architectural.messages.length,
     detailed: result.bundle.detailedDesign.messages.length
   });
   if (result.outcome === "cached") {
-    return t("sequence.cached", { warning: result.warning ? ` ${result.warning}` : "" });
-  }
-  if (result.outcome === "fallback") {
-    return t("sequence.fallback", { counts, warning: result.warning ? ` ${result.warning}` : "" });
+    return t("sequence.cached", { warning: ` ${result.error.message}` });
   }
   return t("sequence.generated", { counts });
 }

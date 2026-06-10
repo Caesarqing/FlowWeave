@@ -9,6 +9,7 @@ import {
   listAgentDefinitions,
   saveCustomAgent
 } from "../../src/main/services/agent-registry.service";
+import { registerProject } from "../../src/main/services/project-registry.service";
 import { startToolPlan } from "../../src/main/services/agent-run.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 
@@ -90,16 +91,13 @@ describe("agent-registry.service", () => {
       description: "Test CLI adapter."
     });
 
-    const result = await startToolPlan({
-      projectPath,
+    const projectId = await registerProject(projectPath);
+    await expect(startToolPlan({
+      projectId,
       toolId: agent.id,
       prompt: "Analyze auth module",
-      executionMode: "plan"
-    });
-
-    expect(result.status).toBe("completed");
-    await expect(readFile(result.promptPath ?? "", "utf8")).resolves.toContain("Analyze auth module");
-    await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("received prompt");
-    await expect(readFile(result.resultPath ?? "", "utf8")).resolves.toContain(`"toolId": "${agent.id}"`);
+      executionMode: "plan",
+      purpose: "implementation-plan"
+    })).rejects.toThrow("does not declare a verifiable read-only Plan mode");
   });
 });

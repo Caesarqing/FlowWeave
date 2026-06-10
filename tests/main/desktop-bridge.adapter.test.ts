@@ -20,7 +20,7 @@ describe("desktop-bridge.adapter", () => {
     ]);
   });
 
-  it("writes bridge request files and reads response.json into the run plan", async () => {
+  it("writes bridge request files and returns pending immediately", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-bridge-"));
     const runId = "run-desktop-response";
     await mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true });
@@ -28,31 +28,22 @@ describe("desktop-bridge.adapter", () => {
     const adapter = new DesktopBridgeAdapter({
       id: "codex-desktop",
       name: "Codex Desktop Test",
-      appPath: "/definitely/not/Codex.app",
-      responseTimeoutMs: 1_000,
-      pollIntervalMs: 10
+      appPath: "/definitely/not/Codex.app"
     });
-
-    setTimeout(() => {
-      void writeFile(
-        join(bridgeDir, "response.json"),
-        JSON.stringify({ status: "completed", summary: "bridge completed", plan: "# Desktop Plan\n\nBridge response." }),
-        "utf8"
-      );
-    }, 20);
 
     const result = await adapter.runPlan({
       id: runId,
+      projectId: "project-00000000-0000-0000-0000-000000000000",
       projectPath,
       prompt: "Inspect the project.",
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "implementation-plan"
     });
 
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("pending");
     await expect(readFile(join(bridgeDir, "request.json"), "utf8")).resolves.toContain('"agentId": "codex-desktop"');
     await expect(readFile(join(bridgeDir, "prompt.md"), "utf8")).resolves.toContain("Inspect the project.");
     await expect(readFile(join(bridgeDir, "instructions.md"), "utf8")).resolves.toContain("response.json");
-    await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Bridge response.");
   });
 
   it("prefers response.json over response.md", async () => {
@@ -62,47 +53,48 @@ describe("desktop-bridge.adapter", () => {
     await writeFile(join(bridgeDir, "response.md"), "# Markdown Plan", "utf8");
     await writeFile(
       join(bridgeDir, "response.json"),
-      JSON.stringify({ status: "completed", summary: "json summary", plan: "# Json Plan" }),
+      JSON.stringify({ status: "completed", summary: "json summary", content: "# Json Plan" }),
       "utf8"
     );
 
     const response = await readDesktopBridgeResponse(bridgeDir);
 
-    expect(response).toMatchObject({ summary: "json summary", plan: "# Json Plan" });
+    expect(response).toMatchObject({ summary: "json summary", content: "# Json Plan" });
   });
 
-  it("times out as failed while preserving bridge artifacts", async () => {
+  it("does not time out pending runs", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-timeout-"));
     const runId = "run-desktop-timeout";
     await mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true });
     const adapter = new DesktopBridgeAdapter({
       id: "claude-desktop",
       name: "Claude Desktop Test",
-      appPath: "/definitely/not/Claude.app",
-      responseTimeoutMs: 20,
-      pollIntervalMs: 5
+      appPath: "/definitely/not/Claude.app"
     });
 
     const result = await adapter.runPlan({
       id: runId,
+      projectId: "project-00000000-0000-0000-0000-000000000000",
       projectPath,
       prompt: "Create a plan.",
-      executionMode: "plan"
+      executionMode: "plan",
+      purpose: "implementation-plan"
     });
 
     const bridgeDir = getDesktopBridgeDir(projectPath, runId);
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("pending");
     await expect(readFile(join(bridgeDir, "request.json"), "utf8")).resolves.toContain('"agentId": "claude-desktop"');
-    await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Desktop Bridge Pending");
   });
 
   it("exposes project, prompt, instructions, skill, and plugin references in request metadata", () => {
     const request = buildDesktopBridgeRequest({
       request: {
         id: "run-metadata",
+        projectId: "project-00000000-0000-0000-0000-000000000000",
         projectPath: "/tmp/project",
         prompt: "Prompt",
-        executionMode: "plan"
+        executionMode: "plan",
+        purpose: "implementation-plan"
       },
       agentId: "claude-desktop",
       promptPath: "/tmp/project/.flowweave/agent-bridge/run-metadata/prompt.md",
