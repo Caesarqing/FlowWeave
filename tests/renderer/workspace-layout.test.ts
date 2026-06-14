@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { WorkspaceLayout } from "../../src/components/WorkspaceLayout";
 import { parseWorkspacePanels } from "../../src/stores/preferences.store";
 
-const styles = readFileSync(new URL("../../src/styles.css", import.meta.url), "utf8");
+const styles = normalizeLineEndings(readFileSync(new URL("../../src/styles.css", import.meta.url), "utf8"));
 
 describe("workspace panel preferences", () => {
   it("keeps collapse state isolated by page and panel side", () => {
@@ -67,3 +67,7 @@ describe("workspace panel preferences", () => {
     expect(styles).toContain(".canvas-page .workspace-layout-panel {\n    position: relative;");
   });
 });
+
+function normalizeLineEndings(content: string): string {
+  return content.replace(/\r\n/g, "\n");
+}
