@@ -1,6 +1,6 @@
 import type { ChangedFile, SafetyLevel, SafetyWarning } from "../../types";
 
-const BLOCKED_PATH_PATTERN = /(^|\/)(\.env($|\.)|credentials\.[^/]+$)|\.(key|pem|p12|pfx|crt|cer)$/i;
+const BLOCKED_PATH_PATTERN = /(^|[\\/])(\.env($|\.)|credentials\.[^\\/]+$)|\.(key|pem|p12|pfx|crt|cer)$/i;
 
 export function checkSafety(files: ChangedFile[]): { level: SafetyLevel; warnings: SafetyWarning[] } {
   const warnings: SafetyWarning[] = [];

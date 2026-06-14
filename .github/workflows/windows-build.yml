@@ -1,0 +1,148 @@
+name: Desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  macos-arm64:
+    name: macOS ARM64
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx electron-builder --mac --dir --arm64
+      - run: npm run smoke:packaged
+      - name: Verify and archive macOS app
+        run: |
+          codesign --verify --deep --strict release/mac-arm64/FlowWeave.app
+          ditto -c -k --sequesterRsrc --keepParent \
+            release/mac-arm64/FlowWeave.app \
+            release/FlowWeave-0.1.0-mac-arm64.zip
+          shasum -a 256 release/FlowWeave-0.1.0-mac-arm64.zip \
+            > release/FlowWeave-0.1.0-mac-arm64.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flowweave-macos-arm64
+          if-no-files-found: error
+          path: |
+            release/FlowWeave-0.1.0-mac-arm64.zip
+            release/FlowWeave-0.1.0-mac-arm64.zip.sha256
+
+  windows-x64:
+    name: Windows 11 x64
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx electron-builder --win --dir --x64
+      - run: npm run smoke:packaged
+      - run: npx electron-builder --win nsis --x64
+      - name: Smoke-test x64 installer
+        shell: pwsh
+        run: scripts/run-windows-installer-smoke.ps1 -InstallerPath release/FlowWeave-0.1.0-win-x64-setup.exe -Architecture x64
+      - name: Create checksum
+        shell: pwsh
+        run: |
+          $file = "release/FlowWeave-0.1.0-win-x64-setup.exe"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flowweave-windows-x64
+          if-no-files-found: error
+          path: |
+            release/FlowWeave-0.1.0-win-x64-setup.exe
+            release/FlowWeave-0.1.0-win-x64-setup.exe.sha256
+
+  windows-arm64:
+    name: Windows 11 ARM64 native
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx electron-builder --win --dir --arm64
+      - run: npm run smoke:packaged
+      - run: npx electron-builder --win nsis --arm64
+      - name: Smoke-test ARM64 installer
+        shell: pwsh
+        run: scripts/run-windows-installer-smoke.ps1 -InstallerPath release/FlowWeave-0.1.0-win-arm64-setup.exe -Architecture arm64
+      - name: Create checksum
+        shell: pwsh
+        run: |
+          $file = "release/FlowWeave-0.1.0-win-arm64-setup.exe"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flowweave-windows-arm64-native
+          if-no-files-found: error
+          path: |
+            release/FlowWeave-0.1.0-win-arm64-setup.exe
+            release/FlowWeave-0.1.0-win-arm64-setup.exe.sha256
+
+  windows-arm64-fallback:
+    name: Windows ARM64 cross-build fallback
+    needs: windows-arm64
+    if: ${{ always() && needs.windows-arm64.result != 'success' }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx electron-builder --win nsis --arm64
+      - name: Mark and checksum unvalidated artifact
+        shell: pwsh
+        run: |
+          $file = "release/FlowWeave-0.1.0-win-arm64-setup.exe"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256"
+          "Cross-built on Windows x64. Native Windows 11 ARM64 smoke validation did not complete." |
+            Set-Content "release/ARM64-NOT-NATIVE-VALIDATED.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flowweave-windows-arm64-unvalidated
+          if-no-files-found: error
+          path: |
+            release/FlowWeave-0.1.0-win-arm64-setup.exe
+            release/FlowWeave-0.1.0-win-arm64-setup.exe.sha256
+            release/ARM64-NOT-NATIVE-VALIDATED.txt

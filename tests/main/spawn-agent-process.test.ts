@@ -2,9 +2,37 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runSpawnedAgent, safeAgentEnvironment } from "../../src/main/agents/spawn-agent-process";
+import {
+  buildWindowsTaskkillArgs,
+  runSpawnedAgent,
+  safeAgentEnvironment
+} from "../../src/main/agents/spawn-agent-process";
 
 describe("spawn-agent-process", () => {
+  it("builds a forced Windows process-tree termination command", () => {
+    expect(buildWindowsTaskkillArgs(1234)).toEqual(["/PID", "1234", "/T", "/F"]);
+  });
+
+  it("keeps required Windows runtime variables in the Agent environment", () => {
+    expect(safeAgentEnvironment({
+      PATH: "C:\\tools",
+      USERPROFILE: "C:\\Users\\dev",
+      APPDATA: "C:\\Users\\dev\\AppData\\Roaming",
+      LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local",
+      TEMP: "C:\\Temp",
+      TMP: "C:\\Temp",
+      PATHEXT: ".EXE;.CMD",
+      SystemRoot: "C:\\Windows",
+      ComSpec: "C:\\Windows\\System32\\cmd.exe"
+    }, "codex-local")).toMatchObject({
+      USERPROFILE: "C:\\Users\\dev",
+      APPDATA: "C:\\Users\\dev\\AppData\\Roaming",
+      LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local",
+      PATHEXT: ".EXE;.CMD",
+      SystemRoot: "C:\\Windows"
+    });
+  });
+
   it("terminates a process when output exceeds the configured limit", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-output-limit-"));
     const result = await runSpawnedAgent({
@@ -91,10 +119,9 @@ describe("spawn-agent-process", () => {
     const childPid = Number(await readFile(childPidPath, "utf8"));
     controller.abort("user-canceled");
     const result = await execution;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitForProcessExit(childPid);
 
     expect(result.terminationReason).toBe("canceled");
-    expect(() => process.kill(childPid, 0)).toThrow();
   });
 });
 
@@ -108,4 +135,16 @@ async function waitForFile(path: string): Promise<void> {
     }
   }
   throw new Error(`Timed out waiting for child process pid file: ${path}`);
+}
+
+async function waitForProcessExit(pid: number): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } catch {
+      return;
+    }
+  }
+  throw new Error(`Timed out waiting for process ${pid} to exit.`);
 }

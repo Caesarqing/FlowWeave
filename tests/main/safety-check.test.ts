@@ -4,10 +4,13 @@ import type { ChangedFile } from "../../src/types";
 
 describe("safety-check.service", () => {
   it("blocks sensitive file changes", () => {
-    const result = checkSafety([file(".env", "modified")]);
+    const result = checkSafety([
+      file(".env", "modified"),
+      file("config\\credentials.local.json", "modified")
+    ]);
 
     expect(result.level).toBe("blocked");
-    expect(result.warnings[0].code).toBe("sensitive-file");
+    expect(result.warnings.filter((warning) => warning.code === "sensitive-file")).toHaveLength(2);
   });
 
   it("requires review for many deletions and large changes", () => {

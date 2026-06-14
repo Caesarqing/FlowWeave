@@ -11,8 +11,11 @@
     "build": "node scripts/check-brand-assets.mjs && npm run typecheck && electron-vite build && node scripts/check-bundle-size.mjs",
     "benchmark": "node --import tsx scripts/run-performance-benchmarks.ts",
     "dist:dir": "npm run build && electron-builder --dir",
+    "dist:mac:arm64": "npm run build && electron-builder --mac --dir --arm64",
+    "dist:win:x64": "npm run build && electron-builder --win nsis --x64",
+    "dist:win:arm64": "npm run build && electron-builder --win nsis --arm64",
     "smoke:agent": "node --import tsx scripts/run-agent-smoke.ts",
-    "smoke:packaged": "release/mac-arm64/FlowWeave.app/Contents/MacOS/FlowWeave --flowweave-smoke-test",
+    "smoke:packaged": "node scripts/run-packaged-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
@@ -85,6 +88,20 @@
       "target": [
         "dir"
       ]
+    },
+    "win": {
+      "icon": "logo/flowweave-app-icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

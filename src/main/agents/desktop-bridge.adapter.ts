@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { BuiltInAgentId, ExecutionMode } from "../../types";
@@ -57,6 +58,15 @@ export class DesktopBridgeAdapter implements ToolAdapter {
   }
 
   async detect() {
+    const platformSupport = desktopBridgePlatformSupport(process.platform);
+    if (!platformSupport.supported) {
+      return {
+        toolId: this.id,
+        available: false,
+        method: "none" as const,
+        message: platformSupport.message
+      };
+    }
     const appPath = await resolveAppPath(this.appPath);
     return {
       toolId: this.id,
@@ -172,6 +182,17 @@ export function buildDesktopAppOpenArgs(appPath: string, projectPath: string) {
   return ["-a", appPath, projectPath];
 }
 
+export function desktopBridgePlatformSupport(platform: NodeJS.Platform): {
+  supported: boolean;
+  message?: string;
+} {
+  if (platform === "darwin") return { supported: true };
+  return {
+    supported: false,
+    message: "Desktop Agent bridge is only supported on macOS. Use the CLI integration on Windows."
+  };
+}
+
 export function getDesktopBridgeDir(projectPath: string, runId: string) {
   return join(projectPath, FLOWWEAVE_DIR, "agent-bridge", runId);
 }
@@ -275,13 +296,13 @@ function buildDesktopBridgeSkillReferences(projectPath: string, promptPath: stri
     {
       name: "Codex skills root",
       kind: "skill-root",
-      path: join(process.env.HOME ?? "", ".codex", "skills"),
+      path: join(homedir(), ".codex", "skills"),
       description: "Optional local Codex skill directory reference. Content is not copied by FlowWeave."
     },
     {
       name: "Codex plugin cache",
       kind: "plugin-root",
-      path: join(process.env.HOME ?? "", ".codex", "plugins"),
+      path: join(homedir(), ".codex", "plugins"),
       description: "Optional local Codex plugin directory reference. Content is not copied by FlowWeave."
     }
   ];

@@ -1,5 +1,6 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import type { RuntimeAgentId, ToolRunEvent, ToolRunRequest, ToolRunResult, ToolRunTerminationReason } from "../../types";
+import { prepareCommandInvocation } from "./command-invocation";
 import { nowIso } from "./time";
 
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
@@ -7,7 +8,8 @@ const MAX_EVENTS = 10_000;
 const FORCE_KILL_DELAY_MS = 2_000;
 const BASE_ENVIRONMENT_KEYS = [
   "PATH", "HOME", "USER", "SHELL", "TMPDIR", "LANG", "LC_ALL",
-  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"
+  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
+  "TEMP", "TMP", "PATHEXT", "SystemRoot", "ComSpec"
 ] as const;
 
 export type SpawnAgentProcessOptions = {
@@ -23,6 +25,7 @@ export async function runSpawnedAgent(
   options: SpawnAgentProcessOptions,
   onEvent?: (event: ToolRunEvent) => void
 ): Promise<ToolRunResult> {
+  const invocation = await prepareCommandInvocation(options.commandPath, options.args, process.platform);
   const startedAt = nowIso();
   const startedMs = Date.now();
   const events: ToolRunEvent[] = [];
@@ -64,7 +67,7 @@ export async function runSpawnedAgent(
     };
     const maxOutputBytes = options.request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
     pushEvent({ type: "status", status: "running", timestamp: startedAt });
-    const child = spawn(options.commandPath, options.args, {
+    const child = spawn(invocation.commandPath, invocation.args, {
       cwd: options.request.projectPath,
       detached: process.platform !== "win32",
       stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
@@ -160,11 +163,26 @@ function abortReason(signal: AbortSignal | undefined): ToolRunTerminationReason 
 
 function terminateProcessTree(pid: number | undefined, signal: NodeJS.Signals): void {
   if (pid === undefined) return;
+  if (process.platform === "win32") {
+    execFile("taskkill.exe", buildWindowsTaskkillArgs(pid), (error) => {
+      if (error && !isMissingProcess(error)) {
+        console.error("Failed to terminate Windows Agent process tree.", {
+          pid,
+          code: "code" in error ? error.code : undefined
+        });
+      }
+    });
+    return;
+  }
   try {
-    process.kill(process.platform === "win32" ? pid : -pid, signal);
+    process.kill(-pid, signal);
   } catch (error) {
     if (!isMissingProcess(error)) throw error;
   }
+}
+
+export function buildWindowsTaskkillArgs(pid: number): string[] {
+  return ["/PID", String(pid), "/T", "/F"];
 }
 
 function isMissingProcess(error: unknown): boolean {

@@ -1,6 +1,6 @@
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   analyzeArchitecture,
@@ -14,6 +14,7 @@ import { listRunSummaries } from "../../src/main/services/run-log.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject } from "../../src/types";
+import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("architecture-analysis.service", () => {
   it("builds an architecture prompt from structure facts", async () => {
@@ -206,17 +207,18 @@ describe("architecture-analysis.service", () => {
   it("returns a local semantic graph on connection failure without overwriting a trusted Agent artifact", async () => {
     const originalPath = process.env.PATH;
     const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-failure-"));
-    const claudePath = join(binRoot, "claude");
     const root = await createFixtureFiles();
     const trusted = await analyzeArchitecture(projectFixture(root), "mock");
     if (trusted.outcome !== "generated") throw new Error("Expected trusted architecture.");
-    await writeFile(
-      claudePath,
-      "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'claude-test 1.0'; exit 0; fi\ncat >/dev/null\necho 'API Error: Unable to connect to API (ConnectionRefused)'\nexit 1\n",
-      "utf8"
-    );
-    await chmod(claudePath, 0o755);
-    process.env.PATH = `${binRoot}:${originalPath ?? ""}`;
+    await createNodeCliFixture(binRoot, "claude", [
+      "if (process.argv.includes('--version')) { console.log('claude-test 1.0'); process.exit(0); }",
+      "process.stdin.resume();",
+      "process.stdin.on('end', () => {",
+      "  console.log('API Error: Unable to connect to API (ConnectionRefused)');",
+      "  process.exit(1);",
+      "});"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
     try {
       const result = await analyzeArchitecture(projectFixture(root), "claude-code");
       const stored = await readArchitectureMap(root);

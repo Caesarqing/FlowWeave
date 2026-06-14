@@ -28,6 +28,15 @@ export class CursorAdapter implements ToolAdapter {
       };
     }
 
+    const platformSupport = cursorDesktopPlatformSupport(process.platform);
+    if (!platformSupport.supported) {
+      return {
+        toolId: this.id,
+        available: false,
+        method: "none" as const,
+        message: platformSupport.message
+      };
+    }
     const appPath = await resolveAppPath(CURSOR_APP_PATH);
     return {
       toolId: this.id,
@@ -141,4 +150,15 @@ export function buildCursorCliOpenArgs(projectPath: string) {
 
 export function buildCursorAppOpenArgs(appPath: string, projectPath: string) {
   return ["-a", appPath, projectPath];
+}
+
+export function cursorDesktopPlatformSupport(platform: NodeJS.Platform): {
+  supported: boolean;
+  message?: string;
+} {
+  if (platform === "darwin") return { supported: true };
+  return {
+    supported: false,
+    message: "Cursor CLI was not found. Install the Cursor CLI to use Cursor on Windows."
+  };
 }

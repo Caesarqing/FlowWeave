@@ -2,7 +2,15 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildCommandSearchPaths, getCommandCandidates, resolveCandidate, resolveCandidateFromSearchPaths, resolveToolCommand } from "../../src/main/agents/agent-command";
+import {
+  buildCommandNames,
+  buildCommandSearchPaths,
+  getCommandCandidates,
+  getCommandCandidatesForPlatform,
+  resolveCandidate,
+  resolveCandidateFromSearchPaths,
+  resolveToolCommand
+} from "../../src/main/agents/agent-command";
 
 describe("agent-command", () => {
   it("resolves the built-in mock command", async () => {
@@ -34,6 +42,11 @@ describe("agent-command", () => {
     ]));
   });
 
+  it("does not mistake the Windows VS Code command for Cursor", () => {
+    expect(getCommandCandidatesForPlatform("cursor", "win32")).toContain("cursor");
+    expect(getCommandCandidatesForPlatform("cursor", "win32")).not.toContain("code");
+  });
+
   it("includes Gemini CLI candidates", () => {
     expect(getCommandCandidates("gemini-cli")).toEqual(expect.arrayContaining([
       "gemini",
@@ -52,13 +65,34 @@ describe("agent-command", () => {
     const file = join(dir, "custom-agent");
     await writeFile(file, "#!/bin/sh\n", { mode: 0o755 });
 
-    await expect(resolveCandidateFromSearchPaths("custom-agent", [dir])).resolves.toBe(file);
+    await expect(resolveCandidateFromSearchPaths("custom-agent", [dir], process.platform, process.env)).resolves.toBe(file);
   });
 
   it("includes user local bin in command search paths", () => {
-    expect(buildCommandSearchPaths("/Users/dev")).toEqual(expect.arrayContaining([
+    expect(buildCommandSearchPaths("/Users/dev", "darwin", {})).toEqual(expect.arrayContaining([
       "/Users/dev/.local/bin",
       "/Users/dev/bin"
+    ]));
+  });
+
+  it("builds Windows command names from PATHEXT", () => {
+    expect(buildCommandNames("codex", "win32", { PATHEXT: ".COM;.EXE;.BAT;.CMD" })).toEqual([
+      "codex",
+      "codex.COM",
+      "codex.EXE",
+      "codex.BAT",
+      "codex.CMD"
+    ]);
+  });
+
+  it("searches Windows user and npm command directories", () => {
+    expect(buildCommandSearchPaths("C:\\Users\\dev", "win32", {
+      APPDATA: "C:\\Users\\dev\\AppData\\Roaming",
+      LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local"
+    })).toEqual(expect.arrayContaining([
+      "C:\\Users\\dev\\AppData\\Roaming\\npm",
+      "C:\\Users\\dev\\AppData\\Local\\Programs",
+      "C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps"
     ]));
   });
 });

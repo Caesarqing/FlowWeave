@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import type { AgentDefinition, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "../../types";
 import { resolveCandidate } from "./agent-command";
+import { prepareCommandInvocation } from "./command-invocation";
 import { nowIso } from "./time";
 import { runSpawnedAgent } from "./spawn-agent-process";
 
@@ -66,8 +67,9 @@ export class CustomCliAdapter implements ToolAdapter {
 }
 
 async function readVersion(commandPath: string, args: string[]) {
+  const invocation = await prepareCommandInvocation(commandPath, ["--version"], process.platform);
   return new Promise<string | undefined>((resolve) => {
-    const child = spawn(commandPath, ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+    const child = spawn(invocation.commandPath, invocation.args, { stdio: ["ignore", "pipe", "ignore"] });
     let output = "";
     const timeout = setTimeout(() => {
       child.kill();

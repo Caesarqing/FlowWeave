@@ -1,8 +1,9 @@
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ClaudeCodeAdapter, buildClaudeArgs, buildClaudeDryRunArgs, buildClaudeDryRunPrompt } from "../../src/main/agents/claude-code.adapter";
+import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("claude-code.adapter", () => {
   it("builds Claude Code dry-run args in plan mode", () => {
@@ -40,15 +41,14 @@ describe("claude-code.adapter", () => {
     const originalPath = process.env.PATH;
     const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-stdin-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-claude-project-"));
-    const commandPath = join(binRoot, "claude");
-    await writeFile(commandPath, [
-      "#!/bin/sh",
-      "if [ \"$1\" = \"--version\" ]; then echo 'claude-test 1.0'; exit 0; fi",
-      "input=$(cat)",
-      "printf '%s' \"${#input}\""
-    ].join("\n"), "utf8");
-    await chmod(commandPath, 0o755);
-    process.env.PATH = `${binRoot}:${originalPath ?? ""}`;
+    const commandPath = await createNodeCliFixture(binRoot, "claude", [
+      "if (process.argv.includes('--version')) { console.log('claude-test 1.0'); process.exit(0); }",
+      "let input = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { input += chunk; });",
+      "process.stdin.on('end', () => { process.stdout.write(String(input.length)); });"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
     try {
       const prompt = "x".repeat(220_000);
       const result = await new ClaudeCodeAdapter().runPlan({

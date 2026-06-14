@@ -6,12 +6,21 @@ import {
   buildDesktopAppOpenArgs,
   buildDesktopBridgeRequest,
   DesktopBridgeAdapter,
+  desktopBridgePlatformSupport,
   getDesktopBridgeDir,
   readDesktopBridgeResponse
 } from "../../src/main/agents/desktop-bridge.adapter";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 
 describe("desktop-bridge.adapter", () => {
+  it("reports desktop bridges as macOS-only", () => {
+    expect(desktopBridgePlatformSupport("darwin")).toEqual({ supported: true });
+    expect(desktopBridgePlatformSupport("win32")).toEqual({
+      supported: false,
+      message: "Desktop Agent bridge is only supported on macOS. Use the CLI integration on Windows."
+    });
+  });
+
   it("builds desktop app open args with the project path", () => {
     expect(buildDesktopAppOpenArgs("/Applications/Codex.app", "/tmp/project")).toEqual([
       "-a",

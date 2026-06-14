@@ -5,7 +5,8 @@ const root = process.cwd();
 const requiredAssets = [
   "logo/flowweave_black_line_on_white.png",
   "logo/flowweave_white_on_black.png",
-  "logo/flowweave-app-icon.png"
+  "logo/flowweave-app-icon.png",
+  "logo/flowweave-app-icon.ico"
 ];
 const inspectedFiles = [
   "index.html",

@@ -1,8 +1,9 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GeminiCliAdapter, buildGeminiArgs, buildGeminiPrompt } from "../../src/main/agents/gemini-cli.adapter";
+import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("gemini-cli.adapter", () => {
   const originalPath = process.env.PATH;
@@ -32,22 +33,17 @@ describe("gemini-cli.adapter", () => {
   it("runs Gemini CLI through stdin", async () => {
     const binDir = await mkdtemp(join(tmpdir(), "flowweave-gemini-bin-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-gemini-project-"));
-    const scriptPath = join(binDir, "gemini");
-    await writeFile(
-      scriptPath,
-      [
-        "#!/bin/sh",
-        "if [ \"$1\" = \"--version\" ]; then",
-        "  echo \"gemini-test 1.0\"",
-        "  exit 0",
-        "fi",
-        "input=$(cat)",
-        "echo \"# Gemini Plan\"",
-        "echo \"$input\" | grep -q \"Analyze billing\" && echo \"received prompt\""
-      ].join("\n"),
-      { encoding: "utf8", mode: 0o755 }
-    );
-    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    const scriptPath = await createNodeCliFixture(binDir, "gemini", [
+      "if (process.argv.includes('--version')) { console.log('gemini-test 1.0'); process.exit(0); }",
+      "let input = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { input += chunk; });",
+      "process.stdin.on('end', () => {",
+      "  console.log('# Gemini Plan');",
+      "  if (input.includes('Analyze billing')) console.log('received prompt');",
+      "});"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
     const adapter = new GeminiCliAdapter();
 
     await expect(adapter.detect()).resolves.toMatchObject({

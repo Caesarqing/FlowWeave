@@ -2,9 +2,10 @@ import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, win32 } from "node:path";
 import { promisify } from "node:util";
 import type { ToolId } from "./agent-adapter";
+import { prepareCommandInvocation } from "./command-invocation";
 
 const execFileAsync = promisify(execFile);
 
@@ -43,13 +44,14 @@ export async function resolveToolCommand(toolId: ToolId): Promise<ResolvedToolCo
     return { commandPath: "built-in", installed: true, version: "mock" };
   }
 
-  for (const candidate of commandCandidates[toolId]) {
+  for (const candidate of getCommandCandidatesForPlatform(toolId, process.platform)) {
     const commandPath = await resolveCandidate(candidate);
     if (!commandPath) {
       continue;
     }
 
-    const version = await execFileAsync(commandPath, ["--version"])
+    const invocation = await prepareCommandInvocation(commandPath, ["--version"], process.platform);
+    const version = await execFileAsync(invocation.commandPath, invocation.args)
       .then(({ stdout }) => stdout.trim())
       .catch(() => undefined);
     return { commandPath, installed: true, version };
@@ -68,7 +70,32 @@ export function getCommandCandidates(toolId: ToolId) {
   return [...commandCandidates[toolId]];
 }
 
-export function buildCommandSearchPaths(homePath = homedir()) {
+export function getCommandCandidatesForPlatform(toolId: ToolId, platform: NodeJS.Platform): string[] {
+  const candidates = commandCandidates[toolId];
+  if (platform !== "win32") return [...candidates];
+  return candidates.filter((candidate) => {
+    if (candidate.startsWith("/")) return false;
+    return toolId !== "cursor" || candidate !== "code";
+  });
+}
+
+export function buildCommandSearchPaths(
+  homePath: string,
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv
+) {
+  if (platform === "win32") {
+    const appData = environment.APPDATA ?? join(homePath, "AppData", "Roaming");
+    const localAppData = environment.LOCALAPPDATA ?? join(homePath, "AppData", "Local");
+    return [
+      win32.join(appData, "npm"),
+      win32.join(localAppData, "Programs"),
+      win32.join(localAppData, "Microsoft", "WindowsApps"),
+      win32.join(homePath, "AppData", "Roaming", "npm"),
+      win32.join(homePath, ".local", "bin"),
+      win32.join(homePath, "bin")
+    ];
+  }
   return [
     join(homePath, ".local", "bin"),
     join(homePath, "bin"),
@@ -82,34 +109,76 @@ export function buildCommandSearchPaths(homePath = homedir()) {
   ];
 }
 
+export function buildCommandNames(
+  candidate: string,
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv
+): string[] {
+  if (platform !== "win32" || win32.extname(candidate)) return [candidate];
+  const extensions = (environment.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.trim())
+    .filter(Boolean);
+  return [candidate, ...extensions.map((extension) => `${candidate}${extension}`)];
+}
+
 export async function resolveCandidate(candidate: string) {
-  if (candidate.includes("/")) {
+  return resolveCandidateForPlatform(candidate, process.platform, process.env);
+}
+
+export async function resolveCandidateForPlatform(
+  candidate: string,
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv
+) {
+  if (isExplicitPath(candidate, platform)) {
     return access(candidate, constants.X_OK)
       .then(() => candidate)
       .catch(() => undefined);
   }
 
-  const pathMatch = await execFileAsync("which", [candidate])
-    .then(({ stdout }) => stdout.trim() || undefined)
+  const lookupCommand = platform === "win32" ? "where.exe" : "which";
+  const pathMatch = await execFileAsync(lookupCommand, [candidate])
+    .then(({ stdout }) => stdout.split(/\r?\n/).find((line) => line.trim())?.trim())
     .catch(() => undefined);
   if (pathMatch) return pathMatch;
 
-  const knownPathMatch = await resolveCandidateFromSearchPaths(candidate);
+  const knownPathMatch = await resolveCandidateFromSearchPaths(
+    candidate,
+    buildCommandSearchPaths(homedir(), platform, environment),
+    platform,
+    environment
+  );
   if (knownPathMatch) return knownPathMatch;
 
+  if (platform === "win32") return undefined;
   return execFileAsync("/bin/zsh", ["-lc", "command -v -- \"$1\"", "flowweave-command-lookup", candidate])
     .then(({ stdout }) => stdout.trim() || undefined)
     .catch(() => undefined);
 }
 
-export async function resolveCandidateFromSearchPaths(candidate: string, searchPaths = buildCommandSearchPaths()) {
+export async function resolveCandidateFromSearchPaths(
+  candidate: string,
+  searchPaths: string[],
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv
+) {
   for (const searchPath of searchPaths) {
-    const resolved = await access(join(searchPath, candidate), constants.X_OK)
-      .then(() => join(searchPath, candidate))
-      .catch(() => undefined);
-    if (resolved) return resolved;
+    for (const commandName of buildCommandNames(candidate, platform, environment)) {
+      const path = platform === "win32" ? win32.join(searchPath, commandName) : join(searchPath, commandName);
+      const resolved = await access(path, constants.X_OK)
+        .then(() => path)
+        .catch(() => undefined);
+      if (resolved) return resolved;
+    }
   }
   return undefined;
+}
+
+function isExplicitPath(candidate: string, platform: NodeJS.Platform): boolean {
+  return platform === "win32"
+    ? win32.isAbsolute(candidate) || candidate.includes("\\") || candidate.includes("/")
+    : isAbsolute(candidate) || candidate.includes("/");
 }
 
 export const resolveAgentCommand = resolveToolCommand;
