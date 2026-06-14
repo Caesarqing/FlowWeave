@@ -14,5 +14,11 @@ if (entry.bytes >= 400_000) {
 }
 
 for (const item of sizes.filter((candidate) => candidate.file !== entry.file && candidate.bytes > 700_000)) {
+  if (item.file.startsWith("elk-worker.min-")) {
+    if (item.bytes >= 2_000_000) {
+      throw new Error(`ELK Worker ${item.file} is ${item.bytes} bytes; budget is below 2000000 bytes.`);
+    }
+    continue;
+  }
   console.warn(`Bundle warning: async chunk ${item.file} is ${item.bytes} bytes; warning threshold is 700000 bytes.`);
 }

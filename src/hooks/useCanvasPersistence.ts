@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import type { GraphEdge, GraphNode } from "../types";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import type { CanvasLayoutState, GraphEdge, GraphNode } from "../types";
+import { useAgentStore } from "../stores/agents.store";
 import { useI18n } from "../utils/i18n";
 
 export function useCanvasPersistence(
@@ -10,22 +10,24 @@ export function useCanvasPersistence(
   artifactState: import("../types").ProjectArtifactState | undefined,
   snapshot: string,
   modules: GraphNode[],
-  relations: GraphEdge[]
+  relations: GraphEdge[],
+  layout: CanvasLayoutState
 ) {
   const { t } = useI18n();
-  const setLastRunStatus = useWorkspaceStore((state) => state.setLastRunStatus);
+  const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
 
   useEffect(() => {
     if (!window.flowweave || !projectId || modules.length === 0 || artifactState !== "current") return;
     const timeout = window.setTimeout(() => {
       void window.flowweave?.saveCanvas(projectId, {
-        version: 2,
+        version: 3,
         id: "main",
         title: "Main Canvas",
         projectPath,
         generatedAt: new Date().toISOString(),
         scanFingerprint,
         artifactState: "current",
+        layout,
         nodes: modules,
         edges: relations
       }).catch((error) => {
@@ -33,7 +35,7 @@ export function useCanvasPersistence(
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [projectId, projectPath, scanFingerprint, artifactState, snapshot]);
+  }, [projectId, projectPath, scanFingerprint, artifactState, snapshot, layout]);
 }
 
 function formatErrorMessage(error: unknown) {

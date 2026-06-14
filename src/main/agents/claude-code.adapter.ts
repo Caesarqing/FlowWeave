@@ -1,8 +1,8 @@
 import { access } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
+import { runSpawnedAgent } from "./spawn-agent-process";
 
 export class ClaudeCodeAdapter implements ToolAdapter {
   id = "claude-code" as const;
@@ -43,77 +43,29 @@ export class ClaudeCodeAdapter implements ToolAdapter {
       await access(request.guidancePath);
     }
 
-    const startedAt = nowIso();
-    const events: ToolRunEvent[] = [];
     const prompt = request.prompt;
-    const args = buildClaudeArgs(request.executionMode, request.model);
-
-    return new Promise<ToolRunResult>((resolve) => {
-      const pushEvent = (event: ToolRunEvent) => {
-        events.push(event);
-        onEvent?.(event);
-      };
-
-      pushEvent({ type: "status", status: "running", timestamp: startedAt });
-
-      const child = spawn(commandPath, [...args, prompt], {
-        cwd: request.projectPath,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-
-      child.stdout.on("data", (chunk: Buffer) => {
-        pushEvent({ type: "stdout", content: chunk.toString(), timestamp: nowIso() });
-      });
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        pushEvent({ type: "stderr", content: chunk.toString(), timestamp: nowIso() });
-      });
-
-      child.on("error", (error: Error) => {
-        const timestamp = nowIso();
-        pushEvent({ type: "error", message: error.message, timestamp });
-        pushEvent({ type: "status", status: "failed", timestamp });
-        resolve({
-          id: request.id,
-          toolId: this.id,
-          status: "failed",
-          projectPath: request.projectPath,
-          startedAt,
-          completedAt: timestamp,
-          executionMode: request.executionMode,
-          purpose: request.purpose,
-          events
-        });
-      });
-
-      child.on("close", (code: number | null) => {
-        const completedAt = nowIso();
-        const status = code === 0 ? "completed" : "failed";
-        pushEvent({ type: "status", status, timestamp: completedAt });
-        resolve({
-          id: request.id,
-          toolId: this.id,
-          status,
-          projectPath: request.projectPath,
-          startedAt,
-          completedAt,
-          exitCode: code,
-          executionMode: request.executionMode,
-          purpose: request.purpose,
-          events
-        });
-      });
-    });
+    const args = buildClaudeArgs(request.executionMode, request.model, request.purpose);
+    return runSpawnedAgent({
+      toolId: this.id,
+      commandPath,
+      args,
+      request,
+      stdin: prompt
+    }, onEvent);
   }
 }
 
-export function buildClaudeArgs(executionMode: "plan" | "execute", model?: string) {
+export function buildClaudeArgs(
+  executionMode: "plan" | "execute",
+  model?: string,
+  purpose?: import("../../types").ToolRunPurpose
+) {
   const args = [
     "--print",
     "--permission-mode",
     executionMode === "plan" ? "plan" : "acceptEdits",
     "--output-format",
-    "text",
+    purpose === "artifact-analysis" ? "json" : "text",
     "--no-session-persistence"
   ];
   if (model) {
@@ -129,5 +81,5 @@ export function buildClaudePrompt(prompt: string, executionMode: "plan" | "execu
 Dry run only: inspect the request and return the implementation plan, affected files, risks, and tests. Do not edit files.`;
 }
 
-export const buildClaudeDryRunArgs = (model?: string) => buildClaudeArgs("plan", model);
+export const buildClaudeDryRunArgs = (model?: string) => buildClaudeArgs("plan", model, "implementation-plan");
 export const buildClaudeDryRunPrompt = (prompt: string) => buildClaudePrompt(prompt, "plan");

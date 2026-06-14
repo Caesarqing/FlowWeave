@@ -1,5 +1,6 @@
 import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolId, ToolUiStatus } from "../types";
 import { useI18n } from "../utils/i18n";
+import { usePreferencesStore } from "../stores/preferences.store";
 
 export function useToolActions({
   buildGuidanceMarkdown,
@@ -31,6 +32,7 @@ export function useToolActions({
   setToolStatuses: (updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)) => void;
 }) {
   const { t } = useI18n();
+  const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const agentNames = new Map<string, string>(agents.map((agent) => [agent.id, agent.name]));
   const getAgentName = (agentId: RuntimeAgentId) => agentNames.get(agentId) ?? (agentId === "mock" ? "Mock Agent" : agentId);
 
@@ -90,6 +92,13 @@ export function useToolActions({
       setLastRunStatus(t("status.noProject"));
       return;
     }
+    if (executionMode === "execute" && !window.confirm(t("agent.executeConfirm", {
+      agent: getAgentName(agentId),
+      project: projectPath
+    }))) {
+      setLastRunStatus(t("agent.executeCanceled"));
+      return;
+    }
 
     setLastRunStatus(t("status.agentProcessing", { agent: getAgentName(agentId), mode: executionMode }));
     try {
@@ -104,6 +113,8 @@ export function useToolActions({
         projectId,
         toolId: agentId,
         executionMode,
+        confirmedExecute: executionMode === "execute",
+        executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
         prompt: `FlowWeave plan request for module "${selectedNode.title}".
 

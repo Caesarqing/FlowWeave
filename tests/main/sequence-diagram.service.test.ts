@@ -8,6 +8,7 @@ import {
   buildSequenceDiagramPrompt,
   generateSequenceDiagrams,
   parseSequenceDiagramBundleJson,
+  readSequenceDiagrams,
   reviseSequenceDiagram
 } from "../../src/main/services/sequence-diagram.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
@@ -169,7 +170,7 @@ describe("sequence-diagram.service", () => {
     expect(stored.architectural.title).toBe("Existing Architectural");
   });
 
-  it("does not write fallback diagrams when agent output is invalid and no bundle exists", async () => {
+  it("writes local semantic diagrams when agent output is invalid and no bundle exists", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-fallback-agent-"));
     const root = await createFixtureFiles();
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
@@ -192,10 +193,11 @@ describe("sequence-diagram.service", () => {
 
     const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
 
-    expect(result.outcome).toBe("failed");
-    if (result.outcome !== "failed") throw new Error("Expected sequence failure.");
-    expect(result.error.message).toContain("read-only");
-    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error("Expected local sequence generation.");
+    expect(result.bundle.source).toBe("fallback");
+    expect(result.warning?.message).toContain("read-only");
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).resolves.toContain('"source": "fallback"');
   });
 
   it("returns generated when valid output is parsed and written", async () => {
@@ -207,6 +209,16 @@ describe("sequence-diagram.service", () => {
     expect(result.bundle.source).toBe("agent");
   });
 
+  it("reports and preserves a corrupted sequence diagram artifact", async () => {
+    const root = await createFixtureFiles();
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    const artifactPath = join(root, FLOWWEAVE_DIR, "sequence-diagrams.json");
+    await writeFile(artifactPath, "{invalid-json", "utf8");
+
+    await expect(readSequenceDiagrams(root)).rejects.toThrow("unreadable and was preserved");
+    await expect(readFile(artifactPath, "utf8")).resolves.toBe("{invalid-json");
+  });
+
   it("revises the current diagram with the selected agent", async () => {
     const root = await createFixtureFiles();
     const project = projectFixture(root);
@@ -216,6 +228,21 @@ describe("sequence-diagram.service", () => {
 
     expect(generated.bundle.architectural.summary).not.toBe(revised.architectural.summary);
     expect(revised.architectural.summary).toContain("split payment into authorize and capture");
+  });
+
+  it("does not publish sequence artifacts after cancellation", async () => {
+    const root = await createFixtureFiles();
+    const controller = new AbortController();
+    controller.abort("test-cancel");
+
+    await expect(generateSequenceDiagrams(projectFixture(root), "mock", {
+      signal: controller.signal
+    })).rejects.toMatchObject({
+      code: "operation-canceled"
+    });
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
   });
 });
 

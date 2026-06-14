@@ -24,6 +24,7 @@ describe("git.service", () => {
     expect(changed).toContainEqual(expect.objectContaining({ path: "app.ts", status: "modified" }));
 
     const checkpointId = await createCheckpoint(root);
+    await expect(readFile(filePath, "utf8")).resolves.toContain("app = 2");
     await writeFile(filePath, "export const app = 3;\n");
 
     const diff = await getDiff(root, checkpointId);

@@ -1,8 +1,8 @@
 import { access } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { resolveToolCommand } from "./agent-command";
 import { nowIso } from "./time";
+import { runSpawnedAgent } from "./spawn-agent-process";
 
 export class GeminiCliAdapter implements ToolAdapter {
   id = "gemini-cli" as const;
@@ -42,70 +42,15 @@ export class GeminiCliAdapter implements ToolAdapter {
       await access(request.guidancePath);
     }
 
-    const startedAt = nowIso();
-    const events: ToolRunEvent[] = [];
     const commandPath = resolvedCommand.commandPath;
     const prompt = request.prompt;
-
-    return new Promise<ToolRunResult>((resolve) => {
-      const pushEvent = (event: ToolRunEvent) => {
-        events.push(event);
-        onEvent?.(event);
-      };
-
-      pushEvent({ type: "status", status: "running", timestamp: startedAt });
-
-      const child = spawn(commandPath, buildGeminiArgs(request.executionMode, request.model), {
-        cwd: request.projectPath,
-        stdio: ["pipe", "pipe", "pipe"]
-      });
-
-      child.stdin.write(prompt);
-      child.stdin.end();
-
-      child.stdout.on("data", (chunk: Buffer) => {
-        pushEvent({ type: "stdout", content: chunk.toString(), timestamp: nowIso() });
-      });
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        pushEvent({ type: "stderr", content: chunk.toString(), timestamp: nowIso() });
-      });
-
-      child.on("error", (error: Error) => {
-        const timestamp = nowIso();
-        pushEvent({ type: "error", message: error.message, timestamp });
-        pushEvent({ type: "status", status: "failed", timestamp });
-        resolve({
-          id: request.id,
-          toolId: this.id,
-          status: "failed",
-          projectPath: request.projectPath,
-          startedAt,
-          completedAt: timestamp,
-          executionMode: request.executionMode,
-          purpose: request.purpose,
-          events
-        });
-      });
-
-      child.on("close", (code: number | null) => {
-        const completedAt = nowIso();
-        const status = code === 0 ? "completed" : "failed";
-        pushEvent({ type: "status", status, timestamp: completedAt });
-        resolve({
-          id: request.id,
-          toolId: this.id,
-          status,
-          projectPath: request.projectPath,
-          startedAt,
-          completedAt,
-          exitCode: code,
-          executionMode: request.executionMode,
-          purpose: request.purpose,
-          events
-        });
-      });
-    });
+    return runSpawnedAgent({
+      toolId: this.id,
+      commandPath,
+      args: buildGeminiArgs(request.executionMode, request.model),
+      request,
+      stdin: prompt
+    }, onEvent);
   }
 }
 

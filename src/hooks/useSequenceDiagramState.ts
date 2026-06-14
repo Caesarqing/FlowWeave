@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ProjectFileNode,
   RuntimeAgentId,
@@ -10,7 +10,7 @@ import type {
   SequenceParticipant
 } from "../types";
 import { useI18n } from "../utils/i18n";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import { useProjectStore } from "../stores/project.store";
 
 const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
   architectural: "structure.architectural",
@@ -29,6 +29,7 @@ export type SequenceDiagramState = {
   selectedParticipant?: SequenceParticipant;
   selectedParticipantId: string;
   status: string;
+  cancelOperation: () => Promise<void>;
   generateDiagrams: () => Promise<void>;
   reviseDiagram: () => Promise<void>;
   selectMessage: (messageId: string) => void;
@@ -50,7 +51,7 @@ export function useSequenceDiagramState({
   selectedAgentId: RuntimeAgentId;
 }): SequenceDiagramState {
   const { t } = useI18n();
-  const setArtifactStatuses = useWorkspaceStore((state) => state.setArtifactStatuses);
+  const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [activeKind, setActiveKind] = useState<SequenceDiagramKind>("architectural");
   const [selectedMessageId, setSelectedMessageId] = useState("");
@@ -58,10 +59,32 @@ export function useSequenceDiagramState({
   const [instruction, setInstruction] = useState("");
   const [status, setStatus] = useState(() => t("sequence.openProject"));
   const [isBusy, setIsBusy] = useState(false);
+  const activeOperationId = useRef<string | null>(null);
   const fileCount = useMemo(() => countFiles(files), [files]);
   const diagram = activeKind === "architectural" ? bundle?.architectural : bundle?.detailedDesign;
   const selectedMessage = diagram?.messages.find((message) => message.id === selectedMessageId);
   const selectedParticipant = diagram?.participants.find((participant) => participant.id === selectedParticipantId);
+
+  useEffect(() => {
+    if (!window.flowweave) return undefined;
+    return window.flowweave.onOperationProgress((operation) => {
+      if (operation.kind !== "sequence-analysis") return;
+      const isTerminal =
+        operation.stage === "completed" ||
+        operation.stage === "failed" ||
+        operation.stage === "canceled";
+      activeOperationId.current = isTerminal ? null : operation.operationId;
+      if (operation.stage === "canceled") {
+        setStatus(t("sequence.canceled"));
+        return;
+      }
+      setStatus(t("operation.progress", {
+        stage: t(`operation.stage.${operation.stage}`),
+        completed: operation.completed,
+        total: operation.total
+      }));
+    });
+  }, [t]);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,7 +132,9 @@ export function useSequenceDiagramState({
       setSelectedParticipantId("");
       setStatus(generationStatusMessage(result, t));
     } catch (error) {
-      setStatus(t("sequence.generationFailed", { error: formatErrorMessage(error) }));
+      setStatus(isCancellationError(error)
+        ? t("sequence.canceled")
+        : t("sequence.generationFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
     }
@@ -134,7 +159,9 @@ export function useSequenceDiagramState({
       setSelectedParticipantId("");
       setStatus(t("sequence.revised"));
     } catch (error) {
-      setStatus(t("sequence.revisionFailed", { error: formatErrorMessage(error) }));
+      setStatus(isCancellationError(error)
+        ? t("sequence.canceled")
+        : t("sequence.revisionFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
     }
@@ -150,9 +177,16 @@ export function useSequenceDiagramState({
     setSelectedMessageId("");
   }
 
+  async function cancelOperation() {
+    const operationId = activeOperationId.current;
+    if (!window.flowweave || !operationId) return;
+    await window.flowweave.cancelOperation(operationId);
+  }
+
   return {
     activeKind,
     bundle,
+    cancelOperation,
     diagram,
     fileCount,
     generateDiagrams,
@@ -185,6 +219,10 @@ function formatErrorMessage(error: unknown) {
   return String(error);
 }
 
+function isCancellationError(error: unknown) {
+  return /cancel(?:ed|led)/i.test(formatErrorMessage(error));
+}
+
 function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (key: string, params?: Record<string, string | number>) => string) {
   if (result.outcome === "failed") {
     return t("sequence.generationFailed", { error: result.error.message });
@@ -195,6 +233,9 @@ function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (ke
   });
   if (result.outcome === "cached") {
     return t("sequence.cached", { warning: ` ${result.error.message}` });
+  }
+  if (result.warning) {
+    return t("sequence.fallback", { counts, warning: ` ${result.warning.message}` });
   }
   return t("sequence.generated", { counts });
 }

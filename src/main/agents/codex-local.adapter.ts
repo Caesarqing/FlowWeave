@@ -1,10 +1,10 @@
 import { access } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import { join } from "node:path";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { runSpawnedAgent } from "./spawn-agent-process";
 
 export class CodexLocalAdapter implements ToolAdapter {
   id = "codex-local" as const;
@@ -45,8 +45,6 @@ export class CodexLocalAdapter implements ToolAdapter {
       await access(request.guidancePath);
     }
 
-    const startedAt = nowIso();
-    const events: ToolRunEvent[] = [];
     const lastMessagePath = join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id, "last-message.md");
     const prompt = request.prompt;
 
@@ -54,69 +52,18 @@ export class CodexLocalAdapter implements ToolAdapter {
       executionMode: request.executionMode,
       lastMessagePath,
       model: request.model,
-      projectPath: request.projectPath
+      projectPath: request.projectPath,
+      isolated: process.env.FLOWWEAVE_AGENT_SMOKE_ISOLATED === "1"
     });
 
-    return new Promise<ToolRunResult>((resolve) => {
-      const pushEvent = (event: ToolRunEvent) => {
-        events.push(event);
-        onEvent?.(event);
-      };
-
-      pushEvent({ type: "status", status: "running", timestamp: startedAt });
-
-      const child = spawn(commandPath, args, {
-        cwd: request.projectPath,
-        stdio: ["pipe", "pipe", "pipe"]
-      });
-
-      child.stdin.write(prompt);
-      child.stdin.end();
-
-      child.stdout.on("data", (chunk: Buffer) => {
-        pushEvent({ type: "stdout", content: chunk.toString(), timestamp: nowIso() });
-      });
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        pushEvent({ type: "stderr", content: chunk.toString(), timestamp: nowIso() });
-      });
-
-      child.on("error", (error: Error) => {
-        const timestamp = nowIso();
-        pushEvent({ type: "error", message: error.message, timestamp });
-        pushEvent({ type: "status", status: "failed", timestamp });
-        resolve({
-          id: request.id,
-          toolId: this.id,
-          status: "failed",
-          projectPath: request.projectPath,
-          startedAt,
-          completedAt: timestamp,
-          executionMode: request.executionMode,
-          purpose: request.purpose,
-          events
-        });
-      });
-
-      child.on("close", (code: number | null) => {
-        const completedAt = nowIso();
-        const status = code === 0 ? "completed" : "failed";
-        pushEvent({ type: "status", status, timestamp: completedAt });
-        resolve({
-          id: request.id,
-          toolId: this.id,
-          status,
-          projectPath: request.projectPath,
-          startedAt,
-          completedAt,
-          exitCode: code,
-          lastMessagePath,
-          executionMode: request.executionMode,
-          purpose: request.purpose,
-          events
-        });
-      });
-    });
+    return runSpawnedAgent({
+      toolId: this.id,
+      commandPath,
+      args,
+      request,
+      stdin: prompt,
+      lastMessagePath
+    }, onEvent);
   }
 }
 
@@ -124,15 +71,18 @@ export function buildCodexPlanArgs({
   executionMode,
   lastMessagePath,
   model,
-  projectPath
+  projectPath,
+  isolated
 }: {
   executionMode: "plan" | "execute";
   lastMessagePath: string;
   model?: string;
   projectPath: string;
+  isolated?: boolean;
 }) {
   const args = [
     "exec",
+    "--skip-git-repo-check",
     "--cd",
     projectPath,
     "--sandbox",
@@ -141,6 +91,9 @@ export function buildCodexPlanArgs({
     lastMessagePath,
     "-"
   ];
+  if (isolated) {
+    args.splice(1, 0, "--ephemeral", "--ignore-user-config", "--ignore-rules");
+  }
 
   if (model) {
     args.splice(1, 0, "--model", model);

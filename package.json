@@ -8,20 +8,27 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "npm run typecheck && electron-vite build && node scripts/check-bundle-size.mjs",
+    "build": "node scripts/check-brand-assets.mjs && npm run typecheck && electron-vite build && node scripts/check-bundle-size.mjs",
+    "benchmark": "node --import tsx scripts/run-performance-benchmarks.ts",
     "dist:dir": "npm run build && electron-builder --dir",
+    "smoke:agent": "node --import tsx scripts/run-agent-smoke.ts",
+    "smoke:packaged": "release/mac-arm64/FlowWeave.app/Contents/MacOS/FlowWeave --flowweave-smoke-test",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vue/compiler-sfc": "^3.5.36",
     "@xyflow/react": "^12.9.3",
+    "elkjs": "^0.11.1",
     "fast-glob": "^3.3.3",
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
     "vite": "^7.3.0",
+    "web-tree-sitter": "^0.26.9",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
@@ -31,8 +38,10 @@
     "electron": "^42.1.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-python": "^0.25.0",
     "tsx": "^4.22.1",
-    "typescript": "^5.9.3",
     "vitest": "^4.1.6"
   },
   "overrides": {
@@ -50,13 +59,29 @@
     ],
     "extraResources": [
       {
-        "from": "logo/logo.png",
-        "to": "logo.png"
+        "from": "logo/flowweave-app-icon.png",
+        "to": "flowweave-app-icon.png"
+      },
+      {
+        "from": "node_modules/web-tree-sitter/web-tree-sitter.wasm",
+        "to": "parsers/web-tree-sitter.wasm"
+      },
+      {
+        "from": "node_modules/tree-sitter-python/tree-sitter-python.wasm",
+        "to": "parsers/tree-sitter-python.wasm"
+      },
+      {
+        "from": "node_modules/tree-sitter-java/tree-sitter-java.wasm",
+        "to": "parsers/tree-sitter-java.wasm"
+      },
+      {
+        "from": "node_modules/tree-sitter-go/tree-sitter-go.wasm",
+        "to": "parsers/tree-sitter-go.wasm"
       }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "logo/logo.png",
+      "icon": "logo/flowweave-app-icon.png",
       "target": [
         "dir"
       ]

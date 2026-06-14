@@ -1,11 +1,32 @@
-import { Background, Controls, ReactFlow, type NodeProps, type NodeTypes } from "@xyflow/react";
+import {
+  Background,
+  Controls,
+  ReactFlow,
+  type Edge,
+  type NodeProps,
+  type NodeTypes,
+  type ReactFlowInstance,
+} from "@xyflow/react";
 import type { CSSProperties } from "react";
-import { useMemo } from "react";
-import { Code2, GitBranch, RefreshCcw, Send, Workflow } from "lucide-react";
-import type { SequenceDiagram, SequenceDiagramKind, SequenceMessage, SequenceParticipant } from "../types";
+import { useMemo, useRef, useState } from "react";
+import { Code2, Focus, GitBranch, RefreshCcw, Search, Send, Square, Workflow } from "lucide-react";
+import type {
+  SequenceDiagram,
+  SequenceDiagramKind,
+  SequenceMessage,
+  SequenceMessageKind,
+  SequenceParticipant
+} from "../types";
 import type { SequenceDiagramState } from "../hooks/useSequenceDiagramState";
-import { buildSequenceFlowNodes, getSequenceFlowBounds, type SequenceFlowNode } from "../utils/sequence-diagram-flow";
+import {
+  buildSequenceFlowNodes,
+  filterSequenceDiagram,
+  type SequenceFlowNode
+} from "../utils/sequence-diagram-flow";
 import { useI18n } from "../utils/i18n";
+import { cn } from "../utils/classnames";
+import { WorkspaceLayout } from "./WorkspaceLayout";
+import { Button } from "./Button";
 
 const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
   architectural: "structure.architectural",
@@ -19,55 +40,163 @@ const messageKindLabelKeys: Record<SequenceMessage["kind"], string> = {
   event: "structure.messageEvent",
   external: "structure.messageExternal"
 };
+const messageKinds = Object.keys(messageKindLabelKeys) as SequenceMessageKind[];
 
 const sequenceNodeTypes: NodeTypes = {
   sequenceParticipant: SequenceParticipantNode,
   sequenceLifeline: SequenceLifelineNode,
   sequenceMessage: SequenceMessageNode
 };
+const emptySequenceEdges: Edge[] = [];
 
 export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramState }) {
   const { t } = useI18n();
-  return (
-    <main className="workspace-page structure-workspace sequence-workspace">
-      <section className="workspace-main sequence-main">
-        <div className="sequence-toolbar">
-          <div className="sequence-toolbar-title">
-            <Workflow size={17} />
-            <div>
-              <strong>{sequence.diagram ? sequence.diagram.title : t("nav.sequence")}</strong>
-              <span>
-                {t("structure.sourceFiles", {
-                  count: sequence.fileCount,
-                  messageCount: sequence.diagram ? t("structure.messages", { count: sequence.diagram.messages.length }) : t("structure.noDiagramShort")
-                })}
-              </span>
-            </div>
-          </div>
-          <div className="sequence-toolbar-actions">
-            <div className="segmented-control" aria-label={t("structure.diagramType")}>
-              {(["architectural", "detailed-design"] as SequenceDiagramKind[]).map((kind) => (
-                <button className={sequence.activeKind === kind ? "active" : ""} key={kind} type="button" onClick={() => sequence.setActiveKind(kind)}>
-                  {kind === "architectural" ? <GitBranch size={14} /> : <Code2 size={14} />}
-                  {t(diagramLabelKeys[kind])}
-                </button>
-              ))}
-            </div>
-            <button className="send-button" disabled={sequence.isBusy} type="button" onClick={() => void sequence.generateDiagrams()}>
-              <RefreshCcw size={15} />
-              {sequence.isBusy ? t("structure.generating") : t("structure.generate")}
-            </button>
-          </div>
-        </div>
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [selectedMessageKinds, setSelectedMessageKinds] = useState<Set<SequenceMessageKind>>(() => new Set());
+  const flowInstance = useRef<ReactFlowInstance<SequenceFlowNode> | null>(null);
+  const visibleDiagram = useMemo(
+    () => sequence.diagram
+      ? filterSequenceDiagram(sequence.diagram, participantQuery, selectedMessageKinds)
+      : undefined,
+    [participantQuery, selectedMessageKinds, sequence.diagram]
+  );
+  const visibleMessageId = visibleDiagram?.messages.some((message) => message.id === sequence.selectedMessageId)
+    ? sequence.selectedMessageId
+    : "";
+  const visibleParticipantId = visibleDiagram?.participants.some((participant) => participant.id === sequence.selectedParticipantId)
+    ? sequence.selectedParticipantId
+    : "";
+  const visibleMessage = visibleDiagram?.messages.find((message) => message.id === visibleMessageId);
+  const visibleParticipant = visibleDiagram?.participants.find((participant) => participant.id === visibleParticipantId);
 
-        {sequence.diagram ? (
-          <SequenceCanvas
-            diagram={sequence.diagram}
-            selectedMessageId={sequence.selectedMessageId}
-            selectedParticipantId={sequence.selectedParticipantId}
-            onSelectMessage={sequence.selectMessage}
-            onSelectParticipant={sequence.selectParticipant}
-          />
+  function toggleMessageKind(kind: SequenceMessageKind) {
+    setSelectedMessageKinds((current) => {
+      const next = new Set(current);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  }
+
+  const detailsPanel = (
+    <section className="workspace-column sequence-detail-panel">
+      <div className="panel-header">
+        <span>{t("structure.details")}</span>
+      </div>
+      <div className="sequence-detail-stack">
+        <SequenceDetails diagram={visibleDiagram} message={visibleMessage} participant={visibleParticipant} />
+        <section className="module-card sequence-agent-card">
+          <small>{t("structure.agentRevision")}</small>
+          <h3>{t("structure.sendRevision")}</h3>
+          <label className="sequence-revision-box">
+            <span>{t("structure.instruction")}</span>
+            <textarea
+              value={sequence.instruction}
+              onChange={(event) => sequence.setInstruction(event.target.value)}
+              placeholder={t("structure.instructionPlaceholder")}
+            />
+          </label>
+          <button className="ghost-button sequence-wide-button" disabled={sequence.isBusy || !sequence.bundle} type="button" onClick={() => void sequence.reviseDiagram()}>
+            <Send size={15} />
+            {t("structure.sendRevision")}
+          </button>
+          <p className="sequence-status">{sequence.status}</p>
+        </section>
+      </div>
+    </section>
+  );
+
+  return (
+    <WorkspaceLayout
+      actions={(
+        <>
+          <div className="segmented-control" aria-label={t("structure.diagramType")}>
+            {(["architectural", "detailed-design"] as SequenceDiagramKind[]).map((kind) => (
+              <button className={cn(sequence.activeKind === kind && "active")} key={kind} type="button" onClick={() => sequence.setActiveKind(kind)}>
+                {kind === "architectural" ? <GitBranch size={14} /> : <Code2 size={14} />}
+                {t(diagramLabelKeys[kind])}
+              </button>
+            ))}
+          </div>
+          <Button
+            disabled={sequence.isBusy}
+            icon={<RefreshCcw size={15} />}
+            size="default"
+            variant="primary"
+            onClick={() => void sequence.generateDiagrams()}
+          >
+            {sequence.isBusy ? t("structure.generating") : t("structure.generate")}
+          </Button>
+          {sequence.isBusy ? (
+            <Button icon={<Square size={12} />} variant="danger" onClick={() => void sequence.cancelOperation()}>
+              {t("sequence.cancel")}
+            </Button>
+          ) : null}
+        </>
+      )}
+      className="workspace-page structure-workspace sequence-workspace"
+      page="structure"
+      right={detailsPanel}
+      status={t("structure.sourceFiles", {
+        count: sequence.fileCount,
+        messageCount: sequence.diagram ? t("structure.messages", { count: sequence.diagram.messages.length }) : t("structure.noDiagramShort")
+      })}
+      title={sequence.diagram ? sequence.diagram.title : t("nav.sequence")}
+    >
+      <section className="workspace-main sequence-main">
+        {sequence.diagram && visibleDiagram ? (
+          <>
+            <div className="sequence-filter-bar">
+              <label className="sequence-search">
+                <Search size={14} />
+                <input
+                  type="search"
+                  value={participantQuery}
+                  onChange={(event) => setParticipantQuery(event.target.value)}
+                  placeholder={t("structure.searchParticipants")}
+                />
+              </label>
+              <div className="sequence-kind-filters" aria-label={t("structure.messageFilter")}>
+                {messageKinds.map((kind) => (
+                  <button
+                    className={cn(selectedMessageKinds.has(kind) && "active")}
+                    key={kind}
+                    type="button"
+                    aria-pressed={selectedMessageKinds.has(kind)}
+                    onClick={() => toggleMessageKind(kind)}
+                  >
+                    {t(messageKindLabelKeys[kind])}
+                  </button>
+                ))}
+              </div>
+              <Button
+                icon={<Focus size={14} />}
+                variant="subtle"
+                type="button"
+                onClick={() => void flowInstance.current?.fitView({ padding: 0.18, duration: 250 })}
+              >
+                {t("structure.fitView")}
+              </Button>
+            </div>
+            {visibleDiagram.participants.length > 0 ? (
+              <SequenceCanvas
+                diagram={visibleDiagram}
+                selectedMessageId={visibleMessageId}
+                selectedParticipantId={visibleParticipantId}
+                onReady={(instance) => {
+                  flowInstance.current = instance;
+                }}
+                onSelectMessage={sequence.selectMessage}
+                onSelectParticipant={sequence.selectParticipant}
+              />
+            ) : (
+              <div className="sequence-empty-state">
+                <Search size={30} />
+                <strong>{t("structure.noMatches")}</strong>
+                <span>{t("structure.noMatchesBody")}</span>
+              </div>
+            )}
+          </>
         ) : (
           <div className="sequence-empty-state">
             <Workflow size={34} />
@@ -76,33 +205,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
           </div>
         )}
       </section>
-
-      <section className="workspace-column sequence-detail-panel">
-        <div className="panel-header">
-          <span>{t("structure.details")}</span>
-        </div>
-        <div className="sequence-detail-stack">
-          <SequenceDetails diagram={sequence.diagram} message={sequence.selectedMessage} participant={sequence.selectedParticipant} />
-          <section className="module-card sequence-agent-card">
-            <small>{t("structure.agentRevision")}</small>
-            <h3>{t("structure.sendRevision")}</h3>
-            <label className="sequence-revision-box">
-              <span>{t("structure.instruction")}</span>
-              <textarea
-                value={sequence.instruction}
-                onChange={(event) => sequence.setInstruction(event.target.value)}
-                placeholder={t("structure.instructionPlaceholder")}
-              />
-            </label>
-            <button className="ghost-button sequence-wide-button" disabled={sequence.isBusy || !sequence.bundle} type="button" onClick={() => void sequence.reviseDiagram()}>
-              <Send size={15} />
-              {t("structure.sendRevision")}
-            </button>
-            <p className="sequence-status">{sequence.status}</p>
-          </section>
-        </div>
-      </section>
-    </main>
+    </WorkspaceLayout>
   );
 }
 
@@ -110,19 +213,20 @@ function SequenceCanvas({
   diagram,
   selectedMessageId,
   selectedParticipantId,
+  onReady,
   onSelectMessage,
   onSelectParticipant
 }: {
   diagram: SequenceDiagram;
   selectedMessageId: string;
   selectedParticipantId: string;
+  onReady: (instance: ReactFlowInstance<SequenceFlowNode>) => void;
   onSelectMessage: (messageId: string) => void;
   onSelectParticipant: (participantId: string) => void;
 }) {
-  const bounds = useMemo(() => getSequenceFlowBounds(diagram), [diagram]);
-  const nodes = useMemo(
+  const nodes = useMemo<SequenceFlowNode[]>(
     () =>
-      buildSequenceFlowNodes(diagram).map((node) => {
+      buildSequenceFlowNodes(diagram).map((node): SequenceFlowNode => {
         const isSelected =
           (node.type === "sequenceParticipant" && node.id === `participant:${selectedParticipantId}`) ||
           (node.type === "sequenceMessage" && node.id === `message:${selectedMessageId}`);
@@ -135,11 +239,11 @@ function SequenceCanvas({
   );
 
   return (
-    <div className="sequence-canvas-stage" style={{ minWidth: bounds.width, minHeight: bounds.height }}>
+    <div className="sequence-canvas-stage">
       <ReactFlow
         key={diagram.id}
         nodes={nodes}
-        edges={[]}
+        edges={emptySequenceEdges}
         nodeTypes={sequenceNodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -157,9 +261,10 @@ function SequenceCanvas({
             onSelectMessage(node.id.replace("message:", ""));
           }
         }}
+        onInit={onReady}
       >
-        <Background color="rgba(137, 236, 255, 0.28)" gap={18} size={1} />
-        <Controls position="bottom-left" showInteractive={false} />
+        <Background color="var(--graph-grid)" gap={18} size={1} />
+        <Controls position="bottom-left" showFitView showInteractive={false} showZoom />
       </ReactFlow>
     </div>
   );
@@ -186,7 +291,7 @@ function SequenceMessageNode({ data }: NodeProps<SequenceFlowNode>) {
   if (!("message" in data)) return null;
   return (
     <div
-      className={`sequence-flow-message ${data.message.kind} ${data.direction}`}
+      className={cn("sequence-flow-message", data.message.kind, data.direction)}
       style={{ width: data.width, "--message-width": `${data.width}px` } as CSSProperties}
     >
       <span className="sequence-flow-arrow" />
@@ -287,7 +392,7 @@ function EvidenceList({ evidence }: { evidence?: SequenceMessage["evidence"] }) 
           <div className="detail-row" key={`${item.filePath ?? ""}-${item.symbol ?? ""}-${item.detail}`}>
             <strong>{item.symbol ?? item.filePath ?? t("structure.evidence")}</strong>
             <span>
-              {item.filePath ? `${item.filePath} · ` : ""}
+              {item.filePath ? `${item.filePath}${item.line ? `:${item.line}` : ""} · ` : ""}
               {item.detail}
             </span>
           </div>

@@ -13,16 +13,19 @@ import type { CodeflowProject } from "../../src/main/storage/schemas";
 
 describe("task-generator.service", () => {
   it("creates a canvas artifact from FlowWeave modules", () => {
-    const canvas = createCanvasArtifact("/tmp/project", graphNodes, graphEdges);
+    const canvas = createCanvasArtifact("/tmp/project", graphNodes, graphEdges, "scan-1");
 
-    expect(canvas.version).toBe(2);
+    expect(canvas.version).toBe(3);
     expect(canvas.artifactState).toBe("current");
+    expect(canvas.generatorVersion).toBe("1.0.0");
+    expect(canvas.inputFingerprint).toBe("scan-1");
+    expect(canvas.layout?.activeMode).toBe("manual");
     expect(canvas.nodes).toHaveLength(graphNodes.length);
     expect(canvas.edges.some((edge) => edge.source === "user-api" && edge.target === "tests")).toBe(true);
   });
 
   it("creates task markdown with module guidance, relations, and acceptance criteria", () => {
-    const task = createTaskArtifact(graphNodes, graphEdges);
+    const task = createTaskArtifact(graphNodes, graphEdges, "scan-1");
     const markdown = createTaskMarkdown(task);
 
     expect(task.targetTools).toEqual([
@@ -33,6 +36,10 @@ describe("task-generator.service", () => {
       "gemini-cli",
       "cursor"
     ]);
+    expect(task.version).toBe(2);
+    expect(task.generatorVersion).toBe("1.0.0");
+    expect(task.inputFingerprint).toBe("scan-1");
+    expect(task.artifactState).toBe("current");
     expect(task.modules.every((module) => module.kind)).toBe(true);
     expect(task.relations.some((relation) => relation.relation === "reads_writes")).toBe(true);
     expect(markdown).toContain("### User API");

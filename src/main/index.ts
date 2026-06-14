@@ -7,10 +7,13 @@ import { registerGitIpc } from "./ipc/git.ipc";
 import { registerProjectIpc } from "./ipc/project.ipc";
 import { configureAgentRegistry } from "./services/agent-registry.service";
 
-function createWindow() {
+const SMOKE_TEST_ARGUMENT = "--flowweave-smoke-test";
+const SMOKE_TEST_TIMEOUT_MS = 15_000;
+
+function createWindow(): BrowserWindow {
   const iconPath = app.isPackaged
-    ? join(process.resourcesPath, "logo.png")
-    : join(app.getAppPath(), "logo", "logo.png");
+    ? join(process.resourcesPath, "flowweave-app-icon.png")
+    : join(app.getAppPath(), "logo", "flowweave-app-icon.png");
   const window = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -39,15 +42,19 @@ function createWindow() {
 app.whenReady().then(() => {
   if (process.platform === "darwin" && app.dock) {
     const iconPath = app.isPackaged
-      ? join(process.resourcesPath, "logo.png")
-      : join(app.getAppPath(), "logo", "logo.png");
+      ? join(process.resourcesPath, "flowweave-app-icon.png")
+      : join(app.getAppPath(), "logo", "flowweave-app-icon.png");
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
   }
   configureAgentRegistry(app.getPath("userData"));
   registerProjectIpc();
   registerAgentIpc();
   registerGitIpc();
-  createWindow();
+  const window = createWindow();
+  if (process.argv.includes(SMOKE_TEST_ARGUMENT)) {
+    runSmokeTest(window);
+    return;
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -61,3 +68,23 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+function runSmokeTest(window: BrowserWindow): void {
+  const timeout = setTimeout(() => {
+    console.error("FlowWeave packaged smoke test timed out.");
+    app.exit(1);
+  }, SMOKE_TEST_TIMEOUT_MS);
+  window.webContents.once("did-finish-load", () => {
+    clearTimeout(timeout);
+    console.log("FlowWeave packaged smoke test passed.");
+    app.exit(0);
+  });
+  window.webContents.once("did-fail-load", (_event, errorCode, errorDescription) => {
+    clearTimeout(timeout);
+    console.error("FlowWeave packaged smoke test failed.", {
+      errorCode,
+      errorDescription
+    });
+    app.exit(1);
+  });
+}

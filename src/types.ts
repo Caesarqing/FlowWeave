@@ -5,6 +5,8 @@ export type ProjectFileNode = {
   type: "folder" | "file";
   depth: number;
   language?: string;
+  size?: number;
+  modifiedAt?: string;
   children?: ProjectFileNode[];
 };
 
@@ -26,10 +28,23 @@ export type ActivePage = "canvas" | "structure" | "docs" | "git-review" | "tools
 export type UtilityPanel = "profile" | "settings";
 export type UiThemeId = "system" | "light" | "dark" | "terminal" | "hologrid";
 export type LocaleId = "en" | "zh-CN";
+export type WorkspacePanelSide = "left" | "right";
+export type WorkspacePanelPage = ActivePage;
+export type WorkspacePanelPreferences = Record<WorkspacePanelPage, Record<WorkspacePanelSide, boolean>>;
 
 export type GraphNodeStatus = "mapped" | "needs-review" | "draft";
 export type GraphNodeType = "module" | "entrypoint" | "api" | "service" | "data" | "external" | "worker" | "utility" | "test";
 export type GraphRisk = "normal" | "review" | "blocked";
+export type TechnologyStack = "frontend" | "backend" | "mobile" | "data" | "infrastructure" | "shared" | "unknown";
+export type ArchitectureLayer = "presentation" | "api" | "domain" | "data" | "integration" | "infrastructure" | "test" | "unknown";
+export type CanvasLayoutMode = "dependency" | "technology" | "architecture" | "functional";
+export type CanvasPosition = { x: number; y: number };
+export type CanvasLayoutState = {
+  activeMode: "manual" | CanvasLayoutMode;
+  manualPositions: Record<string, CanvasPosition>;
+  autoLayouts: Partial<Record<CanvasLayoutMode, Record<string, CanvasPosition>>>;
+  collapsedGroups: string[];
+};
 export type GraphEdgeRelation = "depends_on" | "calls" | "reads_writes" | "external_api" | "publishes_event" | "subscribes_event" | "tests";
 export type CanvasNodeKind = "module" | "requirement" | "task" | "file" | "doc" | "agent" | "diff";
 
@@ -71,6 +86,7 @@ export type StructureSymbol = {
   role?: string;
   exported?: boolean;
   line?: number;
+  signature?: string;
 };
 
 export type ExternalCallInsight = {
@@ -95,6 +111,7 @@ export type FileInsight = {
 export type ArchitectureEvidence = {
   filePath?: string;
   symbol?: string;
+  line?: number;
   detail: string;
 };
 
@@ -126,6 +143,8 @@ export type GraphNode = {
   symbols?: StructureSymbol[];
   evidence?: ArchitectureEvidence[];
   confidence?: number;
+  technologyStack?: TechnologyStack;
+  architectureLayer?: ArchitectureLayer;
 };
 
 export type GraphEdge = {
@@ -152,8 +171,16 @@ export type ProjectScanSummary = {
   truncated?: boolean;
 };
 
+export type ProjectScanOptions = {
+  maxEntries: number;
+  concurrency: number;
+};
+
 export type CodeflowProject = {
-  version: 1;
+  version: 1 | 2;
+  generatorVersion?: string;
+  inputFingerprint?: string;
+  artifactState?: ProjectArtifactState;
   projectName: string;
   rootPath: string;
   generatedAt: string;
@@ -161,16 +188,124 @@ export type CodeflowProject = {
   summary: ProjectScanSummary;
   files: ProjectFileNode[];
   scanFingerprint?: string;
+  scanDelta?: ScanDelta;
+};
+
+export type AnalysisDepth = "semantic" | "syntax" | "lightweight";
+export type SemanticFileStatus = "parsed" | "unsupported" | "failed";
+export type SemanticRelationKind =
+  | "import"
+  | "call"
+  | "inherit"
+  | "render"
+  | "http"
+  | "database"
+  | "filesystem"
+  | "process"
+  | "event"
+  | "test";
+export type SemanticRelationConfidence = "confirmed" | "inferred";
+
+export type SemanticDiagnostic = {
+  code: string;
+  severity: "warning" | "error";
+  message: string;
+  filePath: string;
+};
+
+export type SemanticFile = {
+  path: string;
+  language?: string;
+  framework?: string;
+  size: number;
+  modifiedAt: string;
+  contentHash: string;
+  cacheKey: string;
+  analyzerId: string;
+  analysisDepth: AnalysisDepth;
+  status: SemanticFileStatus;
+  diagnostics: SemanticDiagnostic[];
+  insight?: FileInsight;
+  httpEndpoints: SemanticHttpEndpoint[];
+  renderTargets: string[];
+};
+
+export type SemanticHttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD" | "UNKNOWN";
+
+export type SemanticHttpEndpoint = {
+  id: string;
+  kind: "request" | "route";
+  filePath: string;
+  method: SemanticHttpMethod;
+  path: string;
+  normalizedPath: string;
+  symbol?: string;
+  confidence: SemanticRelationConfidence;
+};
+
+export type SemanticRelation = {
+  id: string;
+  kind: SemanticRelationKind;
+  source: string;
+  target: string;
+  sourceFile: string;
+  targetFile?: string;
+  symbol?: string;
+  detail: string;
+  confidence: SemanticRelationConfidence;
+};
+
+export type SemanticIndex = {
+  version: 1;
+  generatorVersion: string;
+  projectName: string;
+  rootPath: string;
+  generatedAt: string;
+  scanFingerprint: string;
+  files: SemanticFile[];
+  symbols: StructureSymbol[];
+  relations: SemanticRelation[];
+  httpEndpoints: SemanticHttpEndpoint[];
+  diagnostics: SemanticDiagnostic[];
+};
+
+export type SemanticIndexManifestEntry = {
+  path: string;
+  size: number;
+  modifiedAt: string;
+  contentHash: string;
+  cacheKey: string;
+};
+
+export type SemanticIndexManifest = {
+  version: 1;
+  generatorVersion: string;
+  projectName: string;
+  rootPath: string;
+  generatedAt: string;
+  scanFingerprint: string;
+  configurationFingerprint?: string;
+  files: SemanticIndexManifestEntry[];
+};
+
+export type ScanDelta = {
+  added: string[];
+  modified: string[];
+  deleted: string[];
+  unchanged: string[];
 };
 
 export type CodeflowCanvas = {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
+  generatorVersion?: string;
+  inputFingerprint?: string;
   id: string;
   title: string;
   projectPath: string;
   generatedAt: string;
   scanFingerprint?: string;
   artifactState?: ProjectArtifactState;
+  layout?: CanvasLayoutState;
   nodes: GraphNode[];
   edges: GraphEdge[];
 };
@@ -215,6 +350,7 @@ export type ProjectStructureFacts = {
   rootPath: string;
   languages: Record<string, number>;
   files: FileInsight[];
+  relations?: SemanticRelation[];
 };
 
 export type ArchitectureMap = {
@@ -305,6 +441,9 @@ export type AnalysisFailure = {
   code: "agent-failed" | "invalid-output" | "quality-rejected";
   message: string;
   agentId: RuntimeAgentId;
+  category?: ToolRunFailureCode;
+  transient?: boolean;
+  technicalDetails?: string;
   runId?: string;
   attemptRunIds?: string[];
   firstFailure?: string;
@@ -312,7 +451,7 @@ export type AnalysisFailure = {
 };
 
 export type SequenceDiagramGenerationResult =
-  | { outcome: "generated"; bundle: SequenceDiagramBundle }
+  | { outcome: "generated"; bundle: SequenceDiagramBundle; warning?: AnalysisFailure }
   | { outcome: "cached"; bundle: SequenceDiagramBundle; error: AnalysisFailure }
   | { outcome: "failed"; error: AnalysisFailure };
 
@@ -325,6 +464,50 @@ export type ExecutionMode = "plan" | "execute";
 export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
 export type AsyncOperationStatus = "idle" | "running" | "succeeded" | "failed";
 export type AsyncOperationState = { status: AsyncOperationStatus; error?: string };
+export type AnalysisOperationStage =
+  | "discovery"
+  | "hashing"
+  | "parsing"
+  | "linking"
+  | "analyzing"
+  | "validating"
+  | "persisting"
+  | "completed"
+  | "canceled"
+  | "failed";
+export type AnalysisProgressUpdate = {
+  stage: AnalysisOperationStage;
+  completed: number;
+  total: number;
+  failed: number;
+  message: string;
+};
+export type AnalysisOperation = {
+  operationId: string;
+  kind: "project-scan" | "architecture-analysis" | "sequence-analysis";
+  stage: AnalysisOperationStage;
+  completed: number;
+  total: number;
+  failed: number;
+  startedAt: string;
+  updatedAt: string;
+  message: string;
+};
+
+export type FlowWeaveErrorCategory = "validation" | "security" | "filesystem" | "agent" | "canceled" | "internal";
+export type FlowWeaveErrorData = {
+  code: string;
+  category: FlowWeaveErrorCategory;
+  message: string;
+  context: Record<string, string | number | boolean | undefined>;
+  suggestedActions: string[];
+  technicalDetails?: string;
+};
+
+export type AnalysisGenerationOptions = {
+  signal?: AbortSignal;
+  onProgress?: (progress: AnalysisProgressUpdate) => void;
+};
 
 export type ProjectAgentPlatform = "codex" | "claude" | "gemini" | "cursor";
 export type ProjectAgentConnectionConfig = {
@@ -348,7 +531,10 @@ export type ProjectAgentConnectionStatus = {
 };
 
 export type CodeflowTask = {
-  version: 1;
+  version: 1 | 2;
+  generatorVersion?: string;
+  inputFingerprint?: string;
+  artifactState?: ProjectArtifactState;
   id: string;
   title: string;
   generatedAt: string;
@@ -401,7 +587,7 @@ export type ToolRunStatus = "pending" | "running" | "completed" | "failed";
 export type ToolRunEvent =
   | { type: "stdout"; content: string; timestamp: string }
   | { type: "stderr"; content: string; timestamp: string }
-  | { type: "status"; status: ToolRunStatus; timestamp: string }
+  | { type: "status"; status: ToolRunStatus; timestamp: string; message?: string }
   | { type: "error"; message: string; timestamp: string };
 
 export type ToolDetectionResult = {
@@ -455,6 +641,34 @@ export type ToolRunRequest = {
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
   model?: string;
+  signal?: AbortSignal;
+  maxOutputBytes?: number;
+};
+
+export type AgentRunPolicy = {
+  timeoutMs: number;
+  maxOutputBytes: number;
+  retryCount: number;
+  retryDelayMs: number;
+};
+
+export type ToolRunTerminationReason = "completed" | "failed" | "timeout" | "canceled" | "output-limit";
+export type ToolRunFailureCode =
+  | "authentication"
+  | "connection"
+  | "rate-limit"
+  | "provider"
+  | "timeout"
+  | "invalid-output"
+  | "process";
+export type ToolRunOutputSource = "stdout" | "stderr" | "error" | "last-message";
+export type ToolRunFailure = {
+  code: ToolRunFailureCode;
+  message: string;
+  transient: boolean;
+  source: ToolRunOutputSource;
+  exitCode?: number | null;
+  providerDetails?: string;
 };
 
 export type ToolRunResult = {
@@ -473,10 +687,16 @@ export type ToolRunResult = {
   lastMessagePath?: string;
   summary?: string;
   stderr?: string;
+  outputText?: string;
+  failure?: ToolRunFailure;
   events: ToolRunEvent[];
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
   checkpointId?: string;
+  attempts?: number;
+  durationMs?: number;
+  outputTruncated?: boolean;
+  terminationReason?: ToolRunTerminationReason;
 };
 
 export type ToolRunSummary = {
@@ -493,6 +713,7 @@ export type ToolRunSummary = {
   logPath?: string;
   resultPath?: string;
   checkpointId?: string;
+  failure?: ToolRunFailure;
 };
 
 export type ToolRunArtifact = {
@@ -584,7 +805,8 @@ export type ArchitectureAnalysisResult =
       outcome: "generated";
       architectureMap: ArchitectureMap;
       graph: { nodes: GraphNode[]; edges: GraphEdge[] };
-      runId: string;
+      runId?: string;
+      warning?: AnalysisFailure;
     }
   | {
       outcome: "failed";
@@ -602,8 +824,11 @@ export interface ToolAdapter {
 }
 
 export type FlowWeaveApi = {
-  openProject(): Promise<FlowWeaveProjectOpenResult>;
-  scanProject(projectId: string): Promise<FlowWeaveProjectOpenResult>;
+  onFlowWeaveError(listener: (error: FlowWeaveErrorData) => void): () => void;
+  openProject(options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
+  scanProject(projectId: string, options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
+  cancelOperation(operationId: string): Promise<AnalysisOperation>;
+  onOperationProgress(listener: (operation: AnalysisOperation) => void): () => void;
   listAgents(): Promise<AgentDefinition[]>;
   saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
   deleteCustomAgent(agentId: AgentId): Promise<void>;
@@ -617,6 +842,8 @@ export type FlowWeaveApi = {
     executionMode: ExecutionMode;
     purpose: ToolRunPurpose;
     model?: string;
+    confirmedExecute?: boolean;
+    executeTimeoutMs?: number;
   }): Promise<ToolRunResult>;
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
@@ -636,6 +863,7 @@ export type FlowWeaveApi = {
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;
   readCanvas(projectId: string): Promise<CodeflowCanvas | undefined>;
   saveCanvas(projectId: string, canvas: CodeflowCanvas): Promise<string>;
+  exportDiagnostics(projectId: string): Promise<string>;
   getProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
   enableProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
   refreshProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;

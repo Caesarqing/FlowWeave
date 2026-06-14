@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { DiffViewer } from "./DiffViewer";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import { useGitStore } from "../stores/git.store";
+import { useRunsStore } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
+import { WorkspaceLayout } from "./WorkspaceLayout";
+import { Button } from "./Button";
+import { RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 
 export function GitReviewWorkspace({ projectId }: { projectId: string }) {
   const { t } = useI18n();
-  const diff = useWorkspaceStore((state) => state.diff);
-  const checkpointId = useWorkspaceStore((state) => state.checkpointId);
-  const activeRun = useWorkspaceStore((state) => state.selectedRunArtifact?.summary);
-  const setDiff = useWorkspaceStore((state) => state.setDiff);
-  const setCheckpointId = useWorkspaceStore((state) => state.setCheckpointId);
+  const diff = useGitStore((state) => state.diff);
+  const checkpointId = useGitStore((state) => state.checkpointId);
+  const activeRun = useRunsStore((state) => state.selectedRunArtifact?.summary);
+  const setDiff = useGitStore((state) => state.setDiff);
+  const setCheckpointId = useGitStore((state) => state.setCheckpointId);
   const [status, setStatus] = useState(() => t("git.status"));
 
   async function refreshDiff() {
@@ -51,13 +55,9 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
-  return (
-    <main className="workspace-page git-workspace">
-      <section className="workspace-column">
+  const reviewPanel = (
+    <section className="workspace-column">
         <div className="panel-header"><span>Git Review</span></div>
-        <button className="ghost-button" type="button" onClick={refreshDiff}>{t("git.refresh")}</button>
-        <button className="ghost-button" type="button" onClick={() => void createCheckpoint()}>{t("git.createCheckpoint")}</button>
-        <button className="ghost-button" disabled={!checkpointId} type="button" onClick={() => void rollback()}>Rollback</button>
         <p className="project-status">{status}</p>
         <div className="module-card">
           <h3>{t("git.activeRun")}</h3>
@@ -73,11 +73,28 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
             </div>
           ))}
         </div>
-      </section>
+    </section>
+  );
+
+  return (
+    <WorkspaceLayout
+      actions={(
+        <>
+          <Button icon={<RefreshCw size={14} />} variant="secondary" onClick={() => void refreshDiff()}>{t("git.refresh")}</Button>
+          <Button icon={<ShieldCheck size={14} />} variant="secondary" onClick={() => void createCheckpoint()}>{t("git.createCheckpoint")}</Button>
+          <Button disabled={!checkpointId} icon={<RotateCcw size={14} />} variant="danger" onClick={() => void rollback()}>Rollback</Button>
+        </>
+      )}
+      className="workspace-page git-workspace"
+      left={reviewPanel}
+      leftWidth="300px"
+      page="git-review"
+      status={status}
+      title={t("git.diff")}
+    >
       <section className="workspace-main">
-        <div className="panel-header"><span>{t("git.diff")}</span></div>
         <DiffViewer patch={diff?.patch ?? ""} />
       </section>
-    </main>
+    </WorkspaceLayout>
   );
 }

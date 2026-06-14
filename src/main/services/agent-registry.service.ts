@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentDefinition, AgentId, BuiltInAgentId, CustomAgentId, CustomAgentInput, RuntimeAgentId, ToolAdapter } from "../../types";
@@ -9,6 +9,8 @@ import { CustomCliAdapter } from "../agents/custom-cli.adapter";
 import { ClaudeDesktopAdapter, CodexDesktopAdapter } from "../agents/desktop-bridge.adapter";
 import { GeminiCliAdapter } from "../agents/gemini-cli.adapter";
 import { MockAgentAdapter } from "../agents/mock.adapter";
+import { resolveCandidate } from "../agents/agent-command";
+import { writeJsonAtomic } from "../storage/artifact-store";
 
 const BUILT_IN_AGENTS: AgentDefinition[] = [
   {
@@ -94,6 +96,7 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
   const command = input.command.trim();
   if (!name) throw new Error("Agent name is required.");
   if (!command) throw new Error("Agent command is required.");
+  const commandPath = await validateCustomAgentCommand(command, input.args ?? []);
 
   const agents = await readCustomAgents();
   const now = new Date().toISOString();
@@ -102,7 +105,7 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
     id,
     name,
     kind: "cli",
-    command,
+    command: commandPath,
     args: input.args ?? [],
     description: input.description?.trim() || "Custom CLI Agent",
     builtIn: false,
@@ -111,6 +114,25 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
   };
   await writeCustomAgents([...agents, agent]);
   return agent;
+}
+
+async function validateCustomAgentCommand(command: string, args: string[]): Promise<string> {
+  if (command.length > 2048 || /[\0\r\n]/.test(command)) {
+    throw new Error("Agent command contains invalid control characters or exceeds 2048 characters.");
+  }
+  if (args.length > 64) {
+    throw new Error("Agent arguments cannot contain more than 64 entries.");
+  }
+  for (const argument of args) {
+    if (argument.length > 4096 || /[\0\r\n]/.test(argument)) {
+      throw new Error("Agent argument contains invalid control characters or exceeds 4096 characters.");
+    }
+  }
+  const commandPath = await resolveCandidate(command);
+  if (!commandPath) {
+    throw new Error(`Agent executable was not found or is not executable: ${command}`);
+  }
+  return commandPath;
 }
 
 export async function deleteCustomAgent(agentId: AgentId): Promise<void> {
@@ -178,9 +200,7 @@ async function readCustomAgents(): Promise<AgentDefinition[]> {
 }
 
 async function writeCustomAgents(agents: AgentDefinition[]) {
-  const path = agentConfigPath();
-  await mkdir(agentConfigRoot(), { recursive: true });
-  await writeFile(path, `${JSON.stringify(agents, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(agentConfigPath(), agents);
 }
 
 function agentConfigPath() {

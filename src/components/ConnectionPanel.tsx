@@ -129,6 +129,19 @@ export function ConnectionPanel({
               <span><strong>{t("connection.source")}</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)}</span>
               <span><strong>{t("connection.target")}</strong>{moduleOptionLabel(targetNode, selectedEdge.target)}</span>
             </div>
+            <div className="connection-evidence">
+              <strong>{t("connection.evidence")}</strong>
+              {selectedEdge.evidence?.length ? (
+                selectedEdge.evidence.map((item, index) => (
+                  <article key={`${item.filePath ?? "unknown"}-${item.symbol ?? "unknown"}-${index}`}>
+                    <code>{evidenceLocation(item.filePath, item.symbol, item.line)}</code>
+                    <span>{item.detail}</span>
+                  </article>
+                ))
+              ) : (
+                <small>{t("connection.noEvidence")}</small>
+              )}
+            </div>
             <button className="ghost-button danger-button" type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
               <Trash2 size={15} />
               {t("connection.delete")}
@@ -211,4 +224,10 @@ function NodeSelect({ modules, value, onChange }: { modules: GraphNode[]; value:
 function moduleOptionLabel(node: GraphNode | undefined, fallbackId: string) {
   if (!node) return fallbackId;
   return node.title === node.id ? node.title : `${node.title} (${node.id})`;
+}
+
+function evidenceLocation(filePath: string | undefined, symbol: string | undefined, line: number | undefined) {
+  const location = filePath && line ? `${filePath}:${line}` : filePath;
+  if (location && symbol) return `${location} · ${symbol}`;
+  return location ?? symbol ?? "inferred";
 }

@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useI18n } from "../utils/i18n";
+import { WorkspaceLayout } from "./WorkspaceLayout";
+import { Button } from "./Button";
+import { Save } from "lucide-react";
 
 const docTypes = ["PRD", "README", "API Doc", "Task Spec"];
 
@@ -22,9 +25,8 @@ export function DocumentWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
-  return (
-    <main className="workspace-page docs-workspace">
-      <section className="workspace-column">
+  const documentList = (
+    <section className="workspace-column">
         <div className="panel-header"><span>Docs</span></div>
         <div className="doc-list">
           {docTypes.map((docType) => (
@@ -33,15 +35,23 @@ export function DocumentWorkspace({ projectId }: { projectId: string }) {
             </button>
           ))}
         </div>
-      </section>
+    </section>
+  );
+
+  return (
+    <WorkspaceLayout
+      actions={<Button icon={<Save size={14} />} variant="primary" onClick={() => void saveDoc()}>{t("docs.save")}</Button>}
+      className="workspace-page docs-workspace"
+      left={documentList}
+      page="docs"
+      leftWidth="280px"
+      status={`Markdown · ${docId}`}
+      title={t("nav.docs")}
+    >
       <section className="workspace-main">
-        <div className="panel-header">
-          <span>Markdown Editor · {docId}</span>
-          <button className="ghost-button" type="button" onClick={() => void saveDoc()}>{t("docs.save")}</button>
-        </div>
         <textarea className="doc-editor" value={content} onChange={(event) => setContent(event.target.value)} />
         <p className="project-status">{status}</p>
       </section>
-    </main>
+    </WorkspaceLayout>
   );
 }

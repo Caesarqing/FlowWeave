@@ -12,6 +12,11 @@ import { lazy, Suspense, useEffect } from "react";
 import { cn } from "./utils/classnames";
 import { BrandLogo } from "./components/BrandLogo";
 import { useI18n } from "./utils/i18n";
+import { OnboardingDialog } from "./components/OnboardingDialog";
+import { ErrorCenter } from "./components/ErrorCenter";
+import { WorkspaceLayout } from "./components/WorkspaceLayout";
+import { Button } from "./components/Button";
+import { BrainCircuit, Link2, Plus } from "lucide-react";
 
 const CanvasWorkspace = lazy(() => import("./components/CanvasWorkspace").then((module) => ({ default: module.CanvasWorkspace })));
 const StructureWorkspace = lazy(() => import("./components/StructureWorkspace").then((module) => ({ default: module.StructureWorkspace })));
@@ -66,6 +71,7 @@ export function App() {
 
 function DesktopApp() {
   const app = useAppController();
+  const { t } = useI18n();
   const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
   const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
 
@@ -76,15 +82,22 @@ function DesktopApp() {
 
   return (
     <div className="app-shell">
+      <OnboardingDialog />
+      <ErrorCenter />
       <Sidebar activePage={app.activePage} activeUtilityPanel={utilityPanel} onPageChange={changePage} onUtilityPanelChange={setUtilityPanel} />
-      <UtilityPanels activePanel={utilityPanel} onClose={() => setUtilityPanel(undefined)} />
+      <UtilityPanels activePanel={utilityPanel} onClose={() => setUtilityPanel(undefined)} projectId={app.projectId} />
       <section className="main-shell">
         <TopBar activePage={app.activePage} onExport={app.onExport} onSendToTool={app.onSendToTool} projectLabel={app.projectLabel} />
-        <ArtifactStatusBar scanFingerprint={app.scanFingerprint} statuses={app.artifactStatuses} />
+        <div className="artifact-status-slot">
+          <ArtifactStatusBar scanFingerprint={app.scanFingerprint} statuses={app.artifactStatuses} />
+        </div>
+        <div className="workspace-host">
         <Suspense fallback={<main className="workspace-page" aria-busy="true" />}>
         {app.activePage === "canvas" ? (
-          <div className={cn("canvas-page", app.canvas.selectedNode || app.canvas.connectionPanelMode ? "has-selection" : "no-selection")}>
-            <ProjectExplorer
+          <WorkspaceLayout
+            className={cn("canvas-page", app.canvas.selectedNode || app.canvas.connectionPanelMode ? "has-selection" : "no-selection")}
+            page="canvas"
+            left={<ProjectExplorer
               expandedPaths={app.canvas.expandedPaths}
               files={app.canvas.projectFiles}
               isDesktopBridgeAvailable={app.isDesktopBridgeAvailable}
@@ -92,27 +105,12 @@ function DesktopApp() {
               maxVisibleRows={app.canvas.maxRenderedTreeRows}
               onOpenProject={app.canvas.onOpenProject}
               onRefreshProject={app.canvas.onRefreshProject}
+              onCancelOperation={app.canvas.onCancelProjectOperation}
               onTogglePath={app.canvas.onTogglePath}
               projectPath={app.canvas.projectPath}
               statusMessage={app.canvas.projectStatus}
-            />
-            <CanvasWorkspace
-              analysisLabel={app.canvas.analysisLabel}
-              edges={app.canvas.edges}
-              isAnalyzing={app.canvas.isProjectLoading}
-              nodes={app.canvas.nodes}
-              onAddNode={app.canvas.onAddNode}
-              onAnalyzeProject={app.canvas.onAnalyzeProject}
-              onConnect={app.canvas.onConnect}
-              onEdgesChange={app.canvas.onEdgesChange}
-              onNodesChange={app.canvas.onNodesChange}
-              onOpenProject={app.canvas.onOpenProject}
-              onOpenConnectionCreator={app.canvas.onOpenConnectionCreator}
-              onPaneClick={app.canvas.onClearConnectionSelection}
-              onSelectEdge={app.canvas.onSelectEdge}
-              onSelectNode={app.canvas.onSelectNode}
-            />
-            {app.canvas.connectionPanelMode ? (
+            />}
+            right={app.canvas.connectionPanelMode ? (
               <ConnectionPanel
                 defaultRelation={app.canvas.defaultRelation}
                 mode={app.canvas.connectionPanelMode}
@@ -137,8 +135,49 @@ function DesktopApp() {
                 onModuleChange={app.canvas.onUpdateModuleFields}
                 onWriteDraft={app.canvas.onWriteDraft}
               />
-            ) : null}
-          </div>
+            ) : undefined}
+            rightAttention={Boolean(app.canvas.selectedNode || app.canvas.connectionPanelMode)}
+            actions={(
+              <>
+                <Button
+                  disabled={app.canvas.isProjectLoading}
+                  icon={<BrainCircuit size={15} />}
+                  label={app.canvas.isProjectLoading ? t("canvas.analyzing") : t("canvas.generate")}
+                  size="default"
+                  variant="primary"
+                  onClick={app.canvas.onAnalyzeProject}
+                >
+                  <span className="workspace-action-label">
+                    {app.canvas.isProjectLoading ? t("canvas.analyzing") : t("canvas.generate")}
+                  </span>
+                </Button>
+                <Button icon={<Plus size={15} />} label={t("canvas.addNode")} variant="secondary" onClick={app.canvas.onAddNode}>
+                  <span className="workspace-action-label">{t("canvas.addNode")}</span>
+                </Button>
+                <Button icon={<Link2 size={15} />} label={t("canvas.addConnection")} variant="secondary" onClick={app.canvas.onOpenConnectionCreator}>
+                  <span className="workspace-action-label">{t("canvas.addConnection")}</span>
+                </Button>
+              </>
+            )}
+            status={app.canvas.analysisLabel}
+            title={t("canvas.title")}
+          >
+            <CanvasWorkspace
+              canvasLayout={app.canvas.canvasLayout}
+              edges={app.canvas.edges}
+              nodes={app.canvas.nodes}
+              onConnect={app.canvas.onConnect}
+              onApplyAutoLayout={app.canvas.onApplyAutoLayout}
+              onEdgesChange={app.canvas.onEdgesChange}
+              onNodesChange={app.canvas.onNodesChange}
+              onOpenProject={app.canvas.onOpenProject}
+              onRestoreManualLayout={app.canvas.onRestoreManualLayout}
+              onPaneClick={app.canvas.onClearConnectionSelection}
+              onSelectEdge={app.canvas.onSelectEdge}
+              onSelectNode={app.canvas.onSelectNode}
+              onSetCollapsedGroups={app.canvas.onSetCollapsedGroups}
+            />
+          </WorkspaceLayout>
         ) : app.activePage === "structure" ? (
           <StructureWorkspace sequence={app.sequence} />
           ) : app.activePage === "docs" ? (
@@ -174,6 +213,7 @@ function DesktopApp() {
           />
         )}
         </Suspense>
+        </div>
       </section>
     </div>
   );

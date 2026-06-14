@@ -1,6 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer as electronIpcRenderer } from "electron";
 import type {
   AgentAnalysisResult,
+  AnalysisOperation,
   AgentDefinition,
   AgentId,
   ArchitectureAnalysisResult,
@@ -10,6 +11,8 @@ import type {
   GitDiffResult,
   GitStatus,
   FlowWeaveProjectOpenResult,
+  FlowWeaveErrorData,
+  ProjectScanOptions,
   SequenceDiagramBundle,
   SequenceDiagramGenerationResult,
   SequenceDiagramKind,
@@ -21,15 +24,29 @@ import type {
 } from "../types";
 import type { StartToolPlanOptions, StartToolPlanResult } from "../main/services/agent-run.service";
 import { GIT_CHANNELS, PROJECT_CHANNELS, TOOL_CHANNELS } from "../common/ipc-channels";
+import { shouldBroadcastFlowWeaveError } from "../main/services/flowweave-error.service";
+
+const FLOWWEAVE_ERROR_PREFIX = "FLOWWEAVE_ERROR:";
+const flowweaveErrorListeners = new Set<(error: FlowWeaveErrorData) => void>();
+const ipcRenderer = {
+  invoke: invokeFlowWeave,
+  on: electronIpcRenderer.on.bind(electronIpcRenderer),
+  removeListener: electronIpcRenderer.removeListener.bind(electronIpcRenderer)
+};
 
 const flowweaveApi = {
+  onFlowWeaveError: (listener: (error: FlowWeaveErrorData) => void) => {
+    flowweaveErrorListeners.add(listener);
+    return () => flowweaveErrorListeners.delete(listener);
+  },
   listAgents: () => ipcRenderer.invoke(TOOL_CHANNELS.listAgents) as Promise<AgentDefinition[]>,
   saveCustomAgent: (input: CustomAgentInput) =>
     ipcRenderer.invoke(TOOL_CHANNELS.saveCustomAgent, input) as Promise<AgentDefinition>,
   deleteCustomAgent: (agentId: AgentId) => ipcRenderer.invoke(TOOL_CHANNELS.deleteCustomAgent, agentId) as Promise<void>,
   detectAgent: (agentId: AgentId | "mock") => ipcRenderer.invoke(TOOL_CHANNELS.detectAgent, agentId) as Promise<ToolDetectionResult>,
   detectTool: (toolId: ToolId) => ipcRenderer.invoke(TOOL_CHANNELS.detect, toolId) as Promise<ToolDetectionResult>,
-  openProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.openProject) as Promise<FlowWeaveProjectOpenResult>,
+  openProject: (options: ProjectScanOptions) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.openProject, options) as Promise<FlowWeaveProjectOpenResult>,
   openToolProject: (toolId: ToolId, projectId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.openProject, toolId, projectId) as Promise<ToolOpenResult>,
   runToolPlan: (options: StartToolPlanOptions) =>
@@ -38,8 +55,15 @@ const flowweaveApi = {
     ipcRenderer.invoke(TOOL_CHANNELS.listRuns, projectId) as Promise<ToolRunSummary[]>,
   readToolRun: (projectId: string, runId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.readRun, projectId, runId) as Promise<ToolRunArtifact>,
-  scanProject: (projectId: string) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.scanProject, projectId) as Promise<FlowWeaveProjectOpenResult>,
+  scanProject: (projectId: string, options: ProjectScanOptions) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.scanProject, projectId, options) as Promise<FlowWeaveProjectOpenResult>,
+  cancelOperation: (operationId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.cancelOperation, operationId) as Promise<AnalysisOperation>,
+  onOperationProgress: (listener: (operation: AnalysisOperation) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, operation: AnalysisOperation) => listener(operation);
+    ipcRenderer.on(PROJECT_CHANNELS.operationProgress, handler);
+    return () => ipcRenderer.removeListener(PROJECT_CHANNELS.operationProgress, handler);
+  },
   gitStatus: (projectId: string) => ipcRenderer.invoke(GIT_CHANNELS.status, projectId) as Promise<GitStatus>,
   gitDiff: (projectId: string, checkpointId?: string) =>
     ipcRenderer.invoke(GIT_CHANNELS.diff, projectId, checkpointId) as Promise<GitDiffResult>,
@@ -68,6 +92,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.readCanvas, projectId) as Promise<CodeflowCanvas | undefined>,
   saveCanvas: (projectId: string, canvas: CodeflowCanvas) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.saveCanvas, projectId, canvas) as Promise<string>,
+  exportDiagnostics: (projectId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.exportDiagnostics, projectId) as Promise<string>,
   getProjectAgentConnection: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.getAgentConnection, projectId),
   enableProjectAgentConnection: (projectId: string) =>
@@ -83,3 +109,45 @@ const flowweaveApi = {
 contextBridge.exposeInMainWorld("flowweave", flowweaveApi);
 
 export type FlowWeaveApi = typeof flowweaveApi;
+
+async function invokeFlowWeave(channel: string, ...args: unknown[]): Promise<unknown> {
+  try {
+    return await electronIpcRenderer.invoke(channel, ...args);
+  } catch (error) {
+    const data = parseFlowWeaveError(error);
+    if (!data) throw error;
+    if (shouldBroadcastFlowWeaveError(data)) {
+      flowweaveErrorListeners.forEach((listener) => listener(data));
+    }
+    throw new FlowWeaveClientError(data);
+  }
+}
+
+class FlowWeaveClientError extends Error {
+  readonly code: string;
+  readonly category: FlowWeaveErrorData["category"];
+  readonly context: FlowWeaveErrorData["context"];
+  readonly suggestedActions: string[];
+  readonly technicalDetails?: string;
+
+  constructor(data: FlowWeaveErrorData) {
+    super(data.message);
+    this.name = "FlowWeaveClientError";
+    this.code = data.code;
+    this.category = data.category;
+    this.context = data.context;
+    this.suggestedActions = data.suggestedActions;
+    this.technicalDetails = data.technicalDetails;
+  }
+}
+
+function parseFlowWeaveError(error: unknown): FlowWeaveErrorData | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  const index = message.indexOf(FLOWWEAVE_ERROR_PREFIX);
+  if (index < 0) return undefined;
+  try {
+    return JSON.parse(message.slice(index + FLOWWEAVE_ERROR_PREFIX.length)) as FlowWeaveErrorData;
+  } catch {
+    return undefined;
+  }
+}

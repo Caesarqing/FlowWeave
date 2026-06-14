@@ -38,3 +38,36 @@ export function requireSafeId(channel: string, value: unknown, name: string): st
   }
   return id;
 }
+
+export function requireBoolean(channel: string, value: unknown, name: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`[${channel}] Invalid "${name}": expected a boolean.`);
+  }
+  return value;
+}
+
+export function requireInteger(
+  channel: string,
+  value: unknown,
+  name: string,
+  minimum: number,
+  maximum: number
+): number {
+  if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    throw new Error(`[${channel}] Invalid "${name}": expected an integer between ${minimum} and ${maximum}.`);
+  }
+  return value as number;
+}
+
+export function requireBoundedString(
+  channel: string,
+  value: unknown,
+  name: string,
+  maxLength: number
+): string {
+  const text = requireString(channel, value, name);
+  if (text.length > maxLength) {
+    throw new Error(`[${channel}] Invalid "${name}": exceeds ${maxLength} characters.`);
+  }
+  return text;
+}

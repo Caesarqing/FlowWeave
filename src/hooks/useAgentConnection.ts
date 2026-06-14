@@ -1,15 +1,15 @@
 import { useEffect, useRef } from "react";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import { useAgentStore } from "../stores/agents.store";
 import { useI18n } from "../utils/i18n";
 
 export function useAgentConnection(projectId: string, projectPath: string) {
   const { t } = useI18n();
   const promptedProjects = useRef(new Set<string>());
-  const connection = useWorkspaceStore((state) => state.agentConnection);
-  const operation = useWorkspaceStore((state) => state.agentConnectionOperation);
-  const setConnection = useWorkspaceStore((state) => state.setAgentConnection);
-  const setOperation = useWorkspaceStore((state) => state.setAgentConnectionOperation);
-  const setLastRunStatus = useWorkspaceStore((state) => state.setLastRunStatus);
+  const connection = useAgentStore((state) => state.connection);
+  const operation = useAgentStore((state) => state.connectionOperation);
+  const setConnection = useAgentStore((state) => state.setConnection);
+  const setOperation = useAgentStore((state) => state.setConnectionOperation);
+  const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
 
   async function load() {
     if (!window.flowweave || !projectId) {

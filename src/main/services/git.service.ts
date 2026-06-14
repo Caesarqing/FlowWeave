@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ChangedFile, ChangedFileStatus, GitStatus } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { writeJsonAtomic } from "../storage/artifact-store";
 
 const execFileAsync = promisify(execFile);
 
@@ -35,9 +36,11 @@ export async function createCheckpoint(projectPath: string): Promise<string> {
     await writeCheckpointMarker(projectPath, checkpointId, false);
     return checkpointId;
   }
-  if (!(await findStashRef(projectPath, checkpointId))) {
+  const stashRef = await findStashRef(projectPath, checkpointId);
+  if (!stashRef) {
     throw new Error(`Failed to create git checkpoint: ${output.trim() || checkpointId}`);
   }
+  await git(projectPath, ["stash", "apply", "--index", stashRef]);
   await writeCheckpointMarker(projectPath, checkpointId, true);
   return checkpointId;
 }
@@ -134,11 +137,12 @@ async function findStashRef(projectPath: string, checkpointId: string) {
 async function writeCheckpointMarker(projectPath: string, checkpointId: string, hasStash: boolean) {
   const checkpointDir = join(projectPath, FLOWWEAVE_DIR, "checkpoints");
   await mkdir(checkpointDir, { recursive: true });
-  await writeFile(
-    join(checkpointDir, `${checkpointId}.json`),
-    `${JSON.stringify({ checkpointId, projectPath: resolve(projectPath), hasStash, createdAt: new Date().toISOString() }, null, 2)}\n`,
-    "utf8"
-  );
+  await writeJsonAtomic(join(checkpointDir, `${checkpointId}.json`), {
+    checkpointId,
+    projectPath: resolve(projectPath),
+    hasStash,
+    createdAt: new Date().toISOString()
+  });
 }
 
 async function readCheckpointMarker(projectPath: string, checkpointId: string) {

@@ -11,6 +11,7 @@ describe("codex-local.adapter", () => {
       })
     ).toEqual([
       "exec",
+      "--skip-git-repo-check",
       "--cd",
       "/tmp/project",
       "--sandbox",
@@ -31,6 +32,21 @@ describe("codex-local.adapter", () => {
     ).not.toEqual(expect.arrayContaining(["--ask-for-approval", "never"]));
   });
 
+  it("isolates non-interactive runs from user MCP and rule configuration", () => {
+    const args = buildCodexPlanArgs({
+      executionMode: "plan",
+      lastMessagePath: "/tmp/last.md",
+      projectPath: "/tmp/project",
+      isolated: true
+    });
+
+    expect(args).toEqual(expect.arrayContaining([
+      "--ephemeral",
+      "--ignore-user-config",
+      "--ignore-rules"
+    ]));
+  });
+
   it("inserts the model before exec options", () => {
     expect(
       buildCodexPlanArgs({
@@ -38,8 +54,8 @@ describe("codex-local.adapter", () => {
         lastMessagePath: "/tmp/last.md",
         model: "gpt-5",
         projectPath: "/tmp/project"
-      }).slice(0, 3)
-    ).toEqual(["exec", "--model", "gpt-5"]);
+      }).slice(0, 4)
+    ).toEqual(["exec", "--model", "gpt-5", "--skip-git-repo-check"]);
   });
 
   it("builds writable Codex args only for execute mode", () => {

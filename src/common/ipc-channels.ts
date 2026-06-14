@@ -1,6 +1,8 @@
 export const PROJECT_CHANNELS = {
   openProject: "project:open",
   scanProject: "project:scan",
+  cancelOperation: "project:cancel-operation",
+  operationProgress: "project:operation-progress",
   analyzeProject: "project:analyze",
   analyzeArchitecture: "project:analyze-architecture",
   analyzeArchitectureWithAgent: "project:analyze-architecture-with-agent",
@@ -12,6 +14,7 @@ export const PROJECT_CHANNELS = {
   saveDoc: "project:save-doc",
   readCanvas: "project:read-canvas",
   saveCanvas: "project:save-canvas",
+  exportDiagnostics: "project:export-diagnostics",
   getAgentConnection: "project:get-agent-connection",
   enableAgentConnection: "project:enable-agent-connection",
   refreshAgentConnection: "project:refresh-agent-connection",

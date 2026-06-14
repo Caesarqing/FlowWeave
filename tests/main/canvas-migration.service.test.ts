@@ -88,10 +88,19 @@ describe("canvas-migration.service", () => {
     const migrated = migrateCanvasToScan(canvas, "/project", "scan-new", files);
 
     expect(migrated).toMatchObject({
-      version: 2,
+      version: 3,
       projectPath: "/project",
       scanFingerprint: "scan-new",
-      artifactState: "current"
+      artifactState: "current",
+      layout: {
+        activeMode: "manual",
+        manualPositions: {
+          api: { x: 120, y: 240 },
+          service: { x: 480, y: 240 }
+        },
+        autoLayouts: {},
+        collapsedGroups: []
+      }
     });
     expect(migrated.nodes[0]).toMatchObject({
       x: 120,

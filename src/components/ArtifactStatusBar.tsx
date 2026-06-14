@@ -1,4 +1,5 @@
 import type { ProjectArtifactState, ProjectArtifactStatuses } from "../types";
+import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 
 const artifactKeys: Array<keyof ProjectArtifactStatuses> = [
@@ -26,7 +27,7 @@ export function ArtifactStatusBar({
     <details className="artifact-status-bar">
       <summary aria-label={t("artifact.statuses")}>
         {abnormalKeys.map((key) => (
-          <span className={`artifact-status artifact-status-${statuses[key]}`} key={key}>
+          <span className={cn("artifact-status", `artifact-status-${statuses[key]}`)} key={key}>
             {t(`artifact.${key}`)}: {t(stateKey(statuses[key]))}
           </span>
         ))}
@@ -34,7 +35,7 @@ export function ArtifactStatusBar({
       <div className="artifact-status-details">
         <div className="artifact-status-list">
           {artifactKeys.map((key) => (
-            <span className={`artifact-status artifact-status-${statuses[key]}`} key={key}>
+            <span className={cn("artifact-status", `artifact-status-${statuses[key]}`)} key={key}>
               {t(`artifact.${key}`)}: {t(stateKey(statuses[key]))}
             </span>
           ))}

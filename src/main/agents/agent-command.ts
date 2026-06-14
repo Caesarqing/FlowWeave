@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
@@ -83,7 +84,7 @@ export function buildCommandSearchPaths(homePath = homedir()) {
 
 export async function resolveCandidate(candidate: string) {
   if (candidate.includes("/")) {
-    return access(candidate)
+    return access(candidate, constants.X_OK)
       .then(() => candidate)
       .catch(() => undefined);
   }
@@ -103,7 +104,7 @@ export async function resolveCandidate(candidate: string) {
 
 export async function resolveCandidateFromSearchPaths(candidate: string, searchPaths = buildCommandSearchPaths()) {
   for (const searchPath of searchPaths) {
-    const resolved = await access(join(searchPath, candidate))
+    const resolved = await access(join(searchPath, candidate), constants.X_OK)
       .then(() => join(searchPath, candidate))
       .catch(() => undefined);
     if (resolved) return resolved;

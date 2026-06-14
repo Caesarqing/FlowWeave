@@ -1,7 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   AnalysisFailure,
+  AnalysisGenerationOptions,
   ArchitectureMap,
   ArchitectureEvidence,
   CodeflowProject,
@@ -21,7 +21,11 @@ import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readArchitectureMap } from "./architecture-analysis.service";
 import { startToolPlan } from "./agent-run.service";
 import { createScanFingerprint, registerProject } from "./project-registry.service";
-import { buildProjectStructureFacts, selectRepresentativeStructureFacts } from "./structure-extractor.service";
+import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
+import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
+import { FlowWeaveError, throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
+import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
+import { extractStructuredJson } from "./structured-output.service";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
 const MAX_PROMPT_FILES = 180;
@@ -29,22 +33,44 @@ const MAX_SYMBOLS_PER_FILE = 14;
 const REPRESENTATIVE_FILE_LIMIT = 50;
 const sequenceFlights = new Map<string, Promise<SequenceDiagramGenerationResult>>();
 
-export async function generateSequenceDiagrams(project: CodeflowProject, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult> {
+export async function generateSequenceDiagrams(
+  project: CodeflowProject,
+  agentId: RuntimeAgentId,
+  options?: AnalysisGenerationOptions
+): Promise<SequenceDiagramGenerationResult> {
+  if (options?.signal) return generateSequenceDiagramsOnce(project, agentId, options);
   const flightKey = `${project.rootPath}:${agentId}`;
   const existing = sequenceFlights.get(flightKey);
   if (existing) return existing;
-  const flight = generateSequenceDiagramsOnce(project, agentId).finally(() => sequenceFlights.delete(flightKey));
+  const flight = generateSequenceDiagramsOnce(project, agentId, undefined).finally(() => sequenceFlights.delete(flightKey));
   sequenceFlights.set(flightKey, flight);
   return flight;
 }
 
-async function generateSequenceDiagramsOnce(project: CodeflowProject, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult> {
-  const facts = await buildProjectStructureFacts(project);
+async function generateSequenceDiagramsOnce(
+  project: CodeflowProject,
+  agentId: RuntimeAgentId,
+  options: AnalysisGenerationOptions | undefined
+): Promise<SequenceDiagramGenerationResult> {
+  const { index } = await buildSemanticIndex(project, {
+    signal: options?.signal,
+    onProgress: options?.onProgress
+  });
+  throwIfAborted(options?.signal, "Sequence analysis");
+  const facts = semanticIndexToStructureFacts(project, index);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const storedArchitecture = await readArchitectureMap(project.rootPath);
-  const architectureMap = storedArchitecture?.source === "agent" && storedArchitecture.metadata ? storedArchitecture : undefined;
+  const architectureMap = storedArchitecture;
   const inputFingerprint = project.scanFingerprint ?? createScanFingerprint({ representativeFacts, architecture: architectureMap?.metadata?.inputFingerprint });
   const prompt = buildSequenceDiagramPrompt(representativeFacts, architectureMap);
+  const localBundle = createFallbackSequenceBundle(project, facts, architectureMap, "fallback");
+  options?.onProgress?.({
+    stage: "analyzing",
+    completed: 0,
+    total: 1,
+    failed: 0,
+    message: `Analyzing sequence diagrams with ${agentId}.`
+  });
 
   if (agentId === "mock") {
     const inferred = createFallbackSequenceBundle(project, representativeFacts, architectureMap, "agent");
@@ -53,6 +79,7 @@ async function generateSequenceDiagramsOnce(project: CodeflowProject, agentId: R
     const quality = validateSequenceBundle(parsed, representativeFacts);
     if (!quality.valid) return failedSequenceResult(agentId, "quality-rejected", quality.reasons.join("; "), []);
     const bundle = withSequenceMetadata(parsed, agentId, "mock", inputFingerprint, quality);
+    throwIfAborted(options?.signal, "Sequence analysis");
     await writeSequenceDiagramBundle(project.rootPath, bundle);
     return { bundle, outcome: "generated" };
   }
@@ -65,13 +92,19 @@ async function generateSequenceDiagramsOnce(project: CodeflowProject, agentId: R
       toolId: agentId,
       prompt,
       executionMode: "plan",
-      purpose: "artifact-analysis"
+      purpose: "artifact-analysis",
+      signal: options?.signal
     });
     runIds.push(result.id);
+    throwIfRunCanceled(result, "Sequence analysis", options?.signal);
     if (result.status !== "completed") {
-      return cachedOrFailed(project.rootPath, failedSequenceError(agentId, "agent-failed", result.stderr ?? result.summary ?? "Agent sequence diagram generation failed.", runIds));
+      return cachedOrLocal(
+        project.rootPath,
+        localBundle,
+        failureFromRun(agentId, result, runIds)
+      );
     }
-    const output = collectStdout(result.events);
+    const output = result.outputText ?? collectStdout(result.events);
     const parsed = parseSequenceDiagramBundleJson(output, project, facts, architectureMap);
     const quality = parsed ? validateSequenceBundle(parsed, representativeFacts) : undefined;
     if (parsed && quality?.valid) {
@@ -85,27 +118,46 @@ async function generateSequenceDiagramsOnce(project: CodeflowProject, agentId: R
       toolId: agentId,
       prompt: buildSequenceRepairPrompt(prompt, output, firstFailure),
       executionMode: "plan",
-      purpose: "artifact-analysis"
+      purpose: "artifact-analysis",
+      signal: options?.signal
     });
     runIds.push(retry.id);
+    throwIfRunCanceled(retry, "Sequence analysis", options?.signal);
     if (retry.status !== "completed") {
-      return cachedOrFailed(project.rootPath, failedSequenceError(agentId, "agent-failed", retry.stderr ?? retry.summary ?? "Sequence repair run failed.", runIds, firstFailure));
+      return cachedOrLocal(
+        project.rootPath,
+        localBundle,
+        failureFromRun(agentId, retry, runIds, firstFailure)
+      );
     }
-    const retryOutput = collectStdout(retry.events);
+    const retryOutput = retry.outputText ?? collectStdout(retry.events);
     const retryParsed = parseSequenceDiagramBundleJson(retryOutput, project, facts, architectureMap);
     const retryQuality = retryParsed ? validateSequenceBundle(retryParsed, representativeFacts) : undefined;
     if (!retryParsed || !retryQuality?.valid) {
       const retryFailure = retryParsed ? retryQuality?.reasons.join("; ") ?? "Sequence quality validation failed." : "Repair run returned invalid sequence diagram JSON.";
-      return cachedOrFailed(
+      return cachedOrLocal(
         project.rootPath,
-        failedSequenceError(agentId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure)
+        localBundle,
+        {
+          ...failedSequenceError(agentId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure),
+          category: "invalid-output",
+          transient: false,
+          technicalDetails: retryOutput.slice(0, 4_000)
+        }
       );
     }
     const bundle = withSequenceMetadata(retryParsed, agentId, retry.id, inputFingerprint, retryQuality);
+    throwIfAborted(options?.signal, "Sequence analysis");
     await writeSequenceDiagramBundle(project.rootPath, bundle);
     return { bundle, outcome: "generated" };
   } catch (error) {
-    return cachedOrFailed(project.rootPath, failedSequenceError(agentId, "agent-failed", formatErrorMessage(error), runIds));
+    if (error instanceof FlowWeaveError && error.category === "canceled") throw error;
+    return cachedOrLocal(project.rootPath, localBundle, {
+      ...failedSequenceError(agentId, "agent-failed", formatErrorMessage(error), runIds),
+      category: "process",
+      transient: false,
+      technicalDetails: error instanceof Error ? error.stack : undefined
+    });
   }
 }
 
@@ -113,18 +165,32 @@ export async function reviseSequenceDiagram(
   project: CodeflowProject,
   agentId: RuntimeAgentId,
   kind: SequenceDiagramKind,
-  instruction: string
+  instruction: string,
+  options?: AnalysisGenerationOptions
 ): Promise<SequenceDiagramBundle> {
-  const facts = await buildProjectStructureFacts(project);
+  const { index } = await buildSemanticIndex(project, {
+    signal: options?.signal,
+    onProgress: options?.onProgress
+  });
+  throwIfAborted(options?.signal, "Sequence revision");
+  const facts = semanticIndexToStructureFacts(project, index);
   const architectureMap = await readArchitectureMap(project.rootPath);
   const current = await readSequenceDiagrams(project.rootPath);
   if (!current) throw new Error("No trusted sequence diagram exists to revise.");
   const currentDiagram = selectDiagram(current, kind);
   const prompt = buildSequenceDiagramRevisionPrompt(currentDiagram, instruction, facts, architectureMap);
+  options?.onProgress?.({
+    stage: "analyzing",
+    completed: 0,
+    total: 1,
+    failed: 0,
+    message: `Revising ${kind} sequence diagram with ${agentId}.`
+  });
 
   if (agentId === "mock") {
     const parsed = parseSequenceDiagramJson(mockRevisedDiagramJson(currentDiagram, instruction), kind);
     const bundle = parsed ? replaceDiagram(current, parsed) : current;
+    throwIfAborted(options?.signal, "Sequence revision");
     await writeSequenceDiagramBundle(project.rootPath, bundle);
     return bundle;
   }
@@ -134,8 +200,10 @@ export async function reviseSequenceDiagram(
     toolId: agentId,
     prompt,
     executionMode: "plan",
-    purpose: "artifact-analysis"
+    purpose: "artifact-analysis",
+    signal: options?.signal
   });
+  throwIfRunCanceled(result, "Sequence revision", options?.signal);
   if (result.status !== "completed") {
     throw new Error(result.stderr ?? result.summary ?? "Agent sequence diagram revision failed");
   }
@@ -145,15 +213,19 @@ export async function reviseSequenceDiagram(
     throw new Error("Agent did not return a valid sequence diagram JSON object.");
   }
   const bundle = replaceDiagram(current, parsed);
+  throwIfAborted(options?.signal, "Sequence revision");
   await writeSequenceDiagramBundle(project.rootPath, bundle);
   return bundle;
 }
 
 export async function readSequenceDiagrams(projectPath: string): Promise<SequenceDiagramBundle | undefined> {
   const filePath = join(projectPath, FLOWWEAVE_DIR, SEQUENCE_DIAGRAM_FILE);
-  return readFile(filePath, "utf8")
-    .then((content) => JSON.parse(content) as SequenceDiagramBundle)
-    .catch(() => undefined);
+  const value = await readJsonArtifact(filePath);
+  if (value === undefined) return undefined;
+  if (!isSequenceDiagramBundle(value)) {
+    throw new Error(`FlowWeave sequence diagram artifact is invalid and was preserved: ${filePath}`);
+  }
+  return value;
 }
 
 export function buildSequenceDiagramPrompt(facts: ProjectStructureFacts, architectureMap?: ArchitectureMap) {
@@ -386,6 +458,7 @@ function normalizeEvidence(evidence: ArchitectureEvidence[] | undefined) {
     .map((item) => ({
       filePath: stringOrUndefined(item.filePath),
       symbol: stringOrUndefined(item.symbol),
+      line: Number.isInteger(item.line) ? item.line : undefined,
       detail: item.detail?.trim() || "Sequence evidence"
     }))
     .slice(0, 30);
@@ -530,15 +603,17 @@ function selectDiagram(bundle: SequenceDiagramBundle, kind: SequenceDiagramKind)
   return kind === "architectural" ? bundle.architectural : bundle.detailedDesign;
 }
 
-async function cachedOrFailed(
+async function cachedOrLocal(
   projectPath: string,
+  localBundle: SequenceDiagramBundle,
   error: AnalysisFailure
 ): Promise<SequenceDiagramGenerationResult> {
   const cached = await readSequenceDiagrams(projectPath);
   if (cached) {
     return { bundle: cached, outcome: "cached", error };
   }
-  return { outcome: "failed", error };
+  await writeSequenceDiagramBundle(projectPath, localBundle);
+  return { bundle: localBundle, outcome: "generated", warning: error };
 }
 
 function validateSequenceBundle(
@@ -572,7 +647,7 @@ function validateSequenceBundle(
   const firstMessage = bundle.architectural.messages[0];
   const firstParticipant = bundle.architectural.participants.find((participant) => participant.id === firstMessage?.from);
   const firstPath = firstParticipant?.filePath?.toLowerCase();
-  if (!firstPath || !/(^|\/)(main|index|app|server|bootstrap)\.|ipc|controller|route|handler/.test(firstPath)) {
+  if (!firstPath || !/(^|\/)(main|index|app|server|bootstrap)\.|ipc|controller|route|handler|page|view|screen/.test(firstPath)) {
     reasons.push("Architectural sequence does not start from a verified source entry.");
   }
   if (evidenceCoverage < 0.7) reasons.push(`Evidence coverage ${evidenceCoverage.toFixed(2)} is below 0.70.`);
@@ -631,6 +706,25 @@ function failedSequenceError(
   } as const;
 }
 
+function failureFromRun(
+  agentId: RuntimeAgentId,
+  run: Awaited<ReturnType<typeof startToolPlan>>,
+  runIds: string[],
+  firstFailure?: string
+): AnalysisFailure {
+  return {
+    code: "agent-failed",
+    message: run.failure?.message ?? run.stderr ?? run.summary ?? "Agent sequence diagram generation failed.",
+    agentId,
+    category: run.failure?.code,
+    transient: run.failure?.transient,
+    technicalDetails: run.failure?.providerDetails,
+    runId: run.id,
+    attemptRunIds: runIds,
+    firstFailure
+  };
+}
+
 function buildSequenceRepairPrompt(originalPrompt: string, output: string, failure: string) {
   return `${originalPrompt}
 
@@ -643,18 +737,12 @@ ${output.slice(0, 40_000)}`;
 
 async function writeSequenceDiagramBundle(projectPath: string, bundle: SequenceDiagramBundle) {
   const root = join(projectPath, FLOWWEAVE_DIR);
-  await mkdir(root, { recursive: true });
-  await writeFile(join(root, SEQUENCE_DIAGRAM_FILE), `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(join(root, SEQUENCE_DIAGRAM_FILE), bundle);
 }
 
 function parseFirstJsonObject(output: string): unknown {
-  const match = output.match(/\{[\s\S]*\}/);
-  if (!match) return undefined;
-  try {
-    return JSON.parse(match[0]);
-  } catch {
-    return undefined;
-  }
+  const extracted = extractStructuredJson(output);
+  return "value" in extracted ? extracted.value : undefined;
 }
 
 function compactFactsForPrompt(facts: ProjectStructureFacts) {
@@ -670,7 +758,8 @@ function compactFactsForPrompt(facts: ProjectStructureFacts) {
       externalCalls: file.externalCalls.slice(0, 12),
       moduleId: file.moduleId,
       role: file.role
-    }))
+    })),
+    relations: facts.relations?.slice(0, 500)
   };
 }
 
@@ -772,6 +861,28 @@ function isParticipantKind(value: unknown): value is SequenceParticipantKind {
     value === "worker" ||
     value === "utility"
   );
+}
+
+function isSequenceDiagramBundle(value: unknown): value is SequenceDiagramBundle {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("version" in value) || (value.version !== 1 && value.version !== 2)) return false;
+  if (!("projectName" in value) || typeof value.projectName !== "string") return false;
+  if (!("rootPath" in value) || typeof value.rootPath !== "string") return false;
+  return "architectural" in value &&
+    isStoredSequenceDiagram(value.architectural) &&
+    "detailedDesign" in value &&
+    isStoredSequenceDiagram(value.detailedDesign);
+}
+
+function isStoredSequenceDiagram(value: unknown): value is SequenceDiagram {
+  return typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    (value.kind === "architectural" || value.kind === "detailed-design") &&
+    "participants" in value &&
+    Array.isArray(value.participants) &&
+    "messages" in value &&
+    Array.isArray(value.messages);
 }
 
 function isMessageKind(value: unknown): value is SequenceMessageKind {

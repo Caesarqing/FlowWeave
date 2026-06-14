@@ -35,34 +35,27 @@ describe("agent-registry.service", () => {
 
     const agent = await saveCustomAgent({
       name: "Gemini CLI",
-      command: "gemini",
+      command: process.execPath,
       args: ["--model", "pro"],
       description: "Local Gemini CLI adapter."
     });
     const withCustom = await listAgentDefinitions();
 
     expect(agent.id).toBe("custom:gemini-cli");
-    expect(withCustom).toContainEqual(expect.objectContaining({ id: "custom:gemini-cli", command: "gemini", args: ["--model", "pro"] }));
+    expect(withCustom).toContainEqual(expect.objectContaining({ id: "custom:gemini-cli", command: process.execPath, args: ["--model", "pro"] }));
 
     await deleteCustomAgent(agent.id);
     const afterDelete = await listAgentDefinitions();
     expect(afterDelete.some((item) => item.id === agent.id)).toBe(false);
   });
 
-  it("marks missing custom CLI commands unavailable without blocking persistence", async () => {
+  it("rejects missing custom CLI executables when saving", async () => {
     configureAgentRegistry(await mkdtemp(join(tmpdir(), "flowweave-agents-")));
 
-    const agent = await saveCustomAgent({
+    await expect(saveCustomAgent({
       name: "Missing CLI",
       command: "/definitely/not/a/flowweave/agent"
-    });
-    const adapter = await getAgentAdapter(agent.id);
-
-    await expect(adapter.detect()).resolves.toMatchObject({
-      toolId: agent.id,
-      available: false,
-      method: "none"
-    });
+    })).rejects.toThrow("Agent executable was not found or is not executable");
   });
 
   it("runs custom CLI agents through stdin and writes run artifacts", async () => {

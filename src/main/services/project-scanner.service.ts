@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { lstat, realpath } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import fg from "fast-glob";
@@ -16,11 +16,14 @@ const DEFAULT_IGNORE = [
   "**/venv/**", "**/env/**", "**/target/**", "**/vendor/**", "**/Pods/**",
   "**/DerivedData/**", "**/*.app/**", "**/.next/**", `**/${FLOWWEAVE_DIR}/**`,
   "**/coverage/**", "**/.turbo/**", "**/.vercel/**", "**/.runtime/**",
-  "**/logs/**", "**/*.log", "**/.DS_Store"
+  "**/logs/**", "**/*.log", "**/.DS_Store", "**/.env", "**/.env.*",
+  "**/*.{key,pem,p12,pfx,crt,cer}", "**/credentials.{json,yml,yaml}",
+  "**/*credentials*.{json,yml,yaml}", "**/*secret*.{json,yml,yaml}"
 ];
 
 const DEFAULT_MAX_DEPTH = 8;
-const DEFAULT_MAX_ENTRIES = 2500;
+const DEFAULT_MAX_ENTRIES = 10_000;
+const DEFAULT_SCAN_CONCURRENCY = 32;
 
 const LANGUAGE_BY_EXT: Record<string, string> = {
   ".js": "JavaScript",
@@ -46,15 +49,17 @@ const LANGUAGE_BY_EXT: Record<string, string> = {
 };
 
 export type ScanProjectOptions = {
+  concurrency?: number;
   ignore?: string[];
   maxDepth?: number;
   maxEntries?: number;
 };
 
-export async function scanProject(rootPath: string, options: ScanProjectOptions = {}): Promise<CodeflowProject> {
-  const ignore = [...DEFAULT_IGNORE, ...(options.ignore ?? [])];
-  const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
+export async function scanProject(rootPath: string, options?: ScanProjectOptions): Promise<CodeflowProject> {
+  const ignore = [...DEFAULT_IGNORE, ...(options?.ignore ?? [])];
+  const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const maxEntries = options?.maxEntries ?? DEFAULT_MAX_ENTRIES;
+  const concurrency = normalizeConcurrency(options?.concurrency);
   const entries = await fg("**/*", {
     cwd: rootPath,
     deep: maxDepth,
@@ -67,21 +72,22 @@ export async function scanProject(rootPath: string, options: ScanProjectOptions 
     followSymbolicLinks: false
   });
 
-  const nonSymlinkEntries = await filterSafeEntries(rootPath, entries);
+  const nonSymlinkEntries = await filterSafeEntries(rootPath, entries, concurrency);
   const filteredEntries = nonSymlinkEntries.filter((entry) => {
     const depth = entry.split("/").filter(Boolean).length - 1;
     return depth <= maxDepth;
   });
   const visibleEntries = filteredEntries.slice(0, maxEntries);
 
-  const files = buildTree(visibleEntries);
+  const metadata = await readEntryMetadata(rootPath, visibleEntries, concurrency);
+  const files = buildTree(visibleEntries, metadata);
   const summary = buildSummary(visibleEntries);
   summary.displayedEntries = visibleEntries.length;
   summary.truncated = filteredEntries.length > visibleEntries.length;
   const git = await readGitSummary(rootPath);
 
   const project: CodeflowProject = {
-    version: 1,
+    version: 2,
     projectName: basename(rootPath),
     rootPath,
     generatedAt: new Date().toISOString(),
@@ -97,9 +103,18 @@ export async function scanProject(rootPath: string, options: ScanProjectOptions 
   return project;
 }
 
-async function filterSafeEntries(rootPath: string, entries: string[]): Promise<string[]> {
+async function readEntryMetadata(rootPath: string, entries: string[], concurrency: number) {
+  const files = entries.filter((entry) => !entry.endsWith("/"));
+  const results = await mapWithConcurrency(files, concurrency, async (entry) => {
+    const info = await stat(join(rootPath, ...entry.split("/")));
+    return [entry, { size: info.size, modifiedAt: info.mtime.toISOString() }] as const;
+  });
+  return new Map(results);
+}
+
+async function filterSafeEntries(rootPath: string, entries: string[], concurrency: number): Promise<string[]> {
   const canonicalRoot = await realpath(rootPath);
-  const results = await Promise.all(entries.map(async (entry) => {
+  const results = await mapWithConcurrency(entries, concurrency, async (entry) => {
     const relativeEntry = entry.endsWith("/") ? entry.slice(0, -1) : entry;
     const absoluteEntry = join(rootPath, ...relativeEntry.split("/"));
     const info = await lstat(absoluteEntry);
@@ -108,18 +123,49 @@ async function filterSafeEntries(rootPath: string, entries: string[]): Promise<s
     const fromRoot = relative(canonicalRoot, canonicalEntry);
     if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) return undefined;
     return entry;
-  }));
+  });
   return results.filter((entry): entry is string => Boolean(entry));
 }
 
-function flattenFiles(nodes: ProjectFileNode[]): Array<{ path: string; language?: string }> {
+function normalizeConcurrency(value: number | undefined): number {
+  if (value === undefined) return DEFAULT_SCAN_CONCURRENCY;
+  if (!Number.isInteger(value) || value < 1 || value > 128) {
+    throw new Error(`Project scan concurrency must be an integer between 1 and 128: ${value}`);
+  }
+  return value;
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  async function worker(): Promise<void> {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(values[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
+  return results;
+}
+
+function flattenFiles(nodes: ProjectFileNode[]): Array<{ path: string; language?: string; size?: number; modifiedAt?: string }> {
   return nodes.flatMap((node) => [
-    ...(node.type === "file" ? [{ path: node.path, language: node.language }] : []),
+    ...(node.type === "file" ? [{
+      path: node.path,
+      language: node.language,
+      size: node.size,
+      modifiedAt: node.modifiedAt
+    }] : []),
     ...flattenFiles(node.children ?? [])
   ]);
 }
 
-function buildTree(entries: string[]): ProjectFileNode[] {
+function buildTree(entries: string[], metadata: Map<string, { size: number; modifiedAt: string }>): ProjectFileNode[] {
   const rootNodes: ProjectFileNode[] = [];
   const nodesByPath = new Map<string, ProjectFileNode>();
 
@@ -136,6 +182,8 @@ function buildTree(entries: string[]): ProjectFileNode[] {
       type: isFolder ? "folder" : "file",
       depth: parts.length - 1,
       language: isFolder ? undefined : detectLanguage(nodePath),
+      size: isFolder ? undefined : metadata.get(nodePath)?.size,
+      modifiedAt: isFolder ? undefined : metadata.get(nodePath)?.modifiedAt,
       children: isFolder ? [] : undefined
     };
 

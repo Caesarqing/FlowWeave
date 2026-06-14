@@ -1,6 +1,10 @@
 import { DiffEditor } from "@monaco-editor/react";
+import { useResolvedTheme } from "../hooks/useResolvedTheme";
+import { usePreferencesStore } from "../stores/preferences.store";
 
 export function DiffViewer({ patch }: { patch: string }) {
+  const theme = usePreferencesStore((state) => state.theme);
+  const resolvedTheme = useResolvedTheme(theme);
   if (patch.trim()) {
     return (
       <div className="monaco-diff-shell">
@@ -17,7 +21,7 @@ export function DiffViewer({ patch }: { patch: string }) {
             scrollBeyondLastLine: false,
             wordWrap: "on"
           }}
-          theme="vs-dark"
+          theme={resolvedTheme === "light" ? "vs" : "vs-dark"}
         />
       </div>
     );

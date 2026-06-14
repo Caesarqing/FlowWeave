@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -82,7 +82,34 @@ describe("architecture-analysis.service", () => {
     expect(map?.modules[0].symbols[0].name).toBe("loadUser");
     const graph = architectureMapToGraph(map!);
     expect(graph.nodes[0]).toMatchObject({ id: "user-api", nodeType: "api", category: "api-boundary" });
-    expect(graph.edges[0]).toMatchObject({ relation: "calls", guidanceNote: "Controller calls service." });
+    expect(graph.edges[0]).toMatchObject({
+      relation: "depends_on",
+      guidanceNote: expect.stringContaining("imports ../service/user.service")
+    });
+  });
+
+  it("parses provider-wrapped and fenced architecture JSON", async () => {
+    const root = await createFixtureFiles();
+    const project = projectFixture(root);
+    const facts = await buildProjectStructureFacts(project);
+    const content = JSON.stringify({
+      modules: [{
+        id: "user-api",
+        title: "User API",
+        category: "api-boundary",
+        role: "Receives user requests.",
+        description: "HTTP boundary.",
+        files: ["src/api/user.controller.ts"],
+        fileRoles: [],
+        symbols: [],
+        evidence: [{ filePath: "src/api/user.controller.ts", detail: "handler" }],
+        risk: "normal"
+      }],
+      relationships: []
+    });
+
+    expect(parseArchitectureJson(JSON.stringify({ type: "result", result: `\`\`\`json\n${content}\n\`\`\`` }), project, facts)?.modules)
+      .toHaveLength(1);
   });
 
   it("persists validated mock architecture artifacts", async () => {
@@ -104,7 +131,17 @@ describe("architecture-analysis.service", () => {
     expect(fileInsights).toContain("src/api/user.controller.ts");
   });
 
-  it("rejects custom agents without a verifiable read-only analysis mode", async () => {
+  it("reports and preserves a corrupted architecture artifact", async () => {
+    const root = await createFixtureFiles();
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    const artifactPath = join(root, FLOWWEAVE_DIR, "architecture-map.json");
+    await writeFile(artifactPath, "{invalid-json", "utf8");
+
+    await expect(readArchitectureMap(root)).rejects.toThrow("unreadable and was preserved");
+    await expect(readFile(artifactPath, "utf8")).resolves.toBe("{invalid-json");
+  });
+
+  it("uses the local semantic graph when a custom agent lacks a verifiable read-only mode", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-architecture-agent-"));
     const root = await createFixtureFiles();
     const scriptPath = join(configRoot, "architecture-agent.mjs");
@@ -144,10 +181,58 @@ describe("architecture-analysis.service", () => {
     const result = await analyzeArchitecture(projectFixture(root), agent.id);
     const summaries = await listRunSummaries(root);
 
-    expect(result.outcome).toBe("failed");
-    if (result.outcome !== "failed") throw new Error("Expected analysis failure.");
-    expect(result.error.message).toContain("verifiable read-only");
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error("Expected local analysis.");
+    expect(result.architectureMap.source).toBe("fallback");
+    expect(result.warning?.message).toContain("verifiable read-only");
     expect(summaries).toHaveLength(0);
+  });
+
+  it("does not publish architecture artifacts after cancellation", async () => {
+    const root = await createFixtureFiles();
+    const controller = new AbortController();
+    controller.abort("test-cancel");
+
+    await expect(analyzeArchitecture(projectFixture(root), "mock", {
+      signal: controller.signal
+    })).rejects.toMatchObject({
+      code: "operation-canceled"
+    });
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "architecture-map.json"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
+  it("returns a local semantic graph on connection failure without overwriting a trusted Agent artifact", async () => {
+    const originalPath = process.env.PATH;
+    const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-failure-"));
+    const claudePath = join(binRoot, "claude");
+    const root = await createFixtureFiles();
+    const trusted = await analyzeArchitecture(projectFixture(root), "mock");
+    if (trusted.outcome !== "generated") throw new Error("Expected trusted architecture.");
+    await writeFile(
+      claudePath,
+      "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'claude-test 1.0'; exit 0; fi\ncat >/dev/null\necho 'API Error: Unable to connect to API (ConnectionRefused)'\nexit 1\n",
+      "utf8"
+    );
+    await chmod(claudePath, 0o755);
+    process.env.PATH = `${binRoot}:${originalPath ?? ""}`;
+    try {
+      const result = await analyzeArchitecture(projectFixture(root), "claude-code");
+      const stored = await readArchitectureMap(root);
+
+      expect(result.outcome).toBe("generated");
+      if (result.outcome !== "generated") throw new Error("Expected local architecture.");
+      expect(result.architectureMap.source).toBe("fallback");
+      expect(result.warning).toMatchObject({
+        category: "connection",
+        transient: true
+      });
+      expect(stored?.source).toBe("agent");
+      expect(stored?.metadata?.agentId).toBe("mock");
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 });
 

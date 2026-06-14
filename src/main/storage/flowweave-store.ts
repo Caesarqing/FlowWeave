@@ -48,9 +48,18 @@ async function writeProjectArtifacts(
   const nextCanvas = canvasUpdate.mode === "write"
     ? canvasUpdate.canvas ?? createCanvasArtifact(rootPath, modules, edges, scanFingerprint)
     : undefined;
-  const task = createTaskArtifact(modules, edges);
+  const task = createTaskArtifact(modules, edges, scanFingerprint);
   const updates = [
-    { path: join(flowweaveRoot, "project.json"), content: jsonText({ ...project, scanFingerprint }) },
+    {
+      path: join(flowweaveRoot, "project.json"),
+      content: jsonText({
+        ...project,
+        generatorVersion: "1.0.0",
+        inputFingerprint: scanFingerprint,
+        artifactState: "current",
+        scanFingerprint
+      })
+    },
     { path: join(tasksDir, "current.task.md"), content: createTaskMarkdown(task) },
     { path: join(tasksDir, "current.task.json"), content: jsonText(task) },
     { path: join(contextDir, "file-tree.md"), content: createFileTreeMarkdown(project.files) }

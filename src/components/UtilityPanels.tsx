@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Languages, MonitorCog, Palette, Settings2, SlidersHorizontal, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Languages, MonitorCog, Palette, ScanSearch, Settings2, ShieldCheck, SlidersHorizontal, UserRound, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { HANDLE_COLLAPSE_THRESHOLD } from "../utils/graph-converters";
 import { relationOptions } from "../utils/relation-styles";
@@ -15,11 +15,19 @@ const themeOptions: Array<{ id: UiThemeId; labelKey: string; descriptionKey: str
   { id: "hologrid", labelKey: "theme.hologrid", descriptionKey: "theme.hologridDesc", swatches: ["#02060a", "#9deaff", "#22d3ee"] }
 ];
 
-export function UtilityPanels({ activePanel, onClose }: { activePanel?: UtilityPanel; onClose: () => void }) {
+export function UtilityPanels({
+  activePanel,
+  onClose,
+  projectId
+}: {
+  activePanel?: UtilityPanel;
+  onClose: () => void;
+  projectId?: string;
+}) {
   if (!activePanel) return null;
   return (
     <div className="utility-panel-shell">
-      {activePanel === "profile" ? <ProfilePanel onClose={onClose} /> : <SettingsPanel onClose={onClose} />}
+      {activePanel === "profile" ? <ProfilePanel onClose={onClose} /> : <SettingsPanel onClose={onClose} projectId={projectId} />}
     </div>
   );
 }
@@ -59,21 +67,50 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SettingsPanel({ onClose }: { onClose: () => void }) {
+function SettingsPanel({ onClose, projectId }: { onClose: () => void; projectId?: string }) {
   const defaultRelation = usePreferencesStore((state) => state.defaultRelation);
   const locale = usePreferencesStore((state) => state.locale);
   const reducedMotion = usePreferencesStore((state) => state.reducedMotion);
+  const scanMaxEntries = usePreferencesStore((state) => state.scanMaxEntries);
+  const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
+  const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const setDefaultRelation = usePreferencesStore((state) => state.setDefaultRelation);
   const setLocale = usePreferencesStore((state) => state.setLocale);
   const setReducedMotion = usePreferencesStore((state) => state.setReducedMotion);
+  const setScanMaxEntries = usePreferencesStore((state) => state.setScanMaxEntries);
+  const setScanConcurrency = usePreferencesStore((state) => state.setScanConcurrency);
+  const setExecuteTimeoutMinutes = usePreferencesStore((state) => state.setExecuteTimeoutMinutes);
   const { t } = useI18n();
+  const [diagnosticStatus, setDiagnosticStatus] = useState("");
   const [openSections, setOpenSections] = useState({
     canvas: true,
-    general: false
+    diagnostics: false,
+    general: false,
+    scanning: false,
+    agentPermissions: false
   });
 
   function toggleSection(section: keyof typeof openSections) {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
+  }
+
+  async function exportDiagnosticHistory() {
+    if (!projectId) {
+      setDiagnosticStatus(t("settings.diagnosticsNeedProject"));
+      return;
+    }
+    if (!window.flowweave) {
+      setDiagnosticStatus(t("settings.diagnosticsNeedDesktop"));
+      return;
+    }
+
+    try {
+      const exportPath = await window.flowweave.exportDiagnostics(projectId);
+      setDiagnosticStatus(t("settings.diagnosticsExported", { path: exportPath }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDiagnosticStatus(t("settings.diagnosticsFailed", { error: message }));
+    }
   }
 
   return (
@@ -147,8 +184,78 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           <input checked={reducedMotion} type="checkbox" onChange={(event) => setReducedMotion(event.target.checked)} />
         </label>
       </SettingsSection>
+      <SettingsSection icon={<ScanSearch size={14} />} isOpen={openSections.scanning} title={t("settings.scanning")} onToggle={() => toggleSection("scanning")}>
+        <label className="settings-row">
+          <span>
+            <strong>{t("settings.scanBudget")}</strong>
+            <small>{t("settings.scanBudgetHelp")}</small>
+          </span>
+          <input
+            max={100000}
+            min={1000}
+            step={1000}
+            type="number"
+            value={scanMaxEntries}
+            onChange={(event) => setScanMaxEntries(clampInteger(event.target.value, 1000, 100000, scanMaxEntries))}
+          />
+        </label>
+        <label className="settings-row">
+          <span>
+            <strong>{t("settings.scanConcurrency")}</strong>
+            <small>{t("settings.scanConcurrencyHelp")}</small>
+          </span>
+          <input
+            max={128}
+            min={1}
+            type="number"
+            value={scanConcurrency}
+            onChange={(event) => setScanConcurrency(clampInteger(event.target.value, 1, 128, scanConcurrency))}
+          />
+        </label>
+      </SettingsSection>
+      <SettingsSection icon={<ShieldCheck size={14} />} isOpen={openSections.agentPermissions} title={t("settings.agentPermissions")} onToggle={() => toggleSection("agentPermissions")}>
+        <label className="settings-row">
+          <span>
+            <strong>{t("settings.executeTimeout")}</strong>
+            <small>{t("settings.executeTimeoutHelp")}</small>
+          </span>
+          <input
+            max={120}
+            min={1}
+            type="number"
+            value={executeTimeoutMinutes}
+            onChange={(event) => setExecuteTimeoutMinutes(clampInteger(event.target.value, 1, 120, executeTimeoutMinutes))}
+          />
+        </label>
+        <div className="settings-row static">
+          <span>
+            <strong>{t("settings.executeGuard")}</strong>
+            <small>{t("settings.executeGuardHelp")}</small>
+          </span>
+          <code>{t("settings.required")}</code>
+        </div>
+      </SettingsSection>
+      <SettingsSection icon={<Download size={14} />} isOpen={openSections.diagnostics} title={t("settings.diagnostics")} onToggle={() => toggleSection("diagnostics")}>
+        <div className="settings-row static">
+          <span>
+            <strong>{t("settings.exportDiagnostics")}</strong>
+            <small>{t("settings.exportDiagnosticsHelp")}</small>
+          </span>
+          <button className="secondary-button" type="button" onClick={() => void exportDiagnosticHistory()}>
+            <Download size={13} />
+            {t("settings.export")}
+          </button>
+        </div>
+        {diagnosticStatus ? <p className="sequence-status">{diagnosticStatus}</p> : null}
+      </SettingsSection>
     </section>
   );
+}
+
+function clampInteger(value: string, minimum: number, maximum: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
 }
 
 function SettingsSection({

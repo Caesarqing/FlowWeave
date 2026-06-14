@@ -1,18 +1,21 @@
 import { useEffect } from "react";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import { useAgentStore } from "../stores/agents.store";
+import { useGitStore } from "../stores/git.store";
+import { useNavigationStore } from "../stores/navigation.store";
+import { useRunsStore } from "../stores/runs.store";
 import { useI18n } from "../utils/i18n";
 
 export function useRunHistory(projectId: string) {
   const { t } = useI18n();
-  const selectedRunId = useWorkspaceStore((state) => state.selectedRunId);
-  const selectedRunArtifact = useWorkspaceStore((state) => state.selectedRunArtifact);
-  const setActivePage = useWorkspaceStore((state) => state.setActivePage);
-  const setDiff = useWorkspaceStore((state) => state.setDiff);
-  const setIsRunsLoading = useWorkspaceStore((state) => state.setIsRunsLoading);
-  const setLastRunStatus = useWorkspaceStore((state) => state.setLastRunStatus);
-  const setRuns = useWorkspaceStore((state) => state.setRuns);
-  const setSelectedRunArtifact = useWorkspaceStore((state) => state.setSelectedRunArtifact);
-  const setSelectedRunId = useWorkspaceStore((state) => state.setSelectedRunId);
+  const selectedRunId = useRunsStore((state) => state.selectedRunId);
+  const selectedRunArtifact = useRunsStore((state) => state.selectedRunArtifact);
+  const setActivePage = useNavigationStore((state) => state.setActivePage);
+  const setDiff = useGitStore((state) => state.setDiff);
+  const setIsRunsLoading = useRunsStore((state) => state.setIsRunsLoading);
+  const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
+  const setRuns = useRunsStore((state) => state.setRuns);
+  const setSelectedRunArtifact = useRunsStore((state) => state.setSelectedRunArtifact);
+  const setSelectedRunId = useRunsStore((state) => state.setSelectedRunId);
 
   async function selectRun(runId: string) {
     if (!window.flowweave || !projectId) return;

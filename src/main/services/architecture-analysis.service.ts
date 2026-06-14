@@ -1,7 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  ArchitectureLayer,
   ArchitectureAnalysisResult,
+  AnalysisGenerationOptions,
   ArchitectureMap,
   ArchitectureModule,
   ArchitectureModuleCategory,
@@ -18,22 +19,32 @@ import type {
   ProjectStructureFacts,
   RuntimeAgentId,
   StructureSymbol,
+  TechnologyStack,
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { startToolPlan } from "./agent-run.service";
 import { createScanFingerprint, registerProject } from "./project-registry.service";
-import { buildProjectStructureFacts, selectRepresentativeStructureFacts } from "./structure-extractor.service";
+import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
+import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
+import { FlowWeaveError, throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
+import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
+import { extractStructuredJson } from "./structured-output.service";
 
 const MAX_PROMPT_FILES = 260;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 18;
 const REPRESENTATIVE_FILE_LIMIT = 60;
 const architectureFlights = new Map<string, Promise<ArchitectureAnalysisResult>>();
 
-export async function analyzeArchitecture(project: CodeflowProject, toolId: RuntimeAgentId): Promise<ArchitectureAnalysisResult> {
+export async function analyzeArchitecture(
+  project: CodeflowProject,
+  toolId: RuntimeAgentId,
+  options?: AnalysisGenerationOptions
+): Promise<ArchitectureAnalysisResult> {
+  if (options?.signal) return analyzeArchitectureOnce(project, toolId, options);
   const flightKey = `${project.rootPath}:${toolId}`;
   const existing = architectureFlights.get(flightKey);
   if (existing) return existing;
-  const flight = analyzeArchitectureOnce(project, toolId)
+  const flight = analyzeArchitectureOnce(project, toolId, undefined)
     .then(async (result) => {
       if (result.outcome === "generated") return result;
       const previous = await readArchitectureMap(project.rootPath);
@@ -47,11 +58,28 @@ export async function analyzeArchitecture(project: CodeflowProject, toolId: Runt
   return flight;
 }
 
-async function analyzeArchitectureOnce(project: CodeflowProject, toolId: RuntimeAgentId): Promise<ArchitectureAnalysisResult> {
-  const facts = await buildProjectStructureFacts(project);
+async function analyzeArchitectureOnce(
+  project: CodeflowProject,
+  toolId: RuntimeAgentId,
+  options: AnalysisGenerationOptions | undefined
+): Promise<ArchitectureAnalysisResult> {
+  const { index } = await buildSemanticIndex(project, {
+    signal: options?.signal,
+    onProgress: options?.onProgress
+  });
+  throwIfAborted(options?.signal, "Architecture analysis");
+  const facts = semanticIndexToStructureFacts(project, index);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const inputFingerprint = project.scanFingerprint ?? createScanFingerprint(representativeFacts);
   const prompt = buildArchitecturePrompt(representativeFacts);
+  const localArchitecture = createFallbackArchitectureMap(project, facts, "fallback");
+  options?.onProgress?.({
+    stage: "analyzing",
+    completed: 0,
+    total: 1,
+    failed: 0,
+    message: `Analyzing architecture with ${toolId}.`
+  });
 
   if (toolId === "mock") {
     const agentOutput = mockArchitectureJson(createFallbackArchitectureMap(project, representativeFacts, "agent"));
@@ -60,6 +88,7 @@ async function analyzeArchitectureOnce(project: CodeflowProject, toolId: Runtime
     const quality = validateArchitectureMap(parsed, representativeFacts);
     if (!quality.valid) return failedArchitectureResult(toolId, "quality-rejected", quality.reasons.join("; "), []);
     const architectureMap = withArchitectureMetadata(parsed, toolId, "mock", inputFingerprint, quality);
+    throwIfAborted(options?.signal, "Architecture analysis");
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
     return architectureMapToResult(architectureMap, "mock");
   }
@@ -72,13 +101,19 @@ async function analyzeArchitectureOnce(project: CodeflowProject, toolId: Runtime
       toolId,
       prompt,
       executionMode: "plan",
-      purpose: "artifact-analysis"
+      purpose: "artifact-analysis",
+      signal: options?.signal
     });
     runIds.push(firstRun.id);
+    throwIfRunCanceled(firstRun, "Architecture analysis", options?.signal);
     if (firstRun.status !== "completed") {
-      return failedArchitectureResult(toolId, "agent-failed", firstRun.stderr ?? firstRun.summary ?? "Agent architecture analysis failed.", runIds);
+      return publishLocalArchitecture(
+        project.rootPath,
+        localArchitecture,
+        failureFromRun(toolId, firstRun, runIds)
+      );
     }
-    const firstOutput = collectStdout(firstRun.events);
+    const firstOutput = firstRun.outputText ?? collectStdout(firstRun.events);
     const firstParsed = parseArchitectureJson(firstOutput, project, facts);
     const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
     if (firstParsed && firstQuality?.valid) {
@@ -93,32 +128,53 @@ async function analyzeArchitectureOnce(project: CodeflowProject, toolId: Runtime
       toolId,
       prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
       executionMode: "plan",
-      purpose: "artifact-analysis"
+      purpose: "artifact-analysis",
+      signal: options?.signal
     });
     runIds.push(retry.id);
+    throwIfRunCanceled(retry, "Architecture analysis", options?.signal);
     if (retry.status !== "completed") {
-      return failedArchitectureResult(toolId, "agent-failed", retry.stderr ?? retry.summary ?? "Architecture repair run failed.", runIds, firstFailure);
+      return publishLocalArchitecture(
+        project.rootPath,
+        localArchitecture,
+        failureFromRun(toolId, retry, runIds, firstFailure)
+      );
     }
     const retryOutput = collectStdout(retry.events);
     const retryParsed = parseArchitectureJson(retryOutput, project, facts);
     const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
     if (!retryParsed || !retryQuality?.valid) {
       const retryFailure = retryParsed ? retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Repair run returned invalid architecture JSON.";
-      return failedArchitectureResult(toolId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure);
+      return publishLocalArchitecture(project.rootPath, localArchitecture, {
+        ...failedArchitectureResult(toolId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure).error,
+        category: "invalid-output",
+        transient: false,
+        technicalDetails: retryOutput.slice(0, 4_000)
+      });
     }
     const architectureMap = withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality);
+    throwIfAborted(options?.signal, "Architecture analysis");
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
     return architectureMapToResult(architectureMap, retry.id);
   } catch (error) {
-    return failedArchitectureResult(toolId, "agent-failed", formatError(error), runIds);
+    if (error instanceof FlowWeaveError && error.category === "canceled") throw error;
+    return publishLocalArchitecture(project.rootPath, localArchitecture, {
+      ...failedArchitectureResult(toolId, "agent-failed", formatError(error), runIds).error,
+      category: "process",
+      transient: false,
+      technicalDetails: error instanceof Error ? error.stack : undefined
+    });
   }
 }
 
 export async function readArchitectureMap(projectPath: string): Promise<ArchitectureMap | undefined> {
   const architecturePath = join(projectPath, FLOWWEAVE_DIR, "architecture-map.json");
-  return readFile(architecturePath, "utf8")
-    .then((content) => JSON.parse(content) as ArchitectureMap)
-    .catch(() => undefined);
+  const value = await readJsonArtifact(architecturePath);
+  if (value === undefined) return undefined;
+  if (!isArchitectureMap(value)) {
+    throw new Error(`FlowWeave architecture artifact is invalid and was preserved: ${architecturePath}`);
+  }
+  return value;
 }
 
 export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
@@ -178,18 +234,15 @@ Rules:
 }
 
 export function parseArchitectureJson(output: string, project: CodeflowProject, facts: ProjectStructureFacts): ArchitectureMap | undefined {
-  const match = output.match(/\{[\s\S]*\}/);
-  if (!match) return undefined;
+  const extracted = extractStructuredJson(output, "modules");
+  if (!("value" in extracted)) return undefined;
   try {
-    const parsed = JSON.parse(match[0]) as Partial<ArchitectureMap>;
+    const parsed = extracted.value as Partial<ArchitectureMap>;
     if (!Array.isArray(parsed.modules) || parsed.modules.length === 0) return undefined;
     const fileSet = new Set(facts.files.map((file) => file.path));
     const modules = parsed.modules.map((module, index) => normalizeModule(module, facts, fileSet, index)).filter((module): module is ArchitectureModule => Boolean(module));
     if (modules.length === 0) return undefined;
-    const moduleIds = new Set(modules.map((module) => module.id));
-    const relationships = (parsed.relationships ?? [])
-      .map((relationship, index) => normalizeRelationship(relationship, moduleIds, index))
-      .filter((relationship): relationship is ArchitectureRelationship => Boolean(relationship));
+    const relationships = inferFallbackRelationships(modules, facts);
 
     return {
       version: 1,
@@ -208,12 +261,30 @@ export function parseArchitectureJson(output: string, project: CodeflowProject, 
   }
 }
 
-export function architectureMapToResult(architectureMap: ArchitectureMap, runId: string): ArchitectureAnalysisResult {
+export function architectureMapToResult(architectureMap: ArchitectureMap, runId?: string): ArchitectureAnalysisResult {
   return {
     outcome: "generated",
     architectureMap,
     graph: architectureMapToGraph(architectureMap),
     runId
+  };
+}
+
+export async function publishLocalArchitecture(
+  projectPath: string,
+  architectureMap: ArchitectureMap,
+  warning: import("../../types").AnalysisFailure
+): Promise<ArchitectureAnalysisResult> {
+  const previous = await readArchitectureMap(projectPath);
+  if (previous?.source !== "agent") {
+    await writeArchitectureArtifacts(projectPath, architectureMap);
+  }
+  return {
+    outcome: "generated",
+    architectureMap,
+    graph: architectureMapToGraph(architectureMap),
+    runId: warning.runId,
+    warning
   };
 }
 
@@ -236,7 +307,9 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     fileRoles: module.fileRoles,
     symbols: module.symbols,
     evidence: module.evidence,
-    confidence: module.confidence
+    confidence: module.confidence,
+    technologyStack: technologyStackForModule(module),
+    architectureLayer: architectureLayerForCategory(module.category)
   }));
   const edges = architectureMap.relationships.map((relationship): GraphEdge => ({
     id: relationship.id,
@@ -247,6 +320,25 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     evidence: relationship.evidence
   }));
   return { nodes, edges };
+}
+
+function technologyStackForModule(module: ArchitectureModule): TechnologyStack {
+  const paths = module.files.map((file) => file.toLowerCase());
+  if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file))) return "frontend";
+  if (paths.some((file) => /\.(swift|kt|kts|dart)$/.test(file))) return "mobile";
+  if (module.category === "data-access" || paths.some((file) => /\.(sql|prisma)$/.test(file))) return "data";
+  if (module.category === "external-integration") return "infrastructure";
+  if (paths.some((file) => /\.(py|java|go|rs|php|cs|rb)$/.test(file))) return "backend";
+  return module.category === "api-boundary" || module.category === "domain-service" ? "backend" : "shared";
+}
+
+function architectureLayerForCategory(category: ArchitectureModuleCategory): ArchitectureLayer {
+  if (category === "api-boundary") return "api";
+  if (category === "domain-service") return "domain";
+  if (category === "data-access") return "data";
+  if (category === "external-integration") return "integration";
+  if (category === "test-surface") return "test";
+  return "infrastructure";
 }
 
 export function architectureMapToProjectMap(map: ArchitectureMap): ProjectMap {
@@ -278,11 +370,10 @@ export function architectureMapToModuleMap(map: ArchitectureMap): ModuleMap {
 
 async function writeArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap) {
   const root = join(projectPath, FLOWWEAVE_DIR);
-  await mkdir(root, { recursive: true });
   await Promise.all([
-    writeFile(join(root, "architecture-map.json"), `${JSON.stringify(architectureMap, null, 2)}\n`, "utf8"),
-    writeFile(join(root, "file-insights.json"), `${JSON.stringify(architectureMap.files, null, 2)}\n`, "utf8"),
-    writeFile(join(root, "module-map.json"), `${JSON.stringify(architectureMapToModuleMap(architectureMap), null, 2)}\n`, "utf8")
+    writeJsonAtomic(join(root, "architecture-map.json"), architectureMap),
+    writeJsonAtomic(join(root, "file-insights.json"), architectureMap.files),
+    writeJsonAtomic(join(root, "module-map.json"), architectureMapToModuleMap(architectureMap))
   ]);
 }
 
@@ -357,7 +448,7 @@ function failedArchitectureResult(
   runIds: string[],
   firstFailure?: string,
   retryFailure?: string
-): ArchitectureAnalysisResult {
+): Extract<ArchitectureAnalysisResult, { outcome: "failed" }> {
   return {
     outcome: "failed",
     error: {
@@ -369,6 +460,25 @@ function failedArchitectureResult(
       firstFailure,
       retryFailure
     }
+  };
+}
+
+function failureFromRun(
+  agentId: RuntimeAgentId,
+  run: Awaited<ReturnType<typeof startToolPlan>>,
+  runIds: string[],
+  firstFailure?: string
+): import("../../types").AnalysisFailure {
+  return {
+    code: "agent-failed",
+    message: run.failure?.message ?? run.stderr ?? run.summary ?? "Agent architecture analysis failed.",
+    agentId,
+    category: run.failure?.code,
+    transient: run.failure?.transient,
+    technicalDetails: run.failure?.providerDetails,
+    runId: run.id,
+    attemptRunIds: runIds,
+    firstFailure
   };
 }
 
@@ -393,12 +503,12 @@ function formatError(error: unknown) {
 function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectStructureFacts, source: ArchitectureMap["source"]): ArchitectureMap {
   const groups = new Map<string, FileInsight[]>();
   for (const file of facts.files) {
-    const key = fallbackModuleId(file);
+    const key = fallbackModuleId(file, facts);
     groups.set(key, [...(groups.get(key) ?? []), file]);
   }
 
   const modules = [...groups.entries()].map(([id, files]): ArchitectureModule => {
-    const category = fallbackCategory(files);
+    const category = fallbackCategoryWithRelations(files, facts);
     const symbols = files.flatMap((file) => file.symbols.slice(0, 12));
     return {
       id,
@@ -413,6 +523,7 @@ function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectS
       evidence: files.slice(0, 5).map((file) => ({
         filePath: file.path,
         symbol: file.symbols[0]?.name,
+        line: file.symbols[0]?.line,
         detail: evidenceFromInsight(file)
       })),
       risk: riskFromFiles(files),
@@ -420,7 +531,7 @@ function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectS
     };
   });
 
-  const relationships = inferFallbackRelationships(modules, facts.files);
+  const relationships = inferFallbackRelationships(modules, facts);
   return {
     version: 1,
     projectName: project.projectName,
@@ -435,13 +546,39 @@ function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectS
   };
 }
 
-function inferFallbackRelationships(modules: ArchitectureModule[], files: FileInsight[]) {
+function inferFallbackRelationships(modules: ArchitectureModule[], facts: ProjectStructureFacts) {
   const moduleByFile = new Map<string, string>();
   modules.forEach((module) => module.files.forEach((file) => moduleByFile.set(file, module.id)));
   const relationships: ArchitectureRelationship[] = [];
   const seen = new Set<string>();
 
-  for (const file of files) {
+  for (const semanticRelation of facts.relations ?? []) {
+    if (!semanticRelation.sourceFile || !semanticRelation.targetFile) continue;
+    const source = moduleByFile.get(semanticRelation.sourceFile);
+    const target = moduleByFile.get(semanticRelation.targetFile);
+    if (!source || !target || source === target) continue;
+    const relation = architectureRelationFromSemantic(semanticRelation.kind);
+    const key = `${source}:${target}:${relation}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    relationships.push({
+      id: `${source}-${target}-${relation}`,
+      source,
+      target,
+      relation,
+      description: semanticRelation.detail,
+      evidence: [{
+        filePath: semanticRelation.sourceFile,
+        symbol: semanticRelation.symbol,
+        line: facts.files
+          .find((file) => file.path === semanticRelation.sourceFile)
+          ?.symbols.find((symbol) => symbol.name === semanticRelation.symbol)?.line,
+        detail: semanticRelation.detail
+      }]
+    });
+  }
+
+  for (const file of facts.files) {
     const source = moduleByFile.get(file.path);
     if (!source) continue;
     for (const specifier of file.imports) {
@@ -534,7 +671,8 @@ function compactFactsForPrompt(facts: ProjectStructureFacts) {
       })),
       calls: file.calls.slice(0, 35),
       externalCalls: file.externalCalls.slice(0, 20)
-    }))
+    })),
+    relations: facts.relations?.slice(0, 500)
   };
 }
 
@@ -556,8 +694,8 @@ function applyModuleIds(files: FileInsight[], modules: ArchitectureModule[]) {
   return files.map((file) => ({ ...file, moduleId: moduleByFile.get(file.path), role: file.role ?? fileRoleFromInsight(file, modules.find((module) => module.id === moduleByFile.get(file.path))?.category) }));
 }
 
-function fallbackModuleId(file: FileInsight) {
-  const category = fallbackCategory([file]);
+function fallbackModuleId(file: FileInsight, facts: ProjectStructureFacts) {
+  const category = fallbackCategoryWithRelations([file], facts);
   const parts = file.path.split("/");
   const srcIndex = parts.lastIndexOf("src");
   const scope = srcIndex >= 0 ? parts[srcIndex + 1] : parts[0];
@@ -570,6 +708,24 @@ function fallbackModuleId(file: FileInsight) {
   return safeId(scope ?? "domain-service");
 }
 
+function fallbackCategoryWithRelations(
+  files: FileInsight[],
+  facts: ProjectStructureFacts
+): ArchitectureModuleCategory {
+  const paths = new Set(files.map((file) => file.path));
+  const httpRelations = (facts.relations ?? []).filter((relation) => relation.kind === "http");
+  if (httpRelations.some((relation) => relation.targetFile && paths.has(relation.targetFile))) {
+    return "api-boundary";
+  }
+  if (
+    httpRelations.some((relation) => relation.sourceFile && paths.has(relation.sourceFile)) &&
+    files.some((file) => /(^|\/)(app|index|main|page|view|screen)[^/]*\.(tsx?|jsx?|vue)$/i.test(file.path))
+  ) {
+    return "api-boundary";
+  }
+  return fallbackCategory(files);
+}
+
 function fallbackCategory(files: FileInsight[]): ArchitectureModuleCategory {
   const text = files.map((file) => `${file.path} ${file.imports.join(" ")} ${file.externalCalls.map((call) => call.kind).join(" ")}`).join("\n");
   if (/test|spec|__tests__/i.test(text)) return "test-surface";
@@ -579,6 +735,13 @@ function fallbackCategory(files: FileInsight[]): ArchitectureModuleCategory {
   if (/worker|job|queue|cron|schedule|consumer/i.test(text)) return "job-worker";
   if (/util|helper|shared|common|constants|config/i.test(text)) return "shared-utility";
   return "domain-service";
+}
+
+function architectureRelationFromSemantic(kind: import("../../types").SemanticRelation["kind"]): GraphEdgeRelation {
+  if (kind === "database" || kind === "filesystem") return "reads_writes";
+  if (kind === "event") return "publishes_event";
+  if (kind === "test") return "tests";
+  return "calls";
 }
 
 function relationForModules(modules: ArchitectureModule[], source: string, target: string): GraphEdgeRelation {
@@ -661,7 +824,12 @@ function normalizeFileRoles(fileRoles: ArchitectureModule["fileRoles"] | undefin
 function normalizeEvidence(evidence: ArchitectureModule["evidence"] | undefined, files: string[]) {
   return (evidence ?? [])
     .filter((item) => !item.filePath || files.length === 0 || files.includes(item.filePath))
-    .map((item) => ({ filePath: item.filePath, symbol: item.symbol, detail: item.detail || "Architecture evidence" }))
+    .map((item) => ({
+      filePath: item.filePath,
+      symbol: item.symbol,
+      line: Number.isInteger(item.line) ? item.line : undefined,
+      detail: item.detail || "Architecture evidence"
+    }))
     .slice(0, 30);
 }
 
@@ -693,6 +861,25 @@ function isCategory(value: unknown): value is ArchitectureModuleCategory {
     value === "shared-utility" ||
     value === "test-surface"
   );
+}
+
+function isArchitectureMap(value: unknown): value is ArchitectureMap {
+  return typeof value === "object" &&
+    value !== null &&
+    "version" in value &&
+    (value.version === 1 || value.version === 2) &&
+    "projectName" in value &&
+    typeof value.projectName === "string" &&
+    "rootPath" in value &&
+    typeof value.rootPath === "string" &&
+    "modules" in value &&
+    Array.isArray(value.modules) &&
+    "relationships" in value &&
+    Array.isArray(value.relationships) &&
+    "files" in value &&
+    Array.isArray(value.files) &&
+    "symbols" in value &&
+    Array.isArray(value.symbols);
 }
 
 function isRelation(value: unknown): value is GraphEdgeRelation {

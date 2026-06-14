@@ -54,6 +54,13 @@ async function readFileInsight(rootPath: string, projectFiles: ProjectFileNode[]
   return extractLightweightInsight(filePath, content, language, projectFiles);
 }
 
+export function extractFileInsight(filePath: string, content: string, projectFiles: ProjectFileNode[]): FileInsight {
+  const language = detectLanguage(filePath);
+  return isTypeScriptLike(filePath)
+    ? extractTypeScriptInsight(filePath, content, language)
+    : extractLightweightInsight(filePath, content, language, projectFiles);
+}
+
 export function selectRepresentativeStructureFacts(facts: ProjectStructureFacts, maxFiles: number): FileInsight[] {
   return [...facts.files]
     .sort((left, right) => representativeScore(right) - representativeScore(left) || left.path.localeCompare(right.path))

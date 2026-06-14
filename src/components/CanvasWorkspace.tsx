@@ -9,7 +9,8 @@ import {
   type NodeTypes,
   type NodeChange
 } from "@xyflow/react";
-import { BrainCircuit, Link2, Plus } from "lucide-react";
+import { BrainCircuit, ChevronsDownUp, GitBranch, LayoutGrid, RotateCcw, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
 import { DocNode } from "./nodes/DocNode";
@@ -20,7 +21,22 @@ import { RequirementNode } from "./nodes/RequirementNode";
 import { TaskNode } from "./nodes/TaskNode";
 import type { FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
-import type { GraphEdgeRelation } from "../types";
+import type {
+  ArchitectureLayer,
+  CanvasLayoutMode,
+  CanvasLayoutState,
+  GraphEdgeRelation,
+  TechnologyStack
+} from "../types";
+import {
+  layoutCanvasNodes,
+  nodeArchitectureLayer,
+  nodeGroupKey,
+  nodeTechnologyStack,
+  traceNodeIds,
+  type TraceDirection
+} from "../utils/canvas-layout";
+import { Button } from "./Button";
 
 const nodeTypes = {
   moduleNode: ModuleNode,
@@ -33,98 +49,77 @@ const nodeTypes = {
 };
 
 type ControlledFlowCanvasProps = {
+  canvasLayout: CanvasLayoutState;
   edges: Edge[];
   nodes: FlowWeaveNode[];
+  onApplyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) => void;
   onConnect: (connection: Connection) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
   onPaneClick: () => void;
   onSelectEdge: (edgeId: string) => void;
   onSelectNode: (nodeId: string) => void;
+  onRestoreManualLayout: () => void;
+  onSetCollapsedGroups: (groups: string[]) => void;
 };
 
 export function CanvasWorkspace({
   edges,
   nodes,
-  onAddNode,
-  onAnalyzeProject,
-  analysisLabel,
-  isAnalyzing,
   onConnect,
+  onApplyAutoLayout,
   onEdgesChange,
   onOpenProject,
-  onOpenConnectionCreator,
   onNodesChange,
   onPaneClick,
   onSelectEdge,
-  onSelectNode
+  onSelectNode,
+  onRestoreManualLayout,
+  onSetCollapsedGroups,
+  canvasLayout
 }: {
+  canvasLayout: CanvasLayoutState;
   edges: Edge[];
   nodes: FlowWeaveNode[];
-  onAddNode: () => void;
-  onAnalyzeProject: () => void;
-  analysisLabel: string;
-  isAnalyzing: boolean;
   onConnect: (connection: Connection) => void;
+  onApplyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onOpenProject: () => void;
-  onOpenConnectionCreator: () => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
   onPaneClick: () => void;
   onSelectEdge: (edgeId: string) => void;
   onSelectNode: (nodeId: string) => void;
+  onRestoreManualLayout: () => void;
+  onSetCollapsedGroups: (groups: string[]) => void;
 }) {
   const { t } = useI18n();
 
   return (
     <main className="canvas-shell">
-      <div className="canvas-toolbar">
-        <div>
-          <strong>{t("canvas.title")}</strong>
-          <span>{analysisLabel}</span>
-        </div>
-        <div className="canvas-toolbar-actions">
-          <button
-            aria-label={isAnalyzing ? t("canvas.analyzing") : t("canvas.generate")}
-            className="ghost-button"
-            disabled={isAnalyzing}
-            title={isAnalyzing ? t("canvas.analyzing") : t("canvas.generate")}
-            type="button"
-            onClick={onAnalyzeProject}
-          >
-            <BrainCircuit size={15} />
-            <span className="button-label">{isAnalyzing ? t("canvas.analyzing") : t("canvas.generate")}</span>
-          </button>
-          <button aria-label={t("canvas.addNode")} className="add-node" title={t("canvas.addNode")} type="button" onClick={onAddNode}>
-            <Plus size={15} />
-            <span className="button-label">{t("canvas.addNode")}</span>
-          </button>
-          <button aria-label={t("canvas.addConnection")} className="ghost-button" title={t("canvas.addConnection")} type="button" onClick={onOpenConnectionCreator}>
-            <Link2 size={15} />
-            <span className="button-label">{t("canvas.addConnection")}</span>
-          </button>
-        </div>
-      </div>
       <section className="graph-stage" aria-label="FlowWeave backend module graph">
         <HologridScene />
         <ControlledFlowCanvas
           edges={edges}
+          canvasLayout={canvasLayout}
           nodes={nodes}
           onConnect={onConnect}
+          onApplyAutoLayout={onApplyAutoLayout}
           onEdgesChange={onEdgesChange}
           onNodesChange={onNodesChange}
           onPaneClick={onPaneClick}
           onSelectEdge={onSelectEdge}
           onSelectNode={onSelectNode}
+          onRestoreManualLayout={onRestoreManualLayout}
+          onSetCollapsedGroups={onSetCollapsedGroups}
         />
         {nodes.length === 0 ? (
           <div className="canvas-empty-state">
             <BrainCircuit size={34} />
             <strong>{t("canvas.emptyTitle")}</strong>
             <span>{t("canvas.emptyBody")}</span>
-            <button className="send-button" disabled={isAnalyzing} type="button" onClick={onOpenProject}>
+            <Button size="default" variant="primary" type="button" onClick={onOpenProject}>
               {t("project.open")}
-            </button>
+            </Button>
           </div>
         ) : null}
       </section>
@@ -133,44 +128,201 @@ export function CanvasWorkspace({
 }
 
 function ControlledFlowCanvas({
+  canvasLayout,
   edges,
   nodes,
   onConnect,
+  onApplyAutoLayout,
   onEdgesChange,
   onNodesChange,
   onPaneClick,
   onSelectEdge,
-  onSelectNode
+  onSelectNode,
+  onRestoreManualLayout,
+  onSetCollapsedGroups
 }: ControlledFlowCanvasProps) {
   /*
    * FlowWeave persists Canvas state in Zustand so autosave and Agent export can use
    * the same graph. Keep the controlled React Flow boundary isolated here.
-   */
+  */
   const { t } = useI18n();
-  const localizedEdges = localizeCanvasEdgeLabels(edges, t);
+  const [relationFilter, setRelationFilter] = useState<GraphEdgeRelation | "all">("all");
+  const [technologyFilter, setTechnologyFilter] = useState<TechnologyStack | "all">("all");
+  const [layerFilter, setLayerFilter] = useState<ArchitectureLayer | "all">("all");
+  const [layoutMode, setLayoutMode] = useState<CanvasLayoutMode>("dependency");
+  const [traceDirection, setTraceDirection] = useState<TraceDirection | "off">("off");
+  const [focusedNodeId, setFocusedNodeId] = useState("");
+  const [isLayoutRunning, setIsLayoutRunning] = useState(false);
+  const [layoutError, setLayoutError] = useState("");
+  const tracedNodeIds = useMemo(
+    () => focusedNodeId && traceDirection !== "off" ? traceNodeIds(focusedNodeId, edges, traceDirection) : undefined,
+    [edges, focusedNodeId, traceDirection]
+  );
+  const filterVisibleNodeIds = useMemo(
+    () => new Set(nodes.filter((node) =>
+      (technologyFilter === "all" || nodeTechnologyStack(node.data) === technologyFilter) &&
+      (layerFilter === "all" || nodeArchitectureLayer(node.data) === layerFilter)
+    ).map((node) => node.id)),
+    [nodes, technologyFilter, layerFilter]
+  );
+  const collapsedVisibleNodeIds = useMemo(() => {
+    if (layoutMode === "dependency" || canvasLayout.collapsedGroups.length === 0) {
+      return filterVisibleNodeIds;
+    }
+    const representatives = new Map<string, string>();
+    for (const node of nodes.filter((item) => filterVisibleNodeIds.has(item.id)).sort((left, right) => left.id.localeCompare(right.id))) {
+      const group = nodeGroupKey(node.data, layoutMode);
+      if (!representatives.has(group)) representatives.set(group, node.id);
+    }
+    return new Set(nodes
+      .filter((node) => {
+        if (!filterVisibleNodeIds.has(node.id)) return false;
+        const group = nodeGroupKey(node.data, layoutMode);
+        return !canvasLayout.collapsedGroups.includes(group) || representatives.get(group) === node.id;
+      })
+      .map((node) => node.id));
+  }, [canvasLayout.collapsedGroups, filterVisibleNodeIds, layoutMode, nodes]);
+  const filteredEdges = useMemo(
+    () => edges.filter((edge) => {
+      const relation = (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on";
+      return (relationFilter === "all" || relation === relationFilter) &&
+        collapsedVisibleNodeIds.has(edge.source) &&
+        collapsedVisibleNodeIds.has(edge.target) &&
+        (!tracedNodeIds || (tracedNodeIds.has(edge.source) && tracedNodeIds.has(edge.target)));
+    }),
+    [edges, relationFilter, collapsedVisibleNodeIds, tracedNodeIds]
+  );
+  const visibleNodes = useMemo(
+    () => nodes.map((node) => ({
+      ...node,
+      hidden: !collapsedVisibleNodeIds.has(node.id) || Boolean(tracedNodeIds && !tracedNodeIds.has(node.id))
+    })),
+    [nodes, collapsedVisibleNodeIds, tracedNodeIds]
+  );
+  const localizedEdges = useMemo(
+    () => localizeCanvasEdgeLabels(filteredEdges, t),
+    [filteredEdges, t]
+  );
+  async function applyAutoLayout() {
+    const nodesToLayout = visibleNodes.filter((node) => !node.hidden);
+    setIsLayoutRunning(true);
+    setLayoutError("");
+    try {
+      const layout = await layoutCanvasNodes(nodesToLayout, filteredEdges, layoutMode);
+      onApplyAutoLayout(
+        layoutMode,
+        Object.fromEntries(layout.map((node) => [node.id, node.position]))
+      );
+    } catch (error) {
+      setLayoutError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsLayoutRunning(false);
+    }
+  }
+  function toggleGroupCollapse() {
+    if (layoutMode === "dependency") return;
+    const groups = [...new Set(nodes
+      .filter((node) => filterVisibleNodeIds.has(node.id))
+      .map((node) => nodeGroupKey(node.data, layoutMode)))];
+    const allCollapsed = groups.every((group) => canvasLayout.collapsedGroups.includes(group));
+    onSetCollapsedGroups(allCollapsed
+      ? canvasLayout.collapsedGroups.filter((group) => !groups.includes(group))
+      : [...canvasLayout.collapsedGroups, ...groups]);
+  }
   return (
-    <ReactFlow
-      className="flow-canvas"
-      edges={localizedEdges}
-      fitView
-      fitViewOptions={{ padding: 0.18 }}
-      maxZoom={1.35}
-      minZoom={0.45}
-      nodes={nodes}
-      nodeTypes={nodeTypes as NodeTypes}
-      nodesDraggable
-      onConnect={onConnect}
-      onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
-      onEdgesChange={onEdgesChange}
-      onNodesChange={onNodesChange}
-      onNodeClick={(_, node) => onSelectNode(node.id)}
-      onPaneClick={onPaneClick}
-      panOnDrag
-    >
-      <Background color="rgba(148, 163, 184, 0.18)" gap={28} size={1} />
-      <Controls showInteractive={false} />
-      <MiniMap maskColor="rgba(2, 6, 23, 0.72)" nodeColor="#475569" pannable zoomable />
-    </ReactFlow>
+    <div className="canvas-flow-shell">
+      <div className="canvas-view-tools">
+        <div className="canvas-view-tools-content">
+          <Button disabled={isLayoutRunning} icon={<LayoutGrid size={14} />} label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} variant="subtle" type="button" onClick={() => void applyAutoLayout()}>
+            <span className="canvas-tool-label">{isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")}</span>
+          </Button>
+          <Button disabled={canvasLayout.activeMode === "manual"} icon={<RotateCcw size={14} />} label={t("canvas.restoreManualLayout")} variant="subtle" type="button" onClick={onRestoreManualLayout}>
+            <span className="canvas-tool-label">{t("canvas.restoreManualLayout")}</span>
+          </Button>
+          <Button disabled={layoutMode === "dependency"} icon={<ChevronsDownUp size={14} />} label={t("canvas.toggleGroups")} variant="subtle" type="button" onClick={toggleGroupCollapse}>
+            <span className="canvas-tool-label">{t("canvas.toggleGroups")}</span>
+          </Button>
+          {layoutError ? <span className="canvas-layout-error" title={layoutError}>{t("canvas.layoutFailed")}</span> : null}
+          <label>
+            <span>{t("canvas.layoutMode")}</span>
+            <select value={layoutMode} onChange={(event) => setLayoutMode(event.target.value as CanvasLayoutMode)}>
+              <option value="dependency">{t("canvas.layoutDependency")}</option>
+              <option value="technology">{t("canvas.layoutTechnology")}</option>
+              <option value="architecture">{t("canvas.layoutArchitecture")}</option>
+              <option value="functional">{t("canvas.layoutFunctional")}</option>
+            </select>
+          </label>
+          <label>
+            <span>{t("canvas.technologyFilter")}</span>
+            <select value={technologyFilter} onChange={(event) => setTechnologyFilter(event.target.value as TechnologyStack | "all")}>
+              <option value="all">{t("canvas.filterAll")}</option>
+              {(["frontend", "backend", "mobile", "data", "infrastructure", "shared", "unknown"] as TechnologyStack[])
+                .map((stack) => <option key={stack} value={stack}>{t(`technology.${stack}`)}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>{t("canvas.layerFilter")}</span>
+            <select value={layerFilter} onChange={(event) => setLayerFilter(event.target.value as ArchitectureLayer | "all")}>
+              <option value="all">{t("canvas.filterAll")}</option>
+              {(["presentation", "api", "domain", "data", "integration", "infrastructure", "test", "unknown"] as ArchitectureLayer[])
+                .map((layer) => <option key={layer} value={layer}>{t(`architectureLayer.${layer}`)}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>{t("canvas.relationFilter")}</span>
+            <select value={relationFilter} onChange={(event) => setRelationFilter(event.target.value as GraphEdgeRelation | "all")}>
+              <option value="all">{t("canvas.filterAll")}</option>
+              {(["depends_on", "calls", "reads_writes", "external_api", "publishes_event", "subscribes_event", "tests"] as GraphEdgeRelation[])
+                .map((relation) => <option key={relation} value={relation}>{t(`relation.${relation}`)}</option>)}
+            </select>
+          </label>
+          <label>
+            <GitBranch size={14} />
+            <select value={traceDirection} onChange={(event) => setTraceDirection(event.target.value as TraceDirection | "off")}>
+              <option value="off">{t("canvas.traceOff")}</option>
+              <option value="upstream">{t("canvas.traceUpstream")}</option>
+              <option value="downstream">{t("canvas.traceDownstream")}</option>
+              <option value="all">{t("canvas.traceAll")}</option>
+            </select>
+          </label>
+          {tracedNodeIds ? (
+            <Button label={t("canvas.clearTrace")} variant="icon" type="button" onClick={() => {
+              setTraceDirection("off");
+              setFocusedNodeId("");
+            }}>
+              <X size={14} />
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div className="canvas-flow-stage">
+        <ReactFlow
+          className="flow-canvas"
+          edges={localizedEdges}
+          fitView
+          fitViewOptions={{ padding: 0.18 }}
+          maxZoom={1.35}
+          minZoom={0.45}
+          nodes={visibleNodes}
+          nodeTypes={nodeTypes as NodeTypes}
+          nodesDraggable
+          onConnect={onConnect}
+          onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
+          onEdgesChange={onEdgesChange}
+          onNodesChange={onNodesChange}
+          onNodeClick={(_, node) => {
+            setFocusedNodeId(node.id);
+            onSelectNode(node.id);
+          }}
+          onPaneClick={onPaneClick}
+          panOnDrag
+        >
+          <Background color="var(--graph-grid)" gap={28} size={1} />
+          <Controls position="bottom-left" showInteractive={false} />
+          <MiniMap maskColor="var(--minimap-mask)" nodeColor="var(--minimap-node)" pannable zoomable />
+        </ReactFlow>
+      </div>
+    </div>
   );
 }
 

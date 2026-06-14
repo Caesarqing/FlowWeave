@@ -6,9 +6,9 @@ import {
   type NodeChange
 } from "@xyflow/react";
 import { useMemo, useState } from "react";
-import type { GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
+import type { CanvasLayoutMode, CanvasLayoutState, GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
 import { usePreferencesStore } from "../stores/preferences.store";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import { useCanvasStore } from "../stores/canvas.store";
 import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../utils/canvas-graph-crud";
 import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
@@ -18,19 +18,23 @@ export function useFlowWeaveState() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>();
   const [connectionPanelMode, setConnectionPanelMode] = useState<"create" | "edit">();
   const defaultRelation = usePreferencesStore((state) => state.defaultRelation);
-  const modules = useWorkspaceStore((state) => state.modules);
-  const projectFiles = useWorkspaceStore((state) => state.projectFiles);
-  const expandedPaths = useWorkspaceStore((state) => state.expandedPaths);
-  const selectedNodeId = useWorkspaceStore((state) => state.selectedNodeId);
-  const nodes = useWorkspaceStore((state) => state.nodes);
-  const edges = useWorkspaceStore((state) => state.edges);
-  const setGraph = useWorkspaceStore((state) => state.setGraph);
-  const setEdges = useWorkspaceStore((state) => state.setEdges);
-  const setNodes = useWorkspaceStore((state) => state.setNodes);
-  const setSelectedNodeId = useWorkspaceStore((state) => state.setSelectedNodeId);
-  const togglePath = useWorkspaceStore((state) => state.togglePath);
-  const updateModule = useWorkspaceStore((state) => state.updateModule);
-  const syncNodePositions = useWorkspaceStore((state) => state.syncNodePositions);
+  const modules = useCanvasStore((state) => state.modules);
+  const projectFiles = useCanvasStore((state) => state.projectFiles);
+  const expandedPaths = useCanvasStore((state) => state.expandedPaths);
+  const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
+  const nodes = useCanvasStore((state) => state.nodes);
+  const edges = useCanvasStore((state) => state.edges);
+  const setGraph = useCanvasStore((state) => state.setGraph);
+  const setEdges = useCanvasStore((state) => state.setEdges);
+  const setNodes = useCanvasStore((state) => state.setNodes);
+  const setSelectedNodeId = useCanvasStore((state) => state.setSelectedNodeId);
+  const togglePath = useCanvasStore((state) => state.togglePath);
+  const updateModule = useCanvasStore((state) => state.updateModule);
+  const syncNodePositions = useCanvasStore((state) => state.syncNodePositions);
+  const canvasLayout = useCanvasStore((state) => state.canvasLayout);
+  const applyAutoLayout = useCanvasStore((state) => state.applyAutoLayout);
+  const restoreManualLayout = useCanvasStore((state) => state.restoreManualLayout);
+  const setCollapsedGroups = useCanvasStore((state) => state.setCollapsedGroups);
   const graphRelations = useMemo(() => edges.map(graphEdgeFromFlow), [edges]);
   const decoratedGraph = useMemo(() => decorateFlowGraph(nodes, edges, selectedEdgeId), [edges, nodes, selectedEdgeId]);
   const selectedEdge = useMemo(() => {
@@ -40,8 +44,17 @@ export function useFlowWeaveState() {
   }, [edges, selectedEdgeId]);
   const selectedNode = modules.find((node) => node.id === selectedNodeId) ?? modules[0];
 
-  function replaceProjectGraph(nextModules: GraphNode[], nextEdges: GraphEdge[], nextFiles: ProjectFileNode[]) {
-    setGraph(nextModules, nextEdges, nextFiles);
+  function replaceProjectGraph(
+    nextModules: GraphNode[],
+    nextEdges: GraphEdge[],
+    nextFiles: ProjectFileNode[],
+    layout?: CanvasLayoutState
+  ) {
+    setGraph(nextModules, nextEdges, nextFiles, layout);
+  }
+
+  function handleAutoLayout(mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) {
+    applyAutoLayout(mode, positions);
   }
 
   function handleCanvasNodesChange(changes: NodeChange<FlowWeaveNode>[]) {
@@ -79,7 +92,7 @@ export function useFlowWeaveState() {
       y: 520
     };
     setNodes((currentNodes) => [...currentNodes, createFlowNode(newModule)]);
-    useWorkspaceStore.setState((state) => ({ modules: [...state.modules, newModule] }));
+    useCanvasStore.setState((state) => ({ modules: [...state.modules, newModule] }));
     setSelectedNodeId(newModule.id);
   }
 
@@ -141,9 +154,9 @@ export function useFlowWeaveState() {
   }
 
   function deleteModuleNode(nodeId: string) {
-    const graphEdges = useWorkspaceStore.getState().edges.map(graphEdgeFromFlow);
-    const deletedGraph = deleteModuleFromCanvasGraph(useWorkspaceStore.getState().modules, graphEdges, nodeId);
-    useWorkspaceStore.setState((state) => ({
+    const graphEdges = useCanvasStore.getState().edges.map(graphEdgeFromFlow);
+    const deletedGraph = deleteModuleFromCanvasGraph(useCanvasStore.getState().modules, graphEdges, nodeId);
+    useCanvasStore.setState((state) => ({
       modules: deletedGraph.modules,
       nodes: state.nodes.filter((node) => node.id !== nodeId),
       selectedNodeId: state.selectedNodeId === nodeId ? deletedGraph.modules[0]?.id ?? "" : state.selectedNodeId
@@ -163,6 +176,7 @@ export function useFlowWeaveState() {
 
   return {
     addModuleNode,
+    canvasLayout,
     addConnection,
     clearConnectionSelection,
     connectionPanelMode,
@@ -173,6 +187,7 @@ export function useFlowWeaveState() {
     expandedPaths,
     graphRelations,
     handleCanvasNodesChange,
+    handleAutoLayout,
     handleConnect,
     modules,
     nodes: decoratedGraph.nodes,
@@ -180,12 +195,14 @@ export function useFlowWeaveState() {
     openConnectionCreator,
     projectFiles,
     replaceProjectGraph,
+    restoreManualLayout,
     selectEdge,
     selectedEdge,
     selectedEdgeId,
     selectedNode,
     selectedNodeId,
     setSelectedNodeId,
+    setCollapsedGroups,
     togglePath,
     updateEdgeGuidance,
     updateEdgeEndpoints,

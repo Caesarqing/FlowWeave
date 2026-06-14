@@ -61,13 +61,18 @@ export function createScanFingerprint(value: unknown): string {
 export function createStructureFingerprint(
   projectName: string,
   languages: Record<string, number>,
-  files: Array<{ path: string; language?: string }>
+  files: Array<{ path: string; language?: string; size?: number; modifiedAt?: string }>
 ): string {
   return createScanFingerprint({
     projectName,
     languages,
     files: files
-      .map((file) => ({ path: file.path, language: file.language }))
+      .map((file) => ({
+        path: file.path,
+        language: file.language,
+        size: file.size,
+        modifiedAt: file.modifiedAt
+      }))
       .sort((left, right) => left.path.localeCompare(right.path))
   });
 }

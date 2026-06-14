@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { translate } from "../../src/utils/i18n";
 import { localizeCanvasEdgeLabels } from "../../src/components/CanvasWorkspace";
-import { useWorkspaceStore } from "../../src/stores/workspace.store";
+import { useAgentStore } from "../../src/stores/agents.store";
+import { useCanvasStore } from "../../src/stores/canvas.store";
 
 describe("i18n translations", () => {
   it("keeps English UI copy in the English locale", () => {
-    expect(translate("en", "canvas.title")).toBe("Backend Module Graph");
+    expect(translate("en", "canvas.title")).toBe("Module Graph");
     expect(translate("en", "project.files")).toBe("Project Files");
     expect(translate("en", "structure.details")).toBe("Details & Agent");
     expect(translate("en", "structure.sourceFiles", { count: 3, messageCount: "2 messages" })).toBe("3 source files · Agent-ready · 2 messages");
@@ -22,10 +23,15 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.connectorPrompt")).toBe("Connector prompt");
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
     expect(translate("en", "module.manualSubtitle")).toBe("Manual module");
+    expect(translate("en", "artifact.state.stale")).toBe("Outdated");
+    expect(translate("en", "artifact.sequences")).toBe("Sequence diagrams");
+    expect(translate("en", "onboarding.title")).toContain("Understand the project");
+    expect(translate("en", "settings.executeTimeout")).toContain("minutes");
+    expect(translate("en", "settings.scanBudget")).toBe("Scan entry budget");
   });
 
   it("uses Simplified Chinese UI copy in the Chinese locale", () => {
-    expect(translate("zh-CN", "canvas.title")).toBe("后端模块图");
+    expect(translate("zh-CN", "canvas.title")).toBe("模块图");
     expect(translate("zh-CN", "project.files")).toBe("项目文件");
     expect(translate("zh-CN", "structure.emptyTitle")).toBe("尚未生成序列图");
     expect(translate("zh-CN", "structure.sourceFiles", { count: 3, messageCount: "2 条消息" })).toBe("3 个源文件 · 智能体就绪 · 2 条消息");
@@ -42,6 +48,11 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.connectorPrompt")).toBe("连接提示");
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
     expect(translate("zh-CN", "module.manualSubtitle")).toBe("手动补充模块");
+    expect(translate("zh-CN", "artifact.state.stale")).toBe("已过期");
+    expect(translate("zh-CN", "artifact.sequences")).toBe("时序图");
+    expect(translate("zh-CN", "onboarding.title")).toContain("先理解项目");
+    expect(translate("zh-CN", "settings.executeTimeout")).toContain("分钟");
+    expect(translate("zh-CN", "settings.scanBudget")).toBe("扫描条目预算");
   });
 
   it("localizes Canvas relation labels on edges", () => {
@@ -58,10 +69,10 @@ describe("i18n translations", () => {
     expect(chineseEdge.label).toBe("调用");
   });
 
-  it("starts the unified Workspace store without a demo graph", () => {
-    expect(useWorkspaceStore.getState().selectedAgentId).toBe("claude-code");
-    expect(useWorkspaceStore.getState().nodes).toEqual([]);
-    expect(useWorkspaceStore.getState().edges).toEqual([]);
-    expect(useWorkspaceStore.getState().modules).toEqual([]);
+  it("starts the split Agent and Canvas stores without a demo graph", () => {
+    expect(useAgentStore.getState().selectedAgentId).toBe("claude-code");
+    expect(useCanvasStore.getState().nodes).toEqual([]);
+    expect(useCanvasStore.getState().edges).toEqual([]);
+    expect(useCanvasStore.getState().modules).toEqual([]);
   });
 });

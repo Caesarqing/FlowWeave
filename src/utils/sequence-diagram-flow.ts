@@ -1,5 +1,5 @@
 import type { Node } from "@xyflow/react";
-import type { SequenceDiagram, SequenceMessage, SequenceParticipant } from "../types";
+import type { SequenceDiagram, SequenceMessage, SequenceMessageKind, SequenceParticipant } from "../types";
 
 const LANE_WIDTH = 260;
 const PARTICIPANT_WIDTH = 190;
@@ -34,6 +34,38 @@ export type SequenceFlowMessageNodeData = {
 export type SequenceFlowNodeData = SequenceFlowParticipantNodeData | SequenceFlowLifelineNodeData | SequenceFlowMessageNodeData;
 
 export type SequenceFlowNode = Node<SequenceFlowNodeData>;
+
+export function filterSequenceDiagram(
+  diagram: SequenceDiagram,
+  participantQuery: string,
+  messageKinds: ReadonlySet<SequenceMessageKind>
+): SequenceDiagram {
+  const query = participantQuery.trim().toLowerCase();
+  const matchingParticipants = new Set(
+    diagram.participants
+      .filter((participant) => query.length === 0 || participantSearchText(participant).includes(query))
+      .map((participant) => participant.id)
+  );
+  const messages = diagram.messages.filter((message) => {
+    if (messageKinds.size > 0 && !messageKinds.has(message.kind)) return false;
+    if (query.length === 0) return true;
+    return matchingParticipants.has(message.from) ||
+      matchingParticipants.has(message.to) ||
+      messageSearchText(message).includes(query);
+  });
+  const visibleParticipantIds = new Set(
+    messages.flatMap((message) => [message.from, message.to])
+  );
+  for (const participantId of matchingParticipants) {
+    if (query.length > 0) visibleParticipantIds.add(participantId);
+  }
+
+  return {
+    ...diagram,
+    participants: diagram.participants.filter((participant) => visibleParticipantIds.has(participant.id)),
+    messages
+  };
+}
 
 export function buildSequenceFlowNodes(diagram: SequenceDiagram): SequenceFlowNode[] {
   const participantIndex = new Map(diagram.participants.map((participant, index) => [participant.id, index]));
@@ -113,4 +145,27 @@ export function getSequenceFlowBounds(diagram: SequenceDiagram) {
 function participantAccent(index: number) {
   const palette = ["#42f5a7", "#fb923c", "#60a5fa", "#8b5cf6", "#fbbf24", "#f472b6", "#2dd4bf", "#e879f9"];
   return palette[index % palette.length];
+}
+
+function participantSearchText(participant: SequenceParticipant): string {
+  return [
+    participant.id,
+    participant.title,
+    participant.kind,
+    participant.description,
+    participant.filePath,
+    participant.symbol
+  ].filter((value): value is string => Boolean(value)).join(" ").toLowerCase();
+}
+
+function messageSearchText(message: SequenceMessage): string {
+  return [
+    message.id,
+    message.label,
+    message.description,
+    message.methodName,
+    message.input,
+    message.output,
+    ...message.evidence?.flatMap((item) => [item.filePath, item.symbol, item.detail]) ?? []
+  ].filter((value): value is string => Boolean(value)).join(" ").toLowerCase();
 }

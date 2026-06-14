@@ -34,7 +34,7 @@ export function createFlowEdge(edge: GraphEdge): Edge {
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed, color },
     style: { stroke: color },
-    data: { relation: edge.relation, guidanceNote: edge.guidanceNote },
+    data: { relation: edge.relation, guidanceNote: edge.guidanceNote, evidence: edge.evidence },
     className: cn("relation-edge", edge.relation)
   };
 }
@@ -46,7 +46,8 @@ export function graphEdgeFromFlow(edge: Edge): GraphEdge {
     source: edge.source,
     target: edge.target,
     relation,
-    guidanceNote: edge.data?.guidanceNote as string | undefined
+    guidanceNote: edge.data?.guidanceNote as string | undefined,
+    evidence: edge.data?.evidence as GraphEdge["evidence"]
   };
 }
 

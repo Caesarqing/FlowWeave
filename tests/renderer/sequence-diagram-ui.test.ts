@@ -1,7 +1,13 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildSequenceFlowNodes } from "../../src/utils/sequence-diagram-flow";
+import { buildSequenceFlowNodes, filterSequenceDiagram } from "../../src/utils/sequence-diagram-flow";
 import { buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson } from "../../src/utils/export-artifacts";
 import type { SequenceDiagramBundle } from "../../src/types";
+
+const structureWorkspaceSource = readFileSync(
+  new URL("../../src/components/StructureWorkspace.tsx", import.meta.url),
+  "utf8"
+);
 
 describe("sequence diagram UI helpers", () => {
   it("lays out participants as vertical lanes and messages by sequence", () => {
@@ -43,6 +49,37 @@ describe("sequence diagram UI helpers", () => {
     expect(prompt).toContain("Do not require a selected Canvas module node");
     expect(prompt).toContain("Detailed Checkout");
     expect(prompt).not.toContain('module "');
+  });
+
+  it("filters messages by kind and keeps only their participant endpoints", () => {
+    const filtered = filterSequenceDiagram(bundleFixture().architectural, "", new Set(["return"]));
+
+    expect(filtered.messages.map((message) => message.id)).toEqual(["return-session"]);
+    expect(filtered.participants.map((participant) => participant.id)).toEqual(["server", "stripe"]);
+  });
+
+  it("searches participant metadata and retains messages connected to matches", () => {
+    const filtered = filterSequenceDiagram(bundleFixture().detailedDesign, "controller.ts", new Set());
+
+    expect(filtered.messages.map((message) => message.id)).toEqual(["create"]);
+    expect(filtered.participants.map((participant) => participant.id)).toEqual([
+      "order-controller",
+      "checkout-service"
+    ]);
+    expect(bundleFixture().detailedDesign.participants).toHaveLength(2);
+  });
+
+  it("returns an empty view when no participant or message matches the search", () => {
+    const filtered = filterSequenceDiagram(bundleFixture().architectural, "missing participant", new Set());
+
+    expect(filtered.participants).toEqual([]);
+    expect(filtered.messages).toEqual([]);
+  });
+
+  it("keeps zoom controls inside the viewport for both diagram kinds", () => {
+    expect(structureWorkspaceSource).toContain("<Controls position=\"bottom-left\" showFitView showInteractive={false} showZoom />");
+    expect(structureWorkspaceSource).toContain('<div className="sequence-canvas-stage">');
+    expect(structureWorkspaceSource).not.toContain("style={{ minWidth: bounds.width, minHeight: bounds.height }}");
   });
 });
 

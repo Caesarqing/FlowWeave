@@ -6,29 +6,45 @@ import { collectImportReferences, flattenProjectFilePaths } from "./import-parse
 
 const MAX_INFERRED_CODE_FILES = 600;
 const MAX_INFERRED_EDGES = 140;
+const GENERATOR_VERSION = "1.0.0";
 
 export function createCanvasArtifact(
   projectPath: string,
   modules: GraphNode[],
-  edges = createDefaultEdges(modules),
-  scanFingerprint = ""
+  edges: GraphEdge[] | undefined,
+  scanFingerprint: string
 ): CodeflowCanvas {
   return {
-    version: 2,
+    version: 3,
+    generatorVersion: GENERATOR_VERSION,
+    inputFingerprint: scanFingerprint,
     id: "main",
     title: "Main Canvas",
     projectPath,
     generatedAt: new Date().toISOString(),
     scanFingerprint,
     artifactState: "current",
+    layout: {
+      activeMode: "manual",
+      manualPositions: Object.fromEntries(modules.map((node) => [node.id, { x: node.x, y: node.y }])),
+      autoLayouts: {},
+      collapsedGroups: []
+    },
     nodes: modules,
-    edges
+    edges: edges ?? createDefaultEdges(modules)
   };
 }
 
-export function createTaskArtifact(modules: GraphNode[], edges = createDefaultEdges(modules)): CodeflowTask {
+export function createTaskArtifact(
+  modules: GraphNode[],
+  edges: GraphEdge[] | undefined,
+  scanFingerprint: string
+): CodeflowTask {
   return {
-    version: 1,
+    version: 2,
+    generatorVersion: GENERATOR_VERSION,
+    inputFingerprint: scanFingerprint,
+    artifactState: "current",
     id: `task-${Date.now()}`,
     title: "FlowWeave generated Codex task",
     generatedAt: new Date().toISOString(),
@@ -43,7 +59,7 @@ export function createTaskArtifact(modules: GraphNode[], edges = createDefaultEd
       files: module.files,
       guidance: module.guidanceDraft
     })),
-    relations: edges.map((edge) => ({
+    relations: (edges ?? createDefaultEdges(modules)).map((edge) => ({
       source: edge.source,
       target: edge.target,
       relation: edge.relation,

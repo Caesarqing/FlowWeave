@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
@@ -11,6 +11,10 @@ import { deleteCustomAgent, getAgentAdapter as getRegistryAgentAdapter, isBuiltI
 import { createCheckpoint } from "./git.service";
 import { prepareRunPaths, serializeAgentEvents, writeRunResult } from "./run-log.service";
 import { resolveProjectPath } from "./project-registry.service";
+import { executeAgentWithPolicy } from "./agent-execution.service";
+import { redactSensitiveText } from "./sensitive-data.service";
+import { writeTextAtomic } from "../storage/artifact-store";
+import { recordDiagnostic } from "./diagnostic.service";
 
 export type StartToolPlanOptions = {
   projectId: string;
@@ -20,6 +24,9 @@ export type StartToolPlanOptions = {
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
   model?: string;
+  confirmedExecute?: boolean;
+  executeTimeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export type StartToolPlanResult = ToolRunResult & {
@@ -40,14 +47,17 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
   const projectPath = resolveProjectPath(options.projectId);
   const runId = `run-${Date.now()}`;
   const paths = await prepareRunPaths(projectPath, runId);
-  const prompt = buildRunPrompt(await resolvePrompt(options), options.executionMode, options.purpose);
+  const prompt = redactSensitiveText(buildRunPrompt(await resolvePrompt(options), options.executionMode, options.purpose));
 
-  await writeFile(paths.promptPath, prompt, "utf8");
+  await writeTextAtomic(paths.promptPath, prompt);
 
   const adapter = await getAgentAdapter(options.toolId);
   const executionMode = options.executionMode;
+  if (executionMode === "execute" && options.confirmedExecute !== true) {
+    throw new Error("Execute mode requires explicit user confirmation.");
+  }
   const checkpointId = executionMode === "execute" ? await createCheckpoint(projectPath) : undefined;
-  const result = await adapter.runPlan({
+  const result = await executeAgentWithPolicy(adapter, {
     id: runId,
     projectId: options.projectId,
     projectPath,
@@ -55,12 +65,18 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     guidancePath: options.guidancePath,
     executionMode,
     purpose: options.purpose,
-    model: options.model
-  });
+    model: options.model,
+    signal: options.signal
+  }, executionMode === "execute" && options.executeTimeoutMs !== undefined
+    ? { timeoutMs: options.executeTimeoutMs }
+    : undefined);
 
-  const logText = serializeAgentEvents(result.events);
+  const logText = redactSensitiveText(serializeAgentEvents(result.events));
   const planText = await resolvePlanText(result, logText);
-  await Promise.all([writeFile(paths.logPath, logText, "utf8"), writeFile(paths.planPath, planText, "utf8")]);
+  await Promise.all([
+    writeTextAtomic(paths.logPath, logText),
+    writeTextAtomic(paths.planPath, planText)
+  ]);
 
   const finalResult: StartToolPlanResult = {
     ...result,
@@ -72,12 +88,37 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     executionMode,
     purpose: options.purpose,
     checkpointId,
-    summary: result.summary ?? firstUsefulLine(planText),
-    stderr: collectStderr(result.events)
+    summary: result.failure?.message ?? result.summary ?? firstUsefulLine(planText),
+    stderr: result.failure?.message ?? collectStderr(result.events)
   };
 
   await writeRunResult(paths.resultPath, finalResult, {});
+  if (finalResult.status === "failed") {
+    await recordAgentRunFailure(projectPath, finalResult);
+  }
   return finalResult;
+}
+
+export async function recordAgentRunFailure(projectPath: string, result: ToolRunResult): Promise<void> {
+  const errorMessage = result.events
+    .filter((event) => event.type === "stderr" || event.type === "error")
+    .map((event) => event.type === "error" ? event.message : event.content)
+    .filter(Boolean)
+    .join("\n");
+  await recordDiagnostic(projectPath, {
+    category: "agent",
+    code: `agent-${result.terminationReason ?? "failed"}`,
+    message: errorMessage || result.summary || "Agent run failed without an error message.",
+    context: {
+      runId: result.id,
+      agentId: result.toolId,
+      executionMode: result.executionMode,
+      purpose: result.purpose,
+      terminationReason: result.terminationReason,
+      attempts: result.attempts ?? 1,
+      outputTruncated: result.outputTruncated ?? false
+    }
+  });
 }
 
 export function buildRunPrompt(prompt: string, executionMode: ExecutionMode, purpose: ToolRunPurpose) {
@@ -155,6 +196,10 @@ async function resolvePlanText(result: ToolRunResult, logText: string) {
     if (lastMessage.trim()) {
       return lastMessage;
     }
+  }
+
+  if (result.outputText?.trim()) {
+    return result.outputText;
   }
 
   return fallbackPlan(result, logText);

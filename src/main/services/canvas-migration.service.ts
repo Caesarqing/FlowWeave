@@ -1,4 +1,4 @@
-import type { CodeflowCanvas, GraphEdge, GraphNode, ProjectFileNode } from "../../types";
+import type { CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphNode, ProjectFileNode } from "../../types";
 
 export function migrateCanvasToScan(
   canvas: CodeflowCanvas,
@@ -13,14 +13,46 @@ export function migrateCanvasToScan(
 
   return {
     ...canvas,
-    version: 2,
+    version: 3,
     projectPath,
     generatedAt: new Date().toISOString(),
     scanFingerprint,
     artifactState: "current",
+    layout: migrateLayout(canvas, nodes),
     nodes,
     edges
   };
+}
+
+function migrateLayout(canvas: CodeflowCanvas, nodes: GraphNode[]): CanvasLayoutState {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const manualPositions = canvas.layout?.manualPositions ?? Object.fromEntries(
+    nodes.map((node) => [node.id, { x: node.x, y: node.y }])
+  );
+  return {
+    activeMode: canvas.layout?.activeMode ?? "manual",
+    manualPositions: filterPositions(manualPositions, nodeIds),
+    autoLayouts: Object.fromEntries(
+      Object.entries(canvas.layout?.autoLayouts ?? {}).map(([mode, positions]) => [
+        mode,
+        filterPositions(positions ?? {}, nodeIds)
+      ])
+    ),
+    collapsedGroups: [...new Set(canvas.layout?.collapsedGroups ?? [])]
+  };
+}
+
+function filterPositions(
+  positions: Record<string, { x: number; y: number }>,
+  nodeIds: Set<string>
+): Record<string, { x: number; y: number }> {
+  return Object.fromEntries(
+    Object.entries(positions).filter(([nodeId, position]) =>
+      nodeIds.has(nodeId) &&
+      Number.isFinite(position.x) &&
+      Number.isFinite(position.y)
+    )
+  );
 }
 
 function flattenFilePaths(nodes: ProjectFileNode[]): string[] {

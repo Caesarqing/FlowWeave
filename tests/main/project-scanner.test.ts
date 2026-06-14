@@ -62,4 +62,13 @@ describe("project-scanner.service", () => {
     expect(project.git.isRepo).toBe(true);
     expect(project.git.remote).toBeUndefined();
   });
+
+  it("rejects invalid scan concurrency settings", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-options-"));
+    await writeFile(join(root, "main.ts"), "export const main = true;\n");
+
+    await expect(scanProject(root, { concurrency: 0 })).rejects.toThrow(
+      "Project scan concurrency must be an integer between 1 and 128"
+    );
+  });
 });

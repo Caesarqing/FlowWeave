@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildGuidanceMarkdown, buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson, buildTaskJson, downloadText } from "../utils/export-artifacts";
-import { useWorkspaceStore } from "../stores/workspace.store";
+import { useAgentStore } from "../stores/agents.store";
+import { useNavigationStore } from "../stores/navigation.store";
+import { useProjectStore } from "../stores/project.store";
+import { useRunsStore } from "../stores/runs.store";
+import { usePreferencesStore } from "../stores/preferences.store";
 import { useFlowWeaveState } from "./useFlowWeaveState";
 import { useModuleActions } from "./useModuleActions";
 import { useProjectActions } from "./useProjectActions";
@@ -15,38 +19,39 @@ const MAX_RENDERED_TREE_ROWS = 900;
 
 export function useAppController() {
   const { t } = useI18n();
-  const activePage = useWorkspaceStore((state) => state.activePage);
-  const projectLabel = useWorkspaceStore((state) => state.projectLabel);
-  const projectId = useWorkspaceStore((state) => state.projectId);
-  const projectPath = useWorkspaceStore((state) => state.projectPath);
-  const scanFingerprint = useWorkspaceStore((state) => state.scanFingerprint);
-  const artifactStatuses = useWorkspaceStore((state) => state.artifactStatuses);
-  const projectStatus = useWorkspaceStore((state) => state.projectStatus);
-  const isProjectLoading = useWorkspaceStore((state) => state.isProjectLoading);
-  const agents = useWorkspaceStore((state) => state.agents);
-  const selectedAgentId = useWorkspaceStore((state) => state.selectedAgentId);
-  const executionMode = useWorkspaceStore((state) => state.executionMode);
-  const toolStatuses = useWorkspaceStore((state) => state.toolStatuses);
-  const lastRunStatus = useWorkspaceStore((state) => state.lastRunStatus);
-  const runs = useWorkspaceStore((state) => state.runs);
-  const selectedRunId = useWorkspaceStore((state) => state.selectedRunId);
-  const selectedRunArtifact = useWorkspaceStore((state) => state.selectedRunArtifact);
-  const runArtifactTab = useWorkspaceStore((state) => state.runArtifactTab);
-  const isRunsLoading = useWorkspaceStore((state) => state.isRunsLoading);
-  const setActivePage = useWorkspaceStore((state) => state.setActivePage);
-  const setProjectLabel = useWorkspaceStore((state) => state.setProjectLabel);
-  const setProjectId = useWorkspaceStore((state) => state.setProjectId);
-  const setProjectPath = useWorkspaceStore((state) => state.setProjectPath);
-  const setScanFingerprint = useWorkspaceStore((state) => state.setScanFingerprint);
-  const setArtifactStatuses = useWorkspaceStore((state) => state.setArtifactStatuses);
-  const setProjectStatus = useWorkspaceStore((state) => state.setProjectStatus);
-  const setIsProjectLoading = useWorkspaceStore((state) => state.setIsProjectLoading);
-  const setAgents = useWorkspaceStore((state) => state.setAgents);
-  const setSelectedAgentId = useWorkspaceStore((state) => state.setSelectedAgentId);
-  const setExecutionMode = useWorkspaceStore((state) => state.setExecutionMode);
-  const setToolStatuses = useWorkspaceStore((state) => state.setToolStatuses);
-  const setLastRunStatus = useWorkspaceStore((state) => state.setLastRunStatus);
-  const setRunArtifactTab = useWorkspaceStore((state) => state.setRunArtifactTab);
+  const activePage = useNavigationStore((state) => state.activePage);
+  const projectLabel = useProjectStore((state) => state.projectLabel);
+  const projectId = useProjectStore((state) => state.projectId);
+  const projectPath = useProjectStore((state) => state.projectPath);
+  const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
+  const artifactStatuses = useProjectStore((state) => state.artifactStatuses);
+  const projectStatus = useProjectStore((state) => state.projectStatus);
+  const isProjectLoading = useProjectStore((state) => state.isProjectLoading);
+  const agents = useAgentStore((state) => state.agents);
+  const selectedAgentId = useAgentStore((state) => state.selectedAgentId);
+  const executionMode = useAgentStore((state) => state.executionMode);
+  const toolStatuses = useAgentStore((state) => state.toolStatuses);
+  const lastRunStatus = useAgentStore((state) => state.lastRunStatus);
+  const runs = useRunsStore((state) => state.runs);
+  const selectedRunId = useRunsStore((state) => state.selectedRunId);
+  const selectedRunArtifact = useRunsStore((state) => state.selectedRunArtifact);
+  const runArtifactTab = useRunsStore((state) => state.runArtifactTab);
+  const isRunsLoading = useRunsStore((state) => state.isRunsLoading);
+  const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
+  const setActivePage = useNavigationStore((state) => state.setActivePage);
+  const setProjectLabel = useProjectStore((state) => state.setProjectLabel);
+  const setProjectId = useProjectStore((state) => state.setProjectId);
+  const setProjectPath = useProjectStore((state) => state.setProjectPath);
+  const setScanFingerprint = useProjectStore((state) => state.setScanFingerprint);
+  const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
+  const setProjectStatus = useProjectStore((state) => state.setProjectStatus);
+  const setIsProjectLoading = useProjectStore((state) => state.setIsProjectLoading);
+  const setAgents = useAgentStore((state) => state.setAgents);
+  const setSelectedAgentId = useAgentStore((state) => state.setSelectedAgentId);
+  const setExecutionMode = useAgentStore((state) => state.setExecutionMode);
+  const setToolStatuses = useAgentStore((state) => state.setToolStatuses);
+  const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
+  const setRunArtifactTab = useRunsStore((state) => state.setRunArtifactTab);
   const [dialogText, setDialogText] = useState("");
   const flow = useFlowWeaveState();
   const sequence = useSequenceDiagramState({
@@ -71,7 +76,8 @@ export function useAppController() {
     artifactStatuses?.canvas,
     canvasSnapshot,
     flow.modules,
-    flow.graphRelations
+    flow.graphRelations,
+    flow.canvasLayout
   );
   const { openGitReviewFromRun, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
@@ -152,6 +158,13 @@ export function useAppController() {
     }
 
     const agentName = agents.find((agent) => agent.id === agentId)?.name ?? (agentId === "mock" ? "Mock Agent" : agentId);
+    if (executionMode === "execute" && !window.confirm(t("agent.executeConfirm", {
+      agent: agentName,
+      project: projectPath
+    }))) {
+      setLastRunStatus(t("agent.executeCanceled"));
+      return;
+    }
     setLastRunStatus(t("status.sequenceAgentProcessing", { agent: agentName, mode: executionMode }));
     try {
       const detection = await window.flowweave.detectAgent(agentId);
@@ -165,6 +178,8 @@ export function useAppController() {
         projectId,
         toolId: agentId,
         executionMode,
+        confirmedExecute: executionMode === "execute",
+        executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
         prompt: buildSequencePlanPrompt(projectLabel, sequence.bundle, sequence.activeKind)
       });
@@ -235,8 +250,8 @@ export function useAppController() {
     }
   }
 
-  async function analyzeCurrentProjectWithAgent() {
-    await projectActions.analyzeProject(selectedAgentId);
+  async function analyzeCurrentProjectWithAgent(agentId?: import("../types").RuntimeAgentId) {
+    await projectActions.analyzeProject(agentId ?? selectedAgentId);
     setActivePage("canvas");
     await refreshRuns();
   }
@@ -253,6 +268,7 @@ export function useAppController() {
     artifactStatuses,
     canvas: {
       connectionPanelMode: flow.connectionPanelMode,
+      canvasLayout: flow.canvasLayout,
       defaultRelation: flow.defaultRelation,
       deleteEdge: flow.deleteEdge,
       deleteModuleNode: flow.deleteModuleNode,
@@ -273,14 +289,18 @@ export function useAppController() {
       onEdgesChange: flow.onEdgesChange,
       onGuidanceChange: moduleActions.updateGuidance,
       onNodesChange: flow.handleCanvasNodesChange,
+      onApplyAutoLayout: flow.handleAutoLayout,
       onOpenConnectionCreator: flow.openConnectionCreator,
       onOpenProject: projectActions.openProject,
       onRefreshProject: projectActions.refreshProject,
+      onRestoreManualLayout: flow.restoreManualLayout,
+      onCancelProjectOperation: projectActions.cancelProjectOperation,
       onSelectEdge: flow.selectEdge,
       onSelectNode: (nodeId: string) => {
         flow.clearConnectionSelection();
         moduleActions.selectNode(nodeId);
       },
+      onSetCollapsedGroups: flow.setCollapsedGroups,
       onTogglePath: moduleActions.toggleProjectPath,
       onUpdateEdgeGuidance: flow.updateEdgeGuidance,
       onUpdateEdgeEndpoints: flow.updateEdgeEndpoints,
@@ -290,6 +310,7 @@ export function useAppController() {
       projectFiles: flow.projectFiles,
       projectPath,
       projectStatus,
+      operation: projectActions.operation,
       selectedEdge: flow.selectedEdge,
       selectedEdgeId: flow.selectedEdgeId,
       selectedNode: flow.selectedNode,

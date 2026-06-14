@@ -1,8 +1,9 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, ToolRunPurpose, ToolRunResult, ToolRunStatus, ToolRunSummary } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { getDesktopBridgeDir, readDesktopBridgeResponse } from "../agents/desktop-bridge.adapter";
+import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
 
 export type RunPaths = {
   runDir: string;
@@ -29,7 +30,7 @@ export function serializeAgentEvents(events: ToolRunEvent[]) {
   return events
     .map((event) => {
       if (event.type === "status") {
-        return `[${event.timestamp}] status ${event.status}`;
+        return `[${event.timestamp}] status ${event.status}${event.message ? ` ${event.message}` : ""}`;
       }
 
       if (event.type === "error") {
@@ -42,7 +43,7 @@ export function serializeAgentEvents(events: ToolRunEvent[]) {
 }
 
 export async function writeRunResult(resultPath: string, result: ToolRunResult, extra: Record<string, unknown>) {
-  await writeFile(resultPath, `${JSON.stringify({ ...result, ...extra }, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(resultPath, { ...result, ...extra });
 }
 
 export async function listRunSummaries(projectPath: string): Promise<ToolRunSummary[]> {
@@ -96,7 +97,7 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
           exitCode: 1,
           summary: `Desktop bridge response rejected: ${formatError(error)}`
         };
-        await writeFile(join(getRunDir(projectPath, runId), "result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+        await writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result);
       }
     }
     return {
@@ -112,7 +113,8 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
       planPath: result.planPath,
       logPath: result.logPath,
       resultPath: result.resultPath,
-      checkpointId: result.checkpointId
+      checkpointId: result.checkpointId,
+      failure: result.failure
     };
   } catch {
     return undefined;
@@ -148,8 +150,8 @@ async function importDesktopBridgeResponse(
     summary: response.summary
   };
   await Promise.all([
-    writeFile(join(runDir, "plan.md"), response.content, "utf8"),
-    writeFile(join(runDir, "result.json"), `${JSON.stringify(updated, null, 2)}\n`, "utf8")
+    writeTextAtomic(join(runDir, "plan.md"), response.content),
+    writeJsonAtomic(join(runDir, "result.json"), updated)
   ]);
   return updated;
 }

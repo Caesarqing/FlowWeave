@@ -1,10 +1,12 @@
 import { CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
-import type { RunArtifactTab } from "../stores/workspace.store";
+import type { RunArtifactTab } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
 import { useI18n } from "../utils/i18n";
+import { WorkspaceLayout } from "./WorkspaceLayout";
+import { Button } from "./Button";
 
 const fallbackAgents: AgentDefinition[] = [
   {
@@ -115,7 +117,7 @@ export function AgentPage({
   isRunsLoading: boolean;
   isDesktopBridgeAvailable: boolean;
   lastRunStatus: string;
-  onAnalyzeCurrentProject: () => void;
+  onAnalyzeCurrentProject: (agentId?: RuntimeAgentId) => void;
   onDeleteCustomAgent: (agentId: AgentId) => void;
   onDetectAgent: (agentId: RuntimeAgentId) => void;
   onExecutionModeChange: (mode: ExecutionMode) => void;
@@ -161,7 +163,7 @@ export function AgentPage({
           <strong>{selectedAgent?.name ?? t("agent.notSelected")}</strong>
           <span>{selectedAgent ? commandLabel(selectedAgent) : t("agent.addOrSelect")}</span>
         </div>
-        <button className="send-button" disabled={!projectPath || !selectedAgent} type="button" onClick={onAnalyzeCurrentProject}>
+        <button className="send-button" disabled={!projectPath || !selectedAgent} type="button" onClick={() => onAnalyzeCurrentProject()}>
           <Play size={14} />
           {t("agent.analyzeProject")}
         </button>
@@ -173,11 +175,11 @@ export function AgentPage({
           <span>{t("agent.executionModeHelp")}</span>
         </div>
         <div className="segmented-control">
-          <button className={executionMode === "plan" ? "active" : ""} type="button" onClick={() => onExecutionModeChange("plan")}>
+          <button className={cn(executionMode === "plan" && "active")} type="button" onClick={() => onExecutionModeChange("plan")}>
             Plan
           </button>
           <button
-            className={executionMode === "execute" ? "active danger" : "danger"}
+            className={cn("danger", executionMode === "execute" && "active")}
             type="button"
             onClick={() => onExecutionModeChange("execute")}
           >
@@ -245,7 +247,12 @@ export function AgentPage({
                   <RefreshCw size={14} />
                   {status.checking ? t("agent.checking") : t("agent.detect")}
                 </button>
-                <button className={isSelected ? "default-button" : "ghost-button"} disabled={isSelected} type="button" onClick={() => onSelectAgent(agent.id)}>
+                <button
+                  className={cn(isSelected && "default-button", !isSelected && "ghost-button")}
+                  disabled={isSelected}
+                  type="button"
+                  onClick={() => onSelectAgent(agent.id)}
+                >
                   <Settings2 size={14} />
                   {isSelected ? t("agent.currentDefault") : t("agent.setDefault")}
                 </button>
@@ -270,8 +277,19 @@ export function AgentPage({
         <AddAgentCard isAdding={isAddingAgent} onCancel={() => setIsAddingAgent(false)} onSave={onSaveCustomAgent} onStart={() => setIsAddingAgent(true)} />
       </section>
 
-      <section className="run-workspace">
-        <aside className="run-history">
+      <WorkspaceLayout
+        actions={(
+          <Button
+            disabled={!selectedRunArtifact}
+            icon={<GitPullRequestArrow size={14} />}
+            variant="secondary"
+            onClick={onGoToGitReview}
+          >
+            {t("agent.goGitReview")}
+          </Button>
+        )}
+        className="run-workspace"
+        left={<aside className="run-history">
           <div className="panel-header">
             <span>{t("agent.runHistory")}</span>
             <button className="icon-button" title={t("agent.refreshRuns")} type="button" onClick={onRefreshRuns}>
@@ -286,6 +304,7 @@ export function AgentPage({
                   <div>
                     <strong>{run.id}</strong>
                     <span>{agentNames.get(run.toolId) ?? run.toolId} · {run.executionMode} · {run.status}</span>
+                    {run.failure ? <span>{run.failure.code} · {run.failure.message}</span> : null}
                   </div>
                   <small>{formatRunTime(run.startedAt)}</small>
                 </button>
@@ -294,25 +313,43 @@ export function AgentPage({
               <p className="empty-state">{isRunsLoading ? t("agent.readingRuns") : t("agent.noRuns")}</p>
             )}
           </div>
-        </aside>
+        </aside>}
+        leftWidth="minmax(260px, 340px)"
+        page="tools"
+        status={lastRunStatus}
+        title={t("agent.artifacts")}
+      >
         <section className="run-artifact">
-          <div className="panel-header">
-            <span>{t("agent.artifacts")}</span>
-            <button className="ghost-button" disabled={!selectedRunArtifact} type="button" onClick={onGoToGitReview}>
-              <GitPullRequestArrow size={14} />
-              {t("agent.goGitReview")}
-            </button>
-          </div>
           {selectedRunArtifact ? (
             <>
               <div className="run-summary-strip">
                 <FileText size={15} />
-                <span>{selectedRunArtifact.summary.summary ?? selectedRunArtifact.summary.id}</span>
+                <span>
+                  {selectedRunArtifact.summary.failure
+                    ? `${selectedRunArtifact.summary.toolId} · ${selectedRunArtifact.summary.failure.code} · ${selectedRunArtifact.summary.failure.message}`
+                    : selectedRunArtifact.summary.summary ?? selectedRunArtifact.summary.id}
+                </span>
                 <code>{selectedRunArtifact.summary.planPath ?? selectedRunArtifact.summary.logPath ?? "no output path"}</code>
+                {selectedRunArtifact.summary.failure ? (
+                  <>
+                    <button className="ghost-button" type="button" onClick={() => onRunArtifactTabChange("log")}>
+                      {t("agent.viewRunLog")}
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => selectedRunArtifact.summary.purpose === "artifact-analysis"
+                        ? onAnalyzeCurrentProject(selectedRunArtifact.summary.toolId)
+                        : onRunToolPlan(selectedRunArtifact.summary.toolId)}
+                    >
+                      {t("agent.retryRun")}
+                    </button>
+                  </>
+                ) : null}
               </div>
               <div className="artifact-tabs">
                 {(["prompt", "plan", "log", "result"] as RunArtifactTab[]).map((tab) => (
-                  <button className={runArtifactTab === tab ? "active" : ""} key={tab} type="button" onClick={() => onRunArtifactTabChange(tab)}>
+                  <button className={cn(runArtifactTab === tab && "active")} key={tab} type="button" onClick={() => onRunArtifactTabChange(tab)}>
                     {tab}
                   </button>
                 ))}
@@ -323,7 +360,7 @@ export function AgentPage({
             <p className="empty-state">{t("agent.selectRun")}</p>
           )}
         </section>
-      </section>
+      </WorkspaceLayout>
     </main>
   );
 }

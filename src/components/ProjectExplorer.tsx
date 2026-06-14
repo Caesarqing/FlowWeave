@@ -1,8 +1,9 @@
-import { ChevronDown, ChevronRight, FileCode2, Folder, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, FileCode2, Folder, RefreshCw, Square } from "lucide-react";
 import type { ProjectFileNode, ProjectFileRow } from "../types";
 import { flattenVisibleProjectFiles } from "../utils/file-utils";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
+import { Button } from "./Button";
 
 export function ProjectExplorer({
   expandedPaths,
@@ -12,6 +13,7 @@ export function ProjectExplorer({
   maxVisibleRows,
   onOpenProject,
   onRefreshProject,
+  onCancelOperation,
   onTogglePath,
   projectPath,
   statusMessage
@@ -23,6 +25,7 @@ export function ProjectExplorer({
   maxVisibleRows: number;
   onOpenProject: () => void;
   onRefreshProject: () => void;
+  onCancelOperation: () => void;
   onTogglePath: (path: string) => void;
   projectPath: string;
   statusMessage: string;
@@ -36,23 +39,26 @@ export function ProjectExplorer({
         <span>{t("project.files")}</span>
       </div>
       <div className="project-actions">
-        <div className={`bridge-state ${isDesktopBridgeAvailable ? "ready" : "browser"}`}>
+        <div className={cn("bridge-state", isDesktopBridgeAvailable ? "ready" : "browser")}>
           {isDesktopBridgeAvailable ? t("project.desktopReady") : t("project.browserOnly")}
         </div>
         <div className="project-path" title={projectPath || undefined}>
           {projectPath || t("project.noProject")}
         </div>
         <div className="project-action-row">
-          <button className="ghost-button" disabled={isProjectLoading} type="button" onClick={onOpenProject}>
-            <Folder size={14} />
+          <Button disabled={isProjectLoading} icon={<Folder size={14} />} size="default" variant="primary" type="button" onClick={onOpenProject}>
             {t("project.open")}
-          </button>
-          <button className="ghost-button" disabled={isProjectLoading || !projectPath} type="button" onClick={onRefreshProject}>
-            <RefreshCw size={14} />
+          </Button>
+          <Button disabled={isProjectLoading || !projectPath} icon={<RefreshCw size={14} />} variant="secondary" type="button" onClick={onRefreshProject}>
             {t("project.refresh")}
-          </button>
+          </Button>
+          {isProjectLoading ? (
+            <Button icon={<Square size={12} />} variant="danger" type="button" onClick={onCancelOperation}>
+              {t("project.cancel")}
+            </Button>
+          ) : null}
         </div>
-        <p className="project-status">{isProjectLoading ? t("project.loading") : statusMessage}</p>
+        <p className="project-status">{statusMessage}</p>
       </div>
       <div className="tree">
         {rows.map((file: ProjectFileRow) => (
