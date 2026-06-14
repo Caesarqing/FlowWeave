@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -46,11 +46,13 @@ describe("gemini-cli.adapter", () => {
     process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
     const adapter = new GeminiCliAdapter();
 
-    await expect(adapter.detect()).resolves.toMatchObject({
+    const detection = await adapter.detect();
+    expect(detection).toMatchObject({
       available: true,
-      commandPath: scriptPath,
       version: "gemini-test 1.0"
     });
+    expect(detection.commandPath).toBeDefined();
+    await expect(realpath(detection.commandPath ?? "")).resolves.toBe(await realpath(scriptPath));
 
     const result = await adapter.runPlan({
       id: "run-gemini",

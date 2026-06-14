@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
-import { isAbsolute, join, win32 } from "node:path";
+import { isAbsolute, join, posix, win32 } from "node:path";
 import { promisify } from "node:util";
 import type { ToolId } from "./agent-adapter";
 import { prepareCommandInvocation } from "./command-invocation";
@@ -97,8 +97,8 @@ export function buildCommandSearchPaths(
     ];
   }
   return [
-    join(homePath, ".local", "bin"),
-    join(homePath, "bin"),
+    posix.join(homePath, ".local", "bin"),
+    posix.join(homePath, "bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/usr/bin",
