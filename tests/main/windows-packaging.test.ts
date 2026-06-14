@@ -47,5 +47,6 @@ describe("Windows packaging", () => {
     expect(workflow).toContain("FlowWeave-0.1.0-win-x64-setup.exe");
     expect(workflow).toContain("FlowWeave-0.1.0-win-arm64-setup.exe");
     expect(workflow).toContain("FlowWeave-0.1.0-mac-arm64.zip");
+    expect(workflow.match(/electron-builder[^\n]+--publish never/g)).toHaveLength(6);
   });
 });

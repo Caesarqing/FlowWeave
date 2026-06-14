@@ -27,7 +27,7 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - run: npx electron-builder --mac --dir --arm64
+      - run: npx electron-builder --mac --dir --arm64 --publish never
       - run: npm run smoke:packaged
       - name: Verify and archive macOS app
         run: |
@@ -59,9 +59,9 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - run: npx electron-builder --win --dir --x64
+      - run: npx electron-builder --win --dir --x64 --publish never
       - run: npm run smoke:packaged
-      - run: npx electron-builder --win nsis --x64
+      - run: npx electron-builder --win nsis --x64 --publish never
       - name: Smoke-test x64 installer
         shell: pwsh
         run: scripts/run-windows-installer-smoke.ps1 -InstallerPath release/FlowWeave-0.1.0-win-x64-setup.exe -Architecture x64
@@ -93,9 +93,9 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - run: npx electron-builder --win --dir --arm64
+      - run: npx electron-builder --win --dir --arm64 --publish never
       - run: npm run smoke:packaged
-      - run: npx electron-builder --win nsis --arm64
+      - run: npx electron-builder --win nsis --arm64 --publish never
       - name: Smoke-test ARM64 installer
         shell: pwsh
         run: scripts/run-windows-installer-smoke.ps1 -InstallerPath release/FlowWeave-0.1.0-win-arm64-setup.exe -Architecture arm64
@@ -129,7 +129,7 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - run: npx electron-builder --win nsis --arm64
+      - run: npx electron-builder --win nsis --arm64 --publish never
       - name: Mark and checksum unvalidated artifact
         shell: pwsh
         run: |
