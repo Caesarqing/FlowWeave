@@ -2,6 +2,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { FlowWeaveNode } from "../utils/graph-converters";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
+import { localizedModuleDescription } from "../utils/module-text";
 
 export function ModuleFlowNode({ data, selected }: NodeProps<FlowWeaveNode>) {
   const { t } = useI18n();
@@ -14,7 +15,7 @@ export function ModuleFlowNode({ data, selected }: NodeProps<FlowWeaveNode>) {
         <strong>{t(`risk.${node.risk}`)}</strong>
       </div>
       <h3>{node.title}</h3>
-      <p>{node.description}</p>
+      <p>{localizedModuleDescription(node, t)}</p>
       <div className="node-footer">
         <span>{t("module.fileCount", { count: node.files.length })}</span>
         <small>{node.files[0]}</small>

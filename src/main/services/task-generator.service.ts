@@ -129,7 +129,7 @@ export async function inferGraphFromProject(project: CodeflowProject) {
     risk: getNodeRisk(group, files),
     description: getNodeDescription(group, files),
     files,
-    guidanceDraft: `请围绕 ${toTitle(group)} 检查这些文件的职责边界，并只在连接关系要求时扩展修改范围。`,
+    guidanceDraft: `Review the responsibility boundaries of these files around ${toTitle(group)}, and expand the modification scope only when required by its connections.`,
     status: "mapped",
     x: 120 + (index % 3) * 300,
     y: 120 + Math.floor(index / 3) * 210
@@ -305,12 +305,12 @@ function getNodeRisk(group: string, files: string[]): GraphRisk {
 
 function getNodeSubtitle(group: string) {
   const type = getNodeType(group);
-  if (type === "entrypoint") return "请求入口与编排";
-  if (type === "data") return "数据模型与持久化";
-  if (type === "test") return "测试与回归验证";
-  return "后端业务模块";
+  if (type === "entrypoint") return "Request entry and orchestration";
+  if (type === "data") return "Data model and persistence";
+  if (type === "test") return "Testing and regression validation";
+  return "Backend business module";
 }
 
 function getNodeDescription(group: string, files: string[]) {
-  return `${toTitle(group)} 模块由项目扫描生成，包含 ${files.length} 个关键文件，连接关系将作为 Agent 生成计划的范围依据。`;
+  return `${toTitle(group)} was generated from the project scan with ${files.length} key files. Connections define the scope used for Agent planning.`;
 }

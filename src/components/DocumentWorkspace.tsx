@@ -4,7 +4,12 @@ import { WorkspaceLayout } from "./WorkspaceLayout";
 import { Button } from "./Button";
 import { Save } from "lucide-react";
 
-const docTypes = ["PRD", "README", "API Doc", "Task Spec"];
+const docTypes = [
+  { id: "prd", labelKey: "docs.type.prd" },
+  { id: "readme", labelKey: "docs.type.readme" },
+  { id: "api-doc", labelKey: "docs.type.api" },
+  { id: "task-spec", labelKey: "docs.type.task" }
+];
 
 export function DocumentWorkspace({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -27,11 +32,11 @@ export function DocumentWorkspace({ projectId }: { projectId: string }) {
 
   const documentList = (
     <section className="workspace-column">
-        <div className="panel-header"><span>Docs</span></div>
+        <div className="panel-header"><span>{t("docs.list")}</span></div>
         <div className="doc-list">
           {docTypes.map((docType) => (
-            <button className="tree-row" key={docType} onClick={() => setDocId(docType.toLowerCase().replace(/\s+/g, "-"))} type="button">
-              <span>{docType}</span>
+            <button className="tree-row" key={docType.id} onClick={() => setDocId(docType.id)} type="button">
+              <span>{t(docType.labelKey)}</span>
             </button>
           ))}
         </div>

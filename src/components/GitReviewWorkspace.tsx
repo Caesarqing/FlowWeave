@@ -35,7 +35,7 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
     try {
       const id = await window.flowweave.gitCheckpoint(projectId);
       setCheckpointId(id);
-      setStatus(`Checkpoint: ${id}`);
+      setStatus(t("git.checkpoint", { id }));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     }
@@ -57,14 +57,16 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
 
   const reviewPanel = (
     <section className="workspace-column">
-        <div className="panel-header"><span>Git Review</span></div>
+        <div className="panel-header"><span>{t("git.review")}</span></div>
         <p className="project-status">{status}</p>
         <div className="module-card">
           <h3>{t("git.activeRun")}</h3>
           <p>{activeRun ? `${activeRun.id} · ${activeRun.toolId} · ${activeRun.status}` : t("git.noActiveRun")}</p>
-          <p>{activeRun?.checkpointId ? `Checkpoint: ${activeRun.checkpointId}` : t("git.noCheckpoint")}</p>
+          <p>{activeRun?.checkpointId ? t("git.checkpoint", { id: activeRun.checkpointId }) : t("git.noCheckpoint")}</p>
         </div>
-        <div className={cn("bridge-state", diff?.safety.level ?? "ok")}>Safety: {diff?.safety.level ?? "unknown"}</div>
+        <div className={cn("bridge-state", diff?.safety.level ?? "ok")}>
+          {t("git.safety", { level: t(`git.safetyLevel.${diff?.safety.level ?? "unknown"}`) })}
+        </div>
         <div className="file-list">
           {diff?.changedFiles.map((file) => (
             <div className="file-pill" key={file.path}>
@@ -82,7 +84,7 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
         <>
           <Button icon={<RefreshCw size={14} />} variant="secondary" onClick={() => void refreshDiff()}>{t("git.refresh")}</Button>
           <Button icon={<ShieldCheck size={14} />} variant="secondary" onClick={() => void createCheckpoint()}>{t("git.createCheckpoint")}</Button>
-          <Button disabled={!checkpointId} icon={<RotateCcw size={14} />} variant="danger" onClick={() => void rollback()}>Rollback</Button>
+          <Button disabled={!checkpointId} icon={<RotateCcw size={14} />} variant="danger" onClick={() => void rollback()}>{t("git.rollback")}</Button>
         </>
       )}
       className="workspace-page git-workspace"

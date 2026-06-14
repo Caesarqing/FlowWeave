@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { translate } from "../../src/utils/i18n";
+import { translate, translationMessages } from "../../src/utils/i18n";
 import { localizeCanvasEdgeLabels } from "../../src/components/CanvasWorkspace";
 import { useAgentStore } from "../../src/stores/agents.store";
 import { useCanvasStore } from "../../src/stores/canvas.store";
+import { DEFAULT_LOCALE } from "../../src/stores/preferences.store";
+import type { GraphNode, SequenceDiagram } from "../../src/types";
+import {
+  localizedModuleDescription,
+  localizedModuleGuidance
+} from "../../src/utils/module-text";
+import { localizedSequenceDiagram } from "../../src/utils/sequence-text";
 
 describe("i18n translations", () => {
   it("keeps English UI copy in the English locale", () => {
@@ -53,6 +60,74 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "onboarding.title")).toContain("先理解项目");
     expect(translate("zh-CN", "settings.executeTimeout")).toContain("分钟");
     expect(translate("zh-CN", "settings.scanBudget")).toBe("扫描条目预算");
+  });
+
+  it("keeps both locale dictionaries aligned", () => {
+    expect(Object.keys(translationMessages.en).sort()).toEqual(Object.keys(translationMessages["zh-CN"]).sort());
+  });
+
+  it("does not ship Chinese copy in the English dictionary", () => {
+    const contaminatedEntries = Object.entries(translationMessages.en).filter(([, value]) => /[\u3400-\u9fff]/u.test(value));
+    expect(contaminatedEntries).toEqual([]);
+  });
+
+  it("uses English as the default locale for new installations", () => {
+    expect(DEFAULT_LOCALE).toBe("en");
+  });
+
+  it("localizes generated Canvas text from current and legacy artifacts", () => {
+    const node: GraphNode = {
+      id: "services",
+      title: "Services",
+      subtitle: "后端业务模块",
+      kind: "module",
+      nodeType: "module",
+      risk: "normal",
+      description: "Services 模块由项目扫描生成，包含 2 个关键文件，连接关系将作为 Agent 生成计划的范围依据。",
+      files: ["src/a.ts", "src/b.ts"],
+      guidanceDraft: "请围绕 Services 检查这些文件的职责边界，并只在连接关系要求时扩展修改范围。",
+      status: "mapped",
+      x: 0,
+      y: 0
+    };
+
+    expect(localizedModuleDescription(node, (key, params) => translate("en", key, params))).toContain(
+      "was generated from the project scan"
+    );
+    expect(localizedModuleGuidance(node, (key, params) => translate("zh-CN", key, params))).toContain(
+      "职责边界"
+    );
+  });
+
+  it("localizes generated Sequence Diagram boilerplate", () => {
+    const diagram: SequenceDiagram = {
+      id: "architectural-sequence",
+      title: "Architectural Sequence Diagram",
+      kind: "architectural",
+      summary: "Macro collaboration inferred from architecture modules and relationships.",
+      participants: [
+        { id: "a", title: "A", kind: "service", description: "Source file src/a.ts.", filePath: "src/a.ts" },
+        { id: "b", title: "B", kind: "service", description: "Source file src/b.ts.", filePath: "src/b.ts" }
+      ],
+      messages: [{
+        id: "a-b",
+        sequence: 1,
+        from: "a",
+        to: "b",
+        kind: "sync",
+        label: "A collaborates with B",
+        description: "Inferred sequence relation from available project structure.",
+        input: "project context",
+        output: "next step result",
+        evidence: [{ filePath: "src/a.ts", detail: "Fallback sequence participant." }]
+      }],
+      evidence: []
+    };
+    const localized = localizedSequenceDiagram(diagram, (key, params) => translate("zh-CN", key, params));
+
+    expect(localized.title).toBe("架构时序图");
+    expect(localized.messages[0].label).toBe("A 与 B 协作");
+    expect(localized.messages[0].description).toBe("根据现有项目结构推断的时序关系。");
   });
 
   it("localizes Canvas relation labels on edges", () => {

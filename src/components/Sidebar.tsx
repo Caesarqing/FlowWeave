@@ -18,7 +18,7 @@ export function Sidebar({
   const { t } = useI18n();
 
   return (
-    <nav className="side-nav" aria-label="FlowWeave sections">
+    <nav className="side-nav" aria-label={t("nav.sections")}>
       <div className="nav-main">
         <div className="nav-mark">
           <BrandLogo className="brand-logo-nav" />
@@ -44,7 +44,7 @@ export function Sidebar({
           <span>{t("nav.git")}</span>
         </button>
       </div>
-      <div className="nav-utility" aria-label="FlowWeave utility actions">
+      <div className="nav-utility" aria-label={t("nav.utilityActions")}>
         <button
           className={cn(activeUtilityPanel === "profile" && "active utility-active")}
           type="button"

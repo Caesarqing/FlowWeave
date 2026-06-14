@@ -1,8 +1,10 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { useResolvedTheme } from "../hooks/useResolvedTheme";
 import { usePreferencesStore } from "../stores/preferences.store";
+import { useI18n } from "../utils/i18n";
 
 export function DiffViewer({ patch }: { patch: string }) {
+  const { t } = useI18n();
   const theme = usePreferencesStore((state) => state.theme);
   const resolvedTheme = useResolvedTheme(theme);
   if (patch.trim()) {
@@ -27,7 +29,7 @@ export function DiffViewer({ patch }: { patch: string }) {
     );
   }
 
-  const lines = patch ? patch.split("\n") : ["No diff available."];
+  const lines = patch ? patch.split("\n") : [t("git.noDiff")];
   return (
     <pre className="diff-viewer">
       {lines.map((line, index) => (

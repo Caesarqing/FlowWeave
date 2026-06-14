@@ -4,6 +4,12 @@ import type { GraphEdge, GraphNode, GraphNodeType, GraphRisk } from "../types";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
+import {
+  localizedArchitectureCategory,
+  localizedModuleDescription,
+  localizedModuleGuidance,
+  localizedModuleRole
+} from "../utils/module-text";
 
 const nodeTypeOptions: GraphNodeType[] = ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"];
 const riskOptions: GraphRisk[] = ["normal", "review", "blocked"];
@@ -37,6 +43,9 @@ export function ModulePanel({
   });
   const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
   const fileTree = useMemo(() => buildModuleFileTree(node.files, node.fileRoles), [node.fileRoles, node.files]);
+  const localizedDescription = localizedModuleDescription(node, t);
+  const localizedGuidance = localizedModuleGuidance(node, t);
+  const localizedRole = localizedModuleRole(node, t);
 
   function toggleSection(section: keyof typeof openSections) {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
@@ -68,10 +77,10 @@ export function ModulePanel({
       </div>
 
       <section className="module-card hero-card">
-        <small>{node.category ?? t(`nodeType.${node.nodeType}`)}</small>
+        <small>{localizedArchitectureCategory(node.category, node.nodeType, t)}</small>
         <h2>{node.title}</h2>
-        <p>{node.description}</p>
-        {node.role ? <p className="module-role">{node.role}</p> : null}
+        <p>{localizedDescription}</p>
+        {localizedRole ? <p className="module-role">{localizedRole}</p> : null}
         {typeof node.confidence === "number" ? <span className="confidence-chip">{t("module.confidence", { value: Math.round(node.confidence * 100) })}</span> : null}
       </section>
 
@@ -104,7 +113,7 @@ export function ModulePanel({
           </label>
           <label className="module-edit-wide">
             {t("module.description")}
-            <textarea value={node.description} onChange={(event) => onModuleChange(node.id, { description: event.target.value })} />
+            <textarea value={localizedDescription} onChange={(event) => onModuleChange(node.id, { description: event.target.value })} />
           </label>
           <label className="module-edit-wide">
             {t("module.fileList")}
@@ -188,7 +197,7 @@ export function ModulePanel({
 
       <section className="module-card guidance-card">
         <h3>{t("module.guidanceDraft")}</h3>
-        <textarea value={node.guidanceDraft} onChange={(event) => onGuidanceChange(event.target.value)} />
+        <textarea value={localizedGuidance} onChange={(event) => onGuidanceChange(event.target.value)} />
         <label className="dialog-box">
           <span>{t("module.dialog")}</span>
           <textarea

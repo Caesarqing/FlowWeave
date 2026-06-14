@@ -298,7 +298,7 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     risk: module.risk,
     description: module.description,
     files: module.files,
-    guidanceDraft: `请围绕 ${module.title} 的功能架构职责修改代码，优先参考右侧 Files、Functions 和 Connections 证据。`,
+    guidanceDraft: `Modify code around ${module.title}'s functional architecture responsibility. Prioritize the Files, Functions, and Connections evidence in the details panel.`,
     status: architectureMap.source === "agent" ? "mapped" : "needs-review",
     x: xForCategory(module.category) + (index % 2) * 34,
     y: yForCategory(module.category, index),

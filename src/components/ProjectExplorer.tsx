@@ -84,7 +84,7 @@ export function ProjectExplorer({
                 <FileCode2 size={14} />
               </>
             )}
-            <span>{file.name}</span>
+            <span>{file.isTruncatedNotice ? t("project.truncatedRow") : file.name}</span>
           </button>
         ))}
         {truncated ? <p className="tree-truncated">{t("project.truncated")}</p> : null}

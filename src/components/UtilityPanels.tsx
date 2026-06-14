@@ -43,7 +43,7 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
       <div className="utility-identity">
         <div className="avatar-mark">FW</div>
         <div>
-          <strong>FlowWeave User</strong>
+          <strong>{t("profile.user")}</strong>
           <span>{t("profile.identity")}</span>
         </div>
       </div>

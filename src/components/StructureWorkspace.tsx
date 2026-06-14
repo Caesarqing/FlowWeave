@@ -25,6 +25,7 @@ import {
 } from "../utils/sequence-diagram-flow";
 import { useI18n } from "../utils/i18n";
 import { cn } from "../utils/classnames";
+import { localizedSequenceDiagram } from "../utils/sequence-text";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { Button } from "./Button";
 
@@ -54,11 +55,15 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
   const [participantQuery, setParticipantQuery] = useState("");
   const [selectedMessageKinds, setSelectedMessageKinds] = useState<Set<SequenceMessageKind>>(() => new Set());
   const flowInstance = useRef<ReactFlowInstance<SequenceFlowNode> | null>(null);
+  const localizedDiagram = useMemo(
+    () => sequence.diagram ? localizedSequenceDiagram(sequence.diagram, t) : undefined,
+    [sequence.diagram, t]
+  );
   const visibleDiagram = useMemo(
-    () => sequence.diagram
-      ? filterSequenceDiagram(sequence.diagram, participantQuery, selectedMessageKinds)
+    () => localizedDiagram
+      ? filterSequenceDiagram(localizedDiagram, participantQuery, selectedMessageKinds)
       : undefined,
-    [participantQuery, selectedMessageKinds, sequence.diagram]
+    [localizedDiagram, participantQuery, selectedMessageKinds]
   );
   const visibleMessageId = visibleDiagram?.messages.some((message) => message.id === sequence.selectedMessageId)
     ? sequence.selectedMessageId
@@ -141,7 +146,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
         count: sequence.fileCount,
         messageCount: sequence.diagram ? t("structure.messages", { count: sequence.diagram.messages.length }) : t("structure.noDiagramShort")
       })}
-      title={sequence.diagram ? sequence.diagram.title : t("nav.sequence")}
+      title={localizedDiagram ? localizedDiagram.title : t("nav.sequence")}
     >
       <section className="workspace-main sequence-main">
         {sequence.diagram && visibleDiagram ? (
@@ -271,12 +276,13 @@ function SequenceCanvas({
 }
 
 function SequenceParticipantNode({ data }: NodeProps<SequenceFlowNode>) {
+  const { t } = useI18n();
   if (!("participant" in data)) return null;
   return (
     <div className="sequence-flow-participant" style={{ "--participant-accent": data.accent } as CSSProperties}>
       <span className="sequence-flow-accent" />
       <strong>{data.participant.title}</strong>
-      <small>{data.participant.kind}</small>
+      <small>{t(`structure.participantKind.${data.participant.kind}`)}</small>
     </div>
   );
 }
@@ -350,7 +356,7 @@ function SequenceDetails({
     return (
       <>
         <section className="module-card">
-          <small>{participant.kind}</small>
+          <small>{t(`structure.participantKind.${participant.kind}`)}</small>
           <h3>{participant.title}</h3>
           <p>{participant.description}</p>
         </section>

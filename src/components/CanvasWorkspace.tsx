@@ -96,7 +96,7 @@ export function CanvasWorkspace({
 
   return (
     <main className="canvas-shell">
-      <section className="graph-stage" aria-label="FlowWeave backend module graph">
+      <section className="graph-stage" aria-label={t("canvas.graphAria")}>
         <HologridScene />
         <ControlledFlowCanvas
           edges={edges}

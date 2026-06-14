@@ -23,6 +23,7 @@ const WORKSPACE_PANELS_KEY = "flowweave.workspacePanels";
 export const PREFERENCE_STORAGE_ERROR_EVENT = "flowweave-preference-storage-error";
 const themeOptions: UiThemeId[] = ["system", "light", "dark", "terminal", "hologrid"];
 const localeOptions: LocaleId[] = ["en", "zh-CN"];
+export const DEFAULT_LOCALE: LocaleId = "en";
 const defaultWorkspacePanels: WorkspacePanelPreferences = {
   canvas: { left: false, right: false },
   structure: { left: false, right: false },
@@ -56,7 +57,7 @@ type PreferencesState = {
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   defaultRelation: readEnumValue(DEFAULT_RELATION_KEY, relationOptions, "depends_on"),
-  locale: readEnumValue(LOCALE_KEY, localeOptions, "zh-CN"),
+  locale: readEnumValue(LOCALE_KEY, localeOptions, DEFAULT_LOCALE),
   reducedMotion: readStoredValue<"true" | "false">(REDUCED_MOTION_KEY, "false") === "true",
   scanMaxEntries: readStoredInteger(SCAN_MAX_ENTRIES_KEY, 10_000, 1_000, 100_000),
   scanConcurrency: readStoredInteger(SCAN_CONCURRENCY_KEY, 32, 1, 128),
