@@ -6,10 +6,23 @@ import { relationOptions, relationStyle } from "../../src/utils/relation-styles"
 
 describe("canvas graph CRUD helpers", () => {
   it("deletes a module and its related edges", () => {
-    const result = deleteModuleFromCanvasGraph(modulesFixture(), edgesFixture(), "service");
+    const result = deleteModuleFromCanvasGraph(modulesFixture().filter((module) => module.id !== "docs"), edgesFixture(), "service");
 
     expect(result.modules.map((module) => module.id)).toEqual(["api", "repo"]);
     expect(result.edges).toEqual([]);
+  });
+
+  it("invalidates assessments for remaining neighbor modules when deleting a module", () => {
+    const result = deleteModuleFromCanvasGraph(modulesFixture(), [
+      ...edgesFixture(),
+      { id: "api-docs", source: "api", target: "docs", relation: "depends_on" }
+    ], "service");
+
+    expect(result.modules.find((module) => module.id === "api")?.assessment?.confidence.level).toBe("unknown");
+    expect(result.modules.find((module) => module.id === "repo")?.assessment?.confidence.level).toBe("unknown");
+    expect(result.modules.find((module) => module.id === "docs")?.assessment?.confidence.level).toBe("high");
+    expect(result.modules.find((module) => module.id === "api")?.status).toBe("needs-review");
+    expect(result.edges).toEqual([{ id: "api-docs", source: "api", target: "docs", relation: "depends_on" }]);
   });
 
   it("updates module metadata and marks it for review", () => {
@@ -26,6 +39,8 @@ describe("canvas graph CRUD helpers", () => {
       files: ["src/api/public.ts"],
       status: "needs-review"
     });
+    expect(updated.assessment?.confidence.level).toBe("unknown");
+    expect(updated.risk).toBe("unknown");
   });
 
   it("updates edge endpoints, relation, and guidance while rejecting self loops", () => {
@@ -81,7 +96,8 @@ function modulesFixture(): GraphNode[] {
   return [
     graphNode("api", "API"),
     graphNode("service", "Service"),
-    graphNode("repo", "Repository")
+    graphNode("repo", "Repository"),
+    graphNode("docs", "Docs")
   ];
 }
 
@@ -93,6 +109,14 @@ function graphNode(id: string, title: string): GraphNode {
     kind: "module",
     nodeType: "module",
     risk: "normal",
+    assessment: {
+      version: 1,
+      generatorVersion: "test",
+      confidence: { score: 95, level: "high", factors: [] },
+      risk: { systemScore: 10, systemLevel: "low", effectiveLevel: "low", factors: [] },
+      fingerprint: "scan-test",
+      assessedAt: "2026-06-15T00:00:00.000Z"
+    },
     description: `${title} module`,
     files: [`src/${id}.ts`],
     guidanceDraft: "Review before editing.",

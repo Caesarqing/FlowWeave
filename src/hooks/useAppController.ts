@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { buildGuidanceMarkdown, buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson, buildTaskJson, downloadText } from "../utils/export-artifacts";
+import { buildExecutionAssessmentSummary, buildGuidanceMarkdown, buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson, buildTaskJson, downloadText } from "../utils/export-artifacts";
 import { useAgentStore } from "../stores/agents.store";
 import { useNavigationStore } from "../stores/navigation.store";
 import { useProjectStore } from "../stores/project.store";
@@ -158,10 +158,10 @@ export function useAppController() {
     }
 
     const agentName = agents.find((agent) => agent.id === agentId)?.name ?? (agentId === "mock" ? "Mock Agent" : agentId);
-    if (executionMode === "execute" && !window.confirm(t("agent.executeConfirm", {
+    if (executionMode === "execute" && !window.confirm(`${t("agent.executeConfirm", {
       agent: agentName,
       project: projectPath
-    }))) {
+    })}\n\n${buildExecutionAssessmentSummary(flow.modules, flow.graphRelations)}`)) {
       setLastRunStatus(t("agent.executeCanceled"));
       return;
     }

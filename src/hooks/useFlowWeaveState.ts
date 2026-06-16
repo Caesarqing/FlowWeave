@@ -12,6 +12,7 @@ import { useCanvasStore } from "../stores/canvas.store";
 import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../utils/canvas-graph-crud";
 import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
+import { invalidateModuleAssessment, unknownAssessment } from "../utils/module-assessment";
 
 export function useFlowWeaveState() {
   const { t } = useI18n();
@@ -71,6 +72,7 @@ export function useFlowWeaveState() {
       relation: defaultRelation
     });
     setEdges((currentEdges) => appendEdge(currentEdges, nextEdge));
+    invalidateAssessments([connection.source, connection.target]);
     setSelectedEdgeId(nextEdge.id);
     setConnectionPanelMode("edit");
   }
@@ -83,7 +85,8 @@ export function useFlowWeaveState() {
       subtitle: t("module.manualSubtitle"),
       kind: "module",
       nodeType: "module",
-      risk: "normal",
+      risk: "unknown",
+      assessment: unknownAssessment("", new Date().toISOString()),
       description: t("module.manualDescription"),
       files: ["src/new-module/index.ts"],
       guidanceDraft: t("module.manualGuidance"),
@@ -121,31 +124,40 @@ export function useFlowWeaveState() {
       guidanceNote: input.guidanceNote
     });
     setEdges((currentEdges) => appendEdge(currentEdges, nextEdge));
+    invalidateAssessments([input.source, input.target]);
     setSelectedEdgeId(nextEdge.id);
     setConnectionPanelMode("edit");
   }
 
   function updateEdgeRelation(edgeId: string, relation: GraphEdgeRelation) {
+    const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) =>
       updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { relation }).map(createFlowEdge)
     );
+    if (edge) invalidateAssessments([edge.source, edge.target]);
   }
 
   function updateEdgeGuidance(edgeId: string, guidanceNote: string) {
+    const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) =>
       updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { guidanceNote }).map(createFlowEdge)
     );
+    if (edge) invalidateAssessments([edge.source, edge.target]);
   }
 
   function updateEdgeEndpoints(edgeId: string, source: string, target: string) {
     if (!source || !target || source === target) return;
+    const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) =>
       updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { source, target }).map(createFlowEdge)
     );
+    invalidateAssessments([source, target, ...(edge ? [edge.source, edge.target] : [])]);
   }
 
   function deleteEdge(edgeId: string) {
+    const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
+    if (edge) invalidateAssessments([edge.source, edge.target]);
     if (edgeId === selectedEdgeId) clearConnectionSelection();
   }
 
@@ -172,6 +184,28 @@ export function useFlowWeaveState() {
       clearConnectionSelection();
     }
     setEdges((currentEdges) => applyEdgeChanges(changes, currentEdges));
+    const removedIds = new Set(changes.filter((change) => change.type === "remove").map((change) => change.id));
+    invalidateAssessments(graphRelations
+      .filter((edge) => removedIds.has(edge.id))
+      .flatMap((edge) => [edge.source, edge.target]));
+  }
+
+  function invalidateAssessments(nodeIds: string[]) {
+    const affected = new Set(nodeIds);
+    if (affected.size === 0) return;
+    const assessedAt = new Date().toISOString();
+    useCanvasStore.setState((state) => {
+      const nextModules = state.modules.map((module) =>
+        affected.has(module.id) ? invalidateModuleAssessment(module, assessedAt) : module
+      );
+      return {
+        modules: nextModules,
+        nodes: state.nodes.map((node) => {
+          const module = nextModules.find((item) => item.id === node.id);
+          return module ? { ...node, data: { ...module } } : node;
+        })
+      };
+    });
   }
 
   return {

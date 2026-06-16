@@ -30,6 +30,8 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.connectorPrompt")).toBe("Connector prompt");
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
     expect(translate("en", "module.manualSubtitle")).toBe("Manual module");
+    expect(translate("en", "assessment.high")).toBe("high");
+    expect(translate("en", "module.riskOverridePrompt")).toContain("overridden");
     expect(translate("en", "artifact.state.stale")).toBe("Outdated");
     expect(translate("en", "artifact.sequences")).toBe("Sequence diagrams");
     expect(translate("en", "onboarding.title")).toContain("Understand the project");
@@ -55,6 +57,8 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.connectorPrompt")).toBe("连接提示");
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
     expect(translate("zh-CN", "module.manualSubtitle")).toBe("手动补充模块");
+    expect(translate("zh-CN", "assessment.high")).toBe("高");
+    expect(translate("zh-CN", "module.riskOverridePrompt")).toContain("覆写");
     expect(translate("zh-CN", "artifact.state.stale")).toBe("已过期");
     expect(translate("zh-CN", "artifact.sequences")).toBe("时序图");
     expect(translate("zh-CN", "onboarding.title")).toContain("先理解项目");

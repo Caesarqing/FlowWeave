@@ -27,7 +27,7 @@ export const graphNodes: GraphNode[] = [
     subtitle: "需求入口与 Agent 指令边界",
     kind: "module",
     nodeType: "entrypoint",
-    risk: "normal",
+    risk: "low",
     description: "Codex 读取用户目标、项目约束和现有文档后，在这里形成可编辑的任务意图节点。",
     files: [".codex/guidance.md", "AGENTS.md", "docs/architecture.md"],
     guidanceDraft:
@@ -42,7 +42,7 @@ export const graphNodes: GraphNode[] = [
     subtitle: "登录态、JWT、权限守卫",
     kind: "module",
     nodeType: "module",
-    risk: "normal",
+    risk: "low",
     description: "负责身份校验和访问控制，是密码重置、邮箱验证等流程的安全边界。",
     files: ["apps/api/src/auth/auth.guard.ts", "apps/api/src/auth/jwt.strategy.ts", "apps/api/src/auth/token.service.ts"],
     guidanceDraft:
@@ -57,7 +57,7 @@ export const graphNodes: GraphNode[] = [
     subtitle: "账户恢复与用户资料接口",
     kind: "module",
     nodeType: "module",
-    risk: "review",
+    risk: "medium",
     description: "对外暴露用户相关 REST 接口，FlowWeave 将该节点作为本次修改的主工作区。",
     files: ["apps/api/src/user/user.controller.ts", "apps/api/src/user/user.service.ts", "apps/api/src/user/user.dto.ts"],
     guidanceDraft:
@@ -72,7 +72,7 @@ export const graphNodes: GraphNode[] = [
     subtitle: "用户、令牌与审计记录",
     kind: "module",
     nodeType: "data",
-    risk: "normal",
+    risk: "low",
     description: "维护数据库 schema、迁移和仓储访问，决定 Agent 修改时需要同步的持久化文件。",
     files: ["apps/api/src/database/user.repository.ts", "prisma/schema.prisma", "prisma/migrations"],
     guidanceDraft:
@@ -87,7 +87,7 @@ export const graphNodes: GraphNode[] = [
     subtitle: "集成测试与回归验证",
     kind: "module",
     nodeType: "test",
-    risk: "normal",
+    risk: "low",
     description: "记录 Codex 修改完成后必须覆盖的测试面，避免 FlowWeave 只生成实现指令而遗漏验证指令。",
     files: ["tests/integration/user.api.spec.ts", "tests/auth/reset-token.spec.ts"],
     guidanceDraft:
@@ -114,7 +114,7 @@ const englishGraphNodes: GraphNode[] = [
     subtitle: "Request entry and agent instruction boundary",
     kind: "module",
     nodeType: "entrypoint",
-    risk: "normal",
+    risk: "low",
     description: "Codex reads the user goal, project constraints, and existing docs, then forms an editable task intent node here.",
     files: [".codex/guidance.md", "AGENTS.md", "docs/architecture.md"],
     guidanceDraft:
@@ -129,7 +129,7 @@ const englishGraphNodes: GraphNode[] = [
     subtitle: "Session state, JWT, and permission guards",
     kind: "module",
     nodeType: "module",
-    risk: "normal",
+    risk: "low",
     description: "Owns identity checks and access control, forming the security boundary for password reset and email verification flows.",
     files: ["apps/api/src/auth/auth.guard.ts", "apps/api/src/auth/jwt.strategy.ts", "apps/api/src/auth/token.service.ts"],
     guidanceDraft:
@@ -144,7 +144,7 @@ const englishGraphNodes: GraphNode[] = [
     subtitle: "Account recovery and profile endpoints",
     kind: "module",
     nodeType: "module",
-    risk: "review",
+    risk: "medium",
     description: "Exposes user-related REST endpoints and is the main workspace for this FlowWeave change.",
     files: ["apps/api/src/user/user.controller.ts", "apps/api/src/user/user.service.ts", "apps/api/src/user/user.dto.ts"],
     guidanceDraft:
@@ -159,7 +159,7 @@ const englishGraphNodes: GraphNode[] = [
     subtitle: "Users, tokens, and audit records",
     kind: "module",
     nodeType: "data",
-    risk: "normal",
+    risk: "low",
     description: "Maintains schema, migrations, and repository access that must stay aligned with agent-generated changes.",
     files: ["apps/api/src/database/user.repository.ts", "prisma/schema.prisma", "prisma/migrations"],
     guidanceDraft:
@@ -174,7 +174,7 @@ const englishGraphNodes: GraphNode[] = [
     subtitle: "Integration tests and regression checks",
     kind: "module",
     nodeType: "test",
-    risk: "normal",
+    risk: "low",
     description: "Records the test surface required after Codex changes so implementation guidance does not omit verification.",
     files: ["tests/integration/user.api.spec.ts", "tests/auth/reset-token.spec.ts"],
     guidanceDraft:

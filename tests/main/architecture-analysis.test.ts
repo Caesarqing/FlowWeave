@@ -81,6 +81,8 @@ describe("architecture-analysis.service", () => {
     );
 
     expect(map?.modules[0].symbols[0].name).toBe("loadUser");
+    expect(map?.modules[0].risk).toBe("unknown");
+    expect(map?.modules[0].confidence).toBeUndefined();
     const graph = architectureMapToGraph(map!);
     expect(graph.nodes[0]).toMatchObject({ id: "user-api", nodeType: "api", category: "api-boundary" });
     expect(graph.edges[0]).toMatchObject({
@@ -129,6 +131,8 @@ describe("architecture-analysis.service", () => {
     expect(result.graph.nodes.length).toBeGreaterThan(0);
     expect(stored?.modules.length).toBeGreaterThan(0);
     expect(stored?.metadata?.agentId).toBe("mock");
+    expect(stored?.modules[0].assessment?.confidence.factors).toHaveLength(5);
+    expect(stored?.modules[0].confidence).toBeUndefined();
     expect(fileInsights).toContain("src/api/user.controller.ts");
   });
 

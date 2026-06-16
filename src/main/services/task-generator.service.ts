@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { GraphEdge, GraphNode, GraphNodeType, GraphRisk } from "../../types";
+import type { GraphEdge, GraphNode, GraphNodeType } from "../../types";
 import type { CodeflowCanvas, CodeflowProject, CodeflowTask, ProjectFileNode } from "../storage/schemas";
 import { collectImportReferences, flattenProjectFilePaths } from "./import-parser.service";
 
@@ -126,7 +126,7 @@ export async function inferGraphFromProject(project: CodeflowProject) {
     subtitle: getNodeSubtitle(group),
     kind: "module",
     nodeType: getNodeType(group),
-    risk: getNodeRisk(group, files),
+    risk: "unknown",
     description: getNodeDescription(group, files),
     files,
     guidanceDraft: `Review the responsibility boundaries of these files around ${toTitle(group)}, and expand the modification scope only when required by its connections.`,
@@ -295,12 +295,6 @@ function getNodeType(group: string): GraphNodeType {
   if (/database|db|prisma|schema|migration/i.test(group)) return "data";
   if (/api|route|controller|server|app/i.test(group)) return "entrypoint";
   return "module";
-}
-
-function getNodeRisk(group: string, files: string[]): GraphRisk {
-  if (/auth|security|payment|billing/i.test(group)) return "review";
-  if (files.some((file) => /\.(key|pem|p12|pfx|crt|cer)$/.test(file) || /secret|token|credential/i.test(file))) return "blocked";
-  return "normal";
 }
 
 function getNodeSubtitle(group: string) {

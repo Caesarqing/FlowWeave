@@ -27,6 +27,7 @@ import {
 import { registerProject, resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
 import { scanProject } from "../services/project-scanner.service";
 import { buildSemanticIndex } from "../services/semantic-index.service";
+import { assessModules } from "../../utils/module-assessment";
 import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram } from "../services/sequence-diagram.service";
 import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
@@ -134,6 +135,12 @@ export function registerProjectIpc() {
     if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
       throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Canvas nodes and edges must be arrays.`);
     }
+    for (const node of value.nodes) {
+      const override = node.assessment?.risk.override;
+      if (override && !override.reason.trim()) {
+        throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Risk override for "${node.id}" requires a reason.`);
+      }
+    }
     const projectArtifact = JSON.parse(
       await readFile(join(projectPath, FLOWWEAVE_DIR, "project.json"), "utf8")
     ) as { scanFingerprint?: string };
@@ -230,7 +237,7 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       failed: 0,
       message: `Discovered ${total} project files.`
     }));
-    await buildSemanticIndex(project, {
+    const { index } = await buildSemanticIndex(project, {
       signal: started.signal,
       onProgress: (progress) => notify(updateOperation(started.operation.operationId, progress))
     });
@@ -240,10 +247,15 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     const canvas = canvasRead.state === "loaded"
       ? migrateCanvasToScan(canvasRead.canvas, projectPath, scanFingerprint, project.files)
       : undefined;
-    const graph = canvas ? { nodes: canvas.nodes, edges: canvas.edges } : inferredGraph;
+    const baseGraph = canvas ? { nodes: canvas.nodes, edges: canvas.edges } : inferredGraph;
+    const graph = {
+      nodes: assessModules(baseGraph.nodes, baseGraph.edges, index, scanFingerprint, new Date().toISOString()),
+      edges: baseGraph.edges
+    };
+    const assessedCanvas = canvas ? { ...canvas, nodes: graph.nodes, edges: graph.edges } : undefined;
     const written = canvasRead.state === "failed"
       ? await writeFlowWeaveProjectPreservingCanvas(projectPath, project, graph.nodes, graph.edges, scanFingerprint)
-      : await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint, canvas);
+      : await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint, assessedCanvas);
     await refreshConnectionWithoutFailing(projectId, projectPath);
     const artifacts: ProjectArtifactStatuses = {
       project: "current",

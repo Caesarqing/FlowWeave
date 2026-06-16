@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronRight, FileCode2, Folder, GitPullRequestArrow, Send, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import type { GraphEdge, GraphNode, GraphNodeType, GraphRisk } from "../types";
+import type { AssessmentLevel, GraphEdge, GraphNode, GraphNodeType } from "../types";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
+import { applyRiskOverride, clearRiskOverride } from "../utils/module-assessment";
 import {
   localizedArchitectureCategory,
   localizedModuleDescription,
@@ -12,7 +13,7 @@ import {
 } from "../utils/module-text";
 
 const nodeTypeOptions: GraphNodeType[] = ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"];
-const riskOptions: GraphRisk[] = ["normal", "review", "blocked"];
+const riskOptions: AssessmentLevel[] = ["low", "medium", "high", "unknown"];
 
 export function ModulePanel({
   dialogText,
@@ -39,7 +40,8 @@ export function ModulePanel({
   const [openSections, setOpenSections] = useState({
     files: true,
     symbols: false,
-    evidence: false
+    evidence: false,
+    assessment: true
   });
   const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
   const fileTree = useMemo(() => buildModuleFileTree(node.files, node.fileRoles), [node.fileRoles, node.files]);
@@ -69,6 +71,23 @@ export function ModulePanel({
     }
   }
 
+  function updateRisk(level: AssessmentLevel) {
+    if (level === "unknown") return;
+    const reason = window.prompt(t("module.riskOverridePrompt"), node.assessment?.risk.override?.reason ?? "");
+    if (reason === null) return;
+    try {
+      const updated = applyRiskOverride(node, level, reason, new Date().toISOString());
+      onModuleChange(node.id, { risk: updated.risk, assessment: updated.assessment });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function removeRiskOverride() {
+    const updated = clearRiskOverride(node);
+    onModuleChange(node.id, { risk: updated.risk, assessment: updated.assessment });
+  }
+
   return (
     <aside className="module-panel">
       <div className="panel-header">
@@ -81,7 +100,21 @@ export function ModulePanel({
         <h2>{node.title}</h2>
         <p>{localizedDescription}</p>
         {localizedRole ? <p className="module-role">{localizedRole}</p> : null}
-        {typeof node.confidence === "number" ? <span className="confidence-chip">{t("module.confidence", { value: Math.round(node.confidence * 100) })}</span> : null}
+        {node.assessment ? (
+          <div className="assessment-summary">
+            <span className="confidence-chip">
+              {t("module.confidenceLevel", {
+                level: t(`assessment.${node.assessment.confidence.level}`),
+                value: node.assessment.confidence.score ?? t("assessment.unscored")
+              })}
+            </span>
+            <span className={cn("risk-chip", node.assessment.risk.systemLevel)}>
+              {t("module.systemRisk", { level: t(`assessment.${node.assessment.risk.systemLevel}`) })}
+            </span>
+          </div>
+        ) : typeof node.confidence === "number" ? (
+          <span className="confidence-chip">{t("module.confidence", { value: Math.round(node.confidence * 100) })}</span>
+        ) : null}
       </section>
 
       <section className="module-card module-edit-card">
@@ -103,14 +136,27 @@ export function ModulePanel({
           </label>
           <label>
             {t("module.risk")}
-            <select value={node.risk} onChange={(event) => onModuleChange(node.id, { risk: event.target.value as GraphRisk })}>
+            <select value={node.risk} onChange={(event) => updateRisk(event.target.value as AssessmentLevel)}>
               {riskOptions.map((option) => (
-                <option key={option} value={option}>
-                  {t(`risk.${option}`)}
+                <option disabled={option === "unknown"} key={option} value={option}>
+                  {t(`assessment.${option}`)}
                 </option>
               ))}
             </select>
           </label>
+          {node.assessment?.risk.override ? (
+            <div className="module-edit-wide assessment-override">
+              <strong>{t("module.riskOverride")}</strong>
+              <span>{node.assessment.risk.override.reason}</span>
+              {node.assessment.risk.systemLevelChanged ? (
+                <span>{t("module.systemRiskChanged", {
+                  previous: t(`assessment.${node.assessment.risk.previousSystemLevel ?? "unknown"}`),
+                  current: t(`assessment.${node.assessment.risk.systemLevel}`)
+                })}</span>
+              ) : null}
+              <button className="ghost-button" type="button" onClick={removeRiskOverride}>{t("module.clearRiskOverride")}</button>
+            </div>
+          ) : null}
           <label className="module-edit-wide">
             {t("module.description")}
             <textarea value={localizedDescription} onChange={(event) => onModuleChange(node.id, { description: event.target.value })} />
@@ -125,6 +171,16 @@ export function ModulePanel({
           {t("module.delete")}
         </button>
       </section>
+
+      {node.assessment ? (
+        <CollapsibleCard isOpen={openSections.assessment} title={t("module.assessment")} onToggle={() => toggleSection("assessment")}>
+          <AssessmentDetails
+            confidence={node.assessment.confidence}
+            risk={node.assessment.risk}
+            t={t}
+          />
+        </CollapsibleCard>
+      ) : null}
 
       <CollapsibleCard isOpen={openSections.files} title={t("module.files")} onToggle={() => toggleSection("files")}>
         {fileTree.length > 0 ? (
@@ -218,6 +274,67 @@ export function ModulePanel({
       </section>
     </aside>
   );
+}
+
+function AssessmentDetails({
+  confidence,
+  risk,
+  t
+}: {
+  confidence: NonNullable<GraphNode["assessment"]>["confidence"];
+  risk: NonNullable<GraphNode["assessment"]>["risk"];
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  return (
+    <div className="assessment-details">
+      <div className="assessment-heading">
+        <strong>{t("module.confidenceAssessment")}</strong>
+        <span>{confidence.score ?? t("assessment.unscored")} / 100 · {t(`assessment.${confidence.level}`)}</span>
+      </div>
+      {confidence.factors.map((factor) => <AssessmentFactorRow factor={factor} key={factor.id} />)}
+      <div className="assessment-heading">
+        <strong>{t("module.riskAssessment")}</strong>
+        <span>{risk.systemScore ?? t("assessment.unscored")} / 100 · {t(`assessment.${risk.systemLevel}`)}</span>
+      </div>
+      {risk.factors.map((factor) => <AssessmentFactorRow factor={factor} key={factor.id} />)}
+      <div className="assessment-advice">
+        <strong>{t("module.assessmentAdvice")}</strong>
+        {assessmentAdvice(confidence, risk, t).map((advice) => <p key={advice}>{advice}</p>)}
+      </div>
+    </div>
+  );
+}
+
+function AssessmentFactorRow({ factor }: { factor: NonNullable<GraphNode["assessment"]>["confidence"]["factors"][number] }) {
+  return (
+    <div className="assessment-factor">
+      <div>
+        <strong>{factor.label}</strong>
+        <span>{factor.score} / {factor.maxScore}</span>
+      </div>
+      <p>{factor.reason}</p>
+      {factor.evidence[0] ? (
+        <small>
+          {factor.evidence[0].filePath ? `${factor.evidence[0].filePath}${factor.evidence[0].line ? `:${factor.evidence[0].line}` : ""} · ` : ""}
+          {factor.evidence[0].detail}
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
+function assessmentAdvice(
+  confidence: NonNullable<GraphNode["assessment"]>["confidence"],
+  risk: NonNullable<GraphNode["assessment"]>["risk"],
+  t: ReturnType<typeof useI18n>["t"]
+): string[] {
+  const advice: string[] = [];
+  if (confidence.level === "low" || confidence.level === "unknown") advice.push(t("module.advice.refreshScan"));
+  if ((risk.factors.find((factor) => factor.id === "dependency-centrality")?.score ?? 0) >= 15) advice.push(t("module.advice.reviewConnections"));
+  if ((risk.factors.find((factor) => factor.id === "side-effects")?.score ?? 0) > 0) advice.push(t("module.advice.reviewSideEffects"));
+  if (risk.effectiveLevel === "high" || risk.effectiveLevel === "unknown") advice.push(t("module.advice.gitReview"));
+  if (advice.length === 0) advice.push(t("module.advice.standardValidation"));
+  return advice;
 }
 
 function CollapsibleCard({ children, isOpen, onToggle, title }: { children: ReactNode; isOpen: boolean; onToggle: () => void; title: string }) {

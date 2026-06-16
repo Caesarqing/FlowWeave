@@ -1020,12 +1020,16 @@ button:disabled {
   border-color: rgba(251, 113, 133, 0.55);
 }
 
-.flow-module-node.review {
+.flow-module-node.medium {
   border-color: rgba(251, 191, 36, 0.7);
 }
 
-.flow-module-node.blocked {
+.flow-module-node.high {
   border-color: rgba(251, 113, 133, 0.8);
+}
+
+.flow-module-node.unknown {
+  border-color: rgba(156, 163, 175, 0.62);
 }
 
 .flow-handle {
@@ -1958,15 +1962,78 @@ button:disabled {
   font-weight: 800;
 }
 
-.risk-chip.review {
+.risk-chip.medium {
   color: var(--warning);
   border-color: rgba(251, 191, 36, 0.45);
 }
 
-.risk-chip.blocked,
+.risk-chip.high,
 .agent-status.missing {
   color: var(--danger);
   border-color: rgba(251, 113, 133, 0.45);
+}
+
+.risk-chip.low {
+  color: var(--success);
+  border-color: rgba(66, 245, 167, 0.38);
+}
+
+.assessment-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.assessment-summary .confidence-chip {
+  margin-top: 0;
+}
+
+.assessment-override,
+.assessment-details {
+  display: grid;
+  gap: 8px;
+}
+
+.assessment-heading,
+.assessment-factor > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assessment-heading {
+  margin-top: 8px;
+  color: var(--text);
+}
+
+.assessment-factor {
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.assessment-factor p,
+.assessment-factor small {
+  display: block;
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.assessment-advice {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.assessment-advice p {
+  margin: 0;
+  color: var(--muted);
 }
 
 .agent-status.ok {

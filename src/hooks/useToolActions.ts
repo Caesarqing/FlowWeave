@@ -1,6 +1,7 @@
 import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolId, ToolUiStatus } from "../types";
 import { useI18n } from "../utils/i18n";
 import { usePreferencesStore } from "../stores/preferences.store";
+import { buildExecutionAssessmentSummary, scopeGraphForModule } from "../utils/export-artifacts";
 
 export function useToolActions({
   buildGuidanceMarkdown,
@@ -92,10 +93,11 @@ export function useToolActions({
       setLastRunStatus(t("status.noProject"));
       return;
     }
-    if (executionMode === "execute" && !window.confirm(t("agent.executeConfirm", {
+    const executionScope = scopeGraphForModule(modules, graphRelations, selectedNode.id);
+    if (executionMode === "execute" && !window.confirm(`${t("agent.executeConfirm", {
       agent: getAgentName(agentId),
       project: projectPath
-    }))) {
+    })}\n\n${buildExecutionAssessmentSummary(executionScope.nodes, executionScope.edges)}`)) {
       setLastRunStatus(t("agent.executeCanceled"));
       return;
     }

@@ -24,6 +24,7 @@ ${nodes
 
 Type: ${node.nodeType}
 Risk: ${node.risk}
+${formatAssessmentMarkdown(node)}
 
 ${node.description}
 
@@ -36,6 +37,77 @@ ${node.guidanceDraft}
   )
   .join("\n")}
 `;
+}
+
+export function buildExecutionAssessmentSummary(nodes: GraphNode[], edges: GraphEdge[]): string {
+  const assessed = nodes.filter((node) => node.assessment);
+  if (assessed.length === 0) return "Assessment: unavailable. Refresh the project scan before relying on module guidance.";
+  const riskOrder = { unknown: 4, high: 3, medium: 2, low: 1 };
+  const highestRisk = [...assessed].sort((left, right) =>
+    riskOrder[right.assessment!.risk.effectiveLevel] - riskOrder[left.assessment!.risk.effectiveLevel]
+  )[0];
+  const scoredConfidence = assessed.filter((node) => node.assessment?.confidence.score !== undefined);
+  const lowestConfidence = [...scoredConfidence].sort((left, right) =>
+    left.assessment!.confidence.score! - right.assessment!.confidence.score!
+  )[0];
+  const unknownConfidence = assessed.filter((node) => node.assessment?.confidence.level === "unknown");
+  const overrides = assessed.filter((node) => node.assessment?.risk.override);
+  const central = assessed.filter((node) =>
+    (node.assessment?.risk.factors.find((factor) => factor.id === "dependency-centrality")?.score ?? 0) >= 15
+  );
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const crossStack = edges.filter((edge) => {
+    const source = nodeById.get(edge.source)?.technologyStack;
+    const target = nodeById.get(edge.target)?.technologyStack;
+    return source && target && source !== "unknown" && target !== "unknown" && source !== target;
+  });
+  return [
+    `Highest module risk: ${highestRisk?.title ?? "unknown"} (${highestRisk?.assessment?.risk.effectiveLevel ?? "unknown"}).`,
+    lowestConfidence
+      ? `Lowest confidence: ${lowestConfidence.title} (${lowestConfidence.assessment!.confidence.score}/100).`
+      : `Confidence unavailable for ${unknownConfidence.length} module(s).`,
+    `High-centrality modules: ${central.map((node) => node.title).join(", ") || "none"}.`,
+    `Cross-stack connections: ${crossStack.map((edge) => `${nodeById.get(edge.source)?.title ?? edge.source} -> ${nodeById.get(edge.target)?.title ?? edge.target}`).join(", ") || "none"}.`,
+    `Manual risk overrides: ${overrides.map((node) => node.title).join(", ") || "none"}.`,
+    "Git Diff safety is evaluated independently after the Agent run."
+  ].join("\n");
+}
+
+export function scopeGraphForModule(nodes: GraphNode[], edges: GraphEdge[], selectedNodeId: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const scopedIds = new Set<string>([selectedNodeId]);
+  for (const edge of edges) {
+    if (edge.source === selectedNodeId) scopedIds.add(edge.target);
+    if (edge.target === selectedNodeId) scopedIds.add(edge.source);
+  }
+  const scopedEdges = edges.filter((edge) =>
+    scopedIds.has(edge.source) &&
+    scopedIds.has(edge.target) &&
+    (edge.source === selectedNodeId || edge.target === selectedNodeId)
+  );
+  return {
+    nodes: nodes.filter((node) => scopedIds.has(node.id)),
+    edges: scopedEdges
+  };
+}
+
+function formatAssessmentMarkdown(node: GraphNode): string {
+  if (!node.assessment) return "Assessment: unavailable";
+  const topRiskFactors = node.assessment.risk.factors
+    .filter((factor) => factor.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 3)
+    .map((factor) => `${factor.label} ${factor.score}/${factor.maxScore}: ${factor.reason}`)
+    .join("; ");
+  return [
+    `System risk: ${node.assessment.risk.systemLevel}${node.assessment.risk.systemScore === undefined ? "" : ` (${node.assessment.risk.systemScore}/100)`}`,
+    `Effective risk: ${node.assessment.risk.effectiveLevel}`,
+    `Confidence: ${node.assessment.confidence.level}${node.assessment.confidence.score === undefined ? "" : ` (${node.assessment.confidence.score}/100)`}`,
+    node.assessment.risk.override ? `Manual override: ${node.assessment.risk.override.reason}` : "",
+    topRiskFactors ? `Risk evidence: ${topRiskFactors}` : "Risk evidence: unavailable",
+    node.assessment.confidence.level === "low" || node.assessment.confidence.level === "unknown"
+      ? "Guidance: verify source evidence and refresh the semantic scan before broad changes."
+      : "Guidance: validate the highest-scoring risk factors and connected modules."
+  ].filter(Boolean).join("\n");
 }
 
 export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {

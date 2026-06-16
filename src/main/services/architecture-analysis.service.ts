@@ -13,7 +13,6 @@ import type {
   GraphEdgeRelation,
   GraphNode,
   GraphNodeType,
-  GraphRisk,
   ModuleMap,
   ProjectMap,
   ProjectStructureFacts,
@@ -29,6 +28,7 @@ import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-in
 import { FlowWeaveError, throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
+import { assessModules, unknownAssessment } from "../../utils/module-assessment";
 
 const MAX_PROMPT_FILES = 260;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 18;
@@ -72,7 +72,11 @@ async function analyzeArchitectureOnce(
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const inputFingerprint = project.scanFingerprint ?? createScanFingerprint(representativeFacts);
   const prompt = buildArchitecturePrompt(representativeFacts);
-  const localArchitecture = createFallbackArchitectureMap(project, facts, "fallback");
+  const localArchitecture = assessArchitectureMap(
+    createFallbackArchitectureMap(project, facts, "fallback"),
+    index,
+    inputFingerprint
+  );
   options?.onProgress?.({
     stage: "analyzing",
     completed: 0,
@@ -87,7 +91,11 @@ async function analyzeArchitectureOnce(
     if (!parsed) return failedArchitectureResult(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", []);
     const quality = validateArchitectureMap(parsed, representativeFacts);
     if (!quality.valid) return failedArchitectureResult(toolId, "quality-rejected", quality.reasons.join("; "), []);
-    const architectureMap = withArchitectureMetadata(parsed, toolId, "mock", inputFingerprint, quality);
+    const architectureMap = assessArchitectureMap(
+      withArchitectureMetadata(parsed, toolId, "mock", inputFingerprint, quality),
+      index,
+      inputFingerprint
+    );
     throwIfAborted(options?.signal, "Architecture analysis");
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
     return architectureMapToResult(architectureMap, "mock");
@@ -117,7 +125,11 @@ async function analyzeArchitectureOnce(
     const firstParsed = parseArchitectureJson(firstOutput, project, facts);
     const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
     if (firstParsed && firstQuality?.valid) {
-      const architectureMap = withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality);
+      const architectureMap = assessArchitectureMap(
+        withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality),
+        index,
+        inputFingerprint
+      );
       await writeArchitectureArtifacts(project.rootPath, architectureMap);
       return architectureMapToResult(architectureMap, firstRun.id);
     }
@@ -152,7 +164,11 @@ async function analyzeArchitectureOnce(
         technicalDetails: retryOutput.slice(0, 4_000)
       });
     }
-    const architectureMap = withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality);
+    const architectureMap = assessArchitectureMap(
+      withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality),
+      index,
+      inputFingerprint
+    );
     throwIfAborted(options?.signal, "Architecture analysis");
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
     return architectureMapToResult(architectureMap, retry.id);
@@ -174,7 +190,7 @@ export async function readArchitectureMap(projectPath: string): Promise<Architec
   if (!isArchitectureMap(value)) {
     throw new Error(`FlowWeave architecture artifact is invalid and was preserved: ${architecturePath}`);
   }
-  return value;
+  return migrateArchitectureAssessments(value);
 }
 
 export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
@@ -209,8 +225,7 @@ Return this exact JSON shape:
     "fileRoles": [{"path": "path", "role": "why this file belongs here"}],
     "symbols": [{"name": "symbol", "kind": "function|class|method|export|variable", "filePath": "path", "role": "why it matters"}],
     "evidence": [{"filePath": "path", "symbol": "optional", "detail": "import/function/call evidence"}],
-    "risk": "normal|review|blocked",
-    "confidence": 0.0
+    "assessmentNotes": "optional explanation of uncertainty or change impact; FlowWeave calculates final risk and confidence locally"
   }],
   "relationships": [{
     "source": "module-id",
@@ -307,7 +322,7 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     fileRoles: module.fileRoles,
     symbols: module.symbols,
     evidence: module.evidence,
-    confidence: module.confidence,
+    assessment: module.assessment,
     technologyStack: technologyStackForModule(module),
     architectureLayer: architectureLayerForCategory(module.category)
   }));
@@ -526,8 +541,7 @@ function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectS
         line: file.symbols[0]?.line,
         detail: evidenceFromInsight(file)
       })),
-      risk: riskFromFiles(files),
-      confidence: 0.55
+      risk: "unknown"
     };
   });
 
@@ -638,8 +652,9 @@ function normalizeModule(module: Partial<ArchitectureModule>, facts: ProjectStru
     fileRoles: normalizeFileRoles(module.fileRoles, files),
     symbols,
     evidence: normalizeEvidence(module.evidence, files),
-    risk: isRisk(module.risk) ? module.risk : riskFromFiles(facts.files.filter((file) => files.includes(file.path))),
-    confidence: typeof module.confidence === "number" ? module.confidence : undefined
+    risk: "unknown",
+    confidence: undefined,
+    assessment: undefined
   };
 }
 
@@ -833,12 +848,6 @@ function normalizeEvidence(evidence: ArchitectureModule["evidence"] | undefined,
     .slice(0, 30);
 }
 
-function riskFromFiles(files: FileInsight[]): GraphRisk {
-  if (files.some((file) => /secret|token|credential|\.env|\.key|\.pem/i.test(file.path))) return "blocked";
-  if (files.some((file) => /auth|security|payment|billing|permission/i.test(file.path))) return "review";
-  return "normal";
-}
-
 function titleFromId(id: string) {
   return id
     .split(/[-_/]/)
@@ -886,8 +895,73 @@ function isRelation(value: unknown): value is GraphEdgeRelation {
   return value === "depends_on" || value === "calls" || value === "reads_writes" || value === "external_api" || value === "publishes_event" || value === "subscribes_event" || value === "tests";
 }
 
-function isRisk(value: unknown): value is GraphRisk {
-  return value === "normal" || value === "review" || value === "blocked";
+function assessArchitectureMap(
+  architectureMap: ArchitectureMap,
+  index: import("../../types").SemanticIndex,
+  scanFingerprint: string
+): ArchitectureMap {
+  const graph = architectureMapToGraph(architectureMap);
+  const assessedNodes = assessModules(graph.nodes, graph.edges, index, scanFingerprint, architectureMap.generatedAt);
+  const assessedById = new Map(assessedNodes.map((node) => [node.id, node]));
+  return {
+    ...architectureMap,
+    modules: architectureMap.modules.map((module) => {
+      const assessed = assessedById.get(module.id);
+      return assessed ? {
+        ...module,
+        risk: assessed.risk,
+        confidence: undefined,
+        assessment: assessed.assessment
+      } : module;
+    })
+  };
+}
+
+function migrateArchitectureAssessments(architectureMap: ArchitectureMap): ArchitectureMap {
+  return {
+    ...architectureMap,
+    modules: architectureMap.modules.map((module) => {
+      if (module.assessment) return module;
+      const legacyRisk = module.risk as unknown as string;
+      const risk = legacyRisk === "blocked" ? "high" : legacyRisk === "review" ? "medium" : legacyRisk === "normal" ? "low" : module.risk;
+      const assessment = unknownAssessment(architectureMap.metadata?.inputFingerprint ?? "", architectureMap.generatedAt);
+      const legacyConfidence = typeof module.confidence === "number"
+        ? Math.max(0, Math.min(100, Math.round(module.confidence * 100)))
+        : undefined;
+      return {
+        ...module,
+        risk,
+        confidence: undefined,
+        assessment: {
+          ...assessment,
+          confidence: legacyConfidence === undefined ? assessment.confidence : {
+            score: legacyConfidence,
+            level: legacyConfidence >= 80 ? "high" : legacyConfidence >= 50 ? "medium" : "low",
+            factors: [{
+              id: "legacy-confidence",
+              label: "Legacy confidence",
+              score: legacyConfidence,
+              maxScore: 100,
+              reason: "Migrated from a previous architecture artifact. Regenerate architecture to calculate evidence-backed confidence.",
+              evidence: [{ detail: "Legacy architecture confidence value" }]
+            }]
+          },
+          risk: {
+            systemLevel: risk,
+            effectiveLevel: risk,
+            factors: [{
+              id: "legacy-risk",
+              label: "Legacy risk",
+              score: risk === "high" ? 70 : risk === "medium" ? 30 : 0,
+              maxScore: 100,
+              reason: "Migrated from a previous architecture artifact. Regenerate architecture to calculate impact risk.",
+              evidence: [{ detail: "Legacy architecture risk value" }]
+            }]
+          }
+        }
+      };
+    })
+  };
 }
 
 function stringOrUndefined(value: unknown) {

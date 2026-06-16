@@ -105,12 +105,14 @@ describe("canvas-migration.service", () => {
     expect(migrated.nodes[0]).toMatchObject({
       x: 120,
       y: 240,
+      risk: "low",
       description: "User edited",
       files: ["src/api.ts"],
       fileRoles: [{ path: "src/api.ts", role: "API entrypoint" }],
       symbols: [{ name: "handle", kind: "function", filePath: "src/api.ts" }],
       evidence: [{ filePath: "src/api.ts", detail: "Current evidence" }]
     });
+    expect(migrated.nodes[0].assessment?.risk.factors[0].id).toBe("legacy-risk");
     expect(migrated.edges).toEqual([
       {
         id: "valid",

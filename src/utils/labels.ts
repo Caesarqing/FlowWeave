@@ -11,9 +11,10 @@ export const relationLabel: Record<GraphEdgeRelation, string> = {
 };
 
 export const riskLabel: Record<GraphNode["risk"], string> = {
-  normal: "normal",
-  review: "review",
-  blocked: "blocked"
+  low: "low",
+  medium: "medium",
+  high: "high",
+  unknown: "unknown"
 };
 
 export const nodeTypeLabel: Record<GraphNode["nodeType"], string> = {

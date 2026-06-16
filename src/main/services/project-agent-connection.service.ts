@@ -291,7 +291,10 @@ function appendCanvasSummary(lines: string[], canvas: CodeflowCanvas | undefined
   lines.push("## Canvas Modules", "");
   for (const node of canvas.nodes) {
     const files = node.files.length > 0 ? ` Files: ${node.files.join(", ")}.` : "";
-    lines.push(`- ${node.title} (${node.nodeType}): ${node.description || node.role || "No description."}${files}`);
+    const assessment = node.assessment
+      ? ` Risk: ${node.assessment.risk.effectiveLevel}${node.assessment.risk.systemScore === undefined ? "" : ` (${node.assessment.risk.systemScore}/100)`}. Confidence: ${node.assessment.confidence.level}${node.assessment.confidence.score === undefined ? "" : ` (${node.assessment.confidence.score}/100)`}.`
+      : " Assessment unavailable.";
+    lines.push(`- ${node.title} (${node.nodeType}): ${node.description || node.role || "No description."}${assessment}${files}`);
   }
   lines.push("", "## Canvas Relationships", "");
   for (const edge of canvas.edges) {
@@ -304,7 +307,10 @@ function appendArchitectureSummary(lines: string[], architecture: ArchitectureMa
   if (!architecture) return;
   lines.push("## Architecture Modules", "");
   for (const module of architecture.modules) {
-    lines.push(`- ${module.title} (${module.category}): ${module.role}. Files: ${module.files.join(", ") || "none"}.`);
+    const assessment = module.assessment
+      ? ` Risk: ${module.assessment.risk.effectiveLevel}. Confidence: ${module.assessment.confidence.level}.`
+      : "";
+    lines.push(`- ${module.title} (${module.category}): ${module.role}.${assessment} Files: ${module.files.join(", ") || "none"}.`);
   }
   lines.push("", "## Architecture Relationships", "");
   for (const relationship of architecture.relationships) {

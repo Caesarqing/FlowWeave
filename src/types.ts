@@ -34,7 +34,43 @@ export type WorkspacePanelPreferences = Record<WorkspacePanelPage, Record<Worksp
 
 export type GraphNodeStatus = "mapped" | "needs-review" | "draft";
 export type GraphNodeType = "module" | "entrypoint" | "api" | "service" | "data" | "external" | "worker" | "utility" | "test";
-export type GraphRisk = "normal" | "review" | "blocked";
+export type AssessmentLevel = "low" | "medium" | "high" | "unknown";
+export type LegacyGraphRisk = "normal" | "review" | "blocked";
+export type GraphRisk = AssessmentLevel;
+export type AssessmentFactor = {
+  id: string;
+  label: string;
+  score: number;
+  maxScore: number;
+  reason: string;
+  evidence: ArchitectureEvidence[];
+};
+export type AssessmentScore = {
+  score?: number;
+  level: AssessmentLevel;
+  factors: AssessmentFactor[];
+};
+export type RiskAssessment = {
+  systemScore?: number;
+  systemLevel: AssessmentLevel;
+  effectiveLevel: AssessmentLevel;
+  previousSystemLevel?: AssessmentLevel;
+  systemLevelChanged?: boolean;
+  factors: AssessmentFactor[];
+  override?: {
+    level: Exclude<AssessmentLevel, "unknown">;
+    reason: string;
+    createdAt: string;
+  };
+};
+export type ModuleAssessment = {
+  version: 1;
+  generatorVersion: string;
+  confidence: AssessmentScore;
+  risk: RiskAssessment;
+  fingerprint: string;
+  assessedAt: string;
+};
 export type TechnologyStack = "frontend" | "backend" | "mobile" | "data" | "infrastructure" | "shared" | "unknown";
 export type ArchitectureLayer = "presentation" | "api" | "domain" | "data" | "integration" | "infrastructure" | "test" | "unknown";
 export type CanvasLayoutMode = "dependency" | "technology" | "architecture" | "functional";
@@ -143,6 +179,7 @@ export type GraphNode = {
   symbols?: StructureSymbol[];
   evidence?: ArchitectureEvidence[];
   confidence?: number;
+  assessment?: ModuleAssessment;
   technologyStack?: TechnologyStack;
   architectureLayer?: ArchitectureLayer;
 };
@@ -334,6 +371,7 @@ export type ArchitectureModule = {
   evidence: ArchitectureEvidence[];
   risk: GraphRisk;
   confidence?: number;
+  assessment?: ModuleAssessment;
 };
 
 export type ArchitectureRelationship = {
