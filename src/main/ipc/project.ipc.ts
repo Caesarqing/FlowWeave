@@ -82,18 +82,24 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.readArchitectureMap, (_event, projectId: unknown) =>
     readArchitectureMap(resolveProjectPath(requireString(PROJECT_CHANNELS.readArchitectureMap, projectId, "projectId"))));
 
-  handleIpc(PROJECT_CHANNELS.generateSequenceDiagrams, (event, projectId: unknown, agentId: unknown) =>
+  handleIpc(PROJECT_CHANNELS.generateSequenceDiagrams, (event, projectId: unknown, agentId: unknown, planTimeoutMs: unknown) =>
     generateSequenceDiagramsForProject(
       requireString(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.generateSequenceDiagrams, agentId),
+      planTimeoutMs === undefined
+        ? undefined
+        : requireInteger(PROJECT_CHANNELS.generateSequenceDiagrams, planTimeoutMs, "planTimeoutMs", 60_000, 1_800_000),
       event.sender
     ));
 
-  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown) =>
+  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown, planTimeoutMs: unknown) =>
     reviseSequenceDiagramForProject(
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.reviseSequenceDiagram, agentId),
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, instruction, "instruction"),
+      planTimeoutMs === undefined
+        ? undefined
+        : requireInteger(PROJECT_CHANNELS.reviseSequenceDiagram, planTimeoutMs, "planTimeoutMs", 60_000, 1_800_000),
       event.sender
     ));
 
@@ -196,11 +202,12 @@ async function analyzeArchitectureForProject(
 async function generateSequenceDiagramsForProject(
   projectId: string,
   agentId: RuntimeAgentId,
+  planTimeoutMs: number | undefined,
   sender: WebContents
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram analysis.", sender, async (signal, onProgress) => {
-    const result = await generateSequenceDiagrams(await scanProject(projectPath), agentId, { signal, onProgress });
+    const result = await generateSequenceDiagrams(await scanProject(projectPath), agentId, { signal, onProgress, planTimeoutMs });
     if (result.outcome === "failed") throw new Error(result.error.message);
     return result;
   }, projectPath);
@@ -210,11 +217,12 @@ async function reviseSequenceDiagramForProject(
   projectId: string,
   agentId: RuntimeAgentId,
   instruction: string,
+  planTimeoutMs: number | undefined,
   sender: WebContents
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram revision.", sender, async (signal, onProgress) => {
-    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { signal, onProgress });
+    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { signal, onProgress, planTimeoutMs });
   }, projectPath);
 }
 

@@ -22,11 +22,17 @@ describe("sequence-diagram.service", () => {
     const prompt = buildSequenceDiagramPrompt(facts);
 
     expect(prompt).toContain("Architectural Sequence Diagram");
+    expect(prompt).toContain("Detailed Architectural Sequence Diagram");
     expect(prompt).not.toContain("Detailed Design Sequence Diagram");
+    expect(prompt).not.toContain('"detailedDesign"');
     expect(prompt).toContain("ProjectStructureFacts");
     expect(prompt).toContain("src/api/order.controller.ts");
     expect(prompt).toContain("end-to-end workflow");
     expect(prompt).not.toContain("code-level call sequence");
+    expect(prompt).toContain("entry/user action");
+    expect(prompt).toContain("IPC/API boundary");
+    expect(prompt).toContain("Do not return detailedDesign");
+    expect(prompt).toContain("Prefer 6-14 participants and 8-24 messages");
     expect(prompt).toContain("methodName");
     expect(prompt).toContain("input");
     expect(prompt).toContain("output");
@@ -180,6 +186,43 @@ describe("sequence-diagram.service", () => {
     expect(result.bundle.source).toBe("fallback");
     expect(result.warning?.message).toContain("read-only");
     await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).resolves.toContain('"source": "fallback"');
+  });
+
+  it("regenerates local fallback diagrams instead of reusing stale fallback cache", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-refresh-fallback-agent-"));
+    const root = await createFixtureFiles();
+    const flowweaveRoot = join(root, FLOWWEAVE_DIR);
+    await mkdir(flowweaveRoot, { recursive: true });
+    const staleFallback = { ...existingBundle(root), source: "fallback" as const };
+    await writeFile(join(flowweaveRoot, "sequence-diagrams.json"), `${JSON.stringify(staleFallback, null, 2)}\n`, "utf8");
+    const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      [
+        "process.stdin.resume();",
+        "process.stdin.on('end', () => {",
+        "  console.log(JSON.stringify({ architectural: { kind: 'architectural', participants: [], messages: [] } }));",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Refresh Fallback Sequence Agent",
+      command: process.execPath,
+      args: [scriptPath]
+    });
+
+    const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
+
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error("Expected refreshed fallback generation.");
+    expect(result.warning?.message).toContain("read-only");
+    expect(result.bundle.source).toBe("fallback");
+    expect(result.bundle.generatedAt).not.toBe(staleFallback.generatedAt);
+    expect(stored.generatedAt).toBe(result.bundle.generatedAt);
+    expect(stored.architectural.title).not.toBe("Existing Architectural");
   });
 
   it("returns generated when valid output is parsed and written", async () => {

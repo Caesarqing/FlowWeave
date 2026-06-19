@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AgentDefinition, AgentId, BuiltInAgentId, CustomAgentId, CustomAgentInput, RuntimeAgentId, ToolAdapter } from "../../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, BuiltInAgentId, CustomAgentId, CustomAgentInput, RuntimeAgentId, ToolAdapter } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
 import { CustomCliAdapter } from "../agents/custom-cli.adapter";
-import { ClaudeDesktopAdapter, CodexDesktopAdapter } from "../agents/desktop-bridge.adapter";
+import { ClaudeDesktopAdapter, CodexDesktopAdapter, DesktopBridgeAdapter } from "../agents/desktop-bridge.adapter";
 import { GeminiCliAdapter } from "../agents/gemini-cli.adapter";
 import { MockAgentAdapter } from "../agents/mock.adapter";
 import { resolveCandidate } from "../agents/agent-command";
@@ -17,8 +17,10 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "claude-code",
     name: "Claude Code CLI",
     kind: "cli",
+    protocol: "cli-stdin",
     command: "claude",
     args: ["--print", "--permission-mode", "plan"],
+    capabilities: ["artifact-analysis", "implementation-plan", "execute"],
     description: "调用 Claude Code 的 plan 模式输出计划，不直接修改项目文件。",
     builtIn: true,
     createdAt: "builtin",
@@ -28,8 +30,11 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "claude-desktop",
     name: "Claude Desktop",
     kind: "desktop",
+    protocol: "desktop-bridge",
     command: "/Applications/Claude.app",
     args: [".flowweave/agent-bridge"],
+    appPath: "/Applications/Claude.app",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Claude 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
     builtIn: true,
     createdAt: "builtin",
@@ -39,8 +44,10 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "codex-local",
     name: "Codex CLI",
     kind: "cli",
+    protocol: "cli-stdin",
     command: "codex",
     args: ["exec", "--sandbox", "read-only"],
+    capabilities: ["artifact-analysis", "implementation-plan", "execute"],
     description: "调用本地 Codex CLI 读取 FlowWeave 上下文，并生成可审查的实现计划。",
     builtIn: true,
     createdAt: "builtin",
@@ -50,8 +57,11 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "codex-desktop",
     name: "Codex Desktop",
     kind: "desktop",
+    protocol: "desktop-bridge",
     command: "/Applications/Codex.app",
     args: [".flowweave/agent-bridge"],
+    appPath: "/Applications/Codex.app",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Codex 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
     builtIn: true,
     createdAt: "builtin",
@@ -61,8 +71,10 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "gemini-cli",
     name: "Gemini CLI",
     kind: "cli",
+    protocol: "cli-stdin",
     command: "gemini",
     args: [],
+    capabilities: ["artifact-analysis", "implementation-plan", "execute"],
     description: "调用本地 Gemini CLI，通过 stdin 传入 FlowWeave prompt 并记录 stdout/stderr。",
     builtIn: true,
     createdAt: "builtin",
@@ -72,8 +84,10 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "cursor",
     name: "Cursor",
     kind: "desktop",
+    protocol: "desktop-bridge",
     command: "cursor/code <project> / Cursor.app",
     args: [],
+    capabilities: ["implementation-plan"],
     description: "检测 Cursor CLI 或桌面应用，生成计划文件并打开项目供用户在 Cursor 中审查执行。",
     builtIn: true,
     createdAt: "builtin",
@@ -93,10 +107,15 @@ export async function listAgentDefinitions(): Promise<AgentDefinition[]> {
 
 export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition> {
   const name = input.name.trim();
-  const command = input.command.trim();
+  const protocol = input.protocol ?? "cli-stdin";
+  const command = input.command?.trim() ?? "";
+  const appPath = input.appPath?.trim() ?? "";
   if (!name) throw new Error("Agent name is required.");
-  if (!command) throw new Error("Agent command is required.");
-  const commandPath = await validateCustomAgentCommand(command, input.args ?? []);
+  if (!isAgentProtocol(protocol)) throw new Error(`Unsupported Agent protocol: ${protocol}`);
+  const capabilities = normalizeCapabilities(input.capabilities, protocol, input.planArgs);
+  const commandPath = protocol === "cli-stdin"
+    ? await validateCustomAgentCommand(command, input.args ?? [], input.planArgs ?? [], input.executeArgs ?? [])
+    : validateCustomDesktopAppPath(appPath || command);
 
   const agents = await readCustomAgents();
   const now = new Date().toISOString();
@@ -104,10 +123,16 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
   const agent: AgentDefinition = {
     id,
     name,
-    kind: "cli",
+    kind: protocol === "desktop-bridge" ? "desktop" : "cli",
+    protocol,
     command: commandPath,
     args: input.args ?? [],
-    description: input.description?.trim() || "Custom CLI Agent",
+    planArgs: input.planArgs ?? [],
+    executeArgs: input.executeArgs ?? [],
+    appPath: protocol === "desktop-bridge" ? commandPath : undefined,
+    bridgeInstructions: input.bridgeInstructions?.trim() || undefined,
+    capabilities,
+    description: input.description?.trim() || (protocol === "desktop-bridge" ? "Custom Desktop Agent" : "Custom CLI Agent"),
     builtIn: false,
     createdAt: now,
     updatedAt: now
@@ -116,14 +141,18 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
   return agent;
 }
 
-async function validateCustomAgentCommand(command: string, args: string[]): Promise<string> {
+async function validateCustomAgentCommand(command: string, args: string[], planArgs: string[], executeArgs: string[]): Promise<string> {
   if (command.length > 2048 || /[\0\r\n]/.test(command)) {
     throw new Error("Agent command contains invalid control characters or exceeds 2048 characters.");
   }
+  if (!command) throw new Error("Agent command is required.");
   if (args.length > 64) {
     throw new Error("Agent arguments cannot contain more than 64 entries.");
   }
-  for (const argument of args) {
+  if (planArgs.length > 64 || executeArgs.length > 64) {
+    throw new Error("Agent plan or execute arguments cannot contain more than 64 entries.");
+  }
+  for (const argument of [...args, ...planArgs, ...executeArgs]) {
     if (argument.length > 4096 || /[\0\r\n]/.test(argument)) {
       throw new Error("Agent argument contains invalid control characters or exceeds 4096 characters.");
     }
@@ -133,6 +162,14 @@ async function validateCustomAgentCommand(command: string, args: string[]): Prom
     throw new Error(`Agent executable was not found or is not executable: ${command}`);
   }
   return commandPath;
+}
+
+function validateCustomDesktopAppPath(appPath: string): string {
+  if (!appPath) throw new Error("Agent app path is required.");
+  if (appPath.length > 2048 || /[\0\r\n]/.test(appPath)) {
+    throw new Error("Agent app path contains invalid control characters or exceeds 2048 characters.");
+  }
+  return appPath;
 }
 
 export async function deleteCustomAgent(agentId: AgentId): Promise<void> {
@@ -147,8 +184,10 @@ export async function getAgentDefinition(agentId: RuntimeAgentId): Promise<Agent
       id: "custom:mock",
       name: "Mock Agent",
       kind: "cli",
+      protocol: "cli-stdin",
       command: "built-in",
       args: [],
+      capabilities: ["artifact-analysis", "implementation-plan"],
       description: "Built-in mock tool for development tests.",
       builtIn: true,
       createdAt: "builtin",
@@ -170,6 +209,14 @@ export async function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdap
   const definition = await getAgentDefinition(agentId);
   if (!definition || definition.builtIn) {
     throw new Error(`Agent not found: ${agentId}`);
+  }
+  if (definition.protocol === "desktop-bridge") {
+    return new DesktopBridgeAdapter({
+      id: definition.id,
+      name: definition.name,
+      appPath: definition.appPath ?? definition.command,
+      bridgeInstructions: definition.bridgeInstructions
+    });
   }
   return new CustomCliAdapter(definition);
 }
@@ -193,7 +240,9 @@ async function readCustomAgents(): Promise<AgentDefinition[]> {
   const content = await readFile(agentConfigPath(), "utf8").catch(() => "[]");
   try {
     const parsed = JSON.parse(content) as AgentDefinition[];
-    return parsed.filter((agent) => isCustomAgentId(agent.id) && !agent.builtIn);
+    return parsed
+      .filter((agent) => isCustomAgentId(agent.id) && !agent.builtIn)
+      .map(migrateCustomAgent);
   } catch {
     return [];
   }
@@ -221,4 +270,31 @@ function createCustomAgentId(name: string, existing: AgentDefinition[]): CustomA
     id = `custom:${base}-${index}` as CustomAgentId;
   }
   return id;
+}
+
+function migrateCustomAgent(agent: AgentDefinition): AgentDefinition {
+  const protocol = agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin");
+  return {
+    ...agent,
+    protocol,
+    appPath: protocol === "desktop-bridge" ? agent.appPath ?? agent.command : agent.appPath,
+    capabilities: agent.capabilities ?? (protocol === "desktop-bridge" ? ["implementation-plan"] : ["execute"])
+  };
+}
+
+function isAgentProtocol(value: string): value is AgentProtocol {
+  return value === "cli-stdin" || value === "desktop-bridge";
+}
+
+function normalizeCapabilities(
+  capabilities: AgentCapability[] | undefined,
+  protocol: AgentProtocol,
+  planArgs: string[] | undefined
+): AgentCapability[] {
+  const allowed = new Set<AgentCapability>(["artifact-analysis", "implementation-plan", "execute"]);
+  if (capabilities) {
+    return [...new Set(capabilities.filter((capability) => allowed.has(capability)))];
+  }
+  if (protocol === "desktop-bridge") return ["artifact-analysis", "implementation-plan"];
+  return planArgs && planArgs.length > 0 ? ["artifact-analysis", "implementation-plan"] : ["execute"];
 }

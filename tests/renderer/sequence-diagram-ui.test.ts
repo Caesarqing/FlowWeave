@@ -2,10 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildSequenceFlowNodes, filterSequenceDiagram } from "../../src/utils/sequence-diagram-flow";
 import { buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson } from "../../src/utils/export-artifacts";
+import { sequenceArtifactStateFromGenerationResult } from "../../src/hooks/useSequenceDiagramState";
 import type { SequenceDiagramBundle } from "../../src/types";
 
 const structureWorkspaceSource = readFileSync(
   new URL("../../src/components/StructureWorkspace.tsx", import.meta.url),
+  "utf8"
+);
+const sequenceStateSource = readFileSync(
+  new URL("../../src/hooks/useSequenceDiagramState.ts", import.meta.url),
   "utf8"
 );
 
@@ -78,8 +83,34 @@ describe("sequence diagram UI helpers", () => {
   it("keeps zoom controls inside the viewport for the architecture diagram", () => {
     expect(structureWorkspaceSource).toContain("<Controls position=\"bottom-left\" showFitView showInteractive={false} showZoom />");
     expect(structureWorkspaceSource).toContain('<div className="sequence-canvas-stage">');
+    expect(structureWorkspaceSource).toContain('key={canvasKey}');
+    expect(structureWorkspaceSource).toContain('canvasKey={sequence.bundle?.generatedAt ?? visibleDiagram.id}');
     expect(structureWorkspaceSource).not.toContain("detailed-design");
+    expect(structureWorkspaceSource).not.toContain("structure.diagramType");
+    expect(structureWorkspaceSource).not.toContain("segmented-control");
     expect(structureWorkspaceSource).not.toContain("style={{ minWidth: bounds.width, minHeight: bounds.height }}");
+  });
+
+  it("marks cached or fallback sequence generation as failed artifact state", () => {
+    const bundle = bundleFixture();
+
+    expect(sequenceArtifactStateFromGenerationResult({ outcome: "generated", bundle })).toBe("current");
+    expect(sequenceArtifactStateFromGenerationResult({
+      outcome: "generated",
+      bundle: { ...bundle, source: "fallback" },
+      warning: failureFixture()
+    })).toBe("failed");
+    expect(sequenceArtifactStateFromGenerationResult({
+      outcome: "cached",
+      bundle,
+      error: failureFixture()
+    })).toBe("failed");
+  });
+
+  it("passes the configured plan timeout into sequence agent runs", () => {
+    expect(sequenceStateSource).toContain("planTimeoutMinutes * 60_000");
+    expect(sequenceStateSource).toContain("generateSequenceDiagrams(projectId, selectedAgentId, planTimeoutMinutes * 60_000)");
+    expect(sequenceStateSource).toContain("reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim(), planTimeoutMinutes * 60_000)");
   });
 });
 
@@ -136,5 +167,13 @@ function bundleFixture(): SequenceDiagramBundle {
         }
       ]
     }
+  };
+}
+
+function failureFixture() {
+  return {
+    code: "invalid-output" as const,
+    message: "Agent returned invalid sequence diagram JSON.",
+    agentId: "mock" as const
   };
 }

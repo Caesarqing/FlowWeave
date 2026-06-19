@@ -1,6 +1,5 @@
 import { TOOL_CHANNELS } from "../../common/ipc-channels";
-import type { AgentId, CustomAgentInput, RuntimeAgentId } from "../../types";
-import type { ToolId } from "../agents/agent-adapter";
+import type { AgentCapability, AgentId, AgentProtocol, CustomAgentInput, RuntimeAgentId } from "../../types";
 import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
 import { listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
@@ -16,10 +15,30 @@ export function registerAgentIpc() {
     const value = requireObject(TOOL_CHANNELS.saveCustomAgent, input, "input");
     return saveAgent({
       name: requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.name, "name", 120),
-      command: requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.command, "command", 2048),
+      protocol: value.protocol === undefined
+        ? undefined
+        : requireEnum(TOOL_CHANNELS.saveCustomAgent, value.protocol, "protocol", ["cli-stdin", "desktop-bridge"]) as AgentProtocol,
+      command: value.command === undefined
+        ? undefined
+        : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.command, "command", 2048),
       args: value.args === undefined
         ? undefined
         : requireStringArray(TOOL_CHANNELS.saveCustomAgent, value.args, "args"),
+      planArgs: value.planArgs === undefined
+        ? undefined
+        : requireStringArray(TOOL_CHANNELS.saveCustomAgent, value.planArgs, "planArgs"),
+      executeArgs: value.executeArgs === undefined
+        ? undefined
+        : requireStringArray(TOOL_CHANNELS.saveCustomAgent, value.executeArgs, "executeArgs"),
+      appPath: value.appPath === undefined
+        ? undefined
+        : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.appPath, "appPath", 2048),
+      bridgeInstructions: value.bridgeInstructions === undefined
+        ? undefined
+        : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.bridgeInstructions, "bridgeInstructions", 4000),
+      capabilities: value.capabilities === undefined
+        ? undefined
+        : requireCapabilityArray(value.capabilities),
       description: value.description === undefined
         ? undefined
         : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.description, "description", 2000)
@@ -82,7 +101,7 @@ export function registerAgentIpc() {
 
   handleIpc(TOOL_CHANNELS.openProject, async (_event, toolId: unknown, projectId: unknown) => {
     return openToolProject(
-      requireEnum(TOOL_CHANNELS.openProject, toolId, "toolId", ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"]) as ToolId,
+      requireAgentId(TOOL_CHANNELS.openProject, toolId),
       resolveProjectPath(requireString(TOOL_CHANNELS.openProject, projectId, "projectId"))
     );
   });
@@ -104,4 +123,15 @@ function requireCustomAgentId(channel: string, value: unknown): AgentId {
     throw new Error(`[${channel}] Invalid "agentId": expected a custom Agent id.`);
   }
   return value as AgentId;
+}
+
+function requireCapabilityArray(value: unknown): AgentCapability[] {
+  const capabilities = requireStringArray(TOOL_CHANNELS.saveCustomAgent, value, "capabilities");
+  const allowed = new Set<AgentCapability>(["artifact-analysis", "implementation-plan", "execute"]);
+  for (const capability of capabilities) {
+    if (!allowed.has(capability as AgentCapability)) {
+      throw new Error(`[${TOOL_CHANNELS.saveCustomAgent}] Invalid "capabilities": unsupported capability "${capability}".`);
+    }
+  }
+  return capabilities as AgentCapability[];
 }

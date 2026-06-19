@@ -29,7 +29,7 @@ export class CustomCliAdapter implements ToolAdapter {
   }
 
   async runPlan(request: ToolRunRequest, onEvent?: (event: ToolRunEvent) => void): Promise<ToolRunResult> {
-    if (request.executionMode === "plan") {
+    if (request.executionMode === "plan" && !supportsReadOnlyPurpose(this.definition, request.purpose)) {
       throw new Error(`Custom CLI "${this.definition.name}" does not declare a verifiable read-only Plan mode.`);
     }
     const detection = await this.detect();
@@ -59,11 +59,24 @@ export class CustomCliAdapter implements ToolAdapter {
     return runSpawnedAgent({
       toolId: this.definition.id,
       commandPath,
-      args: this.definition.args,
+      args: argsForRequest(this.definition, request),
       request,
       stdin: request.prompt
     }, onEvent);
   }
+}
+
+function supportsReadOnlyPurpose(definition: AgentDefinition, purpose: ToolRunRequest["purpose"]): boolean {
+  const capabilities = new Set(definition.capabilities ?? []);
+  if (purpose === "artifact-analysis") return capabilities.has("artifact-analysis");
+  return capabilities.has("implementation-plan");
+}
+
+function argsForRequest(definition: AgentDefinition, request: ToolRunRequest): string[] {
+  if (request.executionMode === "plan") {
+    return definition.planArgs && definition.planArgs.length > 0 ? definition.planArgs : definition.args;
+  }
+  return definition.executeArgs && definition.executeArgs.length > 0 ? definition.executeArgs : definition.args;
 }
 
 async function readVersion(commandPath: string, args: string[]) {

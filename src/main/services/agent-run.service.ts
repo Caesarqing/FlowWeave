@@ -169,11 +169,11 @@ export function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdapter> {
   return getRegistryAgentAdapter(agentId);
 }
 
-export async function openToolProject(toolId: ToolId, projectPath: string): Promise<ToolOpenResult> {
-  const adapter = adapters[toolId];
+export async function openToolProject(agentId: RuntimeAgentId, projectPath: string): Promise<ToolOpenResult> {
+  const adapter = await getAgentAdapter(agentId);
   if (!adapter.openProject) {
     return {
-      toolId,
+      toolId: agentId,
       opened: false,
       method: "none",
       message: `${adapter.name} does not support opening projects from FlowWeave.`

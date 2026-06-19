@@ -8,7 +8,8 @@ export function migrateCanvasToScan(
   projectFiles: ProjectFileNode[]
 ): CodeflowCanvas {
   const knownFiles = new Set(flattenFilePaths(projectFiles));
-  const nodes = canvas.nodes.map((node) => sanitizeNodeFiles(node, knownFiles));
+  const knownFileOrFolderPaths = new Set([...knownFiles, ...folderPathsForFiles([...knownFiles])]);
+  const nodes = canvas.nodes.map((node) => sanitizeNodeFiles(node, knownFiles, knownFileOrFolderPaths));
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = sanitizeEdges(canvas.edges, nodeIds, knownFiles);
 
@@ -63,7 +64,7 @@ function flattenFilePaths(nodes: ProjectFileNode[]): string[] {
   ]);
 }
 
-function sanitizeNodeFiles(node: GraphNode, knownFiles: Set<string>): GraphNode {
+function sanitizeNodeFiles(node: GraphNode, knownFiles: Set<string>, knownFileOrFolderPaths: Set<string>): GraphNode {
   const risk = normalizeLegacyRisk(node.risk as GraphNode["risk"] | LegacyGraphRisk);
   const assessment = node.assessment ?? migrateLegacyAssessment(node, risk);
   return {
@@ -72,10 +73,19 @@ function sanitizeNodeFiles(node: GraphNode, knownFiles: Set<string>): GraphNode 
     confidence: undefined,
     assessment,
     files: node.files.filter((filePath) => knownFiles.has(filePath)),
-    fileRoles: node.fileRoles?.filter((item) => knownFiles.has(item.path)),
+    fileRoles: node.fileRoles?.filter((item) => knownFileOrFolderPaths.has(item.path)),
     symbols: node.symbols?.filter((symbol) => knownFiles.has(symbol.filePath)),
     evidence: node.evidence?.filter((item) => !item.filePath || knownFiles.has(item.filePath))
   };
+}
+
+function folderPathsForFiles(files: string[]) {
+  return [...new Set(files.flatMap((file) => folderPathsForFile(file)))];
+}
+
+function folderPathsForFile(filePath: string) {
+  const parts = filePath.split("/").filter(Boolean);
+  return parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
 }
 
 function migrateLegacyAssessment(node: GraphNode, risk: AssessmentLevel) {

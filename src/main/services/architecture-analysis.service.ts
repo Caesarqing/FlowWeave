@@ -220,9 +220,9 @@ Return this exact JSON shape:
     "title": "Human module title",
     "category": "api-boundary|domain-service|data-access|external-integration|job-worker|shared-utility|test-surface",
     "role": "one sentence role",
-    "description": "one concise paragraph",
+    "description": "one concise paragraph that explains this module's function and purpose in the project",
     "files": ["path"],
-    "fileRoles": [{"path": "path", "role": "why this file belongs here"}],
+    "fileRoles": [{"path": "path", "role": "short purpose for this file or folder"}],
     "symbols": [{"name": "symbol", "kind": "function|class|method|export|variable", "filePath": "path", "role": "why it matters"}],
     "evidence": [{"filePath": "path", "symbol": "optional", "detail": "import/function/call evidence"}],
     "assessmentNotes": "optional explanation of uncertainty or change impact; FlowWeave calculates final risk and confidence locally"
@@ -241,7 +241,8 @@ Rules:
 - Merge files by responsibility: API boundaries, domain services, data access, external integrations, workers, utilities, tests.
 - Do not create one node per file.
 - Every module must include concrete files and at least one evidence item when possible.
-- For fileRoles, describe what each file does inside the module, such as request handling, orchestration, validation, persistence, integration, configuration, or tests.
+- For fileRoles, include short explanations for important folders and files. Folder paths such as "src/services" are allowed when several files share a responsibility.
+- File and folder roles must describe functional purpose, such as request handling, orchestration, validation, persistence, integration, configuration, or tests. Do not only list symbols.
 - For symbols, choose key functions, classes, methods, or exports that explain how the module works; include a role that tells the user why the symbol matters.
 - Every relationship must explain how modules connect using imports, calls, symbols, or external call hints.
 - Relationship descriptions should describe real workflow collaboration, e.g. API boundary calls domain service, service reads/writes data access, service calls external integration, worker consumes queue work, or tests cover a target module.
@@ -525,15 +526,16 @@ function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectS
   const modules = [...groups.entries()].map(([id, files]): ArchitectureModule => {
     const category = fallbackCategoryWithRelations(files, facts);
     const symbols = files.flatMap((file) => file.symbols.slice(0, 12));
+    const title = titleFromId(id);
     return {
       id,
-      title: titleFromId(id),
+      title,
       category,
       nodeType: nodeTypeFromCategory(category),
-      role: fallbackRole(category),
-      description: `${titleFromId(id)} groups ${files.length} files by detected architecture responsibility.`,
+      role: fallbackRole(category, files),
+      description: fallbackModuleDescription(title, category, files),
       files: files.map((file) => file.path),
-      fileRoles: files.map((file) => ({ path: file.path, role: fileRoleFromInsight(file, category) })),
+      fileRoles: fallbackFileRoles(files, category),
       symbols,
       evidence: files.slice(0, 5).map((file) => ({
         filePath: file.path,
@@ -646,10 +648,10 @@ function normalizeModule(module: Partial<ArchitectureModule>, facts: ProjectStru
     title: module.title?.trim() || titleFromId(id),
     category,
     nodeType: nodeTypeFromCategory(category),
-    role: module.role?.trim() || fallbackRole(category),
-    description: module.description?.trim() || fallbackRole(category),
+    role: module.role?.trim() || fallbackRole(category, facts.files.filter((file) => files.includes(file.path))),
+    description: module.description?.trim() || fallbackModuleDescription(titleFromId(id), category, facts.files.filter((file) => files.includes(file.path))),
     files,
-    fileRoles: normalizeFileRoles(module.fileRoles, files),
+    fileRoles: normalizeFileRoles(module.fileRoles, files, facts.files, category),
     symbols,
     evidence: normalizeEvidence(module.evidence, files),
     risk: "unknown",
@@ -810,14 +812,127 @@ function yForCategory(category: ArchitectureModuleCategory, index: number) {
   return base + Math.floor(index / 2) * 170;
 }
 
-function fallbackRole(category: ArchitectureModuleCategory) {
-  return `${categoryLabel(category)} module inferred from file structure and code symbols.`;
+function fallbackRole(category: ArchitectureModuleCategory, files: FileInsight[]) {
+  const scope = commonDirectory(files.map((file) => file.path));
+  const prefix = scope ? `${scope} contains` : "This module contains";
+  const descriptions: Record<ArchitectureModuleCategory, string> = {
+    "api-boundary": `${prefix} request entry points and interface orchestration.`,
+    "domain-service": `${prefix} business logic and application workflow code.`,
+    "data-access": `${prefix} persistence, project data, and storage access code.`,
+    "external-integration": `${prefix} code that connects FlowWeave to external runtimes or APIs.`,
+    "job-worker": `${prefix} background analysis and generated artifact workflows.`,
+    "shared-utility": `${prefix} shared utilities, UI helpers, configuration, and cross-cutting support.`,
+    "test-surface": `${prefix} tests that verify behavior and protect regressions.`
+  };
+  return descriptions[category];
+}
+
+function fallbackModuleDescription(title: string, category: ArchitectureModuleCategory, files: FileInsight[]) {
+  const scope = commonDirectory(files.map((file) => file.path));
+  const fileCount = files.length;
+  const symbolNames = files.flatMap((file) => file.symbols.map((symbol) => symbol.name)).slice(0, 4);
+  const evidence = symbolNames.length > 0
+    ? ` Key code signals include ${symbolNames.join(", ")}.`
+    : "";
+  const location = scope ? ` under ${scope}` : "";
+  const descriptions: Record<ArchitectureModuleCategory, string> = {
+    "api-boundary": `${title} handles project entry points and routes user or process requests into the rest of the system.`,
+    "domain-service": `${title} owns the main application behavior and coordinates related code paths${location}.`,
+    "data-access": `${title} manages persisted project data, artifact storage, or schema-oriented access paths${location}.`,
+    "external-integration": `${title} isolates calls into external tools, runtimes, or service boundaries${location}.`,
+    "job-worker": `${title} runs background analysis or generated-artifact workflows across ${fileCount} files${location}.`,
+    "shared-utility": `${title} provides reusable support code used across FlowWeave features${location}.`,
+    "test-surface": `${title} verifies expected behavior and regression coverage for the project${location}.`
+  };
+  return `${descriptions[category]}${evidence}`;
+}
+
+function fallbackFileRoles(files: FileInsight[], category: ArchitectureModuleCategory) {
+  const fileRoles = files.map((file) => ({ path: file.path, role: fileRoleFromInsight(file, category) }));
+  const folderRoles = folderRolesFromFiles(files, category);
+  return [...folderRoles, ...fileRoles];
+}
+
+function folderRolesFromFiles(files: FileInsight[], category: ArchitectureModuleCategory) {
+  const byFolder = new Map<string, FileInsight[]>();
+  for (const file of files) {
+    for (const folder of folderPathsForFile(file.path)) {
+      byFolder.set(folder, [...(byFolder.get(folder) ?? []), file]);
+    }
+  }
+
+  return [...byFolder.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(0, 30)
+    .map(([path, folderFiles]) => ({
+      path,
+      role: folderRoleFromInsights(path, folderFiles, category)
+    }));
+}
+
+function folderRoleFromInsights(path: string, files: FileInsight[], category: ArchitectureModuleCategory) {
+  const folderName = path.split("/").at(-1) ?? path;
+  const categoryName = categoryLabel(category).toLowerCase();
+  if (/test|spec|__tests__/i.test(path)) return `Groups regression coverage for the ${categoryName}.`;
+  if (/component|view|page|panel|workspace|node/i.test(path)) return `Groups UI components and interaction surfaces for the ${categoryName}.`;
+  if (/service|domain|core|workflow|analysis|analyzer/i.test(path)) return `Groups service logic and workflow orchestration for the ${categoryName}.`;
+  if (/store|storage|schema|database|repo|repository|data/i.test(path)) return `Groups storage and data handling code for the ${categoryName}.`;
+  if (/agent|cli|ipc|adapter|bridge/i.test(path)) return `Groups agent, command, or process-boundary integration code for the ${categoryName}.`;
+  if (/util|helper|shared|common|config/i.test(path)) return `Groups shared support utilities for the ${categoryName}.`;
+  return `Groups ${files.length} related files in ${folderName} for the ${categoryName}.`;
 }
 
 function fileRoleFromInsight(file: FileInsight, category?: ArchitectureModuleCategory) {
-  if (file.symbols.length > 0) return `Defines ${file.symbols.slice(0, 4).map((symbol) => symbol.name).join(", ")} for ${category ? categoryLabel(category) : "this module"}.`;
-  if (file.externalCalls.length > 0) return `Contains ${file.externalCalls[0].kind} integration hints.`;
-  return "Contributes source code to this architecture module.";
+  const fileName = file.path.split("/").at(-1) ?? file.path;
+  const categoryName = category ? categoryLabel(category).toLowerCase() : "module";
+  const symbolSummary = file.symbols.slice(0, 3).map((symbol) => symbol.name).join(", ");
+  if (/test|spec|__tests__/i.test(file.path)) {
+    return symbolSummary ? `Verifies ${symbolSummary} behavior for the ${categoryName}.` : `Provides regression coverage for the ${categoryName}.`;
+  }
+  if (file.externalCalls.length > 0) {
+    return `Handles ${file.externalCalls[0].kind} integration work used by the ${categoryName}.`;
+  }
+  if (/config|vite|eslint|tsconfig|package/i.test(fileName)) {
+    return `Configures build, runtime, or tooling behavior for the ${categoryName}.`;
+  }
+  if (/store|storage|schema|database|repo|repository/i.test(file.path)) {
+    return `Manages persisted data shape or storage access for the ${categoryName}.`;
+  }
+  if (/component|workspace|panel|view|page|node/i.test(file.path)) {
+    return `Implements user-facing interface behavior for the ${categoryName}.`;
+  }
+  if (/hook|use[A-Z]/.test(fileName)) {
+    return `Coordinates stateful UI or workflow behavior for the ${categoryName}.`;
+  }
+  if (/adapter|agent|cli|ipc/i.test(file.path)) {
+    return `Connects commands, agents, or process boundaries for the ${categoryName}.`;
+  }
+  if (symbolSummary) {
+    return `Implements ${symbolSummary} responsibilities for the ${categoryName}.`;
+  }
+  return `Supports the ${categoryName} responsibility in this project.`;
+}
+
+function folderPathsForFiles(files: string[]) {
+  return [...new Set(files.flatMap((file) => folderPathsForFile(file)))];
+}
+
+function folderPathsForFile(filePath: string) {
+  const parts = filePath.split("/").filter(Boolean);
+  return parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
+}
+
+function commonDirectory(files: string[]) {
+  const folders = files.map((file) => file.split("/").filter(Boolean).slice(0, -1));
+  if (folders.length === 0) return undefined;
+  const common: string[] = [];
+  const shortest = Math.min(...folders.map((parts) => parts.length));
+  for (let index = 0; index < shortest; index += 1) {
+    const part = folders[0][index];
+    if (!folders.every((folder) => folder[index] === part)) break;
+    common.push(part);
+  }
+  return common.length > 0 ? common.join("/") : undefined;
 }
 
 function evidenceFromInsight(file: FileInsight) {
@@ -831,9 +946,20 @@ function normalizeSymbols(symbols: StructureSymbol[], files: string[]) {
   return symbols.filter((symbol) => files.includes(symbol.filePath)).slice(0, 80);
 }
 
-function normalizeFileRoles(fileRoles: ArchitectureModule["fileRoles"] | undefined, files: string[]) {
-  const roleByFile = new Map((fileRoles ?? []).map((item) => [item.path, item.role]));
-  return files.map((path) => ({ path, role: roleByFile.get(path) || "Contributes to this architecture module." }));
+function normalizeFileRoles(
+  fileRoles: ArchitectureModule["fileRoles"] | undefined,
+  files: string[],
+  factsFiles: FileInsight[],
+  category: ArchitectureModuleCategory
+) {
+  const allowedPaths = new Set([...files, ...folderPathsForFiles(files)]);
+  const roles = (fileRoles ?? [])
+    .map((item) => ({ path: item.path.trim(), role: item.role.trim() }))
+    .filter((item) => item.path && item.role && allowedPaths.has(item.path));
+  const roleByPath = new Map(roles.map((item) => [item.path, item.role]));
+  const fileInsights = factsFiles.filter((file) => files.includes(file.path));
+  const generatedRoles = fallbackFileRoles(fileInsights, category).filter((item) => !roleByPath.has(item.path));
+  return [...roles, ...generatedRoles];
 }
 
 function normalizeEvidence(evidence: ArchitectureModule["evidence"] | undefined, files: string[]) {

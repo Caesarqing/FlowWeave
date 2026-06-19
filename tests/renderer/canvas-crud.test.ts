@@ -74,11 +74,18 @@ describe("canvas relation metadata", () => {
 describe("module file tree", () => {
   it("builds a stable tree and attaches file descriptions to leaves", () => {
     const tree = buildModuleFileTree(["src/api/user.controller.ts", "src/api/user.service.ts", "tests/user.spec.ts"], [
+      { path: "src/api", role: "Groups API files" },
       { path: "src/api/user.controller.ts", role: "HTTP entrypoint" },
       { path: "tests/user.spec.ts", role: "Integration coverage" }
     ]);
 
     expect(tree.map((node) => node.name)).toEqual(["src", "tests"]);
+    expect(tree[0].children[0]).toMatchObject({
+      name: "api",
+      path: "src/api",
+      type: "folder",
+      role: "Groups API files"
+    });
     expect(tree[0].children[0].children[0]).toMatchObject({
       name: "user.controller.ts",
       path: "src/api/user.controller.ts",
@@ -88,6 +95,19 @@ describe("module file tree", () => {
     expect(tree[1].children[0]).toMatchObject({
       name: "user.spec.ts",
       role: "Integration coverage"
+    });
+  });
+
+  it("aggregates folder descriptions from child files when a folder role is absent", () => {
+    const tree = buildModuleFileTree(["src/api/user.controller.ts", "src/api/user.service.ts"], [
+      { path: "src/api/user.controller.ts", role: "HTTP entrypoint." },
+      { path: "src/api/user.service.ts", role: "Coordinates user workflow." }
+    ]);
+
+    expect(tree[0].children[0]).toMatchObject({
+      name: "api",
+      type: "folder",
+      role: "HTTP entrypoint, plus 1 related responsibilities."
     });
   });
 });

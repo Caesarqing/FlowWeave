@@ -14,6 +14,7 @@ import type {
   FlowWeaveProjectOpenResult,
   FlowWeaveErrorData,
   ProjectScanOptions,
+  RuntimeAgentId,
   SequenceDiagramBundle,
   SequenceDiagramGenerationResult,
   ToolDetectionResult,
@@ -49,8 +50,8 @@ const flowweaveApi = {
   detectTool: (toolId: ToolId) => ipcRenderer.invoke(TOOL_CHANNELS.detect, toolId) as Promise<ToolDetectionResult>,
   openProject: (options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.openProject, options) as Promise<FlowWeaveProjectOpenResult>,
-  openToolProject: (toolId: ToolId, projectId: string) =>
-    ipcRenderer.invoke(TOOL_CHANNELS.openProject, toolId, projectId) as Promise<ToolOpenResult>,
+  openToolProject: (agentId: RuntimeAgentId, projectId: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.openProject, agentId, projectId) as Promise<ToolOpenResult>,
   runToolPlan: (options: StartToolPlanOptions) =>
     ipcRenderer.invoke(TOOL_CHANNELS.runPlan, options) as Promise<StartToolPlanResult>,
   listToolRuns: (projectId: string) =>
@@ -80,10 +81,10 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.analyzeArchitectureWithAgent, projectId, agentId) as Promise<ArchitectureAnalysisResult>,
   readArchitectureMap: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readArchitectureMap, projectId) as Promise<ArchitectureMap | undefined>,
-  generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock") =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId) as Promise<SequenceDiagramGenerationResult>,
-  reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction) as Promise<SequenceDiagramBundle>,
+  generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock", planTimeoutMs?: number) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId, planTimeoutMs) as Promise<SequenceDiagramGenerationResult>,
+  reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string, planTimeoutMs?: number) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction, planTimeoutMs) as Promise<SequenceDiagramBundle>,
   readSequenceDiagrams: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readSequenceDiagrams, projectId) as Promise<SequenceDiagramBundle | undefined>,
   readProjectFile: (projectId: string, filePath: string) =>

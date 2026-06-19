@@ -55,6 +55,30 @@ describe("desktop-bridge.adapter", () => {
     await expect(readFile(join(bridgeDir, "instructions.md"), "utf8")).resolves.toContain("response.json");
   });
 
+  it("appends custom bridge instructions for desktop agents", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-custom-"));
+    const runId = "run-desktop-custom";
+    await mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true });
+    const bridgeDir = getDesktopBridgeDir(projectPath, runId);
+    const adapter = new DesktopBridgeAdapter({
+      id: "custom:local-desktop-agent",
+      name: "Local Desktop Agent",
+      appPath: "/definitely/not/Local.app",
+      bridgeInstructions: "Use the project context and keep the response concise."
+    });
+
+    await adapter.runPlan({
+      id: runId,
+      projectId: "project-00000000-0000-0000-0000-000000000000",
+      projectPath,
+      prompt: "Inspect the project.",
+      executionMode: "plan",
+      purpose: "artifact-analysis"
+    });
+
+    await expect(readFile(join(bridgeDir, "instructions.md"), "utf8")).resolves.toContain("Use the project context");
+  });
+
   it("prefers response.json over response.md", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-response-"));
     const bridgeDir = getDesktopBridgeDir(projectPath, "run-response-precedence");

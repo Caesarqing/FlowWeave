@@ -1,6 +1,6 @@
 import type { RuntimeAgentId } from "../types";
 
-export type AgentConnectorKind = "codex" | "claude" | "gemini" | "cursor";
+export type AgentConnectorKind = "codex" | "claude" | "gemini" | "cursor" | "custom";
 
 export type AgentConnectorPromptInput = {
   agentId: RuntimeAgentId;
@@ -18,7 +18,7 @@ export type AgentConnectorPrompt = {
 export function buildAgentConnectorPrompt(input: AgentConnectorPromptInput): AgentConnectorPrompt {
   const kind = agentConnectorKind(input.agentId);
   const connectorPath = `${input.projectPath}/.flowweave/agent-context.md`;
-  const command = input.agentId === "codex-desktop" || input.agentId === "claude-desktop"
+  const command = input.agentId === "codex-desktop" || input.agentId === "claude-desktop" || kind === "custom"
     ? "使用 FlowWeave 上下文处理当前待办"
     : buildConnectorCommand(kind, connectorPath);
   return {
@@ -34,6 +34,7 @@ export function agentConnectorKind(agentId: RuntimeAgentId): AgentConnectorKind 
   if (agentId === "claude-code" || agentId === "claude-desktop") return "claude";
   if (agentId === "codex-local" || agentId === "codex-desktop") return "codex";
   if (agentId === "gemini-cli") return "gemini";
+  if (agentId.startsWith("custom:")) return "custom";
   return "cursor";
 }
 
@@ -47,6 +48,9 @@ function buildConnectorCommand(kind: AgentConnectorKind, connectorPath: string) 
   if (kind === "gemini") {
     return `Read ${connectorPath} and follow it to connect with FlowWeave. You may modify project files directly.`;
   }
+  if (kind === "custom") {
+    return `Read ${connectorPath} and follow it to connect with FlowWeave. Use .flowweave/agent-bridge when a pending request is present.`;
+  }
   return `Open this project in Cursor, read ${connectorPath}, and follow it to connect with FlowWeave. You may modify project files directly.`;
 }
 
@@ -54,6 +58,7 @@ function connectorTitle(kind: AgentConnectorKind) {
   if (kind === "codex") return "Codex FlowWeave connector";
   if (kind === "claude") return "Claude FlowWeave connector";
   if (kind === "gemini") return "Gemini FlowWeave connector";
+  if (kind === "custom") return "Custom Agent FlowWeave connector";
   return "Cursor FlowWeave connector";
 }
 
@@ -61,5 +66,6 @@ function connectorDescription(kind: AgentConnectorKind) {
   if (kind === "cursor") {
     return "Copy this into Cursor chat after opening the project.";
   }
+  if (kind === "custom") return "Copy this into the custom Agent chat, CLI, or desktop bridge.";
   return "Copy this into the external Agent chat or CLI prompt.";
 }

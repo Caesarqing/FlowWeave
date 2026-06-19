@@ -544,6 +544,7 @@ export type FlowWeaveErrorData = {
 export type AnalysisGenerationOptions = {
   signal?: AbortSignal;
   onProgress?: (progress: AnalysisProgressUpdate) => void;
+  planTimeoutMs?: number;
 };
 
 export type ProjectAgentPlatform = "codex" | "claude" | "gemini" | "cursor";
@@ -665,20 +666,37 @@ export type AgentDefinition = {
   id: AgentId;
   name: string;
   kind: "cli" | "desktop";
+  protocol?: AgentProtocol;
   command: string;
   args: string[];
+  planArgs?: string[];
+  executeArgs?: string[];
+  appPath?: string;
+  bridgeInstructions?: string;
+  capabilities?: AgentCapability[];
   description: string;
   builtIn: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
+export type AgentProtocol = "cli-stdin" | "desktop-bridge";
+export type AgentCapability = "artifact-analysis" | "implementation-plan" | "execute";
+
 export type CustomAgentInput = {
   name: string;
-  command: string;
+  protocol?: AgentProtocol;
+  command?: string;
   args?: string[];
+  planArgs?: string[];
+  executeArgs?: string[];
+  appPath?: string;
+  bridgeInstructions?: string;
+  capabilities?: AgentCapability[];
   description?: string;
 };
+
+export type AgentJobType = "architecture-map" | "sequence-diagram" | "module-enrichment" | "implementation-plan";
 
 export type ToolOpenResult = {
   toolId: RuntimeAgentId;
@@ -906,7 +924,7 @@ export type FlowWeaveApi = {
   }): Promise<ToolRunResult>;
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
-  openToolProject(toolId: ToolId, projectId: string): Promise<ToolOpenResult>;
+  openToolProject(agentId: RuntimeAgentId, projectId: string): Promise<ToolOpenResult>;
   gitStatus(projectId: string): Promise<GitStatus>;
   gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;
   gitCheckpoint(projectId: string): Promise<string>;
@@ -915,8 +933,8 @@ export type FlowWeaveApi = {
   analyzeArchitecture(projectId: string, toolId: ToolId): Promise<ArchitectureAnalysisResult>;
   analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
   readArchitectureMap(projectId: string): Promise<ArchitectureMap | undefined>;
-  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
-  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string): Promise<SequenceDiagramBundle>;
+  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId, planTimeoutMs?: number): Promise<SequenceDiagramGenerationResult>;
+  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string, planTimeoutMs?: number): Promise<SequenceDiagramBundle>;
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectId: string, filePath: string): Promise<string>;
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;

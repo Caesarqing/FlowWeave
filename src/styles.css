@@ -1992,7 +1992,7 @@ button:disabled {
 .assessment-override,
 .assessment-details {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .assessment-heading,
@@ -2004,36 +2004,61 @@ button:disabled {
 }
 
 .assessment-heading {
-  margin-top: 8px;
+  min-height: 24px;
+  margin-top: 6px;
   color: var(--text);
+  font-size: 11px;
+}
+
+.assessment-heading:first-child {
+  margin-top: 0;
+}
+
+.assessment-heading strong {
+  font-size: 11px;
+}
+
+.assessment-heading span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .assessment-factor {
-  padding: 9px 10px;
-  border: 1px solid var(--line-soft);
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  color: var(--muted);
+  background: rgba(2, 4, 5, 0.72);
+  border: 1px solid rgba(137, 236, 255, 0.08);
   border-radius: 8px;
-  background: var(--panel-soft);
 }
 
 .assessment-factor p,
 .assessment-factor small {
   display: block;
-  margin: 5px 0 0;
-  color: var(--muted);
-}
-
-.assessment-advice {
-  display: grid;
-  gap: 5px;
-  margin-top: 8px;
-  padding: 10px;
-  border-left: 2px solid var(--accent);
-  background: var(--accent-soft);
-}
-
-.assessment-advice p {
   margin: 0;
   color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.assessment-factor strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assessment-factor span {
+  flex: 0 0 auto;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .agent-status.ok {
@@ -2709,6 +2734,38 @@ button:disabled {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.agent-form-section {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  border: 0;
+}
+
+.agent-form-section legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.add-agent-card .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  text-transform: none;
+}
+
+.add-agent-card .checkbox-row input {
+  width: 14px;
+  height: 14px;
+  padding: 0;
 }
 
 .add-agent-card input,

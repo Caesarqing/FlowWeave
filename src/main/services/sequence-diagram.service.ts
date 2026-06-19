@@ -68,7 +68,7 @@ async function generateSequenceDiagramsOnce(
     completed: 0,
     total: 1,
     failed: 0,
-    message: `Analyzing sequence diagrams with ${agentId}.`
+    message: `Analyzing architectural sequence diagram with ${agentId}.`
   });
 
   if (agentId === "mock") {
@@ -92,6 +92,7 @@ async function generateSequenceDiagramsOnce(
       prompt,
       executionMode: "plan",
       purpose: "artifact-analysis",
+      planTimeoutMs: options?.planTimeoutMs,
       signal: options?.signal
     });
     runIds.push(result.id);
@@ -118,6 +119,7 @@ async function generateSequenceDiagramsOnce(
       prompt: buildSequenceRepairPrompt(prompt, output, firstFailure),
       executionMode: "plan",
       purpose: "artifact-analysis",
+      planTimeoutMs: options?.planTimeoutMs,
       signal: options?.signal
     });
     runIds.push(retry.id);
@@ -199,6 +201,7 @@ export async function reviseSequenceDiagram(
     prompt,
     executionMode: "plan",
     purpose: "artifact-analysis",
+    planTimeoutMs: options?.planTimeoutMs,
     signal: options?.signal
   });
   throwIfRunCanceled(result, "Sequence revision", options?.signal);
@@ -230,7 +233,7 @@ export function buildSequenceDiagramPrompt(facts: ProjectStructureFacts, archite
   return `You are FlowWeave's sequence diagram analyst. Return only JSON.
 
 Goal:
-Create one architectural project sequence diagram from the code structure and architecture map so a user can understand the real end-to-end workflow.
+Create one detailed architectural project sequence diagram from the code structure and architecture map so a user can understand the real end-to-end workflow across system modules.
 
 Project: ${facts.projectName}
 Languages: ${JSON.stringify(facts.languages)}
@@ -243,7 +246,9 @@ ${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
 
 Analysis priorities:
 - Use only the supplied ArchitectureMap and ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
-- The architectural diagram should show the end-to-end workflow across macro participants such as actor, frontend/component, gateway/API boundary, service, database, external system, and worker.
+- Generate a Detailed Architectural Sequence Diagram: keep kind exactly "architectural" while making the architecture flow detailed and complete.
+- Cover the main architecture modules and important relationships when evidence exists: entry/user action, UI or desktop shell, IPC/API boundary, service orchestration, domain work, data access, external integrations, asynchronous events or workers, and return/response paths.
+- Use macro participants such as actor, frontend/component, desktop shell, IPC/API boundary, service, data store, external system, and worker. Do not create a class-level or method-level detailed-design diagram.
 - Order messages by the real execution flow: entry/request, validation or orchestration, domain work, data access, external calls or events, return/response.
 - Fill methodName, input, output, and evidence whenever the facts provide calls, symbols, imports, exports, or externalCalls.
 - When the code facts are incomplete, label the detail as inferred from imports/calls/file role instead of presenting it as certain.
@@ -282,8 +287,9 @@ Return this exact JSON shape:
 
 Rules:
 - The architectural diagram uses macro participants: frontend app, gateway, services, databases, workers, and third-party systems.
+- Do not return detailedDesign, a second diagram, or any diagram whose kind is "detailed-design".
 - Every message must reference valid participant ids from its diagram.
-- Prefer 4-10 participants and 4-14 messages.
+- Prefer 6-14 participants and 8-24 messages when the supplied evidence supports that level of detail.
 - Return valid JSON only.`;
 }
 
@@ -548,7 +554,7 @@ async function cachedOrLocal(
   error: AnalysisFailure
 ): Promise<SequenceDiagramGenerationResult> {
   const cached = await readSequenceDiagrams(projectPath);
-  if (cached) {
+  if (cached && cached.source !== "fallback") {
     return { bundle: cached, outcome: "cached", error };
   }
   await writeSequenceDiagramBundle(projectPath, localBundle);

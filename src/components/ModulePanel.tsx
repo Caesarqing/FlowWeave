@@ -291,28 +291,33 @@ function AssessmentDetails({
         <strong>{t("module.confidenceAssessment")}</strong>
         <span>{confidence.score ?? t("assessment.unscored")} / 100 · {t(`assessment.${confidence.level}`)}</span>
       </div>
-      {confidence.factors.map((factor) => <AssessmentFactorRow factor={factor} key={factor.id} />)}
+      {confidence.factors.map((factor) => <AssessmentFactorRow factor={factor} key={factor.id} t={t} />)}
       <div className="assessment-heading">
         <strong>{t("module.riskAssessment")}</strong>
         <span>{risk.systemScore ?? t("assessment.unscored")} / 100 · {t(`assessment.${risk.systemLevel}`)}</span>
       </div>
-      {risk.factors.map((factor) => <AssessmentFactorRow factor={factor} key={factor.id} />)}
-      <div className="assessment-advice">
-        <strong>{t("module.assessmentAdvice")}</strong>
-        {assessmentAdvice(confidence, risk, t).map((advice) => <p key={advice}>{advice}</p>)}
-      </div>
+      {risk.factors.map((factor) => <AssessmentFactorRow factor={factor} key={factor.id} t={t} />)}
     </div>
   );
 }
 
-function AssessmentFactorRow({ factor }: { factor: NonNullable<GraphNode["assessment"]>["confidence"]["factors"][number] }) {
+function AssessmentFactorRow({
+  factor,
+  t
+}: {
+  factor: NonNullable<GraphNode["assessment"]>["confidence"]["factors"][number];
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  const label = translatedFactorText(t, `assessmentFactor.${factor.id}.label`, factor.label);
+  const reason = translatedFactorText(t, `assessmentFactor.${factor.id}.reason`, factor.reason);
+
   return (
     <div className="assessment-factor">
       <div>
-        <strong>{factor.label}</strong>
+        <strong>{label}</strong>
         <span>{factor.score} / {factor.maxScore}</span>
       </div>
-      <p>{factor.reason}</p>
+      <p>{reason}</p>
       {factor.evidence[0] ? (
         <small>
           {factor.evidence[0].filePath ? `${factor.evidence[0].filePath}${factor.evidence[0].line ? `:${factor.evidence[0].line}` : ""} · ` : ""}
@@ -323,18 +328,9 @@ function AssessmentFactorRow({ factor }: { factor: NonNullable<GraphNode["assess
   );
 }
 
-function assessmentAdvice(
-  confidence: NonNullable<GraphNode["assessment"]>["confidence"],
-  risk: NonNullable<GraphNode["assessment"]>["risk"],
-  t: ReturnType<typeof useI18n>["t"]
-): string[] {
-  const advice: string[] = [];
-  if (confidence.level === "low" || confidence.level === "unknown") advice.push(t("module.advice.refreshScan"));
-  if ((risk.factors.find((factor) => factor.id === "dependency-centrality")?.score ?? 0) >= 15) advice.push(t("module.advice.reviewConnections"));
-  if ((risk.factors.find((factor) => factor.id === "side-effects")?.score ?? 0) > 0) advice.push(t("module.advice.reviewSideEffects"));
-  if (risk.effectiveLevel === "high" || risk.effectiveLevel === "unknown") advice.push(t("module.advice.gitReview"));
-  if (advice.length === 0) advice.push(t("module.advice.standardValidation"));
-  return advice;
+function translatedFactorText(t: ReturnType<typeof useI18n>["t"], key: string, fallback: string) {
+  const translated = t(key);
+  return translated === key ? fallback : translated;
 }
 
 function CollapsibleCard({ children, isOpen, onToggle, title }: { children: ReactNode; isOpen: boolean; onToggle: () => void; title: string }) {

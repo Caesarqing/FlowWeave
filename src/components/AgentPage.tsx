@@ -1,6 +1,6 @@
 import { Activity, CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
@@ -15,6 +15,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "cli",
     command: "claude",
     args: ["--print", "--permission-mode", "plan"],
+    protocol: "cli-stdin",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Calls Claude Code in plan mode.",
     builtIn: true,
     createdAt: "builtin",
@@ -26,6 +28,9 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "desktop",
     command: "/Applications/Claude.app",
     args: [".flowweave/agent-bridge"],
+    protocol: "desktop-bridge",
+    appPath: "/Applications/Claude.app",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Opens Claude Desktop and waits for file bridge responses.",
     builtIn: true,
     createdAt: "builtin",
@@ -37,6 +42,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "cli",
     command: "codex",
     args: ["exec", "--sandbox", "read-only"],
+    protocol: "cli-stdin",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Calls the local Codex CLI with FlowWeave context.",
     builtIn: true,
     createdAt: "builtin",
@@ -48,6 +55,9 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "desktop",
     command: "/Applications/Codex.app",
     args: [".flowweave/agent-bridge"],
+    protocol: "desktop-bridge",
+    appPath: "/Applications/Codex.app",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Opens Codex Desktop and waits for file bridge responses.",
     builtIn: true,
     createdAt: "builtin",
@@ -59,6 +69,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "cli",
     command: "gemini",
     args: [],
+    protocol: "cli-stdin",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Calls the local Gemini CLI through stdin.",
     builtIn: true,
     createdAt: "builtin",
@@ -70,6 +82,9 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "desktop",
     command: "cursor",
     args: [],
+    protocol: "desktop-bridge",
+    appPath: "cursor",
+    capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Detects Cursor for project review.",
     builtIn: true,
     createdAt: "builtin",
@@ -239,6 +254,8 @@ export function AgentPage({
               </div>
               <div className="agent-detail-list">
                 <span>{t("agent.kind")}: {agent.kind}</span>
+                <span>{t("agent.protocol")}: {agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin")}</span>
+                <span>{t("agent.capabilities")}: {(agent.capabilities ?? []).join(", ") || t("agent.none")}</span>
                 <span>{t("agent.cli")}: {status.commandPath ?? t("agent.notDetected")}</span>
                 <span>{t("agent.app")}: {status.appPath ?? t("agent.notDetected")}</span>
                 <span>{t("agent.version")}: {status.version ?? t("agent.notDetected")}</span>
@@ -403,9 +420,19 @@ function AddAgentCard({
 }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
+  const [protocol, setProtocol] = useState<AgentProtocol>("cli-stdin");
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
+  const [planArgs, setPlanArgs] = useState("");
+  const [executeArgs, setExecuteArgs] = useState("");
+  const [appPath, setAppPath] = useState("");
+  const [bridgeInstructions, setBridgeInstructions] = useState("");
+  const [artifactAnalysis, setArtifactAnalysis] = useState(true);
+  const [implementationPlan, setImplementationPlan] = useState(true);
+  const [execute, setExecute] = useState(false);
   const [description, setDescription] = useState("");
+  const isCli = protocol === "cli-stdin";
+  const canSave = name.trim().length > 0 && (isCli ? command.trim().length > 0 : appPath.trim().length > 0);
 
   if (!isAdding) {
     return (
@@ -422,7 +449,7 @@ function AddAgentCard({
     <article className="agent-card add-agent-card editing">
       <div className="agent-card-header">
         <div>
-          <small>{t("agent.customCli")}</small>
+          <small>{t(isCli ? "agent.customCli" : "agent.customDesktop")}</small>
           <h3>{t("agent.add")}</h3>
         </div>
         <button className="icon-button" title={t("agent.cancel")} type="button" onClick={onCancel}>
@@ -433,27 +460,103 @@ function AddAgentCard({
         {t("agent.name")}
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Gemini CLI" />
       </label>
-      <label>
-        {t("agent.command")}
-        <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="gemini" />
-      </label>
-      <label>
-        {t("agent.args")}
-        <input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="--model pro" />
-      </label>
+      <fieldset className="agent-form-section">
+        <legend>{t("agent.protocol")}</legend>
+        <div className="segmented-control">
+          <button className={cn(isCli && "active")} type="button" onClick={() => setProtocol("cli-stdin")}>
+            {t("agent.protocolCli")}
+          </button>
+          <button className={cn(!isCli && "active")} type="button" onClick={() => setProtocol("desktop-bridge")}>
+            {t("agent.protocolDesktop")}
+          </button>
+        </div>
+      </fieldset>
+      {isCli ? (
+        <>
+          <label>
+            {t("agent.command")}
+            <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="gemini" />
+          </label>
+          <label>
+            {t("agent.args")}
+            <input value={args} onChange={(event) => setArgs(event.target.value)} placeholder="--model pro" />
+          </label>
+          <label>
+            {t("agent.planArgs")}
+            <input value={planArgs} onChange={(event) => setPlanArgs(event.target.value)} placeholder="--plan --readonly" />
+          </label>
+          <label>
+            {t("agent.executeArgs")}
+            <input value={executeArgs} onChange={(event) => setExecuteArgs(event.target.value)} placeholder="--execute" />
+          </label>
+        </>
+      ) : (
+        <>
+          <label>
+            {t("agent.appPath")}
+            <input value={appPath} onChange={(event) => setAppPath(event.target.value)} placeholder="/Applications/Custom Agent.app" />
+          </label>
+          <label>
+            {t("agent.bridgeInstructions")}
+            <textarea value={bridgeInstructions} onChange={(event) => setBridgeInstructions(event.target.value)} placeholder={t("agent.bridgeInstructionsPlaceholder")} />
+          </label>
+        </>
+      )}
+      <fieldset className="agent-form-section">
+        <legend>{t("agent.capabilities")}</legend>
+        <label className="checkbox-row">
+          <input checked={artifactAnalysis} type="checkbox" onChange={(event) => setArtifactAnalysis(event.target.checked)} />
+          {t("agent.capabilityArtifactAnalysis")}
+        </label>
+        <label className="checkbox-row">
+          <input checked={implementationPlan} type="checkbox" onChange={(event) => setImplementationPlan(event.target.checked)} />
+          {t("agent.capabilityImplementationPlan")}
+        </label>
+        <label className="checkbox-row">
+          <input checked={execute} type="checkbox" onChange={(event) => setExecute(event.target.checked)} />
+          {t("agent.capabilityExecute")}
+        </label>
+      </fieldset>
       <label>
         {t("agent.description")}
         <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t("agent.descriptionPlaceholder")} />
       </label>
       <button
         className="send-button"
-        disabled={!name.trim() || !command.trim()}
+        disabled={!canSave}
         type="button"
         onClick={() => {
-          onSave({ name: name.trim(), command: command.trim(), args: parseArgs(args), description: description.trim() });
+          const capabilities = buildCapabilities(artifactAnalysis, implementationPlan, execute);
+          onSave(isCli
+            ? {
+              name: name.trim(),
+              protocol,
+              command: command.trim(),
+              args: parseArgs(args),
+              planArgs: parseArgs(planArgs),
+              executeArgs: parseArgs(executeArgs),
+              capabilities,
+              description: description.trim()
+            }
+            : {
+              name: name.trim(),
+              protocol,
+              appPath: appPath.trim(),
+              bridgeInstructions: bridgeInstructions.trim(),
+              capabilities,
+              description: description.trim()
+            });
           setName("");
+          setProtocol("cli-stdin");
           setCommand("");
           setArgs("");
+          setPlanArgs("");
+          setExecuteArgs("");
+          setAppPath("");
+          setBridgeInstructions("");
+          setArtifactAnalysis(true);
+          setImplementationPlan(true);
+          setExecute(false);
           setDescription("");
           onCancel();
         }}
@@ -495,6 +598,14 @@ function createUnknownStatus(agentId: RuntimeAgentId): ToolUiStatus {
 
 function parseArgs(value: string) {
   return Array.from(value.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)).map((match) => match[1] ?? match[2] ?? match[3]).filter(Boolean);
+}
+
+function buildCapabilities(artifactAnalysis: boolean, implementationPlan: boolean, execute: boolean): AgentCapability[] {
+  const capabilities: AgentCapability[] = [];
+  if (artifactAnalysis) capabilities.push("artifact-analysis");
+  if (implementationPlan) capabilities.push("implementation-plan");
+  if (execute) capabilities.push("execute");
+  return capabilities;
 }
 
 function artifactContent(artifact: ToolRunArtifact, tab: RunArtifactTab) {

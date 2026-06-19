@@ -6,10 +6,12 @@ import type {
   SequenceDiagramBundle,
   SequenceDiagramGenerationResult,
   SequenceMessage,
-  SequenceParticipant
+  SequenceParticipant,
+  ProjectArtifactState
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { useProjectStore } from "../stores/project.store";
+import { usePreferencesStore } from "../stores/preferences.store";
 
 export type SequenceDiagramState = {
   bundle?: SequenceDiagramBundle;
@@ -44,6 +46,7 @@ export function useSequenceDiagramState({
 }): SequenceDiagramState {
   const { t } = useI18n();
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
+  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
@@ -69,6 +72,7 @@ export function useSequenceDiagramState({
         setStatus(t("sequence.canceled"));
         return;
       }
+      if (isTerminal) return;
       setStatus(t("operation.progress", {
         stage: t(`operation.stage.${operation.stage}`),
         completed: operation.completed,
@@ -110,19 +114,20 @@ export function useSequenceDiagramState({
     setIsBusy(true);
     setStatus(t("sequence.generatingWith", { agent: selectedAgentId }));
     try {
-      const result = await window.flowweave.generateSequenceDiagrams(projectId, selectedAgentId);
+      const result = await window.flowweave.generateSequenceDiagrams(projectId, selectedAgentId, planTimeoutMinutes * 60_000);
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
       const nextBundle = result.bundle;
       setBundle(nextBundle);
-      if (result.outcome === "generated") {
-        setArtifactStatuses((current) => current ? { ...current, sequences: "current" } : current);
-      }
+      setArtifactStatuses((current) => current ? { ...current, sequences: sequenceArtifactStateFromGenerationResult(result) } : current);
       setSelectedMessageId(nextBundle.architectural.messages[0]?.id ?? "");
       setSelectedParticipantId("");
       setStatus(generationStatusMessage(result, t));
     } catch (error) {
+      if (!isCancellationError(error)) {
+        setArtifactStatuses((current) => current ? { ...current, sequences: "failed" } : current);
+      }
       setStatus(isCancellationError(error)
         ? t("sequence.canceled")
         : t("sequence.generationFailed", { error: formatErrorMessage(error) }));
@@ -143,7 +148,7 @@ export function useSequenceDiagramState({
     setIsBusy(true);
     setStatus(t("sequence.revising", { kind: t("structure.architectural") }));
     try {
-      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim());
+      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim(), planTimeoutMinutes * 60_000);
       setBundle(nextBundle);
       setInstruction("");
       setSelectedMessageId(nextBundle.architectural.messages[0]?.id ?? "");
@@ -206,6 +211,13 @@ function formatErrorMessage(error: unknown) {
 
 function isCancellationError(error: unknown) {
   return /cancel(?:ed|led)/i.test(formatErrorMessage(error));
+}
+
+export function sequenceArtifactStateFromGenerationResult(result: SequenceDiagramGenerationResult): ProjectArtifactState {
+  if (result.outcome === "failed") return "failed";
+  if (result.outcome === "cached") return "failed";
+  if (result.warning) return "failed";
+  return result.bundle.source === "fallback" ? "failed" : "current";
 }
 
 function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (key: string, params?: Record<string, string | number>) => string) {

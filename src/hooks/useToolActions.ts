@@ -1,4 +1,4 @@
-import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolId, ToolUiStatus } from "../types";
+import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolUiStatus } from "../types";
 import { useI18n } from "../utils/i18n";
 import { usePreferencesStore } from "../stores/preferences.store";
 import { buildExecutionAssessmentSummary, scopeGraphForModule } from "../utils/export-artifacts";
@@ -93,7 +93,7 @@ export function useToolActions({
       return;
     }
 
-    if (!isOpenableToolId(agentId)) {
+    if (!isOpenableAgent(agentId, agents)) {
       setLastRunStatus(t("status.agentOpenUnsupported", { agent: getAgentName(agentId) }));
       return;
     }
@@ -176,7 +176,8 @@ ${executionMode === "plan"
   return { detectAgent, healthCheckAgent, openToolProject, runToolPlan };
 }
 
-function isOpenableToolId(agentId: RuntimeAgentId): agentId is ToolId {
+function isOpenableAgent(agentId: RuntimeAgentId, agents: AgentDefinition[]): boolean {
+  const agent = agents.find((item) => item.id === agentId);
   return (
     agentId === "claude-code" ||
     agentId === "claude-desktop" ||
@@ -184,7 +185,8 @@ function isOpenableToolId(agentId: RuntimeAgentId): agentId is ToolId {
     agentId === "codex-desktop" ||
     agentId === "gemini-cli" ||
     agentId === "cursor" ||
-    agentId === "mock"
+    agentId === "mock" ||
+    (agent?.kind === "desktop" && agent?.protocol === "desktop-bridge")
   );
 }
 

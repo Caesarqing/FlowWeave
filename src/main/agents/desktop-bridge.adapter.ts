@@ -3,7 +3,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { BuiltInAgentId, ExecutionMode } from "../../types";
+import type { ExecutionMode, RuntimeAgentId } from "../../types";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult, ToolRunStatus } from "./agent-adapter";
 import { resolveAppPath } from "./agent-command";
 import { nowIso } from "./time";
@@ -11,9 +11,10 @@ import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 
 const execFileAsync = promisify(execFile);
 export type DesktopBridgeConfig = {
-  id: Extract<BuiltInAgentId, "claude-desktop" | "codex-desktop">;
+  id: RuntimeAgentId;
   name: string;
   appPath: string;
+  bridgeInstructions?: string;
 };
 
 type DesktopBridgeSkillReference = {
@@ -26,7 +27,7 @@ type DesktopBridgeSkillReference = {
 type DesktopBridgeRequest = {
   runId: string;
   projectId: string;
-  agentId: DesktopBridgeConfig["id"];
+  agentId: RuntimeAgentId;
   projectPath: string;
   executionMode: ExecutionMode;
   promptPath: string;
@@ -50,11 +51,13 @@ export class DesktopBridgeAdapter implements ToolAdapter {
   name: string;
   kind = "desktop" as const;
   private appPath: string;
+  private bridgeInstructions?: string;
 
   constructor(config: DesktopBridgeConfig) {
     this.id = config.id;
     this.name = config.name;
     this.appPath = config.appPath;
+    this.bridgeInstructions = config.bridgeInstructions;
   }
 
   async detect() {
@@ -114,7 +117,7 @@ export class DesktopBridgeAdapter implements ToolAdapter {
     await access(join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id));
     await mkdir(bridgeDir, { recursive: true });
     await writeFile(promptPath, request.prompt, "utf8");
-    await writeFile(instructionsPath, buildDesktopBridgeInstructions(this.name, request.executionMode), "utf8");
+    await writeFile(instructionsPath, buildDesktopBridgeInstructions(this.name, request.executionMode, this.bridgeInstructions), "utf8");
     await writeFile(
       requestPath,
       `${JSON.stringify(buildDesktopBridgeRequest({ request, agentId: this.id, promptPath, instructionsPath }), null, 2)}\n`,
@@ -197,8 +200,8 @@ export function getDesktopBridgeDir(projectPath: string, runId: string) {
   return join(projectPath, FLOWWEAVE_DIR, "agent-bridge", runId);
 }
 
-export function buildDesktopBridgeInstructions(agentName: string, executionMode: ExecutionMode) {
-  return `# FlowWeave Desktop Bridge Instructions
+export function buildDesktopBridgeInstructions(agentName: string, executionMode: ExecutionMode, extraInstructions?: string) {
+  const baseInstructions = `# FlowWeave Desktop Bridge Instructions
 
 Agent: ${agentName}
 Execution mode: ${executionMode}
@@ -211,6 +214,9 @@ Write one response file in the same directory:
 - or response.md with the plan markdown
 
 Prefer response.json when possible. In plan mode, do not modify project files.`;
+  return extraInstructions?.trim()
+    ? `${baseInstructions}\n\n## Agent-specific instructions\n\n${extraInstructions.trim()}\n`
+    : baseInstructions;
 }
 
 export function buildDesktopBridgeRequest({
@@ -220,7 +226,7 @@ export function buildDesktopBridgeRequest({
   instructionsPath
 }: {
   request: ToolRunRequest;
-  agentId: DesktopBridgeConfig["id"];
+  agentId: RuntimeAgentId;
   promptPath: string;
   instructionsPath: string;
 }): DesktopBridgeRequest {

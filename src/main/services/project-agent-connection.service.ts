@@ -265,7 +265,7 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
     "- Canvas: `.flowweave/canvas/main.canvas.json`",
     "- File tree: `.flowweave/context/file-tree.md`",
     `- Architecture map: ${artifacts.architecture ? "`.flowweave/architecture-map.json`" : "not generated"}`,
-    `- Sequence diagrams: ${artifacts.sequences ? "`.flowweave/sequence-diagrams.json`" : "not generated"}`,
+    `- Architectural sequence diagram: ${artifacts.sequences ? "`.flowweave/sequence-diagrams.json`" : "not generated"}`,
     `- Tasks: ${artifacts.taskPaths.length > 0 ? artifacts.taskPaths.map((path) => `\`${path}\``).join(", ") : "none"}`,
     "",
     "## Project Snapshot",

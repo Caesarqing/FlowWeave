@@ -21,6 +21,7 @@ describe("canvas-migration.service", () => {
           description: "User edited",
           files: ["src/api.ts", "src/deleted.ts"],
           fileRoles: [
+            { path: "src", role: "Groups source files" },
             { path: "src/api.ts", role: "API entrypoint" },
             { path: "src/deleted.ts", role: "Deleted file" }
           ],
@@ -108,7 +109,10 @@ describe("canvas-migration.service", () => {
       risk: "low",
       description: "User edited",
       files: ["src/api.ts"],
-      fileRoles: [{ path: "src/api.ts", role: "API entrypoint" }],
+      fileRoles: [
+        { path: "src", role: "Groups source files" },
+        { path: "src/api.ts", role: "API entrypoint" }
+      ],
       symbols: [{ name: "handle", kind: "function", filePath: "src/api.ts" }],
       evidence: [{ filePath: "src/api.ts", detail: "Current evidence" }]
     });

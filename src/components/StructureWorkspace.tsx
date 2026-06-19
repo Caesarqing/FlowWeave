@@ -172,6 +172,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
             {visibleDiagram.participants.length > 0 ? (
               <SequenceCanvas
                 diagram={visibleDiagram}
+                canvasKey={sequence.bundle?.generatedAt ?? visibleDiagram.id}
                 selectedMessageId={visibleMessageId}
                 selectedParticipantId={visibleParticipantId}
                 onReady={(instance) => {
@@ -201,6 +202,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
 }
 
 function SequenceCanvas({
+  canvasKey,
   diagram,
   selectedMessageId,
   selectedParticipantId,
@@ -208,6 +210,7 @@ function SequenceCanvas({
   onSelectMessage,
   onSelectParticipant
 }: {
+  canvasKey: string;
   diagram: SequenceDiagram;
   selectedMessageId: string;
   selectedParticipantId: string;
@@ -232,7 +235,7 @@ function SequenceCanvas({
   return (
     <div className="sequence-canvas-stage">
       <ReactFlow
-        key={diagram.id}
+        key={canvasKey}
         nodes={nodes}
         edges={emptySequenceEdges}
         nodeTypes={sequenceNodeTypes}

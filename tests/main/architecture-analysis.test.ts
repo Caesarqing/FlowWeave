@@ -28,6 +28,8 @@ describe("architecture-analysis.service", () => {
     expect(prompt).toContain("Use only the supplied ProjectStructureFacts");
     expect(prompt).toContain("human-readable explanation");
     expect(prompt).toContain("fileRoles");
+    expect(prompt).toContain("function and purpose");
+    expect(prompt).toContain("important folders and files");
     expect(prompt).toContain("workflow");
     expect(prompt).toContain("Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems");
   });
@@ -47,7 +49,10 @@ describe("architecture-analysis.service", () => {
             role: "Receives user requests.",
             description: "HTTP boundary for user flows.",
             files: ["src/api/user.controller.ts"],
-            fileRoles: [{ path: "src/api/user.controller.ts", role: "Routes user requests." }],
+            fileRoles: [
+              { path: "src/api", role: "Groups request handlers." },
+              { path: "src/api/user.controller.ts", role: "Routes user requests." }
+            ],
             symbols: [{ name: "loadUser", kind: "function", filePath: "src/api/user.controller.ts", role: "request handler" }],
             evidence: [{ filePath: "src/api/user.controller.ts", symbol: "loadUser", detail: "exports handler" }],
             risk: "normal",
@@ -81,6 +86,10 @@ describe("architecture-analysis.service", () => {
     );
 
     expect(map?.modules[0].symbols[0].name).toBe("loadUser");
+    expect(map?.modules[0].fileRoles).toEqual(expect.arrayContaining([
+      { path: "src/api", role: "Groups request handlers." },
+      { path: "src/api/user.controller.ts", role: "Routes user requests." }
+    ]));
     expect(map?.modules[0].risk).toBe("unknown");
     expect(map?.modules[0].confidence).toBeUndefined();
     const graph = architectureMapToGraph(map!);
@@ -130,6 +139,11 @@ describe("architecture-analysis.service", () => {
     if (result.outcome !== "generated") throw new Error(result.error.message);
     expect(result.graph.nodes.length).toBeGreaterThan(0);
     expect(stored?.modules.length).toBeGreaterThan(0);
+    expect(stored?.modules[0].description).not.toContain("groups");
+    expect(stored?.modules[0].description).not.toContain("detected architecture responsibility");
+    const storedFileRoles = stored?.modules.flatMap((module) => module.fileRoles) ?? [];
+    expect(storedFileRoles.some((item) => item.path === "src/api")).toBe(true);
+    expect(storedFileRoles.some((item) => item.path === "src/service")).toBe(true);
     expect(stored?.metadata?.agentId).toBe("mock");
     expect(stored?.modules[0].assessment?.confidence.factors).toHaveLength(5);
     expect(stored?.modules[0].confidence).toBeUndefined();
