@@ -62,12 +62,14 @@ describe("full project flow", () => {
     };
     const sequenceArtifact = JSON.parse(await readFile(join(artifactRoot, "sequence-diagrams.json"), "utf8")) as {
       metadata: { inputFingerprint: string };
+      detailedDesign?: unknown;
     };
 
     expect(canvasArtifact.version).toBe(3);
     expect(canvasArtifact.scanFingerprint).toBe(projectArtifact.scanFingerprint);
     expect(architectureArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);
     expect(sequenceArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);
+    expect(sequenceArtifact.detailedDesign).toBeUndefined();
     await expect(readFile(join(artifactRoot, "index", "semantic-index.json"), "utf8")).resolves.toContain('"version": 1');
     await expect(readFile(join(artifactRoot, "tasks", "current.task.md"), "utf8")).resolves.toContain("Acceptance Criteria");
   });

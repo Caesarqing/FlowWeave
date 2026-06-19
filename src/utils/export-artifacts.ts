@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle, SequenceDiagramKind } from "../types";
+import type { GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle } from "../types";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -151,8 +151,8 @@ function relationDescription(edge: GraphEdge, t?: Translate) {
   return t ? t(`relation.${edge.relation}Description`) : "";
 }
 
-export function buildSequenceGuidanceMarkdown(projectLabel: string, bundle: SequenceDiagramBundle, activeKind: SequenceDiagramKind) {
-  const currentDiagram = selectSequenceDiagram(bundle, activeKind);
+export function buildSequenceGuidanceMarkdown(projectLabel: string, bundle: SequenceDiagramBundle) {
+  const currentDiagram = bundle.architectural;
   return `# FlowWeave Sequence Diagram Guidance
 
 Project: ${projectLabel}
@@ -163,40 +163,32 @@ Target agents: Codex Local / Claude Code / Cursor
 
 ## Sequence Diagram Rule
 
-Use the sequence diagrams as the modification and design context. Keep participant responsibilities, message order, parameters, return values, and code evidence aligned with the project implementation. For detailed design work, prefer files and symbols listed in evidence.
+Use the architectural sequence diagram as the modification and design context. Keep participant responsibilities, message order, parameters, return values, and code evidence aligned with the project implementation.
 
 ## Current Focus
 
 ${formatSequenceDiagramMarkdown(currentDiagram)}
-
-## All Sequence Diagrams
-
-${formatSequenceDiagramMarkdown(bundle.architectural)}
-
-${formatSequenceDiagramMarkdown(bundle.detailedDesign)}
 
 ## Revision Guidance
 
 - Preserve the persisted .flowweave/sequence-diagrams.json schema.
 - Update participants and messages together when component, class, method, input, or return contracts change.
 - Keep architectural messages at system/component granularity.
-- Keep detailed-design messages mapped to classes, interfaces, controllers, and method calls when evidence is available.
 `;
 }
 
-export function buildSequenceTaskJson(projectLabel: string, bundle: SequenceDiagramBundle, activeKind: SequenceDiagramKind) {
+export function buildSequenceTaskJson(projectLabel: string, bundle: SequenceDiagramBundle) {
   return JSON.stringify(
     {
       project: projectLabel,
       source: "FlowWeave",
       artifact: "sequence-diagram",
-      activeKind,
+      activeKind: "architectural",
       generatedAt: bundle.generatedAt,
       targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
       outputFiles: ["sequence-guidance.md", "sequence-task.json", "plan.md"],
       diagrams: {
-        architectural: serializeSequenceDiagram(bundle.architectural),
-        detailedDesign: serializeSequenceDiagram(bundle.detailedDesign)
+        architectural: serializeSequenceDiagram(bundle.architectural)
       }
     },
     null,
@@ -204,13 +196,13 @@ export function buildSequenceTaskJson(projectLabel: string, bundle: SequenceDiag
   );
 }
 
-export function buildSequencePlanPrompt(projectLabel: string, bundle: SequenceDiagramBundle, activeKind: SequenceDiagramKind) {
-  const diagram = selectSequenceDiagram(bundle, activeKind);
+export function buildSequencePlanPrompt(projectLabel: string, bundle: SequenceDiagramBundle) {
+  const diagram = bundle.architectural;
   return `FlowWeave plan request for Sequence Diagram "${diagram.title}".
 
 Use the current sequence diagram as the modification/design context. Do not require a selected Canvas module node.
 
-${buildSequenceGuidanceMarkdown(projectLabel, bundle, activeKind)}
+${buildSequenceGuidanceMarkdown(projectLabel, bundle)}
 
 Return an implementation plan, affected files, risks, and tests. Do not edit files from FlowWeave.`;
 }
@@ -225,10 +217,6 @@ export function downloadText(filename: string, content: string) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
-}
-
-function selectSequenceDiagram(bundle: SequenceDiagramBundle, kind: SequenceDiagramKind) {
-  return kind === "architectural" ? bundle.architectural : bundle.detailedDesign;
 }
 
 function formatSequenceDiagramMarkdown(diagram: SequenceDiagram) {

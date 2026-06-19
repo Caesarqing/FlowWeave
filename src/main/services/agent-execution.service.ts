@@ -2,10 +2,10 @@ import type { AgentRunPolicy, ToolAdapter, ToolRunFailure, ToolRunOutputSource, 
 import { extractProviderOutputText } from "./structured-output.service";
 
 const DEFAULT_PLAN_POLICY: AgentRunPolicy = {
-  timeoutMs: 120_000,
+  timeoutMs: 300_000,
   maxOutputBytes: 4 * 1024 * 1024,
-  retryCount: 1,
-  retryDelayMs: 800
+  retryCount: 2,
+  retryDelayMs: 1_000
 };
 const DEFAULT_EXECUTE_POLICY: AgentRunPolicy = {
   timeoutMs: 600_000,
@@ -14,8 +14,10 @@ const DEFAULT_EXECUTE_POLICY: AgentRunPolicy = {
   retryDelayMs: 0
 };
 const MAX_CONCURRENT_READS_PER_PROJECT = 2;
+const MAX_QUEUED_READS_PER_PROJECT = 8;
 const activeWrites = new Set<string>();
 const activeReads = new Map<string, number>();
+const queuedReads = new Map<string, Array<() => void>>();
 
 export async function executeAgentWithPolicy(
   adapter: ToolAdapter,
@@ -29,11 +31,7 @@ export async function executeAgentWithPolicy(
   if (request.executionMode === "execute") {
     activeWrites.add(request.projectPath);
   } else {
-    const readCount = activeReads.get(request.projectPath) ?? 0;
-    if (readCount >= MAX_CONCURRENT_READS_PER_PROJECT) {
-      throw new Error(`Agent read execution limit reached for project: ${request.projectPath}`);
-    }
-    activeReads.set(request.projectPath, readCount + 1);
+    await acquireReadExecutionSlot(request);
   }
   try {
     return await executeAttempts(adapter, request, effectivePolicy);
@@ -41,9 +39,7 @@ export async function executeAgentWithPolicy(
     if (request.executionMode === "execute") {
       activeWrites.delete(request.projectPath);
     } else {
-      const remaining = (activeReads.get(request.projectPath) ?? 1) - 1;
-      if (remaining === 0) activeReads.delete(request.projectPath);
-      else activeReads.set(request.projectPath, remaining);
+      releaseReadExecutionSlot(request.projectPath);
     }
   }
 }
@@ -51,6 +47,66 @@ export async function executeAgentWithPolicy(
 export function resetAgentExecutionStateForTests(): void {
   activeWrites.clear();
   activeReads.clear();
+  queuedReads.clear();
+}
+
+async function acquireReadExecutionSlot(request: ToolRunRequest): Promise<void> {
+  if (tryAcquireReadExecutionSlot(request.projectPath)) return;
+  const queue = queuedReads.get(request.projectPath) ?? [];
+  if (queue.length >= MAX_QUEUED_READS_PER_PROJECT) {
+    throw new Error(`Agent read execution queue is full for project: ${request.projectPath}`);
+  }
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const releaseListener = () => {
+      if (settled) return;
+      settled = true;
+      request.signal?.removeEventListener("abort", abortListener);
+      resolve();
+    };
+    const abortListener = () => {
+      if (settled) return;
+      settled = true;
+      removeQueuedRead(request.projectPath, releaseListener);
+      reject(new Error(`Agent read execution was canceled while waiting for project: ${request.projectPath}`));
+    };
+    queue.push(releaseListener);
+    queuedReads.set(request.projectPath, queue);
+    if (request.signal?.aborted) abortListener();
+    else request.signal?.addEventListener("abort", abortListener, { once: true });
+  });
+}
+
+function tryAcquireReadExecutionSlot(projectPath: string): boolean {
+  const readCount = activeReads.get(projectPath) ?? 0;
+  if (readCount >= MAX_CONCURRENT_READS_PER_PROJECT) return false;
+  activeReads.set(projectPath, readCount + 1);
+  return true;
+}
+
+function releaseReadExecutionSlot(projectPath: string): void {
+  const remaining = (activeReads.get(projectPath) ?? 1) - 1;
+  if (remaining === 0) activeReads.delete(projectPath);
+  else activeReads.set(projectPath, remaining);
+  drainQueuedReads(projectPath);
+}
+
+function drainQueuedReads(projectPath: string): void {
+  const queue = queuedReads.get(projectPath);
+  if (!queue) return;
+  while (queue.length > 0 && tryAcquireReadExecutionSlot(projectPath)) {
+    const next = queue.shift();
+    next?.();
+  }
+  if (queue.length === 0) queuedReads.delete(projectPath);
+}
+
+function removeQueuedRead(projectPath: string, listener: () => void): void {
+  const queue = queuedReads.get(projectPath);
+  if (!queue) return;
+  const index = queue.indexOf(listener);
+  if (index >= 0) queue.splice(index, 1);
+  if (queue.length === 0) queuedReads.delete(projectPath);
 }
 
 async function executeAttempts(
@@ -87,7 +143,7 @@ async function executeAttempts(
       clearTimeout(timeout);
       request.signal?.removeEventListener("abort", relayAbort);
     }
-    await delay(policy.retryDelayMs * attempt);
+    await delay(retryDelay(policy.retryDelayMs, attempt));
   }
   if (!lastResult) throw new Error(`Agent execution did not produce a result: ${adapter.id}`);
   return lastResult;
@@ -114,6 +170,12 @@ function isTransientFailure(result: ToolRunResult): boolean {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function retryDelay(baseDelayMs: number, attempt: number): number {
+  const exponentialDelay = baseDelayMs * (2 ** Math.max(0, attempt - 1));
+  const jitter = Math.floor(Math.random() * Math.max(1, Math.floor(baseDelayMs / 2)));
+  return exponentialDelay + jitter;
 }
 
 export function normalizeAgentResult(result: ToolRunResult): ToolRunResult {
@@ -153,21 +215,9 @@ function classifyFailure(
   const selected = selectFailureOutput(outputs);
   const message = selected
     ? extractProviderOutputText(selected.text)
-    : `Agent process failed with exit code ${result.exitCode ?? "unknown"}.`;
+    : fallbackFailureMessage(result);
   const lower = message.toLowerCase();
-  const code = result.terminationReason === "timeout"
-    ? "timeout"
-    : /(noauth|unauthori[sz]ed|authentication|invalid api key|permission denied|forbidden|oauth|credential)/i.test(message)
-      ? "authentication"
-      : /(429|rate.?limit|usage limit|quota|too many requests)/i.test(message)
-        ? "rate-limit"
-        : /(connectionrefused|econnrefused|econnreset|etimedout|unable to connect|network unavailable|dns|socket hang up)/i.test(message)
-          ? "connection"
-          : /(http\s*5\d\d|server-side issue|service unavailable|provider|temporar(?:y|ily))/i.test(message)
-            ? "provider"
-            : result.terminationReason === "output-limit"
-              ? "invalid-output"
-              : "process";
+  const code = classifyFailureCode(message, result.terminationReason);
   return {
     code,
     message,
@@ -176,8 +226,77 @@ function classifyFailure(
       (code === "rate-limit" && !/(usage limit|quota|credits|billing)/i.test(message)),
     source: selected?.source ?? "error",
     exitCode: result.exitCode,
-    providerDetails: lower.includes("request id") || lower.includes("sid:") ? message : undefined
+    providerDetails: lower.includes("request id") || lower.includes("sid:") ? message : undefined,
+    suggestedActions: suggestedActionsForFailure(code)
   };
+}
+
+function fallbackFailureMessage(result: ToolRunResult): string {
+  if (result.terminationReason === "timeout") {
+    return `Agent run timed out after ${formatDuration(result.durationMs)}.`;
+  }
+  if (result.terminationReason === "canceled") {
+    return "Agent run was canceled.";
+  }
+  if (result.exitCode === 143) {
+    return "Agent process was terminated with SIGTERM (exit code 143). Check the plan timeout setting and any external process manager.";
+  }
+  return `Agent process failed with exit code ${result.exitCode ?? "unknown"}.`;
+}
+
+function formatDuration(durationMs: number | undefined): string {
+  if (durationMs === undefined) return "the configured timeout";
+  if (durationMs >= 60_000) return `${Math.round(durationMs / 60_000)} minutes`;
+  return `${durationMs}ms`;
+}
+
+function classifyFailureCode(
+  message: string,
+  terminationReason: ToolRunResult["terminationReason"]
+): ToolRunFailure["code"] {
+  if (terminationReason === "timeout") return "timeout";
+  if (/exit code 143|sigterm/i.test(message)) return "timeout";
+  if (/(appidnoautherror|noauth|unauthori[sz]ed|authentication|invalid api key|permission denied|forbidden|oauth|credential)/i.test(message)) {
+    return "authentication";
+  }
+  if (/(429|rate.?limit|too many requests)/i.test(message)) return "rate-limit";
+  if (/(usage limit|quota|credits|billing)/i.test(message)) return "rate-limit";
+  if (/(connectionrefused|econnrefused|econnreset|etimedout|unable to connect|network unavailable|dns|socket hang up)/i.test(message)) {
+    return "connection";
+  }
+  if (/(http\s*5\d\d|\b5\d\d\b|server-side issue|service unavailable|provider|temporar(?:y|ily))/i.test(message)) return "provider";
+  if (terminationReason === "output-limit") return "invalid-output";
+  return "process";
+}
+
+function suggestedActionsForFailure(code: ToolRunFailure["code"]): string[] {
+  if (code === "authentication") {
+    return [
+      "Verify Claude authentication and provider gateway credentials visible to FlowWeave.",
+      "If ANTHROPIC_BASE_URL points to a third-party gateway, validate that gateway app id and token."
+    ];
+  }
+  if (code === "connection") {
+    return [
+      "Check network and proxy reachability from the FlowWeave desktop process.",
+      "Retry after the connection recovers."
+    ];
+  }
+  if (code === "rate-limit") {
+    return [
+      "Wait for rate limits to reset or switch to a model/provider with available quota.",
+      "Check billing or quota when the message mentions usage limit, quota, credits, or billing."
+    ];
+  }
+  if (code === "provider") {
+    return [
+      "Retry after the provider recovers.",
+      "Check the configured Claude provider status and gateway logs."
+    ];
+  }
+  if (code === "timeout") return ["Increase the plan timeout or retry with a smaller prompt."];
+  if (code === "invalid-output") return ["Reduce Agent output size or inspect the run log for runaway output."];
+  return ["Open the run log and verify the Agent command, arguments, and environment."];
 }
 
 function selectFailureOutput(

@@ -16,17 +16,17 @@ import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject, SequenceDiagramBundle } from "../../src/types";
 
 describe("sequence-diagram.service", () => {
-  it("builds a prompt for architectural and detailed-design diagrams", async () => {
+  it("builds a prompt for architectural diagrams only", async () => {
     const root = await createFixtureFiles();
     const facts = await buildProjectStructureFacts(projectFixture(root));
     const prompt = buildSequenceDiagramPrompt(facts);
 
     expect(prompt).toContain("Architectural Sequence Diagram");
-    expect(prompt).toContain("Detailed Design Sequence Diagram");
+    expect(prompt).not.toContain("Detailed Design Sequence Diagram");
     expect(prompt).toContain("ProjectStructureFacts");
     expect(prompt).toContain("src/api/order.controller.ts");
     expect(prompt).toContain("end-to-end workflow");
-    expect(prompt).toContain("code-level call sequence");
+    expect(prompt).not.toContain("code-level call sequence");
     expect(prompt).toContain("methodName");
     expect(prompt).toContain("input");
     expect(prompt).toContain("output");
@@ -38,7 +38,7 @@ describe("sequence-diagram.service", () => {
     const root = await createFixtureFiles();
     const project = projectFixture(root);
     const facts = await buildProjectStructureFacts(project);
-    const current = diagramJson("detailed-design", [
+    const current = diagramJson([
       {
         id: "controller-service",
         sequence: 1,
@@ -56,7 +56,7 @@ describe("sequence-diagram.service", () => {
 
     expect(prompt).toContain("Preserve reliable existing evidence");
     expect(prompt).toContain("Return the complete updated diagram object");
-    expect(prompt).toContain('Keep kind exactly "detailed-design"');
+    expect(prompt).toContain('Keep kind exactly "architectural"');
     expect(prompt).toContain("Update participants and messages together");
     expect(prompt).toContain("methodName");
     expect(prompt).toContain("input");
@@ -69,22 +69,9 @@ describe("sequence-diagram.service", () => {
     const facts = await buildProjectStructureFacts(project);
     const bundle = parseSequenceDiagramBundleJson(
       JSON.stringify({
-        architectural: diagramJson("architectural", [
+        architectural: diagramJson([
           { id: "request-payment", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "POST /orders" },
           { id: "invalid", sequence: 2, from: "frontend-app", to: "missing", kind: "sync", label: "Invalid" }
-        ]),
-        detailedDesign: diagramJson("detailed-design", [
-          {
-            id: "controller-service",
-            sequence: 1,
-            from: "order-controller",
-            to: "order-service",
-            kind: "sync",
-            label: "createOrder",
-            methodName: "createOrder",
-            input: "CreateOrderDto",
-            output: "Order"
-          }
         ])
       }),
       project,
@@ -93,7 +80,6 @@ describe("sequence-diagram.service", () => {
 
     expect(bundle?.architectural.messages).toHaveLength(1);
     expect(bundle?.architectural.messages[0]).toMatchObject({ id: "request-payment", from: "frontend-app", to: "api-gateway" });
-    expect(bundle?.detailedDesign.messages[0]).toMatchObject({ methodName: "createOrder", input: "CreateOrderDto", output: "Order" });
   });
 
   it("maps raw participant ids and titles to normalized message endpoints", async () => {
@@ -116,10 +102,7 @@ describe("sequence-diagram.service", () => {
             { id: "normalized-id-message", sequence: 2, from: "frontend-app", to: "api-gateway", kind: "return", label: "Order result" }
           ],
           evidence: []
-        },
-        detailedDesign: diagramJson("detailed-design", [
-          { id: "controller-service", sequence: 1, from: "OrderController", to: "OrderService", kind: "sync", label: "createOrder" }
-        ])
+        }
       }),
       project,
       facts
@@ -130,7 +113,6 @@ describe("sequence-diagram.service", () => {
       expect.objectContaining({ id: "raw-id-message", from: "frontend-app", to: "api-gateway" }),
       expect.objectContaining({ id: "normalized-id-message", from: "frontend-app", to: "api-gateway" })
     ]);
-    expect(bundle?.detailedDesign.messages[0]).toMatchObject({ from: "order-controller", to: "order-service" });
   });
 
   it("does not overwrite an existing bundle when agent output is invalid", async () => {
@@ -219,12 +201,32 @@ describe("sequence-diagram.service", () => {
     await expect(readFile(artifactPath, "utf8")).resolves.toBe("{invalid-json");
   });
 
+  it("reads legacy bundles that still contain detailed-design diagrams", async () => {
+    const root = await createFixtureFiles();
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    const legacyBundle = {
+      ...existingBundle(root),
+      detailedDesign: {
+        ...diagramJson([{ id: "legacy-detail", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "Legacy detail" }]),
+        id: "detailed-design-sequence",
+        title: "Detailed Design Sequence Diagram",
+        kind: "detailed-design"
+      }
+    };
+    await writeFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), `${JSON.stringify(legacyBundle, null, 2)}\n`, "utf8");
+
+    const bundle = await readSequenceDiagrams(root);
+
+    expect(bundle?.architectural.title).toBe("Existing Architectural");
+    expect("detailedDesign" in (bundle as object)).toBe(false);
+  });
+
   it("revises the current diagram with the selected agent", async () => {
     const root = await createFixtureFiles();
     const project = projectFixture(root);
     const generated = await generateSequenceDiagrams(project, "mock");
     if (generated.outcome !== "generated") throw new Error(generated.error.message);
-    const revised = await reviseSequenceDiagram(project, "mock", "architectural", "split payment into authorize and capture");
+    const revised = await reviseSequenceDiagram(project, "mock", "split payment into authorize and capture");
 
     expect(generated.bundle.architectural.summary).not.toBe(revised.architectural.summary);
     expect(revised.architectural.summary).toContain("split payment into authorize and capture");
@@ -293,22 +295,16 @@ function projectFixture(rootPath: string): CodeflowProject {
   };
 }
 
-function diagramJson(kind: "architectural" | "detailed-design", messages: unknown[]) {
-  const isArchitectural = kind === "architectural";
+function diagramJson(messages: unknown[]) {
   return {
-    id: isArchitectural ? "architectural-sequence" : "detailed-design-sequence",
-    title: isArchitectural ? "Architectural Sequence Diagram" : "Detailed Design Sequence Diagram",
-    kind,
+    id: "architectural-sequence",
+    title: "Architectural Sequence Diagram",
+    kind: "architectural",
     summary: "Fixture diagram.",
-    participants: isArchitectural
-      ? [
-          { id: "frontend-app", title: "Frontend App", kind: "actor", description: "Starts the order flow." },
-          { id: "api-gateway", title: "API Gateway", kind: "gateway", description: "Receives order requests." }
-        ]
-      : [
-          { id: "order-controller", title: "OrderController", kind: "controller", description: "Handles HTTP requests.", filePath: "src/api/order.controller.ts", symbol: "OrderController" },
-          { id: "order-service", title: "OrderService", kind: "class", description: "Creates orders.", filePath: "src/service/order.service.ts", symbol: "OrderService" }
-        ],
+    participants: [
+      { id: "frontend-app", title: "Frontend App", kind: "actor", description: "Starts the order flow." },
+      { id: "api-gateway", title: "API Gateway", kind: "gateway", description: "Receives order requests." }
+    ],
     messages,
     evidence: []
   };
@@ -322,9 +318,8 @@ function existingBundle(rootPath: string): SequenceDiagramBundle {
     generatedAt: "2026-05-31T01:00:00.000Z",
     source: "agent",
     architectural: {
-      ...diagramJson("architectural", [{ id: "existing-message", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "Existing call" }]),
+      ...diagramJson([{ id: "existing-message", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "Existing call" }]),
       title: "Existing Architectural"
-    },
-    detailedDesign: diagramJson("detailed-design", [{ id: "existing-detail", sequence: 1, from: "order-controller", to: "order-service", kind: "sync", label: "Existing method" }])
-  } as SequenceDiagramBundle;
+    }
+  };
 }

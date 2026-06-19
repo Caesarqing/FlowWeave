@@ -30,24 +30,23 @@ describe("sequence diagram UI helpers", () => {
     expect(secondMessage?.data).toMatchObject({ direction: "backward" });
   });
 
-  it("exports both sequence diagram types with method contracts and evidence", () => {
+  it("exports the architectural sequence diagram with method contracts and evidence", () => {
     const bundle = bundleFixture();
-    const markdown = buildSequenceGuidanceMarkdown("Checkout", bundle, "architectural");
-    const task = JSON.parse(buildSequenceTaskJson("Checkout", bundle, "detailed-design"));
+    const markdown = buildSequenceGuidanceMarkdown("Checkout", bundle);
+    const task = JSON.parse(buildSequenceTaskJson("Checkout", bundle));
 
     expect(markdown).toContain("Architectural Checkout");
-    expect(markdown).toContain("Detailed Checkout");
     expect(markdown).toContain("method=createCheckoutSession");
     expect(markdown).toContain("src/orders/controller.ts:OrderController.create");
     expect(task.diagrams.architectural.messages[0].input).toBe("OrderInput");
-    expect(task.diagrams.detailedDesign.messages[0].methodName).toBe("create");
+    expect(task.diagrams.detailedDesign).toBeUndefined();
   });
 
   it("builds a sequence agent plan prompt without a selected canvas node", () => {
-    const prompt = buildSequencePlanPrompt("Checkout", bundleFixture(), "detailed-design");
+    const prompt = buildSequencePlanPrompt("Checkout", bundleFixture());
 
     expect(prompt).toContain("Do not require a selected Canvas module node");
-    expect(prompt).toContain("Detailed Checkout");
+    expect(prompt).toContain("Architectural Checkout");
     expect(prompt).not.toContain('module "');
   });
 
@@ -59,14 +58,14 @@ describe("sequence diagram UI helpers", () => {
   });
 
   it("searches participant metadata and retains messages connected to matches", () => {
-    const filtered = filterSequenceDiagram(bundleFixture().detailedDesign, "controller.ts", new Set());
+    const filtered = filterSequenceDiagram(bundleFixture().architectural, "Buyer", new Set());
 
-    expect(filtered.messages.map((message) => message.id)).toEqual(["create"]);
+    expect(filtered.messages.map((message) => message.id)).toEqual(["send-order"]);
     expect(filtered.participants.map((participant) => participant.id)).toEqual([
-      "order-controller",
-      "checkout-service"
+      "client",
+      "server"
     ]);
-    expect(bundleFixture().detailedDesign.participants).toHaveLength(2);
+    expect(bundleFixture().architectural.participants).toHaveLength(3);
   });
 
   it("returns an empty view when no participant or message matches the search", () => {
@@ -76,9 +75,10 @@ describe("sequence diagram UI helpers", () => {
     expect(filtered.messages).toEqual([]);
   });
 
-  it("keeps zoom controls inside the viewport for both diagram kinds", () => {
+  it("keeps zoom controls inside the viewport for the architecture diagram", () => {
     expect(structureWorkspaceSource).toContain("<Controls position=\"bottom-left\" showFitView showInteractive={false} showZoom />");
     expect(structureWorkspaceSource).toContain('<div className="sequence-canvas-stage">');
+    expect(structureWorkspaceSource).not.toContain("detailed-design");
     expect(structureWorkspaceSource).not.toContain("style={{ minWidth: bounds.width, minHeight: bounds.height }}");
   });
 });
@@ -97,7 +97,14 @@ function bundleFixture(): SequenceDiagramBundle {
       summary: "Checkout flow",
       participants: [
         { id: "client", title: "Client", kind: "actor", description: "Buyer" },
-        { id: "server", title: "Server", kind: "service", description: "Backend" },
+        {
+          id: "server",
+          title: "Server",
+          kind: "service",
+          description: "Backend",
+          filePath: "src/orders/controller.ts",
+          symbol: "OrderController.create"
+        },
         { id: "stripe", title: "Stripe API", kind: "external", description: "Payment API" }
       ],
       messages: [
@@ -109,7 +116,14 @@ function bundleFixture(): SequenceDiagramBundle {
           kind: "sync",
           label: "Send order information",
           input: "OrderInput",
-          output: "CheckoutSession"
+          output: "CheckoutSession",
+          evidence: [
+            {
+              filePath: "src/orders/controller.ts",
+              symbol: "OrderController.create",
+              detail: "Controller delegates order creation."
+            }
+          ]
         },
         {
           id: "return-session",
@@ -119,50 +133,6 @@ function bundleFixture(): SequenceDiagramBundle {
           kind: "return",
           label: "Return Checkout Session",
           methodName: "createCheckoutSession"
-        }
-      ]
-    },
-    detailedDesign: {
-      id: "detail",
-      title: "Detailed Checkout",
-      kind: "detailed-design",
-      summary: "Controller to service flow",
-      participants: [
-        {
-          id: "order-controller",
-          title: "OrderController",
-          kind: "controller",
-          description: "HTTP controller",
-          filePath: "src/orders/controller.ts",
-          symbol: "OrderController"
-        },
-        {
-          id: "checkout-service",
-          title: "CheckoutService",
-          kind: "class",
-          description: "Checkout orchestration",
-          filePath: "src/checkout/service.ts",
-          symbol: "CheckoutService"
-        }
-      ],
-      messages: [
-        {
-          id: "create",
-          sequence: 1,
-          from: "order-controller",
-          to: "checkout-service",
-          kind: "sync",
-          label: "create order",
-          methodName: "create",
-          input: "CreateOrderDto",
-          output: "Promise<Order>",
-          evidence: [
-            {
-              filePath: "src/orders/controller.ts",
-              symbol: "OrderController.create",
-              detail: "Controller delegates order creation."
-            }
-          ]
         }
       ]
     }

@@ -69,4 +69,43 @@ describe("claude-code.adapter", () => {
       process.env.PATH = originalPath;
     }
   });
+
+  it("reports Claude CLI health without exposing credential values", async () => {
+    const originalPath = process.env.PATH;
+    const originalApiKey = process.env.ANTHROPIC_API_KEY;
+    const originalBaseUrl = process.env.ANTHROPIC_BASE_URL;
+    const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-health-"));
+    await createNodeCliFixture(binRoot, "claude", [
+      "if (process.argv.includes('--version')) { console.log('claude-test 2.0'); process.exit(0); }",
+      "process.stdout.write('ok');"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
+    process.env.ANTHROPIC_API_KEY = "sk-ant-flowweave-secret";
+    process.env.ANTHROPIC_BASE_URL = "https://provider.example";
+    try {
+      const health = await new ClaudeCodeAdapter().healthCheck();
+      const serialized = JSON.stringify(health);
+
+      expect(health.agentId).toBe("claude-code");
+      expect(health.severity).toBe("warning");
+      expect(serialized).toContain("ANTHROPIC_API_KEY");
+      expect(serialized).not.toContain("sk-ant-flowweave-secret");
+      expect(health.checks).toContainEqual(expect.objectContaining({
+        id: "claude-provider",
+        status: "warning"
+      }));
+    } finally {
+      process.env.PATH = originalPath;
+      restoreEnv("ANTHROPIC_API_KEY", originalApiKey);
+      restoreEnv("ANTHROPIC_BASE_URL", originalBaseUrl);
+    }
+  });
 });
+
+function restoreEnv(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}

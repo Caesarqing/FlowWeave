@@ -33,6 +33,7 @@ export function useToolActions({
   setToolStatuses: (updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)) => void;
 }) {
   const { t } = useI18n();
+  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
   const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const agentNames = new Map<string, string>(agents.map((agent) => [agent.id, agent.name]));
   const getAgentName = (agentId: RuntimeAgentId) => agentNames.get(agentId) ?? (agentId === "mock" ? "Mock Agent" : agentId);
@@ -57,6 +58,32 @@ export function useToolActions({
     } catch (error) {
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: false } }));
       setLastRunStatus(t("status.agentDetectFailed", { agent: getAgentName(agentId), error: formatErrorMessage(error) }));
+    }
+  }
+
+  async function healthCheckAgent(agentId: RuntimeAgentId) {
+    if (!window.flowweave) {
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: false } }));
+      setLastRunStatus(t("agent.bridgeWarning"));
+      return;
+    }
+
+    setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, checking: true } }));
+    setLastRunStatus(t("status.agentHealthChecking", { agent: getAgentName(agentId) }));
+    try {
+      const health = await window.flowweave.healthCheckAgent(agentId);
+      const failedChecks = health.checks.filter((check) => check.status === "failed").length;
+      const warningChecks = health.checks.filter((check) => check.status === "warning").length;
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], health, checking: false } }));
+      setLastRunStatus(t("status.agentHealthChecked", {
+        agent: getAgentName(agentId),
+        severity: health.severity,
+        failed: String(failedChecks),
+        warnings: String(warningChecks)
+      }));
+    } catch (error) {
+      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], checking: false } }));
+      setLastRunStatus(t("status.agentHealthFailed", { agent: getAgentName(agentId), error: formatErrorMessage(error) }));
     }
   }
 
@@ -116,6 +143,7 @@ export function useToolActions({
         toolId: agentId,
         executionMode,
         confirmedExecute: executionMode === "execute",
+        planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
         executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
         prompt: `FlowWeave plan request for module "${selectedNode.title}".
@@ -145,7 +173,7 @@ ${executionMode === "plan"
     }
   }
 
-  return { detectAgent, openToolProject, runToolPlan };
+  return { detectAgent, healthCheckAgent, openToolProject, runToolPlan };
 }
 
 function isOpenableToolId(agentId: RuntimeAgentId): agentId is ToolId {

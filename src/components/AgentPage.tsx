@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/runs.store";
@@ -97,6 +97,7 @@ export function AgentPage({
   onDetectAgent,
   onExecutionModeChange,
   onGoToGitReview,
+  onHealthCheckAgent,
   onOpenToolProject,
   onRefreshRuns,
   onRunToolPlan,
@@ -122,6 +123,7 @@ export function AgentPage({
   onDetectAgent: (agentId: RuntimeAgentId) => void;
   onExecutionModeChange: (mode: ExecutionMode) => void;
   onGoToGitReview: () => void;
+  onHealthCheckAgent: (agentId: RuntimeAgentId) => void;
   onOpenToolProject: (agentId: RuntimeAgentId) => void;
   onRefreshRuns: () => void;
   onRunToolPlan: (agentId: RuntimeAgentId) => void;
@@ -242,10 +244,25 @@ export function AgentPage({
                 <span>{t("agent.version")}: {status.version ?? t("agent.notDetected")}</span>
                 <span>{t("agent.lastOutput")}: {status.lastOutputPath ?? t("agent.none")}</span>
               </div>
+              {status.health ? (
+                <div className={cn("agent-health-box", status.health.severity)}>
+                  <strong>{t("agent.health")}: {status.health.severity}</strong>
+                  {status.health.checks.map((check) => (
+                    <span key={check.id}>{check.label}: {check.status} · {check.message}</span>
+                  ))}
+                  {status.health.suggestedActions.map((action) => (
+                    <small key={action}>{action}</small>
+                  ))}
+                </div>
+              ) : null}
               <div className="agent-actions">
                 <button className="ghost-button" type="button" onClick={() => onDetectAgent(agent.id)}>
                   <RefreshCw size={14} />
                   {status.checking ? t("agent.checking") : t("agent.detect")}
+                </button>
+                <button className="ghost-button" type="button" onClick={() => onHealthCheckAgent(agent.id)}>
+                  <Activity size={14} />
+                  {t("agent.healthCheck")}
                 </button>
                 <button
                   className={cn(isSelected && "default-button", !isSelected && "ghost-button")}
@@ -347,6 +364,14 @@ export function AgentPage({
                   </>
                 ) : null}
               </div>
+              {selectedRunArtifact.summary.failure?.suggestedActions?.length ? (
+                <div className="run-failure-actions">
+                  <strong>{t("agent.suggestedActions")}</strong>
+                  {selectedRunArtifact.summary.failure.suggestedActions.map((action) => (
+                    <span key={action}>{action}</span>
+                  ))}
+                </div>
+              ) : null}
               <div className="artifact-tabs">
                 {(["prompt", "plan", "log", "result"] as RunArtifactTab[]).map((tab) => (
                   <button className={cn(runArtifactTab === tab && "active")} key={tab} type="button" onClick={() => onRunArtifactTabChange(tab)}>

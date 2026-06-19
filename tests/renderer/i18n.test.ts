@@ -18,8 +18,8 @@ describe("i18n translations", () => {
     expect(translate("en", "structure.details")).toBe("Details & Agent");
     expect(translate("en", "structure.sourceFiles", { count: 3, messageCount: "2 messages" })).toBe("3 source files · Agent-ready · 2 messages");
     expect(translate("en", "relation.depends_onDescription")).toContain("depends on the target");
-    expect(translate("en", "sequence.generated", { counts: "2 architectural messages, 4 detailed design messages" })).toBe(
-      "Sequence diagram generated: 2 architectural messages, 4 detailed design messages."
+    expect(translate("en", "sequence.generated", { counts: "2 architectural messages" })).toBe(
+      "Sequence diagram generated: 2 architectural messages."
     );
     expect(translate("en", "desktopOnly.title")).toBe("Open FlowWeave from the desktop app");
     expect(translate("en", "agent.bridgeWarning")).not.toContain("Browser preview");
@@ -27,10 +27,12 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.claudeDesktopDescription")).toContain("agent-bridge");
     expect(translate("en", "agent.codexDesktopDescription")).toContain("response.json");
     expect(translate("en", "agent.geminiDescription")).toContain("Gemini CLI");
+    expect(translate("en", "agent.healthCheck")).toBe("Health check");
     expect(translate("en", "agent.connectorPrompt")).toBe("Connector prompt");
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
     expect(translate("en", "module.manualSubtitle")).toBe("Manual module");
     expect(translate("en", "assessment.high")).toBe("high");
+    expect(translate("en", "settings.planTimeout")).toContain("Plan timeout");
     expect(translate("en", "module.riskOverridePrompt")).toContain("overridden");
     expect(translate("en", "artifact.state.stale")).toBe("Outdated");
     expect(translate("en", "artifact.sequences")).toBe("Sequence diagrams");
@@ -45,8 +47,8 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "structure.emptyTitle")).toBe("尚未生成序列图");
     expect(translate("zh-CN", "structure.sourceFiles", { count: 3, messageCount: "2 条消息" })).toBe("3 个源文件 · 智能体就绪 · 2 条消息");
     expect(translate("zh-CN", "relation.depends_onDescription")).toContain("依赖目标模块");
-    expect(translate("zh-CN", "sequence.generated", { counts: "2 条架构消息，4 条详细设计消息" })).toBe(
-      "序列图生成完成：2 条架构消息，4 条详细设计消息。"
+    expect(translate("zh-CN", "sequence.generated", { counts: "2 条架构消息" })).toBe(
+      "序列图生成完成：2 条架构消息。"
     );
     expect(translate("zh-CN", "desktopOnly.title")).toBe("请从桌面端打开 FlowWeave");
     expect(translate("zh-CN", "agent.bridgeWarning")).not.toContain("浏览器预览");
@@ -54,10 +56,12 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.claudeDesktopDescription")).toContain("agent-bridge");
     expect(translate("zh-CN", "agent.codexDesktopDescription")).toContain("response.json");
     expect(translate("zh-CN", "agent.geminiDescription")).toContain("Gemini CLI");
+    expect(translate("zh-CN", "agent.healthCheck")).toBe("健康检查");
     expect(translate("zh-CN", "agent.connectorPrompt")).toBe("连接提示");
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
     expect(translate("zh-CN", "module.manualSubtitle")).toBe("手动补充模块");
     expect(translate("zh-CN", "assessment.high")).toBe("高");
+    expect(translate("zh-CN", "settings.planTimeout")).toContain("计划超时");
     expect(translate("zh-CN", "module.riskOverridePrompt")).toContain("覆写");
     expect(translate("zh-CN", "artifact.state.stale")).toBe("已过期");
     expect(translate("zh-CN", "artifact.sequences")).toBe("时序图");

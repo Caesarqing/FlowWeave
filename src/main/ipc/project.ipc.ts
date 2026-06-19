@@ -89,11 +89,10 @@ export function registerProjectIpc() {
       event.sender
     ));
 
-  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, kind: unknown, instruction: unknown) =>
+  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown) =>
     reviseSequenceDiagramForProject(
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.reviseSequenceDiagram, agentId),
-      requireEnum(PROJECT_CHANNELS.reviseSequenceDiagram, kind, "kind", ["architectural", "detailed-design"]),
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, instruction, "instruction"),
       event.sender
     ));
@@ -210,13 +209,12 @@ async function generateSequenceDiagramsForProject(
 async function reviseSequenceDiagramForProject(
   projectId: string,
   agentId: RuntimeAgentId,
-  kind: "architectural" | "detailed-design",
   instruction: string,
   sender: WebContents
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram revision.", sender, async (signal, onProgress) => {
-    return reviseSequenceDiagram(await scanProject(projectPath), agentId, kind, instruction, { signal, onProgress });
+    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { signal, onProgress });
   }, projectPath);
 }
 

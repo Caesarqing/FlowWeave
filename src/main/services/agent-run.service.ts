@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { AgentDefinition, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentHealthCheckResult, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
@@ -26,6 +26,7 @@ export type StartToolPlanOptions = {
   model?: string;
   confirmedExecute?: boolean;
   executeTimeoutMs?: number;
+  planTimeoutMs?: number;
   signal?: AbortSignal;
 };
 
@@ -67,9 +68,7 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     purpose: options.purpose,
     model: options.model,
     signal: options.signal
-  }, executionMode === "execute" && options.executeTimeoutMs !== undefined
-    ? { timeoutMs: options.executeTimeoutMs }
-    : undefined);
+  }, resolveRunPolicyOverride(executionMode, options));
 
   const logText = redactSensitiveText(serializeAgentEvents(result.events));
   const planText = await resolvePlanText(result, logText);
@@ -134,6 +133,29 @@ export async function detectTool(toolId: ToolId): Promise<ToolDetectionResult> {
 
 export async function detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult> {
   return (await getAgentAdapter(agentId)).detect();
+}
+
+export async function healthCheckAgent(agentId: RuntimeAgentId): Promise<AgentHealthCheckResult> {
+  const adapter = await getAgentAdapter(agentId);
+  if (adapter.healthCheck) {
+    return adapter.healthCheck();
+  }
+  const detection = await adapter.detect();
+  return {
+    agentId,
+    severity: detection.available ? "ok" : "error",
+    checks: [{
+      id: "agent-detection",
+      label: "Agent detection",
+      status: detection.available ? "passed" : "failed",
+      message: detection.message ?? (detection.available ? `${adapter.name} detected.` : `${adapter.name} was not detected.`)
+    }],
+    suggestedActions: detection.available
+      ? [`${adapter.name} is detectable. Review the run log if executions fail.`]
+      : [`Install or configure ${adapter.name}, then run detection again.`],
+    environmentHints: [],
+    checkedAt: new Date().toISOString()
+  };
 }
 
 export function getToolAdapter(toolId: ToolId): ToolAdapter {
@@ -226,6 +248,19 @@ function collectStderr(events: ToolRunResult["events"]) {
     .filter(Boolean)
     .join("\n");
   return stderr || undefined;
+}
+
+function resolveRunPolicyOverride(
+  executionMode: ExecutionMode,
+  options: StartToolPlanOptions
+) {
+  if (executionMode === "execute" && options.executeTimeoutMs !== undefined) {
+    return { timeoutMs: options.executeTimeoutMs };
+  }
+  if (executionMode === "plan" && options.planTimeoutMs !== undefined) {
+    return { timeoutMs: options.planTimeoutMs };
+  }
+  return undefined;
 }
 
 function firstUsefulLine(text: string) {

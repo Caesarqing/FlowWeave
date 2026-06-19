@@ -325,7 +325,6 @@ function appendSequenceSummary(lines: string[], sequences: SequenceDiagramBundle
     "## Sequence Diagrams",
     "",
     `- Architectural: ${sequences.architectural.title}. ${sequences.architectural.summary}`,
-    `- Detailed design: ${sequences.detailedDesign.title}. ${sequences.detailedDesign.summary}`,
     ""
   );
 }

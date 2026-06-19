@@ -13,7 +13,44 @@ describe("agent-execution.service", () => {
 
     expect(result.status).toBe("failed");
     expect(result.terminationReason).toBe("timeout");
+    expect(result.failure?.code).toBe("timeout");
     expect(result.attempts).toBe(1);
+  });
+
+  it("classifies silent SIGTERM exit 143 as a timeout-style termination", async () => {
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Silent SIGTERM",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => ({
+        id: runRequest.id,
+        toolId: "mock",
+        status: "failed",
+        projectPath: runRequest.projectPath,
+        startedAt: "2026-06-10T00:00:00.000Z",
+        completedAt: "2026-06-10T00:02:00.000Z",
+        exitCode: 143,
+        executionMode: runRequest.executionMode,
+        purpose: runRequest.purpose,
+        events: [],
+        durationMs: 120_000,
+        terminationReason: "failed"
+      })
+    };
+
+    const execution = await executeAgentWithPolicy(adapter, request("plan"), {
+      timeoutMs: 1000,
+      maxOutputBytes: 1024,
+      retryCount: 0,
+      retryDelayMs: 0
+    });
+
+    expect(execution.failure).toMatchObject({
+      code: "timeout",
+      transient: false,
+      message: expect.stringContaining("SIGTERM")
+    });
   });
 
   it("retries only transient failures", async () => {
@@ -77,7 +114,32 @@ describe("agent-execution.service", () => {
     expect(execution.failure).toMatchObject({
       code: "authentication",
       transient: false,
-      source: "stdout"
+      source: "stdout",
+      suggestedActions: expect.arrayContaining([
+        expect.stringContaining("provider gateway credentials")
+      ])
+    });
+  });
+
+  it("classifies HTTP 500 provider failures as transient provider errors", async () => {
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Provider 500",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => result(runRequest, "failed", "API Error: HTTP 500 service unavailable")
+    };
+
+    const execution = await executeAgentWithPolicy(adapter, request("plan"), {
+      timeoutMs: 1000,
+      maxOutputBytes: 1024,
+      retryCount: 0,
+      retryDelayMs: 0
+    });
+
+    expect(execution.failure).toMatchObject({
+      code: "provider",
+      transient: true
     });
   });
 
@@ -114,6 +176,31 @@ describe("agent-execution.service", () => {
     expect(execution.outputText).toBe("ok");
   });
 
+  it("uses the default plan retry count for transient failures", async () => {
+    let calls = 0;
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Default retry",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => {
+        calls += 1;
+        return result(runRequest, calls === 3 ? "completed" : "failed", calls === 3 ? "ok" : "ConnectionRefused");
+      }
+    };
+
+    const execution = await executeAgentWithPolicy(adapter, request("plan"), {
+      timeoutMs: 1000,
+      maxOutputBytes: 1024,
+      retryDelayMs: 0
+    });
+
+    expect(calls).toBe(3);
+    expect(execution.status).toBe("completed");
+    expect(execution.attempts).toBe(3);
+    expect(execution.events.filter((event) => event.type === "status" && event.message?.includes("Retrying transient Agent failure"))).toHaveLength(2);
+  });
+
   it("rejects concurrent write executions for the same project", async () => {
     resetAgentExecutionStateForTests();
     const adapter = abortAwareAdapter();
@@ -133,15 +220,17 @@ describe("agent-execution.service", () => {
     await first;
   });
 
-  it("limits concurrent read executions for the same project", async () => {
+  it("queues concurrent read executions for the same project", async () => {
     resetAgentExecutionStateForTests();
     const adapter = abortAwareAdapter();
     const first = executeAgentWithPolicy(adapter, request("plan"), policy());
     const second = executeAgentWithPolicy(adapter, request("plan"), policy());
+    const third = executeAgentWithPolicy(adapter, request("plan"), policy());
 
-    await expect(executeAgentWithPolicy(adapter, request("plan"), policy()))
-      .rejects.toThrow("read execution limit");
-    await Promise.all([first, second]);
+    const results = await Promise.all([first, second, third]);
+
+    expect(results).toHaveLength(3);
+    expect(results.every((result) => result.terminationReason === "timeout")).toBe(true);
   });
 });
 

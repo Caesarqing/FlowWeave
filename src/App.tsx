@@ -196,6 +196,7 @@ function DesktopApp() {
             onDetectAgent={app.tools.onDetectAgent}
             onExecutionModeChange={app.tools.onExecutionModeChange}
             onGoToGitReview={app.tools.onGoToGitReview}
+            onHealthCheckAgent={app.tools.onHealthCheckAgent}
             onOpenToolProject={app.tools.onOpenToolProject}
             onRefreshRuns={app.tools.onRefreshRuns}
             onRunToolPlan={app.tools.onRunToolPlan}

@@ -36,7 +36,7 @@ export function normalizeIpcError(channel: string, error: unknown): FlowWeaveErr
     category,
     message,
     context: { channel },
-    suggestedActions: suggestedActions(category),
+    suggestedActions: suggestedActions(category, message),
     technicalDetails: error instanceof Error ? error.stack : undefined
   };
 }
@@ -50,7 +50,13 @@ function categorizeError(message: string): FlowWeaveErrorData["category"] {
   return "internal";
 }
 
-function suggestedActions(category: FlowWeaveErrorData["category"]): string[] {
+function suggestedActions(category: FlowWeaveErrorData["category"], message: string): string[] {
+  if (/already running|read execution|queue is full|concurrent/i.test(message)) {
+    return [
+      "Wait for the current Agent run to finish, then retry.",
+      "Open the Agent run history to check whether another plan is still running or pending."
+    ];
+  }
   if (category === "validation") return ["Review the submitted values and retry."];
   if (category === "security") return ["Verify the project path, Git state, and requested permissions before retrying."];
   if (category === "filesystem") return ["Verify the file still exists and that FlowWeave has permission to access it."];

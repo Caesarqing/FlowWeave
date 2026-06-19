@@ -27,6 +27,7 @@ export const TOOL_CHANNELS = {
   saveCustomAgent: "tool:save-custom-agent",
   deleteCustomAgent: "tool:delete-custom-agent",
   detectAgent: "tool:detect-agent",
+  healthCheckAgent: "tool:health-check-agent",
   detect: "tool:detect",
   runPlan: "tool:run-plan",
   listRuns: "tool:list-runs",

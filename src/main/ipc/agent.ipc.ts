@@ -1,7 +1,7 @@
 import { TOOL_CHANNELS } from "../../common/ipc-channels";
 import type { AgentId, CustomAgentInput, RuntimeAgentId } from "../../types";
 import type { ToolId } from "../agents/agent-adapter";
-import { deleteAgent, detectAgent, detectTool, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
+import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
 import { listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
 import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
@@ -34,6 +34,10 @@ export function registerAgentIpc() {
     return detectAgent(requireAgentId(TOOL_CHANNELS.detectAgent, agentId));
   });
 
+  handleIpc(TOOL_CHANNELS.healthCheckAgent, async (_event, agentId: unknown) => {
+    return healthCheckAgent(requireAgentId(TOOL_CHANNELS.healthCheckAgent, agentId));
+  });
+
   handleIpc(TOOL_CHANNELS.detect, async (_event, toolId: unknown) => {
     return detectTool(requireEnum(TOOL_CHANNELS.detect, toolId, "toolId", ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"]));
   });
@@ -58,6 +62,9 @@ export function registerAgentIpc() {
         : false,
       executeTimeoutMs: options.executionMode === "execute"
         ? requireInteger(TOOL_CHANNELS.runPlan, options.executeTimeoutMs, "executeTimeoutMs", 60_000, 7_200_000)
+        : undefined,
+      planTimeoutMs: options.executionMode === "plan" && options.planTimeoutMs !== undefined
+        ? requireInteger(TOOL_CHANNELS.runPlan, options.planTimeoutMs, "planTimeoutMs", 60_000, 1_800_000)
         : undefined
     });
   });

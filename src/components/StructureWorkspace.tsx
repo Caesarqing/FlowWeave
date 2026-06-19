@@ -9,10 +9,9 @@ import {
 } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import { useMemo, useRef, useState } from "react";
-import { Code2, Focus, GitBranch, RefreshCcw, Search, Send, Square, Workflow } from "lucide-react";
+import { Focus, RefreshCcw, Search, Send, Square, Workflow } from "lucide-react";
 import type {
   SequenceDiagram,
-  SequenceDiagramKind,
   SequenceMessage,
   SequenceMessageKind,
   SequenceParticipant
@@ -28,11 +27,6 @@ import { cn } from "../utils/classnames";
 import { localizedSequenceDiagram } from "../utils/sequence-text";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { Button } from "./Button";
-
-const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
-  architectural: "structure.architectural",
-  "detailed-design": "structure.detailedDesign"
-};
 
 const messageKindLabelKeys: Record<SequenceMessage["kind"], string> = {
   sync: "structure.messageSync",
@@ -115,14 +109,6 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
     <WorkspaceLayout
       actions={(
         <>
-          <div className="segmented-control" aria-label={t("structure.diagramType")}>
-            {(["architectural", "detailed-design"] as SequenceDiagramKind[]).map((kind) => (
-              <button className={cn(sequence.activeKind === kind && "active")} key={kind} type="button" onClick={() => sequence.setActiveKind(kind)}>
-                {kind === "architectural" ? <GitBranch size={14} /> : <Code2 size={14} />}
-                {t(diagramLabelKeys[kind])}
-              </button>
-            ))}
-          </div>
           <Button
             disabled={sequence.isBusy}
             icon={<RefreshCcw size={15} />}

@@ -5,20 +5,13 @@ import type {
   SequenceDiagram,
   SequenceDiagramBundle,
   SequenceDiagramGenerationResult,
-  SequenceDiagramKind,
   SequenceMessage,
   SequenceParticipant
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { useProjectStore } from "../stores/project.store";
 
-const diagramLabelKeys: Record<SequenceDiagramKind, string> = {
-  architectural: "structure.architectural",
-  "detailed-design": "structure.detailedDesign"
-};
-
 export type SequenceDiagramState = {
-  activeKind: SequenceDiagramKind;
   bundle?: SequenceDiagramBundle;
   diagram?: SequenceDiagram;
   fileCount: number;
@@ -34,7 +27,6 @@ export type SequenceDiagramState = {
   reviseDiagram: () => Promise<void>;
   selectMessage: (messageId: string) => void;
   selectParticipant: (participantId: string) => void;
-  setActiveKind: (kind: SequenceDiagramKind) => void;
   setInstruction: (instruction: string) => void;
   setStatus: (status: string) => void;
 };
@@ -53,7 +45,6 @@ export function useSequenceDiagramState({
   const { t } = useI18n();
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
-  const [activeKind, setActiveKind] = useState<SequenceDiagramKind>("architectural");
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [instruction, setInstruction] = useState("");
@@ -61,7 +52,7 @@ export function useSequenceDiagramState({
   const [isBusy, setIsBusy] = useState(false);
   const activeOperationId = useRef<string | null>(null);
   const fileCount = useMemo(() => countFiles(files), [files]);
-  const diagram = activeKind === "architectural" ? bundle?.architectural : bundle?.detailedDesign;
+  const diagram = bundle?.architectural;
   const selectedMessage = diagram?.messages.find((message) => message.id === selectedMessageId);
   const selectedParticipant = diagram?.participants.find((participant) => participant.id === selectedParticipantId);
 
@@ -98,18 +89,18 @@ export function useSequenceDiagramState({
     void window.flowweave.readSequenceDiagrams(projectId).then((nextBundle) => {
       if (!isMounted) return;
       setBundle(nextBundle);
-      setStatus(nextBundle ? t("sequence.loaded", { kind: t(diagramLabelKeys[activeKind]) }) : t("sequence.noneYet"));
+      setStatus(nextBundle ? t("sequence.loaded", { kind: t("structure.architectural") }) : t("sequence.noneYet"));
     });
     return () => {
       isMounted = false;
     };
-  }, [projectId, projectPath]);
+  }, [projectId, projectPath, t]);
 
   useEffect(() => {
     if (!diagram) return;
     setSelectedMessageId(diagram.messages[0]?.id ?? "");
     setSelectedParticipantId(diagram.messages[0] ? "" : diagram.participants[0]?.id ?? "");
-  }, [activeKind, bundle?.generatedAt]);
+  }, [bundle?.generatedAt]);
 
   async function generateDiagrams() {
     if (!window.flowweave || !projectId) {
@@ -128,7 +119,7 @@ export function useSequenceDiagramState({
       if (result.outcome === "generated") {
         setArtifactStatuses((current) => current ? { ...current, sequences: "current" } : current);
       }
-      setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
+      setSelectedMessageId(nextBundle.architectural.messages[0]?.id ?? "");
       setSelectedParticipantId("");
       setStatus(generationStatusMessage(result, t));
     } catch (error) {
@@ -150,12 +141,12 @@ export function useSequenceDiagramState({
       return;
     }
     setIsBusy(true);
-    setStatus(t("sequence.revising", { kind: t(diagramLabelKeys[activeKind]) }));
+    setStatus(t("sequence.revising", { kind: t("structure.architectural") }));
     try {
-      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, activeKind, instruction.trim());
+      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim());
       setBundle(nextBundle);
       setInstruction("");
-      setSelectedMessageId(selectDiagram(nextBundle, activeKind).messages[0]?.id ?? "");
+      setSelectedMessageId(nextBundle.architectural.messages[0]?.id ?? "");
       setSelectedParticipantId("");
       setStatus(t("sequence.revised"));
     } catch (error) {
@@ -184,7 +175,6 @@ export function useSequenceDiagramState({
   }
 
   return {
-    activeKind,
     bundle,
     cancelOperation,
     diagram,
@@ -199,15 +189,10 @@ export function useSequenceDiagramState({
     selectedParticipantId,
     selectMessage,
     selectParticipant,
-    setActiveKind,
     setInstruction,
     setStatus,
     status
   };
-}
-
-function selectDiagram(bundle: SequenceDiagramBundle, kind: SequenceDiagramKind) {
-  return kind === "architectural" ? bundle.architectural : bundle.detailedDesign;
 }
 
 function countFiles(nodes: ProjectFileNode[]): number {
@@ -228,8 +213,7 @@ function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (ke
     return t("sequence.generationFailed", { error: result.error.message });
   }
   const counts = t("sequence.messageCounts", {
-    architectural: result.bundle.architectural.messages.length,
-    detailed: result.bundle.detailedDesign.messages.length
+    architectural: result.bundle.architectural.messages.length
   });
   if (result.outcome === "cached") {
     return t("sequence.cached", { warning: ` ${result.error.message}` });

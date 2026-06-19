@@ -37,6 +37,7 @@ export function useAppController() {
   const selectedRunArtifact = useRunsStore((state) => state.selectedRunArtifact);
   const runArtifactTab = useRunsStore((state) => state.runArtifactTab);
   const isRunsLoading = useRunsStore((state) => state.isRunsLoading);
+  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
   const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const setActivePage = useNavigationStore((state) => state.setActivePage);
   const setProjectLabel = useProjectStore((state) => state.setProjectLabel);
@@ -127,8 +128,8 @@ export function useAppController() {
         setLastRunStatus(t("sequence.exportNeedsDiagram"));
         return;
       }
-      downloadText("sequence-guidance.md", buildSequenceGuidanceMarkdown(projectLabel, sequence.bundle, sequence.activeKind));
-      downloadText("sequence-task.json", buildSequenceTaskJson(projectLabel, sequence.bundle, sequence.activeKind));
+      downloadText("sequence-guidance.md", buildSequenceGuidanceMarkdown(projectLabel, sequence.bundle));
+      downloadText("sequence-task.json", buildSequenceTaskJson(projectLabel, sequence.bundle));
       setLastRunStatus(t("sequence.exported"));
       return;
     }
@@ -179,9 +180,10 @@ export function useAppController() {
         toolId: agentId,
         executionMode,
         confirmedExecute: executionMode === "execute",
+        planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
         executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
-        prompt: buildSequencePlanPrompt(projectLabel, sequence.bundle, sequence.activeKind)
+        prompt: buildSequencePlanPrompt(projectLabel, sequence.bundle)
       });
 
       if (agentId !== "mock") setSelectedAgentId(agentId);
@@ -335,6 +337,7 @@ export function useAppController() {
       onDetectAgent: toolActions.detectAgent,
       onExecutionModeChange: setExecutionMode,
       onGoToGitReview: openGitReviewFromRun,
+      onHealthCheckAgent: toolActions.healthCheckAgent,
       onOpenToolProject: toolActions.openToolProject,
       onRefreshRuns: refreshRuns,
       onRunToolPlan: toolActions.runToolPlan,

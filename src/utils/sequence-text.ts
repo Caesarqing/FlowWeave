@@ -18,16 +18,12 @@ export function localizedSequenceDiagram(diagram: SequenceDiagram, t: Translate)
 
 function localizedDiagramTitle(diagram: SequenceDiagram, t: Translate): string {
   if (diagram.title === "Architectural Sequence Diagram") return t("structure.architectural");
-  if (diagram.title === "Detailed Design Sequence Diagram") return t("structure.detailedDesign");
   return diagram.title;
 }
 
 function localizedDiagramSummary(summary: string, t: Translate): string {
   if (summary === "Macro collaboration inferred from architecture modules and relationships.") {
     return t("structure.architecturalSummary");
-  }
-  if (summary === "Code-level call sequence inferred from imports, symbols, and call expressions.") {
-    return t("structure.detailedDesignSummary");
   }
   return summary;
 }

@@ -76,6 +76,11 @@ export async function runSpawnedAgent(
 
     const abortProcessTree = () => {
       forcedReason = abortReason(options.request.signal);
+      pushEvent({
+        type: "error",
+        message: forcedReason === "timeout" ? "Agent run timed out and was terminated." : "Agent run was canceled and terminated.",
+        timestamp: nowIso()
+      });
       terminateProcessTree(child.pid, "SIGTERM");
       forceKillTimer = setTimeout(() => terminateProcessTree(child.pid, "SIGKILL"), FORCE_KILL_DELAY_MS);
     };

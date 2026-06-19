@@ -2594,6 +2594,39 @@ button:disabled {
   white-space: nowrap;
 }
 
+.agent-health-box {
+  display: grid;
+  gap: 5px;
+  max-height: 156px;
+  padding: 9px;
+  overflow: auto;
+  color: var(--muted);
+  background: rgba(137, 236, 255, 0.045);
+  border: 1px solid rgba(137, 236, 255, 0.14);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.agent-health-box.warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.agent-health-box.error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.agent-health-box strong {
+  color: var(--text);
+}
+
+.agent-health-box span,
+.agent-health-box small {
+  overflow-wrap: anywhere;
+}
+
 .agent-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2840,6 +2873,25 @@ button:disabled {
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
+}
+
+.run-failure-actions {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: rgba(239, 68, 68, 0.055);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.16);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.run-failure-actions strong {
+  color: var(--text);
+}
+
+.run-failure-actions span {
+  overflow-wrap: anywhere;
 }
 
 .artifact-tabs {

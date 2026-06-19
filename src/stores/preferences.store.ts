@@ -17,6 +17,7 @@ const DEFAULT_RELATION_KEY = "flowweave.defaultRelation";
 const REDUCED_MOTION_KEY = "flowweave.reducedMotion";
 const SCAN_MAX_ENTRIES_KEY = "flowweave.scanMaxEntries";
 const SCAN_CONCURRENCY_KEY = "flowweave.scanConcurrency";
+const PLAN_TIMEOUT_MINUTES_KEY = "flowweave.planTimeoutMinutes";
 const EXECUTE_TIMEOUT_MINUTES_KEY = "flowweave.executeTimeoutMinutes";
 const ONBOARDING_SEEN_KEY = "flowweave.onboardingSeen";
 const WORKSPACE_PANELS_KEY = "flowweave.workspacePanels";
@@ -38,6 +39,7 @@ type PreferencesState = {
   reducedMotion: boolean;
   scanMaxEntries: number;
   scanConcurrency: number;
+  planTimeoutMinutes: number;
   executeTimeoutMinutes: number;
   onboardingSeen: boolean;
   theme: UiThemeId;
@@ -48,6 +50,7 @@ type PreferencesState = {
   setReducedMotion: (value: boolean) => void;
   setScanMaxEntries: (value: number) => void;
   setScanConcurrency: (value: number) => void;
+  setPlanTimeoutMinutes: (value: number) => void;
   setExecuteTimeoutMinutes: (value: number) => void;
   completeOnboarding: () => void;
   setTheme: (theme: UiThemeId) => void;
@@ -61,6 +64,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   reducedMotion: readStoredValue<"true" | "false">(REDUCED_MOTION_KEY, "false") === "true",
   scanMaxEntries: readStoredInteger(SCAN_MAX_ENTRIES_KEY, 10_000, 1_000, 100_000),
   scanConcurrency: readStoredInteger(SCAN_CONCURRENCY_KEY, 32, 1, 128),
+  planTimeoutMinutes: readStoredInteger(PLAN_TIMEOUT_MINUTES_KEY, 5, 1, 30),
   executeTimeoutMinutes: readStoredInteger(EXECUTE_TIMEOUT_MINUTES_KEY, 10, 1, 120),
   onboardingSeen: readStoredValue<"true" | "false">(ONBOARDING_SEEN_KEY, "false") === "true",
   theme: readEnumValue(THEME_KEY, themeOptions, "dark"),
@@ -84,6 +88,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setScanConcurrency: (scanConcurrency) => {
     if (!writeStoredValue(SCAN_CONCURRENCY_KEY, String(scanConcurrency))) return;
     set({ scanConcurrency });
+  },
+  setPlanTimeoutMinutes: (planTimeoutMinutes) => {
+    if (!writeStoredValue(PLAN_TIMEOUT_MINUTES_KEY, String(planTimeoutMinutes))) return;
+    set({ planTimeoutMinutes });
   },
   setExecuteTimeoutMinutes: (executeTimeoutMinutes) => {
     if (!writeStoredValue(EXECUTE_TIMEOUT_MINUTES_KEY, String(executeTimeoutMinutes))) return;

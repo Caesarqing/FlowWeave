@@ -1,4 +1,6 @@
 import type {
+  AgentHealthCheck,
+  AgentHealthCheckResult,
   ToolAdapter as SharedToolAdapter,
   ToolDetectionResult,
   ToolId,
@@ -13,6 +15,8 @@ import type {
 export interface ToolAdapter extends SharedToolAdapter {}
 
 export type {
+  AgentHealthCheck,
+  AgentHealthCheckResult,
   ToolDetectionResult,
   ToolId,
   ToolKind,

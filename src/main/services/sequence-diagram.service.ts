@@ -11,7 +11,6 @@ import type {
   SequenceDiagram,
   SequenceDiagramBundle,
   SequenceDiagramGenerationResult,
-  SequenceDiagramKind,
   SequenceMessage,
   SequenceMessageKind,
   SequenceParticipant,
@@ -164,7 +163,6 @@ async function generateSequenceDiagramsOnce(
 export async function reviseSequenceDiagram(
   project: CodeflowProject,
   agentId: RuntimeAgentId,
-  kind: SequenceDiagramKind,
   instruction: string,
   options?: AnalysisGenerationOptions
 ): Promise<SequenceDiagramBundle> {
@@ -177,18 +175,18 @@ export async function reviseSequenceDiagram(
   const architectureMap = await readArchitectureMap(project.rootPath);
   const current = await readSequenceDiagrams(project.rootPath);
   if (!current) throw new Error("No trusted sequence diagram exists to revise.");
-  const currentDiagram = selectDiagram(current, kind);
+  const currentDiagram = current.architectural;
   const prompt = buildSequenceDiagramRevisionPrompt(currentDiagram, instruction, facts, architectureMap);
   options?.onProgress?.({
     stage: "analyzing",
     completed: 0,
     total: 1,
     failed: 0,
-    message: `Revising ${kind} sequence diagram with ${agentId}.`
+    message: `Revising architectural sequence diagram with ${agentId}.`
   });
 
   if (agentId === "mock") {
-    const parsed = parseSequenceDiagramJson(mockRevisedDiagramJson(currentDiagram, instruction), kind);
+    const parsed = parseSequenceDiagramJson(mockRevisedDiagramJson(currentDiagram, instruction));
     const bundle = parsed ? replaceDiagram(current, parsed) : current;
     throwIfAborted(options?.signal, "Sequence revision");
     await writeSequenceDiagramBundle(project.rootPath, bundle);
@@ -208,7 +206,7 @@ export async function reviseSequenceDiagram(
     throw new Error(result.stderr ?? result.summary ?? "Agent sequence diagram revision failed");
   }
 
-  const parsed = parseSequenceDiagramJson(collectStdout(result.events), kind);
+  const parsed = parseSequenceDiagramJson(collectStdout(result.events));
   if (!parsed) {
     throw new Error("Agent did not return a valid sequence diagram JSON object.");
   }
@@ -225,14 +223,14 @@ export async function readSequenceDiagrams(projectPath: string): Promise<Sequenc
   if (!isSequenceDiagramBundle(value)) {
     throw new Error(`FlowWeave sequence diagram artifact is invalid and was preserved: ${filePath}`);
   }
-  return value;
+  return storedSequenceDiagramBundle(value);
 }
 
 export function buildSequenceDiagramPrompt(facts: ProjectStructureFacts, architectureMap?: ArchitectureMap) {
   return `You are FlowWeave's sequence diagram analyst. Return only JSON.
 
 Goal:
-Create two project sequence diagrams from the code structure and architecture map so a user can understand the real end-to-end workflow and the concrete code-level call sequence.
+Create one architectural project sequence diagram from the code structure and architecture map so a user can understand the real end-to-end workflow.
 
 Project: ${facts.projectName}
 Languages: ${JSON.stringify(facts.languages)}
@@ -246,7 +244,6 @@ ${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
 Analysis priorities:
 - Use only the supplied ArchitectureMap and ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
 - The architectural diagram should show the end-to-end workflow across macro participants such as actor, frontend/component, gateway/API boundary, service, database, external system, and worker.
-- The detailed-design diagram should show the code-level call sequence across real controllers, classes, interfaces, repositories, utilities, workers, and methods.
 - Order messages by the real execution flow: entry/request, validation or orchestration, domain work, data access, external calls or events, return/response.
 - Fill methodName, input, output, and evidence whenever the facts provide calls, symbols, imports, exports, or externalCalls.
 - When the code facts are incomplete, label the detail as inferred from imports/calls/file role instead of presenting it as certain.
@@ -280,24 +277,13 @@ Return this exact JSON shape:
       "evidence": [{"filePath": "path", "symbol": "optional", "detail": "specific evidence"}]
     }],
     "evidence": [{"filePath": "path", "symbol": "optional", "detail": "why this diagram is credible"}]
-  },
-  "detailedDesign": {
-    "id": "detailed-design-sequence",
-    "title": "Detailed Design Sequence Diagram",
-    "kind": "detailed-design",
-    "summary": "code-level method call sequence",
-    "participants": [],
-    "messages": [],
-    "evidence": []
   }
 }
 
 Rules:
 - The architectural diagram uses macro participants: frontend app, gateway, services, databases, workers, and third-party systems.
-- The detailed-design diagram maps directly to code structure: Controller, Service, Repository, Interface, Class, and concrete method calls.
-- Detailed-design messages must include methodName, input, output, and evidence when the code facts provide them.
 - Every message must reference valid participant ids from its diagram.
-- Prefer 4-10 participants and 4-14 messages per diagram.
+- Prefer 4-10 participants and 4-14 messages.
 - Return valid JSON only.`;
 }
 
@@ -334,7 +320,7 @@ Return this exact JSON shape:
 {
   "id": "stable-diagram-id",
   "title": "Diagram title",
-  "kind": "${currentDiagram.kind}",
+  "kind": "architectural",
   "summary": "updated summary",
   "participants": [],
   "messages": [],
@@ -342,7 +328,7 @@ Return this exact JSON shape:
 }
 
 Rules:
-- Keep kind exactly "${currentDiagram.kind}".
+- Keep kind exactly "architectural".
 - Every message must reference existing participant ids.
 - Preserve useful evidence and add code evidence for changed method calls when possible.
 - Return valid JSON only.`;
@@ -357,36 +343,34 @@ export function parseSequenceDiagramBundleJson(
   const parsed = parseFirstJsonObject(output) as Partial<SequenceDiagramBundle> | undefined;
   if (!parsed) return undefined;
   const architectural = normalizeDiagram(parsed.architectural, "architectural");
-  const detailedDesign = normalizeDiagram(parsed.detailedDesign, "detailed-design");
-  if (!architectural || !detailedDesign) return undefined;
-  if (!isUsableDiagram(architectural) || !isUsableDiagram(detailedDesign)) return undefined;
+  if (!architectural) return undefined;
+  if (!isUsableDiagram(architectural)) return undefined;
   return {
     version: 1,
     projectName: project.projectName,
     rootPath: project.rootPath,
     generatedAt: new Date().toISOString(),
     source: "agent",
-    architectural,
-    detailedDesign
+    architectural
   };
 }
 
-export function parseSequenceDiagramJson(output: string, kind: SequenceDiagramKind): SequenceDiagram | undefined {
+export function parseSequenceDiagramJson(output: string): SequenceDiagram | undefined {
   const parsed = parseFirstJsonObject(output) as Partial<SequenceDiagram> | undefined;
   if (!parsed) return undefined;
-  return normalizeDiagram(parsed, kind);
+  return normalizeDiagram(parsed, "architectural");
 }
 
-function normalizeDiagram(diagram: Partial<SequenceDiagram> | undefined, kind: SequenceDiagramKind): SequenceDiagram | undefined {
+function normalizeDiagram(diagram: Partial<SequenceDiagram> | undefined, kind: SequenceDiagram["kind"]): SequenceDiagram | undefined {
   if (!diagram || diagram.kind !== kind) return undefined;
   const { participants, idAliases } = normalizeParticipants(diagram.participants);
   const participantIds = new Set(participants.map((participant) => participant.id));
   const messages = normalizeMessages(diagram.messages, participantIds, idAliases);
   const normalized: SequenceDiagram = {
     id: safeId(diagram.id ?? `${kind}-sequence`),
-    title: diagram.title?.trim() || defaultDiagramTitle(kind),
+    title: diagram.title?.trim() || defaultDiagramTitle(),
     kind,
-    summary: diagram.summary?.trim() || defaultDiagramSummary(kind),
+    summary: diagram.summary?.trim() || defaultDiagramSummary(),
     participants,
     messages,
     evidence: normalizeEvidence(diagram.evidence)
@@ -476,8 +460,7 @@ function createFallbackSequenceBundle(
     rootPath: project.rootPath,
     generatedAt: new Date().toISOString(),
     source,
-    architectural: createFallbackArchitecturalDiagram(facts, architectureMap),
-    detailedDesign: createFallbackDetailedDiagram(facts)
+    architectural: createFallbackArchitecturalDiagram(facts, architectureMap)
   };
 }
 
@@ -492,7 +475,7 @@ function createFallbackArchitecturalDiagram(facts: ProjectStructureFacts, archit
         filePath: module.files[0],
         symbol: module.symbols[0]?.name
       }))
-    : fallbackFileParticipants(facts.files.slice(0, 6), "architectural");
+    : fallbackFileParticipants(facts.files.slice(0, 6));
   const participantIds = new Set(participants.map((participant) => participant.id));
   const relationships = architectureMap?.relationships ?? [];
   const messages = relationships
@@ -519,53 +502,14 @@ function createFallbackArchitecturalDiagram(facts: ProjectStructureFacts, archit
   };
 }
 
-function createFallbackDetailedDiagram(facts: ProjectStructureFacts): SequenceDiagram {
-  const symbolFiles = facts.files.filter((file) => file.symbols.length > 0).slice(0, 10);
-  const participants = fallbackFileParticipants(symbolFiles.length > 0 ? symbolFiles : facts.files.slice(0, 8), "detailed-design");
-  const participantByFile = new Map(participants.map((participant) => [participant.filePath, participant.id]));
-  const messages: SequenceMessage[] = [];
-  for (const file of symbolFiles) {
-    const source = participantByFile.get(file.path);
-    if (!source) continue;
-    for (const importPath of file.imports.slice(0, 4)) {
-      const targetFile = findImportedFile(importPath, symbolFiles);
-      const target = targetFile ? participantByFile.get(targetFile.path) : undefined;
-      if (!target || target === source) continue;
-      messages.push({
-        id: safeId(`${source}-${target}-${messages.length + 1}`),
-        sequence: messages.length + 1,
-        from: source,
-        to: target,
-        kind: "sync",
-        label: file.calls[0] ?? `imports ${importPath}`,
-        methodName: file.calls[0],
-        input: "inferred from caller context",
-        output: "inferred return value",
-        evidence: [{ filePath: file.path, symbol: file.symbols[0]?.name, detail: `Import reference: ${importPath}` }]
-      });
-      if (messages.length >= 14) break;
-    }
-    if (messages.length >= 14) break;
-  }
-  return {
-    id: "detailed-design-sequence",
-    title: "Detailed Design Sequence Diagram",
-    kind: "detailed-design",
-    summary: "Code-level call sequence inferred from imports, symbols, and call expressions.",
-    participants,
-    messages: messages.length > 0 ? messages : fallbackMessages(participants),
-    evidence: symbolFiles.slice(0, 8).map((file) => ({ filePath: file.path, symbol: file.symbols[0]?.name, detail: `Symbols: ${file.symbols.map((symbol) => symbol.name).slice(0, 4).join(", ")}` }))
-  };
-}
-
-function fallbackFileParticipants(files: FileInsight[], kind: SequenceDiagramKind) {
+function fallbackFileParticipants(files: FileInsight[]) {
   return files.slice(0, 10).map((file, index): SequenceParticipant => {
     const symbol = file.symbols[0];
     const id = safeId(symbol?.name ?? file.path) || `participant-${index + 1}`;
     return {
       id,
       title: symbol?.name ?? titleFromPath(file.path),
-      kind: kind === "detailed-design" ? participantKindFromSymbol(symbol?.kind, file.path) : participantKindFromPath(file.path),
+      kind: participantKindFromPath(file.path),
       description: symbol ? `${symbol.kind} in ${file.path}.` : `Source file ${file.path}.`,
       filePath: file.path,
       symbol: symbol?.name
@@ -594,13 +538,8 @@ function replaceDiagram(bundle: SequenceDiagramBundle, diagram: SequenceDiagram)
     ...bundle,
     generatedAt: new Date().toISOString(),
     source: "agent",
-    architectural: diagram.kind === "architectural" ? diagram : bundle.architectural,
-    detailedDesign: diagram.kind === "detailed-design" ? diagram : bundle.detailedDesign
+    architectural: diagram
   };
-}
-
-function selectDiagram(bundle: SequenceDiagramBundle, kind: SequenceDiagramKind) {
-  return kind === "architectural" ? bundle.architectural : bundle.detailedDesign;
 }
 
 async function cachedOrLocal(
@@ -621,27 +560,25 @@ function validateSequenceBundle(
   facts: ProjectStructureFacts
 ): { valid: boolean; reasons: string[]; fileCoverage: number; evidenceCoverage: number } {
   const files = new Set(facts.files.map((file) => file.path));
-  const diagrams = [bundle.architectural, bundle.detailedDesign];
-  const evidence = diagrams.flatMap((diagram) => [
+  const diagram = bundle.architectural;
+  const evidence = [
     ...(diagram.evidence ?? []),
     ...diagram.messages.flatMap((message) => message.evidence ?? [])
-  ]);
+  ];
   const coveredFiles = new Set(evidence.map((item) => item.filePath).filter((file): file is string => typeof file === "string" && files.has(file)));
   const validEvidence = evidence.filter((item) => Boolean(item.filePath) && files.has(item.filePath as string));
   const fileCoverage = facts.files.length === 0 ? 0 : coveredFiles.size / facts.files.length;
   const evidenceCoverage = evidence.length === 0 ? 0 : validEvidence.length / evidence.length;
   const reasons: string[] = [];
 
-  for (const diagram of diagrams) {
-    const participantIds = new Set(diagram.participants.map((participant) => participant.id));
-    if (diagram.messages.length === 0) reasons.push(`${diagram.kind} has no messages.`);
-    for (const message of diagram.messages) {
-      if (!participantIds.has(message.from) || !participantIds.has(message.to)) {
-        reasons.push(`${diagram.kind} message ${message.id} has an invalid endpoint.`);
-      }
-      if (!message.evidence?.some((item) => item.filePath && files.has(item.filePath))) {
-        reasons.push(`${diagram.kind} message ${message.id} has no valid source evidence.`);
-      }
+  const participantIds = new Set(diagram.participants.map((participant) => participant.id));
+  if (diagram.messages.length === 0) reasons.push(`${diagram.kind} has no messages.`);
+  for (const message of diagram.messages) {
+    if (!participantIds.has(message.from) || !participantIds.has(message.to)) {
+      reasons.push(`${diagram.kind} message ${message.id} has an invalid endpoint.`);
+    }
+    if (!message.evidence?.some((item) => item.filePath && files.has(item.filePath))) {
+      reasons.push(`${diagram.kind} message ${message.id} has no valid source evidence.`);
     }
   }
   const firstMessage = bundle.architectural.messages[0];
@@ -782,8 +719,7 @@ function compactArchitectureMap(map?: ArchitectureMap) {
 function mockSequenceBundleJson(bundle: SequenceDiagramBundle) {
   return JSON.stringify(
     {
-      architectural: bundle.architectural,
-      detailedDesign: bundle.detailedDesign
+      architectural: bundle.architectural
     },
     null,
     2
@@ -809,11 +745,6 @@ function collectStdout(events: Awaited<ReturnType<typeof startToolPlan>>["events
     .join("\n");
 }
 
-function findImportedFile(importPath: string, files: FileInsight[]) {
-  const normalized = importPath.replace(/^\.\.?\//, "").replace(/\.(ts|tsx|js|jsx|py|go|java|rs|php|cs)$/i, "");
-  return files.find((file) => file.path.includes(normalized) || file.path.replace(/\.(ts|tsx|js|jsx|py|go|java|rs|php|cs)$/i, "").endsWith(normalized));
-}
-
 function participantKindFromCategory(category: ArchitectureMap["modules"][number]["category"]): SequenceParticipantKind {
   const map: Record<ArchitectureMap["modules"][number]["category"], SequenceParticipantKind> = {
     "api-boundary": "gateway",
@@ -825,13 +756,6 @@ function participantKindFromCategory(category: ArchitectureMap["modules"][number
     "test-surface": "component"
   };
   return map[category];
-}
-
-function participantKindFromSymbol(kind: FileInsight["symbols"][number]["kind"] | undefined, filePath: string): SequenceParticipantKind {
-  if (/controller|route|router/i.test(filePath)) return "controller";
-  if (/repository|db|database/i.test(filePath)) return "repository";
-  if (kind === "class") return "class";
-  return "interface";
 }
 
 function participantKindFromPath(filePath: string): SequenceParticipantKind {
@@ -869,16 +793,26 @@ function isSequenceDiagramBundle(value: unknown): value is SequenceDiagramBundle
   if (!("projectName" in value) || typeof value.projectName !== "string") return false;
   if (!("rootPath" in value) || typeof value.rootPath !== "string") return false;
   return "architectural" in value &&
-    isStoredSequenceDiagram(value.architectural) &&
-    "detailedDesign" in value &&
-    isStoredSequenceDiagram(value.detailedDesign);
+    isStoredSequenceDiagram(value.architectural);
+}
+
+function storedSequenceDiagramBundle(value: SequenceDiagramBundle): SequenceDiagramBundle {
+  return {
+    version: value.version,
+    projectName: value.projectName,
+    rootPath: value.rootPath,
+    generatedAt: value.generatedAt,
+    source: value.source,
+    metadata: value.metadata,
+    architectural: value.architectural
+  };
 }
 
 function isStoredSequenceDiagram(value: unknown): value is SequenceDiagram {
   return typeof value === "object" &&
     value !== null &&
     "kind" in value &&
-    (value.kind === "architectural" || value.kind === "detailed-design") &&
+    value.kind === "architectural" &&
     "participants" in value &&
     Array.isArray(value.participants) &&
     "messages" in value &&
@@ -902,12 +836,12 @@ function resolveParticipantId(value: unknown, aliases: Map<string, string>) {
   return aliases.get(candidate) ?? aliases.get(safeId(candidate));
 }
 
-function defaultDiagramTitle(kind: SequenceDiagramKind) {
-  return kind === "architectural" ? "Architectural Sequence Diagram" : "Detailed Design Sequence Diagram";
+function defaultDiagramTitle() {
+  return "Architectural Sequence Diagram";
 }
 
-function defaultDiagramSummary(kind: SequenceDiagramKind) {
-  return kind === "architectural" ? "System component collaboration sequence." : "Code-level method call sequence.";
+function defaultDiagramSummary() {
+  return "System component collaboration sequence.";
 }
 
 function titleFromPath(path: string) {

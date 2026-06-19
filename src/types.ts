@@ -405,7 +405,7 @@ export type ArchitectureMap = {
   symbols: StructureSymbol[];
 };
 
-export type SequenceDiagramKind = "architectural" | "detailed-design";
+export type SequenceDiagramKind = "architectural";
 export type SequenceDiagramSource = "agent" | "fallback";
 export type SequenceParticipantKind =
   | "actor"
@@ -463,7 +463,6 @@ export type SequenceDiagramBundle = {
   source: SequenceDiagramSource;
   metadata?: ArtifactGenerationMetadata;
   architectural: SequenceDiagram;
-  detailedDesign: SequenceDiagram;
 };
 
 export type ArtifactGenerationMetadata = {
@@ -638,8 +637,26 @@ export type ToolDetectionResult = {
   message?: string;
 };
 
+export type AgentHealthCheckSeverity = "ok" | "warning" | "error";
+export type AgentHealthCheckStatus = "passed" | "warning" | "failed";
+export type AgentHealthCheck = {
+  id: string;
+  label: string;
+  status: AgentHealthCheckStatus;
+  message: string;
+};
+export type AgentHealthCheckResult = {
+  agentId: RuntimeAgentId;
+  severity: AgentHealthCheckSeverity;
+  checks: AgentHealthCheck[];
+  suggestedActions: string[];
+  environmentHints: string[];
+  checkedAt: string;
+};
+
 export type ToolUiStatus = ToolDetectionResult & {
   checking: boolean;
+  health?: AgentHealthCheckResult;
   lastRunStatus?: ToolRunStatus;
   lastOutputPath?: string;
 };
@@ -707,6 +724,7 @@ export type ToolRunFailure = {
   source: ToolRunOutputSource;
   exitCode?: number | null;
   providerDetails?: string;
+  suggestedActions?: string[];
 };
 
 export type ToolRunResult = {
@@ -857,6 +875,7 @@ export interface ToolAdapter {
   name: string;
   kind: ToolKind;
   detect(): Promise<ToolDetectionResult>;
+  healthCheck?(): Promise<AgentHealthCheckResult>;
   runPlan(request: ToolRunRequest, onEvent?: (event: ToolRunEvent) => void): Promise<ToolRunResult>;
   openProject?(projectPath: string): Promise<ToolOpenResult>;
 }
@@ -871,6 +890,7 @@ export type FlowWeaveApi = {
   saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
   deleteCustomAgent(agentId: AgentId): Promise<void>;
   detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult>;
+  healthCheckAgent(agentId: RuntimeAgentId): Promise<AgentHealthCheckResult>;
   detectTool(toolId: ToolId): Promise<ToolDetectionResult>;
   runToolPlan(options: {
     projectId: string;
@@ -882,6 +902,7 @@ export type FlowWeaveApi = {
     model?: string;
     confirmedExecute?: boolean;
     executeTimeoutMs?: number;
+    planTimeoutMs?: number;
   }): Promise<ToolRunResult>;
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
@@ -895,7 +916,7 @@ export type FlowWeaveApi = {
   analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
   readArchitectureMap(projectId: string): Promise<ArchitectureMap | undefined>;
   generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
-  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, kind: SequenceDiagramKind, instruction: string): Promise<SequenceDiagramBundle>;
+  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string): Promise<SequenceDiagramBundle>;
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectId: string, filePath: string): Promise<string>;
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;
