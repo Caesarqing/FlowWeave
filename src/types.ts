@@ -696,7 +696,7 @@ export type CustomAgentInput = {
   description?: string;
 };
 
-export type AgentJobType = "architecture-map" | "sequence-diagram" | "module-enrichment" | "implementation-plan";
+export type AgentJobType = "architecture-map" | "sequence-diagram" | "implementation-plan";
 
 export type ToolOpenResult = {
   toolId: RuntimeAgentId;

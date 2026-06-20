@@ -41,7 +41,8 @@ export function ModulePanel({
     files: true,
     symbols: false,
     evidence: false,
-    assessment: true
+    assessment: true,
+    relations: true
   });
   const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
   const fileTree = useMemo(() => buildModuleFileTree(node.files, node.fileRoles), [node.fileRoles, node.files]);
@@ -211,8 +212,7 @@ export function ModulePanel({
         </div>
       </CollapsibleCard>
 
-      <section className="module-card">
-        <h3>{t("module.relations")}</h3>
+      <CollapsibleCard isOpen={openSections.relations} title={t("module.relations")} onToggle={() => toggleSection("relations")}>
         <div className="relation-list">
           {relatedEdges.length > 0 ? (
             relatedEdges.map((edge) => (
@@ -234,7 +234,7 @@ export function ModulePanel({
             <p>{t("module.noConnections")}</p>
           )}
         </div>
-      </section>
+      </CollapsibleCard>
 
       <CollapsibleCard isOpen={openSections.evidence} title={t("module.evidence")} onToggle={() => toggleSection("evidence")}>
         {node.evidence && node.evidence.length > 0 ? (

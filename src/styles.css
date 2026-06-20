@@ -1239,6 +1239,22 @@ button:disabled {
   font-size: 12px;
 }
 
+.canvas-view-tools select,
+.connection-form select,
+.module-edit-form select,
+.settings-row select {
+  appearance: none;
+  padding-right: 26px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 9px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+}
+
 .connection-form textarea,
 .module-edit-form textarea {
   min-height: 92px;
@@ -1461,9 +1477,7 @@ button:disabled {
 
 .utility-identity strong,
 .utility-identity span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .utility-identity span,
@@ -1567,9 +1581,7 @@ button:disabled {
 
 .settings-overview-card small,
 .settings-overview-card strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .settings-overview-card small {
@@ -1622,9 +1634,7 @@ button:disabled {
 .theme-grid strong,
 .theme-grid small {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .settings-row {
@@ -1649,6 +1659,7 @@ button:disabled {
   display: grid;
   gap: 3px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .settings-row strong {
@@ -1657,7 +1668,9 @@ button:disabled {
 
 .settings-row code {
   justify-self: end;
+  max-width: 100%;
   padding: 5px 8px;
+  overflow-wrap: anywhere;
   color: var(--accent);
   background: #030607;
   border: 1px solid var(--line-soft);
@@ -1884,6 +1897,7 @@ button:disabled {
 .module-card h2 {
   margin-top: 6px;
   font-size: 21px;
+  overflow-wrap: anywhere;
 }
 
 .module-card h3 {
@@ -1928,6 +1942,7 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .module-role {
@@ -2046,12 +2061,10 @@ button:disabled {
 
 .assessment-factor strong {
   min-width: 0;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--text);
   font-size: 11px;
   font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .assessment-factor span {
@@ -2139,15 +2152,13 @@ button:disabled {
 .module-file-tree-row strong,
 .module-file-tree-row small {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .module-file-tree-row strong {
   color: var(--text);
   font-size: 11px;
   font-weight: 750;
-  white-space: nowrap;
 }
 
 .module-file-tree-row small {
@@ -2188,8 +2199,7 @@ button:disabled {
 .detail-row span,
 .detail-row strong {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .relation-row span {
@@ -2214,13 +2224,11 @@ button:disabled {
 .relation-row small {
   flex: 1 0 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--dim);
   font-size: 10px;
   font-style: normal;
   line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .detail-row strong {
@@ -2449,7 +2457,7 @@ button:disabled {
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  grid-auto-rows: 1fr;
+  grid-auto-rows: auto;
   gap: 12px;
   min-width: 0;
   align-items: stretch;
@@ -2457,12 +2465,11 @@ button:disabled {
 
 .agent-card {
   display: grid;
-  grid-template-rows: auto minmax(58px, auto) auto auto minmax(96px, 1fr) auto;
+  grid-template-rows: auto auto auto auto minmax(86px, auto) auto auto;
   gap: 12px;
   min-width: 0;
-  min-height: 488px;
   padding: 14px;
-  overflow: hidden;
+  overflow: visible;
   background:
     linear-gradient(180deg, rgba(137, 236, 255, 0.025), transparent 54%),
     var(--panel-soft);
@@ -2551,11 +2558,11 @@ button:disabled {
 
 .agent-card code {
   display: block;
-  overflow: hidden;
+  overflow: auto;
   padding: 9px;
   color: #cbd5e1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
   background: #030607;
   border: 1px solid var(--line-soft);
   border-radius: 6px;
@@ -2580,12 +2587,12 @@ button:disabled {
 }
 
 .agent-connector-box span {
-  overflow: hidden;
+  overflow: visible;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .agent-connector-box code {
@@ -2614,9 +2621,7 @@ button:disabled {
 }
 
 .agent-detail-list span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-health-box {
@@ -2654,7 +2659,7 @@ button:disabled {
 
 .agent-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 8px;
   align-self: end;
 }
@@ -2672,7 +2677,9 @@ button:disabled {
 
 .agent-actions .send-button,
 .agent-actions .ghost-button {
+  height: auto;
   min-height: 36px;
+  white-space: normal;
 }
 
 .default-button {
@@ -2903,8 +2910,8 @@ button:disabled {
 }
 
 .run-summary-strip {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 40%);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -2917,9 +2924,23 @@ button:disabled {
 .run-summary-strip span,
 .run-summary-strip code {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.run-summary-strip > svg {
+  flex: 0 0 auto;
+}
+
+.run-summary-strip > span {
+  flex: 1 1 280px;
+}
+
+.run-summary-strip > code {
+  flex: 1 1 220px;
+}
+
+.run-summary-strip > button {
+  flex: 0 1 auto;
 }
 
 .run-summary-strip code {
@@ -2930,6 +2951,7 @@ button:disabled {
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
+  white-space: normal;
 }
 
 .run-failure-actions {
@@ -2953,6 +2975,7 @@ button:disabled {
 
 .artifact-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--line-soft);
@@ -3759,16 +3782,18 @@ button:disabled {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  max-width: 62%;
+  max-width: min(62%, 720px);
   min-width: 0;
   overflow: hidden;
 }
 
 .workspace-header-primary-actions {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -3785,6 +3810,7 @@ button:disabled {
   align-items: baseline;
   gap: 9px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .workspace-header-title strong,
@@ -3795,12 +3821,14 @@ button:disabled {
 }
 
 .workspace-header-title strong {
+  flex: 0 1 auto;
   color: var(--text);
   font-size: 13px;
   font-weight: 850;
 }
 
 .workspace-header-title span {
+  flex: 1 1 auto;
   color: var(--muted);
   font-size: 11px;
 }
@@ -4365,6 +4393,10 @@ button:disabled {
   .workspace-layout.has-left-panel.has-right-panel:not(.left-panel-collapsed):not(.right-panel-collapsed) {
     grid-template-columns: 210px minmax(0, 1fr) 286px;
   }
+
+  .workspace-header-actions {
+    max-width: 54%;
+  }
 }
 
 @media (max-width: 920px) {
@@ -4391,27 +4423,12 @@ button:disabled {
     right: 10px;
   }
 
-  .canvas-page.has-left-panel:not(.left-panel-collapsed) {
-    grid-template-columns: 210px minmax(0, 1fr);
+  .workspace-header {
+    gap: 8px;
   }
 
-  .canvas-page.has-right-panel:not(.right-panel-collapsed) {
-    grid-template-columns: minmax(0, 1fr) 286px;
-  }
-
-  .canvas-page.has-left-panel.has-right-panel:not(.left-panel-collapsed):not(.right-panel-collapsed) {
-    grid-template-columns: 190px minmax(0, 1fr) 260px;
-  }
-
-  .canvas-page .workspace-layout-panel {
-    position: relative;
-    z-index: auto;
-    top: auto;
-    right: auto;
-    bottom: auto;
-    left: auto;
-    width: auto;
-    box-shadow: none;
+  .workspace-header-actions {
+    max-width: 48%;
   }
 }
 
