@@ -178,12 +178,10 @@ export function useProjectActions({
       replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
       setArtifactStatuses((current) => current ? {
         ...current,
-        architecture: result.architectureMap.source === "agent" || current.architecture === "missing"
-          ? "current"
-          : current.architecture
+        architecture: "current"
       } : current);
       const message = result.warning
-        ? t("status.analysisFallbackWarning", {
+        ? t("status.analysisLocalWarning", {
             count: result.graph.nodes.length,
             agent: result.warning.agentId,
             error: result.warning.message

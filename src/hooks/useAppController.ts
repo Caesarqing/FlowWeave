@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { buildExecutionAssessmentSummary, buildGuidanceMarkdown, buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson, buildTaskJson, downloadText } from "../utils/export-artifacts";
+import {
+  buildAgentPrompt,
+  buildExecutionAssessmentSummary,
+  buildLegacyCanvasGuidance,
+  buildLegacyCanvasTaskJson,
+  buildLegacySequenceGuidance,
+  buildLegacySequenceTaskJson,
+  buildModificationContext,
+  buildModificationContextJson,
+  buildModificationGuidanceMarkdown,
+  downloadText
+} from "../utils/export-artifacts";
 import { useAgentStore } from "../stores/agents.store";
 import { useNavigationStore } from "../stores/navigation.store";
 import { useProjectStore } from "../stores/project.store";
@@ -97,7 +108,6 @@ export function useAppController() {
     setProjectStatus
   });
   const toolActions = useToolActions({
-    buildGuidanceMarkdown: (label, nodes, edges) => buildGuidanceMarkdown(label, nodes, edges, t),
     agents,
     executionMode,
     graphRelations: flow.graphRelations,
@@ -121,44 +131,39 @@ export function useAppController() {
     updateModule: flow.updateModule
   });
 
+  function buildCurrentModificationContext() {
+    return buildModificationContext({
+      projectLabel,
+      projectPath,
+      scanFingerprint,
+      nodes: flow.modules,
+      edges: flow.graphRelations,
+      selectedNodeId: flow.selectedNode?.id,
+      sequenceBundle: sequence.bundle,
+      sequenceInstruction: sequence.instruction,
+      selectedSequenceMessageId: sequence.selectedMessageId,
+      selectedSequenceParticipantId: sequence.selectedParticipantId
+    });
+  }
+
   function exportGuidanceFiles() {
-    if (activePage === "structure") {
-      if (!sequence.bundle) {
-        sequence.setStatus(t("sequence.exportNeedsDiagram"));
-        setLastRunStatus(t("sequence.exportNeedsDiagram"));
-        return;
-      }
-      downloadText("sequence-guidance.md", buildSequenceGuidanceMarkdown(projectLabel, sequence.bundle));
-      downloadText("sequence-task.json", buildSequenceTaskJson(projectLabel, sequence.bundle));
-      setLastRunStatus(t("sequence.exported"));
-      return;
-    }
-    downloadText("guidance.md", buildGuidanceMarkdown(projectLabel, flow.modules, flow.graphRelations, t));
-    downloadText("task.json", buildTaskJson(projectLabel, flow.modules, flow.graphRelations, t));
+    const context = buildCurrentModificationContext();
+    downloadText("flowweave-modification-guidance.md", buildModificationGuidanceMarkdown(context));
+    downloadText("flowweave-modification-context.json", buildModificationContextJson(context));
+    downloadText("guidance.md", buildLegacyCanvasGuidance(context, t));
+    downloadText("task.json", buildLegacyCanvasTaskJson(context, t));
+    downloadText("sequence-guidance.md", buildLegacySequenceGuidance(context));
+    downloadText("sequence-task.json", buildLegacySequenceTaskJson(context));
+    setLastRunStatus(t("sequence.exported"));
   }
 
   async function sendActivePageToTool() {
-    if (activePage === "structure") {
-      await runSequenceToolPlan(selectedAgentId);
-      return;
-    }
-    await toolActions.runToolPlan(selectedAgentId);
-  }
-
-  async function runSequenceToolPlan(agentId: import("../types").RuntimeAgentId) {
     if (!window.flowweave || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
-      sequence.setStatus(t("docs.needDesktop"));
-      return;
-    }
-    if (!sequence.bundle) {
-      const message = t("sequence.sendNeedsDiagram");
-      setLastRunStatus(message);
-      sequence.setStatus(message);
       return;
     }
 
-    const agentName = agents.find((agent) => agent.id === agentId)?.name ?? (agentId === "mock" ? "Mock Agent" : agentId);
+    const agentName = agents.find((agent) => agent.id === selectedAgentId)?.name ?? selectedAgentId;
     if (executionMode === "execute" && !window.confirm(`${t("agent.executeConfirm", {
       agent: agentName,
       project: projectPath
@@ -166,41 +171,41 @@ export function useAppController() {
       setLastRunStatus(t("agent.executeCanceled"));
       return;
     }
-    setLastRunStatus(t("status.sequenceAgentProcessing", { agent: agentName, mode: executionMode }));
+    setLastRunStatus(t("status.agentProcessing", { agent: agentName, mode: executionMode }));
     try {
-      const detection = await window.flowweave.detectAgent(agentId);
-      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...detection, checking: false } }));
+      const detection = await window.flowweave.detectAgent(selectedAgentId);
+      setToolStatuses((current) => ({ ...current, [selectedAgentId]: { ...current[selectedAgentId], ...detection, checking: false } }));
       if (!detection.available) {
         setLastRunStatus(t("status.agentCannotPlan", { agent: agentName }));
         return;
       }
 
+      const context = buildCurrentModificationContext();
       const result = await window.flowweave.runToolPlan({
         projectId,
-        toolId: agentId,
+        toolId: selectedAgentId,
         executionMode,
         confirmedExecute: executionMode === "execute",
         planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
         executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
-        prompt: buildSequencePlanPrompt(projectLabel, sequence.bundle)
+        prompt: buildAgentPrompt(context, "combined-modification-plan", executionMode)
       });
 
-      if (agentId !== "mock") setSelectedAgentId(agentId);
+      setSelectedAgentId(selectedAgentId);
       setToolStatuses((current) => ({
         ...current,
-        [agentId]: {
-          ...current[agentId],
+        [selectedAgentId]: {
+          ...current[selectedAgentId],
           lastRunStatus: result.status,
           lastOutputPath: result.planPath ?? result.logPath ?? result.resultPath
         }
       }));
       setLastRunStatus(`${agentName} ${executionMode} ${result.status} · ${result.planPath ?? result.logPath ?? "no output"}`);
-      sequence.setStatus(t("sequence.sentToAgent", { title: sequence.diagram?.title ?? "Sequence Diagram" }));
       await refreshRuns(result.id);
     } catch (error) {
-      setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], lastRunStatus: "failed" } }));
-      setLastRunStatus(t("status.sequencePlanFailed", { agent: agentName, error: formatErrorMessage(error) }));
+      setToolStatuses((current) => ({ ...current, [selectedAgentId]: { ...current[selectedAgentId], lastRunStatus: "failed" } }));
+      setLastRunStatus(t("status.agentPlanFailed", { agent: agentName, error: formatErrorMessage(error) }));
     }
   }
 

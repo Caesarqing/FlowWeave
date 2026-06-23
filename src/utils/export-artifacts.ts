@@ -1,42 +1,288 @@
-import type { GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle } from "../types";
+import type { ExecutionMode, GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle } from "../types";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
-export function buildGuidanceMarkdown(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
+export type AgentPromptKind =
+  | "combined-modification-plan"
+  | "canvas-implementation-plan"
+  | "sequence-revision"
+  | "execute-change"
+  | "artifact-analysis";
+
+export type FlowWeaveModificationContext = {
+  schemaVersion: 1;
+  source: "FlowWeave";
+  generatedAt: string;
+  project: {
+    label: string;
+    path?: string;
+    scanFingerprint?: string;
+  };
+  canvas: {
+    selectedModuleId?: string;
+    modules: GraphNode[];
+    relations: GraphEdge[];
+  };
+  sequence?: {
+    source: SequenceDiagramBundle["source"];
+    generatedAt: string;
+    activeKind: "architectural";
+    revisionInstruction?: string;
+    selectedMessageId?: string;
+    selectedParticipantId?: string;
+    diagrams: {
+      architectural: ReturnType<typeof serializeSequenceDiagram>;
+    };
+  };
+  userInstructions: {
+    canvas: Array<{ moduleId: string; title: string; guidance: string }>;
+    sequence?: string;
+  };
+};
+
+export type BuildModificationContextInput = {
+  projectLabel: string;
+  projectPath?: string;
+  scanFingerprint?: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  selectedNodeId?: string;
+  sequenceBundle?: SequenceDiagramBundle;
+  sequenceInstruction?: string;
+  selectedSequenceMessageId?: string;
+  selectedSequenceParticipantId?: string;
+  generatedAt?: string;
+};
+
+export function buildModificationContext(input: BuildModificationContextInput): FlowWeaveModificationContext {
+  const sequenceInstruction = input.sequenceInstruction?.trim() || undefined;
+  return {
+    schemaVersion: 1,
+    source: "FlowWeave",
+    generatedAt: input.generatedAt ?? new Date().toISOString(),
+    project: {
+      label: input.projectLabel,
+      path: input.projectPath,
+      scanFingerprint: input.scanFingerprint
+    },
+    canvas: {
+      selectedModuleId: input.selectedNodeId,
+      modules: input.nodes,
+      relations: input.edges
+    },
+    sequence: input.sequenceBundle
+      ? {
+          source: input.sequenceBundle.source,
+          generatedAt: input.sequenceBundle.generatedAt,
+          activeKind: "architectural",
+          revisionInstruction: sequenceInstruction,
+          selectedMessageId: input.selectedSequenceMessageId,
+          selectedParticipantId: input.selectedSequenceParticipantId,
+          diagrams: {
+            architectural: serializeSequenceDiagram(input.sequenceBundle.architectural)
+          }
+        }
+      : undefined,
+    userInstructions: {
+      canvas: input.nodes
+        .filter((node) => node.guidanceDraft.trim())
+        .map((node) => ({ moduleId: node.id, title: node.title, guidance: node.guidanceDraft })),
+      sequence: sequenceInstruction
+    }
+  };
+}
+
+export function buildModificationGuidanceMarkdown(context: FlowWeaveModificationContext): string {
+  return `# FlowWeave Modification Guidance
+
+Generated: ${context.generatedAt}
+Project: ${context.project.label}
+Project path: ${context.project.path ?? "unknown"}
+Scan fingerprint: ${context.project.scanFingerprint ?? "unknown"}
+
+This document is generated from the current Canvas and Sequence Diagram modification context.
+
+## Canvas Guidance
+
+${buildLegacyCanvasGuidance(context)}
+
+## Sequence Diagram Guidance
+
+${context.sequence ? buildLegacySequenceGuidance(context) : "No sequence diagram is currently available."}
+`;
+}
+
+export function buildModificationContextJson(context: FlowWeaveModificationContext): string {
+  return `${JSON.stringify(context, null, 2)}\n`;
+}
+
+export function buildAgentPrompt(
+  context: FlowWeaveModificationContext,
+  promptKind: AgentPromptKind,
+  executionMode: ExecutionMode
+): string {
+  const effectiveKind: AgentPromptKind = executionMode === "execute" && promptKind !== "artifact-analysis" ? "execute-change" : promptKind;
+  return `You are FlowWeave's agent.
+
+Prompt kind: ${effectiveKind}
+Execution mode: ${executionMode}
+
+Rules:
+- Use the JSON context as the source of truth.
+- Do not infer files, APIs, symbols, or behavior not present in context or source code.
+- In plan mode, do not edit files.
+- Return the requested output contract.
+
+Output contract:
+${outputContract(effectiveKind)}
+
+Context JSON:
+\`\`\`json
+${buildModificationContextJson(context).trimEnd()}
+\`\`\``;
+}
+
+export function buildLegacyCanvasGuidance(context: FlowWeaveModificationContext, t?: Translate): string {
   return `# FlowWeave Guidance
 
-Project: ${projectLabel}
+Project: ${context.project.label}
 Target agents: Codex Local / Claude Code / Cursor
 
 ## Graph Rule
 
 Use the module nodes and connection relations as the modification boundary. Prefer files listed on the selected node; follow connected nodes only when the relation requires it.
 
+Selected module: ${context.canvas.selectedModuleId ?? "none"}
+
 ## Module Relations
 
-${edges.map((edge) => `- ${edge.source} -> ${edge.target}: ${relationTitle(edge, t)} (${edge.relation}) - ${relationDescription(edge, t)}${edge.guidanceNote ? ` Guidance: ${edge.guidanceNote}` : ""}`).join("\n")}
+${context.canvas.relations.map((edge) => `- ${edge.source} -> ${edge.target}: ${relationTitle(edge, t)} (${edge.relation}) - ${relationDescription(edge, t)}${edge.guidanceNote ? ` Guidance: ${edge.guidanceNote}` : ""}`).join("\n") || "- No module relations recorded."}
 
 ## Modules
 
-${nodes
-  .map(
-    (node) => `### ${node.title}
+${context.canvas.modules.map(formatCanvasModule).join("\n")}`;
+}
 
-Type: ${node.nodeType}
-Risk: ${node.risk}
-${formatAssessmentMarkdown(node)}
+export function buildLegacyCanvasTaskJson(context: FlowWeaveModificationContext, t?: Translate): string {
+  return `${JSON.stringify(
+    {
+      project: context.project.label,
+      source: "FlowWeave",
+      schemaVersion: context.schemaVersion,
+      selectedModuleId: context.canvas.selectedModuleId,
+      targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
+      outputFiles: [
+        "flowweave-modification-guidance.md",
+        "flowweave-modification-context.json",
+        "guidance.md",
+        "task.json",
+        "sequence-guidance.md",
+        "sequence-task.json",
+        "plan.md"
+      ],
+      modules: context.canvas.modules.map((node) => ({
+        id: node.id,
+        title: node.title,
+        kind: node.kind,
+        nodeType: node.nodeType,
+        risk: node.risk,
+        assessment: node.assessment,
+        description: node.description,
+        files: node.files,
+        guidance: node.guidanceDraft,
+        position: { x: node.x, y: node.y }
+      })),
+      relations: context.canvas.relations.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        relation: edge.relation,
+        relationLabel: relationTitle(edge, t),
+        relationDescription: relationDescription(edge, t),
+        guidanceNote: edge.guidanceNote,
+        evidence: edge.evidence
+      }))
+    },
+    null,
+    2
+  )}\n`;
+}
 
-${node.description}
+export function buildLegacySequenceGuidance(context: FlowWeaveModificationContext): string {
+  if (!context.sequence) return "# FlowWeave Sequence Diagram Guidance\n\nNo sequence diagram is currently available.\n";
+  const currentDiagram = context.sequence.diagrams.architectural;
+  return `# FlowWeave Sequence Diagram Guidance
 
-Files:
-${node.files.map((file) => `- ${file}`).join("\n")}
+Project: ${context.project.label}
+Source: ${context.sequence.source}
+Generated at: ${context.sequence.generatedAt}
+Current diagram: ${currentDiagram.title} (${currentDiagram.kind})
+Revision instruction: ${context.sequence.revisionInstruction ?? "none"}
+Target agents: Codex Local / Claude Code / Cursor
 
-Guidance:
-${node.guidanceDraft}
-`
-  )
-  .join("\n")}
+## Sequence Diagram Rule
+
+Use the architectural sequence diagram JSON as the modification and design context. Keep participant responsibilities, message order, parameters, return values, and code evidence aligned with the project implementation.
+
+## Current Focus
+
+${formatSequenceDiagramMarkdown(currentDiagram)}
+
+## Revision Guidance
+
+- Preserve the persisted .flowweave/sequence-diagrams.json schema.
+- Update participants and messages together when component, class, method, input, or return contracts change.
+- Keep architectural messages at system/component granularity.
 `;
+}
+
+export function buildLegacySequenceTaskJson(context: FlowWeaveModificationContext): string {
+  return `${JSON.stringify(
+    {
+      project: context.project.label,
+      source: "FlowWeave",
+      schemaVersion: context.schemaVersion,
+      artifact: "sequence-diagram",
+      activeKind: "architectural",
+      generatedAt: context.sequence?.generatedAt,
+      revisionInstruction: context.sequence?.revisionInstruction,
+      targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
+      outputFiles: [
+        "flowweave-modification-guidance.md",
+        "flowweave-modification-context.json",
+        "sequence-guidance.md",
+        "sequence-task.json",
+        "plan.md"
+      ],
+      diagrams: context.sequence?.diagrams ?? {}
+    },
+    null,
+    2
+  )}\n`;
+}
+
+export function buildGuidanceMarkdown(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
+  return buildLegacyCanvasGuidance(buildModificationContext({ projectLabel, nodes, edges }), t);
+}
+
+export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
+  return buildLegacyCanvasTaskJson(buildModificationContext({ projectLabel, nodes, edges }), t);
+}
+
+export function buildSequenceGuidanceMarkdown(projectLabel: string, bundle: SequenceDiagramBundle) {
+  return buildLegacySequenceGuidance(buildModificationContext({ projectLabel, nodes: [], edges: [], sequenceBundle: bundle }));
+}
+
+export function buildSequenceTaskJson(projectLabel: string, bundle: SequenceDiagramBundle) {
+  return buildLegacySequenceTaskJson(buildModificationContext({ projectLabel, nodes: [], edges: [], sequenceBundle: bundle }));
+}
+
+export function buildSequencePlanPrompt(projectLabel: string, bundle: SequenceDiagramBundle) {
+  return buildAgentPrompt(
+    buildModificationContext({ projectLabel, nodes: [], edges: [], sequenceBundle: bundle }),
+    "sequence-revision",
+    "plan"
+  );
 }
 
 export function buildExecutionAssessmentSummary(nodes: GraphNode[], edges: GraphEdge[]): string {
@@ -90,6 +336,76 @@ export function scopeGraphForModule(nodes: GraphNode[], edges: GraphEdge[], sele
   };
 }
 
+export function downloadText(filename: string, content: string) {
+  const environment = globalThis as unknown as {
+    Blob: new (parts: string[], options: { type: string }) => unknown;
+    URL: {
+      createObjectURL(blob: unknown): string;
+      revokeObjectURL(url: string): void;
+    };
+    document: {
+      createElement(tagName: "a"): {
+        href: string;
+        download: string;
+        click(): void;
+        remove(): void;
+      };
+      body: {
+        appendChild(node: unknown): void;
+      };
+    };
+  };
+  const blob = new environment.Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = environment.URL.createObjectURL(blob);
+  const anchor = environment.document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  environment.document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  environment.URL.revokeObjectURL(url);
+}
+
+function outputContract(promptKind: AgentPromptKind): string {
+  if (promptKind === "sequence-revision") {
+    return [
+      "Return a complete updated architectural sequence diagram JSON object when revising the diagram.",
+      "If code changes are needed instead, return a plan with affected files, risks, and tests.",
+      "Do not return a patch fragment."
+    ].join("\n");
+  }
+  if (promptKind === "execute-change") {
+    return [
+      "Modify only files justified by the JSON context and source verification.",
+      "Report changed files, verification commands, risks, and any skipped tests."
+    ].join("\n");
+  }
+  if (promptKind === "artifact-analysis") {
+    return "Return the requested FlowWeave artifact JSON only, following the schema in the prompt.";
+  }
+  if (promptKind === "canvas-implementation-plan") {
+    return "Return an implementation plan for the selected Canvas module with affected files, risks, and tests.";
+  }
+  return "Return a combined implementation plan across Canvas and Sequence context with affected files, risks, and tests.";
+}
+
+function formatCanvasModule(node: GraphNode): string {
+  return `### ${node.title}
+
+Type: ${node.nodeType}
+Risk: ${node.risk}
+${formatAssessmentMarkdown(node)}
+
+${node.description}
+
+Files:
+${node.files.map((file) => `- ${file}`).join("\n") || "- No files recorded."}
+
+Guidance:
+${node.guidanceDraft || "No guidance recorded."}
+`;
+}
+
 function formatAssessmentMarkdown(node: GraphNode): string {
   if (!node.assessment) return "Assessment: unavailable";
   const topRiskFactors = node.assessment.risk.factors
@@ -102,45 +418,12 @@ function formatAssessmentMarkdown(node: GraphNode): string {
     `System risk: ${node.assessment.risk.systemLevel}${node.assessment.risk.systemScore === undefined ? "" : ` (${node.assessment.risk.systemScore}/100)`}`,
     `Effective risk: ${node.assessment.risk.effectiveLevel}`,
     `Confidence: ${node.assessment.confidence.level}${node.assessment.confidence.score === undefined ? "" : ` (${node.assessment.confidence.score}/100)`}`,
-    node.assessment.risk.override ? `Manual override: ${node.assessment.risk.override.reason}` : "",
+    node.assessment.risk.override ? `Manual override: ${node.assessment.risk.override.level} (${node.assessment.risk.override.reason})` : "",
     topRiskFactors ? `Risk evidence: ${topRiskFactors}` : "Risk evidence: unavailable",
     node.assessment.confidence.level === "low" || node.assessment.confidence.level === "unknown"
       ? "Guidance: verify source evidence and refresh the semantic scan before broad changes."
       : "Guidance: validate the highest-scoring risk factors and connected modules."
   ].filter(Boolean).join("\n");
-}
-
-export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
-  return JSON.stringify(
-    {
-      project: projectLabel,
-      source: "FlowWeave",
-      targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
-      outputFiles: ["guidance.md", "task.json", "plan.md"],
-      modules: nodes.map((node) => ({
-        id: node.id,
-        title: node.title,
-        kind: node.kind,
-        nodeType: node.nodeType,
-        risk: node.risk,
-        description: node.description,
-        files: node.files,
-        guidance: node.guidanceDraft,
-        position: { x: node.x, y: node.y }
-      })),
-      relations: edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        relation: edge.relation,
-        relationLabel: relationTitle(edge, t),
-        relationDescription: relationDescription(edge, t),
-        guidanceNote: edge.guidanceNote
-      }))
-    },
-    null,
-    2
-  );
 }
 
 function relationTitle(edge: GraphEdge, t?: Translate) {
@@ -151,75 +434,7 @@ function relationDescription(edge: GraphEdge, t?: Translate) {
   return t ? t(`relation.${edge.relation}Description`) : "";
 }
 
-export function buildSequenceGuidanceMarkdown(projectLabel: string, bundle: SequenceDiagramBundle) {
-  const currentDiagram = bundle.architectural;
-  return `# FlowWeave Sequence Diagram Guidance
-
-Project: ${projectLabel}
-Source: ${bundle.source}
-Generated at: ${bundle.generatedAt}
-Current diagram: ${currentDiagram.title} (${currentDiagram.kind})
-Target agents: Codex Local / Claude Code / Cursor
-
-## Sequence Diagram Rule
-
-Use the architectural sequence diagram as the modification and design context. Keep participant responsibilities, message order, parameters, return values, and code evidence aligned with the project implementation.
-
-## Current Focus
-
-${formatSequenceDiagramMarkdown(currentDiagram)}
-
-## Revision Guidance
-
-- Preserve the persisted .flowweave/sequence-diagrams.json schema.
-- Update participants and messages together when component, class, method, input, or return contracts change.
-- Keep architectural messages at system/component granularity.
-`;
-}
-
-export function buildSequenceTaskJson(projectLabel: string, bundle: SequenceDiagramBundle) {
-  return JSON.stringify(
-    {
-      project: projectLabel,
-      source: "FlowWeave",
-      artifact: "sequence-diagram",
-      activeKind: "architectural",
-      generatedAt: bundle.generatedAt,
-      targetTools: ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor"],
-      outputFiles: ["sequence-guidance.md", "sequence-task.json", "plan.md"],
-      diagrams: {
-        architectural: serializeSequenceDiagram(bundle.architectural)
-      }
-    },
-    null,
-    2
-  );
-}
-
-export function buildSequencePlanPrompt(projectLabel: string, bundle: SequenceDiagramBundle) {
-  const diagram = bundle.architectural;
-  return `FlowWeave plan request for Sequence Diagram "${diagram.title}".
-
-Use the current sequence diagram as the modification/design context. Do not require a selected Canvas module node.
-
-${buildSequenceGuidanceMarkdown(projectLabel, bundle)}
-
-Return an implementation plan, affected files, risks, and tests. Do not edit files from FlowWeave.`;
-}
-
-export function downloadText(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-function formatSequenceDiagramMarkdown(diagram: SequenceDiagram) {
+function formatSequenceDiagramMarkdown(diagram: ReturnType<typeof serializeSequenceDiagram>) {
   return `### ${diagram.title}
 
 Kind: ${diagram.kind}

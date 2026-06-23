@@ -396,7 +396,7 @@ export type ArchitectureMap = {
   projectName: string;
   rootPath: string;
   generatedAt: string;
-  source: "agent" | "fallback";
+  source: "agent" | "local";
   metadata?: ArtifactGenerationMetadata;
   architectureStyle?: string;
   modules: ArchitectureModule[];
@@ -406,7 +406,7 @@ export type ArchitectureMap = {
 };
 
 export type SequenceDiagramKind = "architectural";
-export type SequenceDiagramSource = "agent" | "fallback";
+export type SequenceDiagramSource = "agent" | "local";
 export type SequenceParticipantKind =
   | "actor"
   | "component"
@@ -466,8 +466,9 @@ export type SequenceDiagramBundle = {
 };
 
 export type ArtifactGenerationMetadata = {
-  agentId: RuntimeAgentId;
-  runId: string;
+  source?: "agent" | "local";
+  agentId?: RuntimeAgentId;
+  runId?: string;
   generatedAt: string;
   inputFingerprint: string;
   fileCoverage: number;
@@ -866,7 +867,7 @@ export type AgentAnalysisResult = {
   projectMap: ProjectMap;
   moduleMap: ModuleMap;
   apiMap?: ApiMap;
-  source: "agent" | "fallback";
+  source: "agent" | "local";
   agentOutput?: string;
   graph: {
     nodes: GraphNode[];

@@ -63,8 +63,8 @@ describe("workspace panel preferences", () => {
   });
 
   it("keeps canvas side panels in the grid on narrow desktop windows", () => {
-    expect(styles).toContain(".canvas-page.has-right-panel:not(.right-panel-collapsed) {\n    grid-template-columns: minmax(0, 1fr) 286px;");
-    expect(styles).toContain(".canvas-page .workspace-layout-panel {\n    position: relative;");
+    expect(styles).toContain(".workspace-layout.has-right-panel:not(.right-panel-collapsed) {\n  grid-template-columns: minmax(0, 1fr) var(--workspace-right-width);");
+    expect(styles).toContain(".workspace-layout-panel,\n.workspace-layout-main {\n  container-name: workspace-main;\n  container-type: inline-size;\n  position: relative;");
   });
 });
 

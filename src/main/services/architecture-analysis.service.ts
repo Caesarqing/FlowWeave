@@ -25,14 +25,14 @@ import { startToolPlan } from "./agent-run.service";
 import { createScanFingerprint, registerProject } from "./project-registry.service";
 import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
-import { FlowWeaveError, throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
+import { FlowWeaveError, throwIfAborted } from "./flowweave-error.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { assessModules, unknownAssessment } from "../../utils/module-assessment";
 
-const MAX_PROMPT_FILES = 260;
-const MAX_PROMPT_SYMBOLS_PER_FILE = 18;
-const REPRESENTATIVE_FILE_LIMIT = 60;
+const MAX_PROMPT_FILES = 80;
+const MAX_PROMPT_SYMBOLS_PER_FILE = 8;
+const REPRESENTATIVE_FILE_LIMIT = 40;
 const architectureFlights = new Map<string, Promise<ArchitectureAnalysisResult>>();
 
 export async function analyzeArchitecture(
@@ -72,8 +72,10 @@ async function analyzeArchitectureOnce(
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const inputFingerprint = project.scanFingerprint ?? createScanFingerprint(representativeFacts);
   const prompt = buildArchitecturePrompt(representativeFacts);
+  const localArchitectureBase = createLocalArchitectureMap(project, facts, "local");
+  const localQuality = validateArchitectureMap(localArchitectureBase, facts);
   const localArchitecture = assessArchitectureMap(
-    createFallbackArchitectureMap(project, facts, "fallback"),
+    withLocalArchitectureMetadata(localArchitectureBase, inputFingerprint, localQuality),
     index,
     inputFingerprint
   );
@@ -86,7 +88,7 @@ async function analyzeArchitectureOnce(
   });
 
   if (toolId === "mock") {
-    const agentOutput = mockArchitectureJson(createFallbackArchitectureMap(project, representativeFacts, "agent"));
+    const agentOutput = mockArchitectureJson(createLocalArchitectureMap(project, representativeFacts, "agent"));
     const parsed = parseArchitectureJson(agentOutput, project, facts);
     if (!parsed) return failedArchitectureResult(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", []);
     const quality = validateArchitectureMap(parsed, representativeFacts);
@@ -101,86 +103,18 @@ async function analyzeArchitectureOnce(
     return architectureMapToResult(architectureMap, "mock");
   }
 
-  const projectId = await registerProject(project.rootPath);
-  const runIds: string[] = [];
-  try {
-    const firstRun = await startToolPlan({
-      projectId,
-      toolId,
-      prompt,
-      executionMode: "plan",
-      purpose: "artifact-analysis",
-      signal: options?.signal
-    });
-    runIds.push(firstRun.id);
-    throwIfRunCanceled(firstRun, "Architecture analysis", options?.signal);
-    if (firstRun.status !== "completed") {
-      return publishLocalArchitecture(
-        project.rootPath,
-        localArchitecture,
-        failureFromRun(toolId, firstRun, runIds)
-      );
-    }
-    const firstOutput = firstRun.outputText ?? collectStdout(firstRun.events);
-    const firstParsed = parseArchitectureJson(firstOutput, project, facts);
-    const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
-    if (firstParsed && firstQuality?.valid) {
-      const architectureMap = assessArchitectureMap(
-        withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality),
-        index,
-        inputFingerprint
-      );
-      await writeArchitectureArtifacts(project.rootPath, architectureMap);
-      return architectureMapToResult(architectureMap, firstRun.id);
-    }
-
-    const firstFailure = firstParsed ? firstQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Agent returned invalid architecture JSON.";
-    const retry = await startToolPlan({
-      projectId,
-      toolId,
-      prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
-      executionMode: "plan",
-      purpose: "artifact-analysis",
-      signal: options?.signal
-    });
-    runIds.push(retry.id);
-    throwIfRunCanceled(retry, "Architecture analysis", options?.signal);
-    if (retry.status !== "completed") {
-      return publishLocalArchitecture(
-        project.rootPath,
-        localArchitecture,
-        failureFromRun(toolId, retry, runIds, firstFailure)
-      );
-    }
-    const retryOutput = collectStdout(retry.events);
-    const retryParsed = parseArchitectureJson(retryOutput, project, facts);
-    const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
-    if (!retryParsed || !retryQuality?.valid) {
-      const retryFailure = retryParsed ? retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Repair run returned invalid architecture JSON.";
-      return publishLocalArchitecture(project.rootPath, localArchitecture, {
-        ...failedArchitectureResult(toolId, retryParsed ? "quality-rejected" : "invalid-output", retryFailure, runIds, firstFailure, retryFailure).error,
-        category: "invalid-output",
-        transient: false,
-        technicalDetails: retryOutput.slice(0, 4_000)
+  throwIfAborted(options?.signal, "Architecture analysis");
+  await writeLocalArchitectureArtifacts(project.rootPath, localArchitecture);
+  void enhanceArchitectureWithAgent(project, toolId, prompt, facts, representativeFacts, index, inputFingerprint)
+    .catch((error: unknown) => {
+      if (error instanceof FlowWeaveError && error.category === "canceled") return;
+      console.warn("FlowWeave architecture Agent enhancement failed.", {
+        projectPath: project.rootPath,
+        agentId: toolId,
+        reason: formatError(error)
       });
-    }
-    const architectureMap = assessArchitectureMap(
-      withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality),
-      index,
-      inputFingerprint
-    );
-    throwIfAborted(options?.signal, "Architecture analysis");
-    await writeArchitectureArtifacts(project.rootPath, architectureMap);
-    return architectureMapToResult(architectureMap, retry.id);
-  } catch (error) {
-    if (error instanceof FlowWeaveError && error.category === "canceled") throw error;
-    return publishLocalArchitecture(project.rootPath, localArchitecture, {
-      ...failedArchitectureResult(toolId, "agent-failed", formatError(error), runIds).error,
-      category: "process",
-      transient: false,
-      technicalDetails: error instanceof Error ? error.stack : undefined
     });
-  }
+  return architectureMapToResult(localArchitecture);
 }
 
 export async function readArchitectureMap(projectPath: string): Promise<ArchitectureMap | undefined> {
@@ -190,7 +124,7 @@ export async function readArchitectureMap(projectPath: string): Promise<Architec
   if (!isArchitectureMap(value)) {
     throw new Error(`FlowWeave architecture artifact is invalid and was preserved: ${architecturePath}`);
   }
-  return migrateArchitectureAssessments(value);
+  return migrateLegacyArchitectureSource(migrateArchitectureAssessments(value));
 }
 
 export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
@@ -286,22 +220,62 @@ export function architectureMapToResult(architectureMap: ArchitectureMap, runId?
   };
 }
 
-export async function publishLocalArchitecture(
-  projectPath: string,
-  architectureMap: ArchitectureMap,
-  warning: import("../../types").AnalysisFailure
-): Promise<ArchitectureAnalysisResult> {
+async function writeLocalArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap): Promise<void> {
   const previous = await readArchitectureMap(projectPath);
-  if (previous?.source !== "agent") {
-    await writeArchitectureArtifacts(projectPath, architectureMap);
+  if (previous?.source === "agent") return;
+  await writeArchitectureArtifacts(projectPath, architectureMap);
+}
+
+async function enhanceArchitectureWithAgent(
+  project: CodeflowProject,
+  toolId: RuntimeAgentId,
+  prompt: string,
+  facts: ProjectStructureFacts,
+  representativeFacts: ProjectStructureFacts,
+  index: import("../../types").SemanticIndex,
+  inputFingerprint: string
+): Promise<void> {
+  const projectId = await registerProject(project.rootPath);
+  const firstRun = await startToolPlan({
+    projectId,
+    toolId,
+    prompt,
+    executionMode: "plan",
+    purpose: "artifact-analysis"
+  });
+  if (firstRun.status !== "completed") return;
+  const firstOutput = firstRun.outputText ?? collectStdout(firstRun.events);
+  const firstParsed = parseArchitectureJson(firstOutput, project, facts);
+  const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
+  if (firstParsed && firstQuality?.valid) {
+    const architectureMap = assessArchitectureMap(
+      withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality),
+      index,
+      inputFingerprint
+    );
+    await writeArchitectureArtifacts(project.rootPath, architectureMap);
+    return;
   }
-  return {
-    outcome: "generated",
-    architectureMap,
-    graph: architectureMapToGraph(architectureMap),
-    runId: warning.runId,
-    warning
-  };
+
+  const firstFailure = firstParsed ? firstQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Agent returned invalid architecture JSON.";
+  const retry = await startToolPlan({
+    projectId,
+    toolId,
+    prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
+    executionMode: "plan",
+    purpose: "artifact-analysis"
+  });
+  if (retry.status !== "completed") return;
+  const retryOutput = collectStdout(retry.events);
+  const retryParsed = parseArchitectureJson(retryOutput, project, facts);
+  const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
+  if (!retryParsed || !retryQuality?.valid) return;
+  const architectureMap = assessArchitectureMap(
+    withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality),
+    index,
+    inputFingerprint
+  );
+  await writeArchitectureArtifacts(project.rootPath, architectureMap);
 }
 
 export function architectureMapToGraph(architectureMap: ArchitectureMap): { nodes: GraphNode[]; edges: GraphEdge[] } {
@@ -447,8 +421,30 @@ function withArchitectureMetadata(
     source: "agent",
     generatedAt,
     metadata: {
+      source: "agent",
       agentId,
       runId,
+      generatedAt,
+      inputFingerprint,
+      fileCoverage: quality.fileCoverage,
+      evidenceCoverage: quality.evidenceCoverage
+    }
+  };
+}
+
+function withLocalArchitectureMetadata(
+  architectureMap: ArchitectureMap,
+  inputFingerprint: string,
+  quality: { fileCoverage: number; evidenceCoverage: number }
+): ArchitectureMap {
+  const generatedAt = new Date().toISOString();
+  return {
+    ...architectureMap,
+    version: 2,
+    source: "local",
+    generatedAt,
+    metadata: {
+      source: "local",
       generatedAt,
       inputFingerprint,
       fileCoverage: quality.fileCoverage,
@@ -479,25 +475,6 @@ function failedArchitectureResult(
   };
 }
 
-function failureFromRun(
-  agentId: RuntimeAgentId,
-  run: Awaited<ReturnType<typeof startToolPlan>>,
-  runIds: string[],
-  firstFailure?: string
-): import("../../types").AnalysisFailure {
-  return {
-    code: "agent-failed",
-    message: run.failure?.message ?? run.stderr ?? run.summary ?? "Agent architecture analysis failed.",
-    agentId,
-    category: run.failure?.code,
-    transient: run.failure?.transient,
-    technicalDetails: run.failure?.providerDetails,
-    runId: run.id,
-    attemptRunIds: runIds,
-    firstFailure
-  };
-}
-
 function buildArchitectureRepairPrompt(originalPrompt: string, output: string, failure: string): string {
   return `${originalPrompt}
 
@@ -516,7 +493,7 @@ function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createFallbackArchitectureMap(project: CodeflowProject, facts: ProjectStructureFacts, source: ArchitectureMap["source"]): ArchitectureMap {
+function createLocalArchitectureMap(project: CodeflowProject, facts: ProjectStructureFacts, source: ArchitectureMap["source"]): ArchitectureMap {
   const groups = new Map<string, FileInsight[]>();
   for (const file of facts.files) {
     const key = fallbackModuleId(file, facts);
@@ -679,17 +656,17 @@ function compactFactsForPrompt(facts: ProjectStructureFacts) {
     files: facts.files.slice(0, MAX_PROMPT_FILES).map((file) => ({
       path: file.path,
       language: file.language,
-      imports: file.imports.slice(0, 40),
-      exports: file.exports.slice(0, 30),
+      imports: file.imports.slice(0, 16),
+      exports: file.exports.slice(0, 12),
       symbols: file.symbols.slice(0, MAX_PROMPT_SYMBOLS_PER_FILE).map((symbol) => ({
         name: symbol.name,
         kind: symbol.kind,
         exported: symbol.exported
       })),
-      calls: file.calls.slice(0, 35),
-      externalCalls: file.externalCalls.slice(0, 20)
+      calls: file.calls.slice(0, 12),
+      externalCalls: file.externalCalls.slice(0, 8)
     })),
-    relations: facts.relations?.slice(0, 500)
+    relations: facts.relations?.slice(0, 120)
   };
 }
 
@@ -1088,6 +1065,12 @@ function migrateArchitectureAssessments(architectureMap: ArchitectureMap): Archi
       };
     })
   };
+}
+
+function migrateLegacyArchitectureSource(architectureMap: ArchitectureMap): ArchitectureMap {
+  const legacySource = (architectureMap as unknown as { source?: string }).source;
+  if (legacySource !== "fallback") return architectureMap;
+  return { ...architectureMap, source: "local", metadata: undefined };
 }
 
 function stringOrUndefined(value: unknown) {

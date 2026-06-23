@@ -133,7 +133,7 @@ describe("i18n translations", () => {
         description: "Inferred sequence relation from available project structure.",
         input: "project context",
         output: "next step result",
-        evidence: [{ filePath: "src/a.ts", detail: "Fallback sequence participant." }]
+        evidence: [{ filePath: "src/a.ts", detail: "Inferred sequence participant." }]
       }],
       evidence: []
     };

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { analyzeProject, buildAnalysisPrompt } from "../../src/main/services/agent-analysis.service";
+import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
 import type { CodeflowProject } from "../../src/types";
 
 describe("agent-analysis.service", () => {
@@ -27,6 +28,35 @@ describe("agent-analysis.service", () => {
     expect(result.source).toBe("agent");
     expect(result.graph.nodes.length).toBeGreaterThan(0);
     expect(result.moduleMap.modules[0].files).toContain("src/auth/index.ts");
+  });
+
+  it("reports local source when project analysis returns a local semantic graph", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-analysis-local-agent-"));
+    const root = await mkdtemp(join(tmpdir(), "flowweave-analysis-local-"));
+    const scriptPath = join(configRoot, "architecture-agent.mjs");
+    await mkdir(join(root, "src/auth"), { recursive: true });
+    await writeFile(join(root, "src/auth/index.ts"), "export const auth = true;\n");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      [
+        "process.stdin.resume();",
+        "process.stdin.on('end', () => {",
+        "  console.log(JSON.stringify({ architectureStyle: 'layered service', modules: [], relationships: [] }));",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Local Analysis Agent",
+      command: process.execPath,
+      args: [scriptPath]
+    });
+
+    const result = await analyzeProject(projectFixture(root), agent.id);
+
+    expect(result.source).toBe("local");
+    expect(result.graph.nodes.length).toBeGreaterThan(0);
   });
 });
 

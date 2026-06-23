@@ -150,16 +150,15 @@ describe("sequence-diagram.service", () => {
     const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
     const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
-    expect(result.outcome).toBe("cached");
-    if (result.outcome !== "cached") throw new Error("Expected cached sequence result.");
-    expect(result.error.message).toContain("read-only");
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error("Expected generated sequence result.");
     expect(result.bundle.architectural.title).toBe("Existing Architectural");
     expect(stored.generatedAt).toBe(existing.generatedAt);
     expect(stored.architectural.title).toBe("Existing Architectural");
   });
 
   it("writes local semantic diagrams when agent output is invalid and no bundle exists", async () => {
-    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-fallback-agent-"));
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-local-agent-"));
     const root = await createFixtureFiles();
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
     configureAgentRegistry(configRoot);
@@ -174,27 +173,36 @@ describe("sequence-diagram.service", () => {
       "utf8"
     );
     const agent = await saveCustomAgent({
-      name: "Fallback Sequence Agent",
+      name: "Local Sequence Agent",
       command: process.execPath,
       args: [scriptPath]
     });
 
     const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const stored = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error("Expected local sequence generation.");
-    expect(result.bundle.source).toBe("fallback");
-    expect(result.warning?.message).toContain("read-only");
-    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).resolves.toContain('"source": "fallback"');
+    expect(result.bundle.source).toBe("local");
+    expect(result.bundle.metadata).toMatchObject({
+      source: "local",
+      inputFingerprint: expect.any(String)
+    });
+    expect(stored.metadata).toMatchObject({
+      source: "local",
+      inputFingerprint: result.bundle.metadata?.inputFingerprint
+    });
+    expect(result.warning).toBeUndefined();
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).resolves.toContain('"source": "local"');
   });
 
-  it("regenerates local fallback diagrams instead of reusing stale fallback cache", async () => {
-    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-refresh-fallback-agent-"));
+  it("regenerates local diagrams instead of reusing stale local cache", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-refresh-local-agent-"));
     const root = await createFixtureFiles();
     const flowweaveRoot = join(root, FLOWWEAVE_DIR);
     await mkdir(flowweaveRoot, { recursive: true });
-    const staleFallback = { ...existingBundle(root), source: "fallback" as const };
-    await writeFile(join(flowweaveRoot, "sequence-diagrams.json"), `${JSON.stringify(staleFallback, null, 2)}\n`, "utf8");
+    const staleLocal = { ...existingBundle(root), source: "local" as const };
+    await writeFile(join(flowweaveRoot, "sequence-diagrams.json"), `${JSON.stringify(staleLocal, null, 2)}\n`, "utf8");
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
     configureAgentRegistry(configRoot);
     await writeFile(
@@ -208,7 +216,7 @@ describe("sequence-diagram.service", () => {
       "utf8"
     );
     const agent = await saveCustomAgent({
-      name: "Refresh Fallback Sequence Agent",
+      name: "Refresh Local Sequence Agent",
       command: process.execPath,
       args: [scriptPath]
     });
@@ -217,12 +225,26 @@ describe("sequence-diagram.service", () => {
     const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
     expect(result.outcome).toBe("generated");
-    if (result.outcome !== "generated") throw new Error("Expected refreshed fallback generation.");
-    expect(result.warning?.message).toContain("read-only");
-    expect(result.bundle.source).toBe("fallback");
-    expect(result.bundle.generatedAt).not.toBe(staleFallback.generatedAt);
+    if (result.outcome !== "generated") throw new Error("Expected refreshed local generation.");
+    expect(result.warning).toBeUndefined();
+    expect(result.bundle.source).toBe("local");
+    expect(result.bundle.generatedAt).not.toBe(staleLocal.generatedAt);
     expect(stored.generatedAt).toBe(result.bundle.generatedAt);
     expect(stored.architectural.title).not.toBe("Existing Architectural");
+  });
+
+  it("reads legacy fallback bundles as local sequence diagrams", async () => {
+    const root = await createFixtureFiles();
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    await writeFile(
+      join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"),
+      `${JSON.stringify({ ...existingBundle(root), source: "fallback" }, null, 2)}\n`,
+      "utf8"
+    );
+
+    const bundle = await readSequenceDiagrams(root);
+
+    expect(bundle?.source).toBe("local");
   });
 
   it("returns generated when valid output is parsed and written", async () => {
@@ -270,9 +292,14 @@ describe("sequence-diagram.service", () => {
     const generated = await generateSequenceDiagrams(project, "mock");
     if (generated.outcome !== "generated") throw new Error(generated.error.message);
     const revised = await reviseSequenceDiagram(project, "mock", "split payment into authorize and capture");
+    const context = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "docs", "modification-context.json"), "utf8"));
+    const guidance = await readFile(join(root, FLOWWEAVE_DIR, "docs", "modification-guidance.md"), "utf8");
 
     expect(generated.bundle.architectural.summary).not.toBe(revised.architectural.summary);
     expect(revised.architectural.summary).toContain("split payment into authorize and capture");
+    expect(context.sequence.revisionInstruction).toBe("split payment into authorize and capture");
+    expect(context.userInstructions.sequence).toBe("split payment into authorize and capture");
+    expect(guidance).toContain("split payment into authorize and capture");
   });
 
   it("does not publish sequence artifacts after cancellation", async () => {

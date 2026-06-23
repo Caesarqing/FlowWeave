@@ -17,7 +17,7 @@ export async function analyzeProject(project: CodeflowProject, toolId: RuntimeAg
   return {
     projectMap: architectureMapToProjectMap(architecture.architectureMap),
     moduleMap: architectureMapToModuleMap(architecture.architectureMap),
-    source: "agent",
+    source: architecture.architectureMap.source,
     graph: architecture.graph
   };
 }

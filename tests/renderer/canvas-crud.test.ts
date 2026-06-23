@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GraphEdge, GraphNode } from "../../src/types";
+import {
+  buildAgentPrompt,
+  buildLegacyCanvasTaskJson,
+  buildModificationContext,
+  buildModificationContextJson,
+  buildModificationGuidanceMarkdown
+} from "../../src/utils/export-artifacts";
 import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../../src/utils/canvas-graph-crud";
 import { buildModuleFileTree } from "../../src/utils/module-file-tree";
 import { relationOptions, relationStyle } from "../../src/utils/relation-styles";
@@ -109,6 +116,63 @@ describe("module file tree", () => {
       type: "folder",
       role: "HTTP entrypoint, plus 1 related responsibilities."
     });
+  });
+});
+
+describe("modification guidance docs", () => {
+  it("serializes canvas guidance, relations, risk overrides, and prompt kind", () => {
+    const [api, service, repo] = modulesFixture();
+    const context = buildModificationContext({
+      projectLabel: "Fixture",
+      projectPath: "/tmp/project",
+      scanFingerprint: "scan-test",
+      nodes: [
+        {
+          ...api,
+          guidanceDraft: "Keep controller edits isolated.",
+          assessment: {
+            ...api.assessment!,
+            risk: {
+              ...api.assessment!.risk,
+              override: {
+                level: "high",
+                reason: "Public API contract is changing.",
+                createdAt: "2026-06-23T00:00:00.000Z"
+              }
+            }
+          }
+        },
+        service,
+        repo
+      ],
+      edges: [
+        {
+          id: "api-service",
+          source: "api",
+          target: "service",
+          relation: "calls",
+          guidanceNote: "Service contract may need updates."
+        }
+      ],
+      selectedNodeId: "api",
+      generatedAt: "2026-06-23T00:00:00.000Z"
+    });
+
+    const markdown = buildModificationGuidanceMarkdown(context);
+    const contextJson = JSON.parse(buildModificationContextJson(context));
+    const legacyTask = JSON.parse(buildLegacyCanvasTaskJson(context));
+    const prompt = buildAgentPrompt(context, "canvas-implementation-plan", "plan");
+
+    expect(markdown).toContain("# FlowWeave Modification Guidance");
+    expect(markdown).toContain("Keep controller edits isolated.");
+    expect(markdown).toContain("Manual override: high (Public API contract is changing.)");
+    expect(markdown).toContain("api -> service: calls");
+    expect(markdown).toContain("Guidance: Service contract may need updates.");
+    expect(contextJson.canvas.selectedModuleId).toBe("api");
+    expect(contextJson.userInstructions.canvas[0].guidance).toBe("Keep controller edits isolated.");
+    expect(legacyTask.modules[0].assessment.risk.override.reason).toBe("Public API contract is changing.");
+    expect(prompt).toContain("Prompt kind: canvas-implementation-plan");
+    expect(prompt).toContain("Context JSON:");
   });
 });
 

@@ -199,11 +199,20 @@ describe("architecture-analysis.service", () => {
 
     const result = await analyzeArchitecture(projectFixture(root), agent.id);
     const summaries = await listRunSummaries(root);
+    const stored = await readArchitectureMap(root);
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error("Expected local analysis.");
-    expect(result.architectureMap.source).toBe("fallback");
-    expect(result.warning?.message).toContain("verifiable read-only");
+    expect(result.architectureMap.source).toBe("local");
+    expect(result.architectureMap.metadata).toMatchObject({
+      source: "local",
+      inputFingerprint: expect.any(String)
+    });
+    expect(stored?.metadata).toMatchObject({
+      source: "local",
+      inputFingerprint: result.architectureMap.metadata?.inputFingerprint
+    });
+    expect(result.warning).toBeUndefined();
     expect(summaries).toHaveLength(0);
   });
 
@@ -243,16 +252,30 @@ describe("architecture-analysis.service", () => {
 
       expect(result.outcome).toBe("generated");
       if (result.outcome !== "generated") throw new Error("Expected local architecture.");
-      expect(result.architectureMap.source).toBe("fallback");
-      expect(result.warning).toMatchObject({
-        category: "connection",
-        transient: true
+      expect(result.architectureMap.source).toBe("local");
+      expect(result.architectureMap.metadata).toMatchObject({
+        source: "local",
+        inputFingerprint: expect.any(String)
       });
+      expect(result.warning).toBeUndefined();
       expect(stored?.source).toBe("agent");
       expect(stored?.metadata?.agentId).toBe("mock");
     } finally {
       process.env.PATH = originalPath;
     }
+  });
+
+  it("reads legacy fallback architecture artifacts as local maps", async () => {
+    const root = await createFixtureFiles();
+    const trusted = await analyzeArchitecture(projectFixture(root), "mock");
+    if (trusted.outcome !== "generated") throw new Error("Expected trusted architecture.");
+    const artifactPath = join(root, FLOWWEAVE_DIR, "architecture-map.json");
+    const artifact = JSON.parse(await readFile(artifactPath, "utf8"));
+    await writeFile(artifactPath, `${JSON.stringify({ ...artifact, source: "fallback", metadata: undefined }, null, 2)}\n`, "utf8");
+
+    const stored = await readArchitectureMap(root);
+
+    expect(stored?.source).toBe("local");
   });
 });
 

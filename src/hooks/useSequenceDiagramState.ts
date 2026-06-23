@@ -215,9 +215,7 @@ function isCancellationError(error: unknown) {
 
 export function sequenceArtifactStateFromGenerationResult(result: SequenceDiagramGenerationResult): ProjectArtifactState {
   if (result.outcome === "failed") return "failed";
-  if (result.outcome === "cached") return "failed";
-  if (result.warning) return "failed";
-  return result.bundle.source === "fallback" ? "failed" : "current";
+  return result.bundle ? "current" : "failed";
 }
 
 function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (key: string, params?: Record<string, string | number>) => string) {
@@ -231,7 +229,7 @@ function generationStatusMessage(result: SequenceDiagramGenerationResult, t: (ke
     return t("sequence.cached", { warning: ` ${result.error.message}` });
   }
   if (result.warning) {
-    return t("sequence.fallback", { counts, warning: ` ${result.warning.message}` });
+    return t("sequence.localWithAgentWarning", { counts, warning: ` ${result.warning.message}` });
   }
   return t("sequence.generated", { counts });
 }

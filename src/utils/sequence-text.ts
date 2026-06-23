@@ -51,20 +51,20 @@ function localizeMessage(message: SequenceMessage, diagram: SequenceDiagram, t: 
   return {
     ...message,
     label: collaborationMatch
-      ? t("structure.fallbackMessage", { from, to })
+      ? t("structure.localInferredMessage", { from, to })
       : importMatch
         ? t("structure.imports", { path: importMatch[1] })
         : message.label,
     description: message.description === "Inferred sequence relation from available project structure."
-      ? t("structure.fallbackMessageDescription")
+      ? t("structure.localInferredMessageDescription")
       : message.description,
     input: message.input === "project context"
-      ? t("structure.fallbackInput")
+      ? t("structure.localInferredInput")
       : message.input === "inferred from caller context"
         ? t("structure.inferredCallerInput")
         : message.input,
     output: message.output === "next step result"
-      ? t("structure.fallbackOutput")
+      ? t("structure.localInferredOutput")
       : message.output === "inferred return value"
         ? t("structure.inferredReturnValue")
         : message.output,
@@ -76,7 +76,7 @@ function localizeMessage(message: SequenceMessage, diagram: SequenceDiagram, t: 
 }
 
 function localizedEvidenceDetail(detail: string, t: Translate): string {
-  if (detail === "Fallback sequence participant.") return t("structure.fallbackEvidence");
+  if (detail === "Inferred sequence participant.") return t("structure.localInferredEvidence");
   const importMatch = /^Import reference: (.+)$/.exec(detail);
   if (importMatch) return t("structure.importReference", { path: importMatch[1] });
   const symbolsMatch = /^Symbols: (.+)$/.exec(detail);

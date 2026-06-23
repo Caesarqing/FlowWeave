@@ -1,10 +1,9 @@
 import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolUiStatus } from "../types";
 import { useI18n } from "../utils/i18n";
 import { usePreferencesStore } from "../stores/preferences.store";
-import { buildExecutionAssessmentSummary, scopeGraphForModule } from "../utils/export-artifacts";
+import { buildAgentPrompt, buildExecutionAssessmentSummary, buildModificationContext, scopeGraphForModule } from "../utils/export-artifacts";
 
 export function useToolActions({
-  buildGuidanceMarkdown,
   agents,
   executionMode,
   graphRelations,
@@ -18,7 +17,6 @@ export function useToolActions({
   setSelectedAgentId,
   setToolStatuses
 }: {
-  buildGuidanceMarkdown: (projectLabel: string, nodes: GraphNode[], edges: GraphEdge[]) => string;
   agents: AgentDefinition[];
   executionMode: ExecutionMode;
   graphRelations: GraphEdge[];
@@ -146,14 +144,17 @@ export function useToolActions({
         planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
         executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
-        prompt: `FlowWeave plan request for module "${selectedNode.title}".
-
-Use this module graph as the modification boundary:
-${buildGuidanceMarkdown(projectLabel, modules, graphRelations)}
-
-${executionMode === "plan"
-  ? "Return an implementation plan, affected files, risks, and tests. Do not edit files."
-  : "Implement the requested module changes, report affected files, risks, and tests."}`
+        prompt: buildAgentPrompt(
+          buildModificationContext({
+            projectLabel,
+            projectPath,
+            nodes: modules,
+            edges: graphRelations,
+            selectedNodeId: selectedNode.id
+          }),
+          "canvas-implementation-plan",
+          executionMode
+        )
       });
 
       if (agentId !== "mock") setSelectedAgentId(agentId);

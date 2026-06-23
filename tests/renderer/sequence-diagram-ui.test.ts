@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildSequenceFlowNodes, filterSequenceDiagram } from "../../src/utils/sequence-diagram-flow";
-import { buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson } from "../../src/utils/export-artifacts";
+import { buildAgentPrompt, buildModificationContext, buildSequenceGuidanceMarkdown, buildSequencePlanPrompt, buildSequenceTaskJson } from "../../src/utils/export-artifacts";
 import { sequenceArtifactStateFromGenerationResult } from "../../src/hooks/useSequenceDiagramState";
 import type { SequenceDiagramBundle } from "../../src/types";
 
@@ -47,12 +47,22 @@ describe("sequence diagram UI helpers", () => {
     expect(task.diagrams.detailedDesign).toBeUndefined();
   });
 
-  it("builds a sequence agent plan prompt without a selected canvas node", () => {
-    const prompt = buildSequencePlanPrompt("Checkout", bundleFixture());
+  it("builds a sequence agent prompt from JSON context", () => {
+    const context = buildModificationContext({
+      projectLabel: "Checkout",
+      nodes: [],
+      edges: [],
+      sequenceBundle: bundleFixture(),
+      sequenceInstruction: "Split payment into authorize and capture"
+    });
+    const prompt = buildAgentPrompt(context, "sequence-revision", "plan");
+    const legacyPrompt = buildSequencePlanPrompt("Checkout", bundleFixture());
 
-    expect(prompt).toContain("Do not require a selected Canvas module node");
+    expect(prompt).toContain("Prompt kind: sequence-revision");
+    expect(prompt).toContain("Context JSON:");
+    expect(prompt).toContain("Split payment into authorize and capture");
     expect(prompt).toContain("Architectural Checkout");
-    expect(prompt).not.toContain('module "');
+    expect(legacyPrompt).toContain("Prompt kind: sequence-revision");
   });
 
   it("filters messages by kind and keeps only their participant endpoints", () => {
@@ -91,20 +101,20 @@ describe("sequence diagram UI helpers", () => {
     expect(structureWorkspaceSource).not.toContain("style={{ minWidth: bounds.width, minHeight: bounds.height }}");
   });
 
-  it("marks cached or fallback sequence generation as failed artifact state", () => {
+  it("marks local sequence generation as a current artifact state", () => {
     const bundle = bundleFixture();
 
     expect(sequenceArtifactStateFromGenerationResult({ outcome: "generated", bundle })).toBe("current");
     expect(sequenceArtifactStateFromGenerationResult({
       outcome: "generated",
-      bundle: { ...bundle, source: "fallback" },
+      bundle: { ...bundle, source: "local" },
       warning: failureFixture()
-    })).toBe("failed");
+    })).toBe("current");
     expect(sequenceArtifactStateFromGenerationResult({
       outcome: "cached",
       bundle,
       error: failureFixture()
-    })).toBe("failed");
+    })).toBe("current");
   });
 
   it("passes the configured plan timeout into sequence agent runs", () => {

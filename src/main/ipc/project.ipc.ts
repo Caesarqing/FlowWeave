@@ -35,6 +35,7 @@ import { writeFlowWeaveProject, writeFlowWeaveProjectPreservingCanvas } from "..
 import { requireEnum, requireInteger, requireObject, requireSafeId, requireString } from "./ipc-validation";
 import { cancelOperation, finishOperation, startOperation, updateOperation } from "../services/operation.service";
 import { exportDiagnostics, recordDiagnostic } from "../services/diagnostic.service";
+import { writeModificationGuidanceDoc } from "../services/modification-doc.service";
 import { handleIpc } from "./ipc-handler";
 
 const TOOL_IDS = ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"] as const;
@@ -162,6 +163,7 @@ export function registerProjectIpc() {
       await rm(temporaryPath, { force: true });
       throw error;
     }
+    await writeModificationGuidanceDoc(projectPath, { ...value, projectPath } as CodeflowCanvas);
     await refreshConnectionWithoutFailing(safeProjectId, projectPath);
     return canvasPath;
   });
@@ -376,7 +378,6 @@ async function artifactStateForFingerprint(projectPath: string, fileName: string
       source?: string;
       metadata?: { inputFingerprint?: string };
     };
-    if (artifact.source === "fallback") return "missing";
     return artifact.metadata?.inputFingerprint === fingerprint ? "current" : "stale";
   } catch (error) {
     return isMissing(error) ? "missing" : "failed";
