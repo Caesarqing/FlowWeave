@@ -107,11 +107,16 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.readSequenceDiagrams, (_event, projectId: unknown) =>
     readSequenceDiagrams(resolveProjectPath(requireString(PROJECT_CHANNELS.readSequenceDiagrams, projectId, "projectId"))));
 
-  handleIpc(PROJECT_CHANNELS.readFile, async (_event, projectId: unknown, filePath: unknown) =>
-    readFile(await resolveProjectFile(
-      requireString(PROJECT_CHANNELS.readFile, projectId, "projectId"),
-      requireString(PROJECT_CHANNELS.readFile, filePath, "filePath")
-    ), "utf8"));
+  handleIpc(PROJECT_CHANNELS.readFile, async (_event, projectId: unknown, filePath: unknown) => {
+    const requestedPath = requireString(PROJECT_CHANNELS.readFile, filePath, "filePath");
+    return readOptionalProjectTextFile(
+      await resolveProjectFile(
+        requireString(PROJECT_CHANNELS.readFile, projectId, "projectId"),
+        requestedPath
+      ),
+      requestedPath
+    );
+  });
 
   handleIpc(PROJECT_CHANNELS.saveDoc, async (_event, projectId: unknown, docId: unknown, content: unknown) => {
     const projectPath = resolveProjectPath(requireString(PROJECT_CHANNELS.saveDoc, projectId, "projectId"));
@@ -402,4 +407,17 @@ function requireRuntimeAgentId(channel: string, value: unknown): RuntimeAgentId 
 
 function isMissing(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+export async function readOptionalProjectTextFile(resolvedPath: string, requestedPath: string): Promise<string | undefined> {
+  try {
+    return await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    if (isMissing(error) && isOptionalFlowWeaveDocPath(requestedPath)) return undefined;
+    throw error;
+  }
+}
+
+function isOptionalFlowWeaveDocPath(filePath: string): boolean {
+  return /^\.flowweave\/docs\/[A-Za-z0-9_-]+\.(md|json)$/.test(filePath);
 }

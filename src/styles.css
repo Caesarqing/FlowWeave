@@ -519,7 +519,10 @@ input:focus-visible {
 .artifact-status-details {
   display: grid;
   gap: 8px;
+  max-height: min(260px, 34dvh);
   padding: 8px 24px 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .artifact-status-list {
@@ -721,6 +724,7 @@ input:focus-visible {
 .project-status {
   min-height: 34px;
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--dim);
   font-size: 11px;
   line-height: 1.5;
@@ -1707,7 +1711,9 @@ button:disabled {
 
 .onboarding-dialog {
   width: min(720px, 100%);
+  max-height: calc(100dvh - 48px);
   padding: 28px;
+  overflow: auto;
   color: var(--text);
   background: var(--panel-strong);
   border: 1px solid var(--line);
@@ -1768,9 +1774,14 @@ button:disabled {
   right: 18px;
   bottom: 18px;
   width: min(440px, calc(100vw - 36px));
+  max-height: calc(100dvh - 36px);
   display: grid;
   gap: 10px;
+  min-width: 0;
   padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--text);
   background: var(--panel-strong);
   border: 1px solid rgba(251, 113, 133, 0.55);
@@ -1779,22 +1790,46 @@ button:disabled {
 }
 
 .error-center header {
+  position: sticky;
+  top: -14px;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin: -14px -14px 0;
+  padding: 14px 14px 8px;
+  background: var(--panel-strong);
 }
 
 .error-center header span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
   color: var(--danger);
   font-weight: 700;
+}
+
+.error-center header .icon-button {
+  flex: 0 0 32px;
+}
+
+.error-center > strong,
+.error-center li,
+.error-center details,
+.error-center > code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .error-center section {
   display: grid;
   gap: 5px;
+  min-width: 0;
 }
 
 .error-center ul {
@@ -1810,8 +1845,14 @@ button:disabled {
   font-size: 12px;
 }
 
+.error-center details {
+  overflow: hidden;
+}
+
 .error-center pre {
-  max-height: 180px;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(240px, 34dvh);
   overflow: auto;
   margin: 8px 0 0;
   padding: 9px;
@@ -1819,6 +1860,9 @@ button:disabled {
   background: #030607;
   border-radius: 6px;
   font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   white-space: pre-wrap;
 }
 
@@ -2342,6 +2386,7 @@ button:disabled {
 
 .bridge-warning {
   padding: 11px 12px;
+  overflow-wrap: anywhere;
   color: #f8d889;
   background: rgba(251, 191, 36, 0.08);
   border: 1px solid rgba(251, 191, 36, 0.28);
@@ -2904,6 +2949,7 @@ button:disabled {
 .empty-state {
   margin: 0;
   padding: 14px;
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
@@ -3153,9 +3199,20 @@ button:disabled {
   display: grid;
   align-content: start;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   padding: 10px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.sequence-detail-stack > *,
+.sequence-detail-stack .module-card,
+.sequence-detail-stack .detail-row {
+  min-width: 0;
 }
 
 .sequence-toolbar {
@@ -3216,6 +3273,7 @@ button:disabled {
 .sequence-filter-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line-soft);
@@ -3247,8 +3305,10 @@ button:disabled {
 
 .sequence-kind-filters {
   display: flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: 5px;
+  min-width: 0;
 }
 
 .sequence-kind-filters button {
@@ -3307,13 +3367,17 @@ button:disabled {
 .sequence-revision-box {
   display: grid;
   gap: 7px;
+  min-width: 0;
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
 }
 
 .sequence-revision-box textarea {
+  width: 100%;
+  max-width: 100%;
   min-height: 138px;
+  min-width: 0;
   resize: vertical;
   color: var(--text);
   background: #020405;
@@ -3326,6 +3390,8 @@ button:disabled {
 
 .sequence-status {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--dim);
   font-size: 11px;
   line-height: 1.55;
@@ -3559,17 +3625,21 @@ button:disabled {
 
 .sequence-empty-state span {
   max-width: 360px;
+  overflow-wrap: anywhere;
   font-size: 12px;
   line-height: 1.55;
 }
 
 .sequence-detail-panel {
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
 .sequence-agent-card {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 @media (max-width: 1280px) {

@@ -937,7 +937,7 @@ export type FlowWeaveApi = {
   generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId, planTimeoutMs?: number): Promise<SequenceDiagramGenerationResult>;
   reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string, planTimeoutMs?: number): Promise<SequenceDiagramBundle>;
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
-  readProjectFile(projectId: string, filePath: string): Promise<string>;
+  readProjectFile(projectId: string, filePath: string): Promise<string | undefined>;
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;
   readCanvas(projectId: string): Promise<CodeflowCanvas | undefined>;
   saveCanvas(projectId: string, canvas: CodeflowCanvas): Promise<string>;

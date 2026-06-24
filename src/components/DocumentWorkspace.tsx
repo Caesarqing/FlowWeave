@@ -31,8 +31,8 @@ export function DocumentWorkspace({ projectId }: { projectId: string }) {
       try {
         const text = await window.flowweave.readProjectFile(projectId, selectedDocPath);
         if (canceled) return;
-        setContent(text);
-        setStatus(t("docs.loaded", { path: selectedDocPath }));
+        setContent(text ?? defaultDocContent(docId, t));
+        setStatus(text === undefined ? t("docs.notSaved") : t("docs.loaded", { path: selectedDocPath }));
       } catch {
         if (canceled) return;
         setContent(defaultDocContent(docId, t));

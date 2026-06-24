@@ -88,7 +88,7 @@ const flowweaveApi = {
   readSequenceDiagrams: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readSequenceDiagrams, projectId) as Promise<SequenceDiagramBundle | undefined>,
   readProjectFile: (projectId: string, filePath: string) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.readFile, projectId, filePath) as Promise<string>,
+    ipcRenderer.invoke(PROJECT_CHANNELS.readFile, projectId, filePath) as Promise<string | undefined>,
   saveFlowWeaveDoc: (projectId: string, docId: string, content: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.saveDoc, projectId, docId, content) as Promise<string>,
   readCanvas: (projectId: string) =>
