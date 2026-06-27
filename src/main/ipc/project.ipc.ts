@@ -6,15 +6,27 @@ import { PROJECT_CHANNELS } from "../../common/ipc-channels";
 import type {
   AnalysisOperation,
   AnalysisProgressUpdate,
+  ArchitectureReviewEvent,
   CodeflowCanvas,
   ProjectArtifactState,
   ProjectArtifactStatuses,
   ProjectScanOptions,
   RuntimeAgentId,
-  ToolId
+  SequenceReviewEvent,
+  ToolId,
+  ModificationAcknowledgementScope,
+  ModificationSnapshot
 } from "../../types";
 import { analyzeProject } from "../services/agent-analysis.service";
 import { analyzeArchitecture, readArchitectureMap } from "../services/architecture-analysis.service";
+import {
+  isArchitectureReviewActive,
+  readArchitectureReviewStatus
+} from "../services/architecture-review.service";
+import {
+  isSequenceReviewActive,
+  readSequenceReviewStatus
+} from "../services/sequence-review.service";
 import { migrateCanvasToScan } from "../services/canvas-migration.service";
 import {
   disableProjectAgentConnection,
@@ -32,10 +44,14 @@ import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram }
 import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { writeFlowWeaveProject, writeFlowWeaveProjectPreservingCanvas } from "../storage/flowweave-store";
-import { requireEnum, requireInteger, requireObject, requireSafeId, requireString } from "./ipc-validation";
+import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString } from "./ipc-validation";
 import { cancelOperation, finishOperation, startOperation, updateOperation } from "../services/operation.service";
 import { exportDiagnostics, recordDiagnostic } from "../services/diagnostic.service";
-import { writeModificationGuidanceDoc } from "../services/modification-doc.service";
+import { writeModificationDocs } from "../services/modification-doc.service";
+import {
+  acknowledgeModificationChanges,
+  readModificationDelta
+} from "../services/modification-delta.service";
 import { handleIpc } from "./ipc-handler";
 
 const TOOL_IDS = ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"] as const;
@@ -128,6 +144,40 @@ export function registerProjectIpc() {
     return docPath;
   });
 
+  handleIpc(PROJECT_CHANNELS.saveModificationDocs, (_event, projectId: unknown, sequenceInstruction: unknown) =>
+    writeModificationDocs(
+      resolveProjectPath(requireString(PROJECT_CHANNELS.saveModificationDocs, projectId, "projectId")),
+      {
+        sequenceInstruction: optionalTrimmedString(
+          PROJECT_CHANNELS.saveModificationDocs,
+          sequenceInstruction,
+          "sequenceInstruction"
+        )
+      }
+    ));
+
+  handleIpc(PROJECT_CHANNELS.readModificationDelta, (_event, projectId: unknown, sequenceInstruction: unknown, canvas: unknown) => {
+    const value = canvas === undefined
+      ? undefined
+      : requireCanvas(PROJECT_CHANNELS.readModificationDelta, canvas);
+    return readModificationDelta(
+      resolveProjectPath(requireString(PROJECT_CHANNELS.readModificationDelta, projectId, "projectId")),
+      optionalTrimmedString(
+        PROJECT_CHANNELS.readModificationDelta,
+        sequenceInstruction,
+        "sequenceInstruction"
+      ) ?? "",
+      value
+    );
+  });
+
+  handleIpc(PROJECT_CHANNELS.acknowledgeModificationChanges, (_event, projectId: unknown, snapshot: unknown, scope: unknown) =>
+    acknowledgeModificationChanges(
+      resolveProjectPath(requireString(PROJECT_CHANNELS.acknowledgeModificationChanges, projectId, "projectId")),
+      requireModificationSnapshot(PROJECT_CHANNELS.acknowledgeModificationChanges, snapshot),
+      requireModificationAcknowledgementScope(PROJECT_CHANNELS.acknowledgeModificationChanges, scope)
+    ));
+
   handleIpc(PROJECT_CHANNELS.readCanvas, async (_event, projectId: unknown) => {
     const result = await readCanvasArtifactState(resolveProjectPath(requireString(PROJECT_CHANNELS.readCanvas, projectId, "projectId")));
     if (result.state === "failed") {
@@ -168,7 +218,6 @@ export function registerProjectIpc() {
       await rm(temporaryPath, { force: true });
       throw error;
     }
-    await writeModificationGuidanceDoc(projectPath, { ...value, projectPath } as CodeflowCanvas);
     await refreshConnectionWithoutFailing(safeProjectId, projectPath);
     return canvasPath;
   });
@@ -200,7 +249,12 @@ async function analyzeArchitectureForProject(
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("architecture-analysis", "Preparing architecture analysis.", sender, async (signal, onProgress) => {
-    const result = await analyzeArchitecture(await scanProject(projectPath), agentId, { signal, onProgress });
+    const result = await analyzeArchitecture(await scanProject(projectPath), agentId, {
+      signal,
+      onProgress,
+      projectId,
+      onArchitectureReview: (reviewEvent) => sendArchitectureReview(sender, reviewEvent)
+    });
     if (result.outcome === "failed") throw new Error(result.error.message);
     return result;
   }, projectPath);
@@ -214,7 +268,13 @@ async function generateSequenceDiagramsForProject(
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram analysis.", sender, async (signal, onProgress) => {
-    const result = await generateSequenceDiagrams(await scanProject(projectPath), agentId, { signal, onProgress, planTimeoutMs });
+    const result = await generateSequenceDiagrams(await scanProject(projectPath), agentId, {
+      signal,
+      onProgress,
+      planTimeoutMs,
+      projectId,
+      onSequenceReview: (reviewEvent) => sendSequenceReview(sender, reviewEvent)
+    });
     if (result.outcome === "failed") throw new Error(result.error.message);
     return result;
   }, projectPath);
@@ -269,6 +329,9 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     const written = canvasRead.state === "failed"
       ? await writeFlowWeaveProjectPreservingCanvas(projectPath, project, graph.nodes, graph.edges, scanFingerprint)
       : await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint, assessedCanvas);
+    if (canvasRead.state !== "failed") {
+      await readModificationDelta(projectPath, "");
+    }
     await refreshConnectionWithoutFailing(projectId, projectPath);
     const artifacts: ProjectArtifactStatuses = {
       project: "current",
@@ -278,6 +341,38 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       architecture: await artifactStateForFingerprint(projectPath, "architecture-map.json", scanFingerprint),
       sequences: await artifactStateForFingerprint(projectPath, "sequence-diagrams.json", scanFingerprint)
     };
+    let architectureReview = await readArchitectureReviewStatus(projectPath, scanFingerprint);
+    if (
+      architectureReview.state === "reviewing" &&
+      architectureReview.reviewId &&
+      architectureReview.agentId &&
+      !isArchitectureReviewActive(architectureReview.reviewId)
+    ) {
+      const resumed = await analyzeArchitecture(project, architectureReview.agentId, {
+        projectId,
+        resumeArchitectureReview: architectureReview,
+        onArchitectureReview: (reviewEvent) => sendArchitectureReview(sender, reviewEvent)
+      });
+      if (resumed.outcome === "generated") {
+        architectureReview = resumed.review;
+      }
+    }
+    let sequenceReview = await readSequenceReviewStatus(projectPath, scanFingerprint);
+    if (
+      sequenceReview.state === "reviewing" &&
+      sequenceReview.reviewId &&
+      sequenceReview.agentId &&
+      !isSequenceReviewActive(sequenceReview.reviewId)
+    ) {
+      const resumed = await generateSequenceDiagrams(project, sequenceReview.agentId, {
+        projectId,
+        resumeSequenceReview: sequenceReview,
+        onSequenceReview: (reviewEvent) => sendSequenceReview(sender, reviewEvent)
+      });
+      if (resumed.outcome === "generated") {
+        sequenceReview = resumed.review;
+      }
+    }
     notify(updateOperation(started.operation.operationId, {
       stage: "completed",
       completed: total,
@@ -285,7 +380,17 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       failed: 0,
       message: "Project scan completed."
     }));
-    return { canceled: false as const, projectId, scanFingerprint, artifacts, project, graph, written };
+    return {
+      canceled: false as const,
+      projectId,
+      scanFingerprint,
+      artifacts,
+      architectureReview,
+      sequenceReview,
+      project,
+      graph,
+      written
+    };
   } catch (error) {
     if (!started.signal.aborted) {
       notify(updateOperation(started.operation.operationId, {
@@ -307,6 +412,18 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     throw error;
   } finally {
     finishOperation(started.operation.operationId);
+  }
+}
+
+function sendArchitectureReview(sender: WebContents, event: ArchitectureReviewEvent): void {
+  if (!sender.isDestroyed()) {
+    sender.send(PROJECT_CHANNELS.architectureReview, event);
+  }
+}
+
+function sendSequenceReview(sender: WebContents, event: SequenceReviewEvent): void {
+  if (!sender.isDestroyed()) {
+    sender.send(PROJECT_CHANNELS.sequenceReview, event);
   }
 }
 
@@ -403,6 +520,37 @@ async function refreshConnectionWithoutFailing(projectId: string, projectPath: s
 function requireRuntimeAgentId(channel: string, value: unknown): RuntimeAgentId {
   if (typeof value === "string" && value.startsWith("custom:") && value.length > 7) return value as RuntimeAgentId;
   return requireEnum(channel, value, "agentId", TOOL_IDS);
+}
+
+function requireCanvas(channel: string, value: unknown): CodeflowCanvas {
+  const canvas = requireObject(channel, value, "canvas") as Partial<CodeflowCanvas>;
+  if (canvas.version !== 3 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
+    throw new Error(`[${channel}] Canvas must be a valid v3 Canvas.`);
+  }
+  return canvas as CodeflowCanvas;
+}
+
+function requireModificationSnapshot(channel: string, value: unknown): ModificationSnapshot {
+  const snapshot = requireObject(channel, value, "snapshot") as Partial<ModificationSnapshot>;
+  if (!snapshot.canvas || !Array.isArray(snapshot.canvas.modules) || !Array.isArray(snapshot.canvas.relations)) {
+    throw new Error(`[${channel}] Modification snapshot must include Canvas modules and relations.`);
+  }
+  return snapshot as ModificationSnapshot;
+}
+
+function requireModificationAcknowledgementScope(
+  channel: string,
+  value: unknown
+): ModificationAcknowledgementScope {
+  const scope = requireObject(channel, value, "scope") as Partial<ModificationAcknowledgementScope>;
+  if (scope.kind === "all" || scope.kind === "sequence") return { kind: scope.kind };
+  if (scope.kind === "module-guidance" && "moduleId" in scope) {
+    return {
+      kind: "module-guidance",
+      moduleId: requireString(channel, scope.moduleId, "scope.moduleId")
+    };
+  }
+  throw new Error(`[${channel}] Unsupported modification acknowledgement scope.`);
 }
 
 function isMissing(error: unknown) {

@@ -58,11 +58,22 @@ export function useRunHistory(projectId: string) {
     }
   }
 
+  async function applySelectedRunArtifact() {
+    if (!window.flowweave || !projectId || !selectedRunId) return;
+    try {
+      const summary = await window.flowweave.applyRunArtifact(projectId, selectedRunId);
+      setLastRunStatus(summary.artifactAdoption?.message ?? t("agent.applyRunArtifactComplete"));
+      await refreshRuns(selectedRunId);
+    } catch (error) {
+      setLastRunStatus(t("agent.applyRunArtifactFailed", { error: formatErrorMessage(error) }));
+    }
+  }
+
   useEffect(() => {
     void refreshRuns();
   }, [projectId]);
 
-  return { openGitReviewFromRun, refreshRuns, selectRun };
+  return { applySelectedRunArtifact, openGitReviewFromRun, refreshRuns, selectRun };
 }
 
 function formatErrorMessage(error: unknown) {

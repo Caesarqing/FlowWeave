@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileCode2, Folder, GitPullRequestArrow, Send, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, FileCode2, Folder, GitPullRequestArrow, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { AssessmentLevel, GraphEdge, GraphNode, GraphNodeType } from "../types";
 import { cn } from "../utils/classnames";
@@ -11,30 +11,31 @@ import {
   localizedModuleGuidance,
   localizedModuleRole
 } from "../utils/module-text";
+import { AgentGuidanceComposer } from "./AgentGuidanceComposer";
 
 const nodeTypeOptions: GraphNodeType[] = ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"];
 const riskOptions: AssessmentLevel[] = ["low", "medium", "high", "unknown"];
 
 export function ModulePanel({
-  dialogText,
   edges,
+  guidanceOperation,
   node,
-  onApplyDialog,
   onDeleteNode,
-  onDialogTextChange,
   onGuidanceChange,
   onModuleChange,
-  onWriteDraft
+  onSaveGuidance,
+  onSendGuidance,
+  sendGuidanceDisabled
 }: {
-  dialogText: string;
   edges: GraphEdge[];
+  guidanceOperation: "save" | "send" | "";
   node: GraphNode;
-  onApplyDialog: () => void;
   onDeleteNode: (nodeId: string) => void;
-  onDialogTextChange: (value: string) => void;
   onGuidanceChange: (value: string) => void;
   onModuleChange: (nodeId: string, patch: Partial<GraphNode>) => void;
-  onWriteDraft: () => void;
+  onSaveGuidance: () => void;
+  onSendGuidance: () => void;
+  sendGuidanceDisabled: boolean;
 }) {
   const { t } = useI18n();
   const [openSections, setOpenSections] = useState({
@@ -251,27 +252,20 @@ export function ModulePanel({
         )}
       </CollapsibleCard>
 
-      <section className="module-card guidance-card">
-        <h3>{t("module.guidanceDraft")}</h3>
-        <textarea value={localizedGuidance} onChange={(event) => onGuidanceChange(event.target.value)} />
-        <label className="dialog-box">
-          <span>{t("module.dialog")}</span>
-          <textarea
-            value={dialogText}
-            onChange={(event) => onDialogTextChange(event.target.value)}
-            placeholder={t("module.dialogPlaceholder")}
-          />
-        </label>
-        <div className="dialog-actions">
-          <button className="ghost-button" type="button" onClick={onApplyDialog}>
-            <Send size={15} />
-            {t("module.writeGuidance")}
-          </button>
-          <button className="send-button" type="button" onClick={onWriteDraft}>
-            {t("module.saveStatus")}
-          </button>
-        </div>
-      </section>
+      <AgentGuidanceComposer
+        disabled={false}
+        isSaving={guidanceOperation === "save"}
+        isSending={guidanceOperation === "send"}
+        placeholder={t("module.guidancePlaceholder")}
+        saveLabel={t("guidance.save")}
+        sendDisabled={sendGuidanceDisabled}
+        sendLabel={t("module.sendCurrentGuidance")}
+        title={t("module.guidance")}
+        value={localizedGuidance}
+        onChange={onGuidanceChange}
+        onSave={onSaveGuidance}
+        onSend={onSendGuidance}
+      />
     </aside>
   );
 }

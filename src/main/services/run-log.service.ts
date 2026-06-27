@@ -4,6 +4,7 @@ import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, Tool
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { getDesktopBridgeDir, readDesktopBridgeResponse } from "../agents/desktop-bridge.adapter";
 import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
+import { adoptArtifactRun } from "./artifact-run-adoption.service";
 
 export type RunPaths = {
   runDir: string;
@@ -78,6 +79,34 @@ export async function readRunArtifact(projectPath: string, runId: string): Promi
   return { summary, prompt, plan, log, result };
 }
 
+export async function applyRunArtifact(projectPath: string, runId: string): Promise<ToolRunSummary> {
+  assertSafeRunId(runId);
+  const runDir = getRunDir(projectPath, runId);
+  const resultText = await readFixedRunFile(runDir, "result.json");
+  if (!resultText.trim()) throw new Error(`FlowWeave run not found: ${runId}`);
+  const result = JSON.parse(resultText) as Partial<ToolRunResult>;
+  const output = await readFixedRunFile(runDir, "plan.md");
+  const adoption = await adoptArtifactRun(projectPath, result, output, "manual");
+  const updated = { ...result, artifactAdoption: adoption };
+  await writeJsonAtomic(join(runDir, "result.json"), updated);
+  const summary = await readRunSummary(projectPath, runId);
+  if (!summary) throw new Error(`FlowWeave run not found after applying artifact: ${runId}`);
+  return summary;
+}
+
+export async function updateRunArtifactAdoption(
+  projectPath: string,
+  runId: string,
+  artifactAdoption: NonNullable<ToolRunResult["artifactAdoption"]>
+): Promise<void> {
+  assertSafeRunId(runId);
+  const runDir = getRunDir(projectPath, runId);
+  const resultText = await readFixedRunFile(runDir, "result.json");
+  if (!resultText.trim()) return;
+  const result = JSON.parse(resultText) as Partial<ToolRunResult>;
+  await writeJsonAtomic(join(runDir, "result.json"), { ...result, artifactAdoption });
+}
+
 async function readRunSummary(projectPath: string, runId: string): Promise<ToolRunSummary | undefined> {
   assertSafeRunId(runId);
   const resultText = await readFixedRunFile(getRunDir(projectPath, runId), "result.json").catch(() => "");
@@ -114,6 +143,10 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
       logPath: result.logPath,
       resultPath: result.resultPath,
       checkpointId: result.checkpointId,
+      artifactTarget: result.artifactTarget,
+      scanFingerprint: result.scanFingerprint,
+      reviewId: result.reviewId,
+      artifactAdoption: result.artifactAdoption,
       failure: result.failure
     };
   } catch {
@@ -128,13 +161,14 @@ async function importDesktopBridgeResponse(
 ): Promise<Partial<ToolRunResult>> {
   const response = await readDesktopBridgeResponse(getDesktopBridgeDir(projectPath, runId));
   if (!response) return result;
-  if (!response.sourcePath.endsWith("response.json")) {
-    throw new Error(`Desktop bridge response.json is required for pending run ${runId}.`);
+  const purpose = isPurpose(result.purpose) ? result.purpose : "implementation-plan";
+  if (purpose === "artifact-analysis" && !response.sourcePath.endsWith("response.json")) {
+    throw new Error(`Desktop bridge response.json is required for artifact-analysis pending run ${runId}.`);
   }
-  if (response.runId !== runId) {
+  if (response.runId !== undefined && response.runId !== runId) {
     throw new Error(`Desktop bridge response runId does not match pending run ${runId}.`);
   }
-  if (!result.projectId || response.projectId !== result.projectId) {
+  if (response.sourcePath.endsWith("response.json") && (!result.projectId || response.projectId !== result.projectId)) {
     throw new Error(`Desktop bridge response projectId does not match pending run ${runId}.`);
   }
   const completedAt = response.completedAt ?? new Date().toISOString();
@@ -149,11 +183,17 @@ async function importDesktopBridgeResponse(
     exitCode: response.status === "completed" ? 0 : 1,
     summary: response.summary
   };
+  const adoption = response.status === "completed"
+    ? await adoptArtifactRun(projectPath, updated, response.content, "auto").catch((error) => ({
+        status: "rejected" as const,
+        message: formatError(error)
+      }))
+    : updated.artifactAdoption;
   await Promise.all([
     writeTextAtomic(join(runDir, "plan.md"), response.content),
-    writeJsonAtomic(join(runDir, "result.json"), updated)
+    writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption })
   ]);
-  return updated;
+  return { ...updated, artifactAdoption: adoption };
 }
 
 function getRunDir(projectPath: string, runId: string) {

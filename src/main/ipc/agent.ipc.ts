@@ -1,7 +1,7 @@
 import { TOOL_CHANNELS } from "../../common/ipc-channels";
 import type { AgentCapability, AgentId, AgentProtocol, CustomAgentInput, RuntimeAgentId } from "../../types";
 import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
-import { listRunSummaries, readRunArtifact } from "../services/run-log.service";
+import { applyRunArtifact, listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
 import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
 import { handleIpc } from "./ipc-handler";
@@ -73,6 +73,15 @@ export function registerAgentIpc() {
         : undefined,
       executionMode: requireEnum(TOOL_CHANNELS.runPlan, options.executionMode, "executionMode", ["plan", "execute"]),
       purpose: requireEnum(TOOL_CHANNELS.runPlan, options.purpose, "purpose", ["implementation-plan", "artifact-analysis"]),
+      artifactTarget: options.purpose === "artifact-analysis"
+        ? requireEnum(TOOL_CHANNELS.runPlan, options.artifactTarget, "artifactTarget", ["architecture-map", "sequence-diagrams", "sequence-revision"]) as StartToolPlanOptions["artifactTarget"]
+        : undefined,
+      scanFingerprint: options.purpose === "artifact-analysis"
+        ? requireBoundedString(TOOL_CHANNELS.runPlan, options.scanFingerprint, "scanFingerprint", 200)
+        : undefined,
+      reviewId: options.purpose === "artifact-analysis" && options.reviewId !== undefined
+        ? requireBoundedString(TOOL_CHANNELS.runPlan, options.reviewId, "reviewId", 200)
+        : undefined,
       model: options.model === undefined
         ? undefined
         : requireBoundedString(TOOL_CHANNELS.runPlan, options.model, "model", 200),
@@ -96,6 +105,13 @@ export function registerAgentIpc() {
     return readRunArtifact(
       resolveProjectPath(requireString(TOOL_CHANNELS.readRun, projectId, "projectId")),
       requireRunId(TOOL_CHANNELS.readRun, runId)
+    );
+  });
+
+  handleIpc(TOOL_CHANNELS.applyRunArtifact, async (_event, projectId: unknown, runId: unknown) => {
+    return applyRunArtifact(
+      resolveProjectPath(requireString(TOOL_CHANNELS.applyRunArtifact, projectId, "projectId")),
+      requireRunId(TOOL_CHANNELS.applyRunArtifact, runId)
     );
   });
 

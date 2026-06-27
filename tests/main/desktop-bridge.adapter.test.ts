@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildDesktopAppOpenArgs,
+  buildDesktopBridgeInstructions,
   buildDesktopBridgeRequest,
   DesktopBridgeAdapter,
   desktopBridgePlatformSupport,
@@ -53,6 +54,14 @@ describe("desktop-bridge.adapter", () => {
     await expect(readFile(join(bridgeDir, "request.json"), "utf8")).resolves.toContain('"agentId": "codex-desktop"');
     await expect(readFile(join(bridgeDir, "prompt.md"), "utf8")).resolves.toContain("Inspect the project.");
     await expect(readFile(join(bridgeDir, "instructions.md"), "utf8")).resolves.toContain("response.json");
+  });
+
+  it("requires structured response.json for artifact analysis bridge runs", () => {
+    const instructions = buildDesktopBridgeInstructions("Codex Desktop Test", "plan", "artifact-analysis");
+
+    expect(instructions).toContain("Artifact analysis requires response.json");
+    expect(instructions).toContain("Do not answer only in chat");
+    expect(instructions).not.toContain("or response.md with the plan markdown");
   });
 
   it("appends custom bridge instructions for desktop agents", async () => {

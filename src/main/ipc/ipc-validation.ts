@@ -5,6 +5,18 @@ export function requireString(channel: string, value: unknown, name: string): st
   return value;
 }
 
+export function optionalTrimmedString(
+  channel: string,
+  value: unknown,
+  name: string
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`[${channel}] Invalid "${name}": expected a string when provided.`);
+  }
+  return value.trim() || undefined;
+}
+
 export function requireObject(channel: string, value: unknown, name: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`[${channel}] Invalid "${name}": expected an object.`);

@@ -11,6 +11,7 @@ import {
   readSequenceDiagrams,
   reviseSequenceDiagram
 } from "../../src/main/services/sequence-diagram.service";
+import { registerProject } from "../../src/main/services/project-registry.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject, SequenceDiagramBundle } from "../../src/types";
@@ -121,7 +122,7 @@ describe("sequence-diagram.service", () => {
     ]);
   });
 
-  it("does not overwrite an existing bundle when agent output is invalid", async () => {
+  it("returns a fresh local bundle without overwriting a trusted Agent bundle before review succeeds", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-agent-"));
     const root = await createFixtureFiles();
     const flowweaveRoot = join(root, FLOWWEAVE_DIR);
@@ -152,7 +153,8 @@ describe("sequence-diagram.service", () => {
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error("Expected generated sequence result.");
-    expect(result.bundle.architectural.title).toBe("Existing Architectural");
+    expect(result.bundle.source).toBe("local");
+    expect(result.bundle.architectural.title).not.toBe("Existing Architectural");
     expect(stored.generatedAt).toBe(existing.generatedAt);
     expect(stored.architectural.title).toBe("Existing Architectural");
   });
@@ -195,6 +197,114 @@ describe("sequence-diagram.service", () => {
     expect(result.warning).toBeUndefined();
     await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).resolves.toContain('"source": "local"');
   });
+
+  it("publishes a review-failed event after the Agent repair attempt is rejected", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-review-failed-"));
+    const root = await createFixtureFiles();
+    const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      [
+        "process.stdin.resume();",
+        "process.stdin.on('end', () => {",
+        "  console.log(JSON.stringify({ architectural: { kind: 'architectural', participants: [], messages: [] } }));",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Rejected Sequence Review Agent",
+      command: process.execPath,
+      args: [scriptPath]
+    });
+    const events: import("../../src/types").SequenceReviewEvent[] = [];
+
+    const result = await generateSequenceDiagrams(projectFixture(root), agent.id, {
+      projectId: "project-00000000-0000-0000-0000-000000000000",
+      onSequenceReview: (event) => events.push(event)
+    });
+
+    expect(result.outcome).toBe("generated");
+    await waitFor(() => events.some((event) => event.status.state === "review-failed"));
+    expect(events.map((event) => event.status.state)).toContain("reviewing");
+    expect(events.at(-1)?.status).toMatchObject({
+      state: "review-failed",
+      error: { message: expect.any(String) }
+    });
+  });
+
+  it("waits for desktop bridge response.json before completing sequence review", async () => {
+    const root = await createFixtureFiles();
+    const projectId = await registerProject(root);
+    const events: import("../../src/types").SequenceReviewEvent[] = [];
+
+    void writeDesktopSequenceResponseWhenRunStarts(root, projectId, events);
+
+    const result = await generateSequenceDiagrams(projectFixture(root), "codex-desktop", {
+      projectId,
+      onSequenceReview: (event) => events.push(event),
+      planTimeoutMs: 1_000
+    });
+    const reviewed = await waitForEvent(events, "reviewed");
+
+    expect(result.outcome).toBe("generated");
+    expect(reviewed).toMatchObject({
+      status: {
+        state: "reviewed",
+        agentId: "codex-desktop",
+        runId: expect.stringMatching(/^run-/)
+      },
+      bundle: {
+        source: "agent"
+      }
+    });
+    expect((await readSequenceDiagrams(root))?.source).toBe("agent");
+  });
+
+  async function writeDesktopSequenceResponseWhenRunStarts(
+    root: string,
+    projectId: string,
+    events: import("../../src/types").SequenceReviewEvent[]
+  ): Promise<void> {
+    const running = await waitForRunId(events);
+    const runId = running.status.runId;
+    if (!runId) throw new Error("Expected sequence review run id.");
+    const bridgeDir = join(root, FLOWWEAVE_DIR, "agent-bridge", runId);
+    await waitForPath(join(bridgeDir, "request.json"));
+    await mkdir(bridgeDir, { recursive: true });
+    await writeFile(
+      join(bridgeDir, "response.json"),
+      JSON.stringify({
+        runId,
+        projectId,
+        status: "completed",
+        summary: "desktop sequence response",
+        content: JSON.stringify(validSequenceBundle(root)),
+        completedAt: "2026-06-26T04:00:00.000Z"
+      }),
+      "utf8"
+    );
+  }
+
+  async function waitForRunId(events: import("../../src/types").SequenceReviewEvent[]) {
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline) {
+      const event = events.find((candidate) => candidate.status.runId);
+      if (event) return event;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("Timed out waiting for sequence review run id.");
+  }
+
+  async function waitForPath(path: string) {
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline) {
+      if (await readFile(path, "utf8").then(() => true).catch(() => false)) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Timed out waiting for ${path}.`);
+  }
 
   it("regenerates local diagrams instead of reusing stale local cache", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-refresh-local-agent-"));
@@ -297,8 +407,7 @@ describe("sequence-diagram.service", () => {
 
     expect(generated.bundle.architectural.summary).not.toBe(revised.architectural.summary);
     expect(revised.architectural.summary).toContain("split payment into authorize and capture");
-    expect(context.sequence.revisionInstruction).toBe("split payment into authorize and capture");
-    expect(context.userInstructions.sequence).toBe("split payment into authorize and capture");
+    expect(context.delta.sequenceInstruction).toBe("split payment into authorize and capture");
     expect(guidance).toContain("split payment into authorize and capture");
   });
 
@@ -325,6 +434,27 @@ async function createFixtureFiles() {
   await writeFile(join(root, "src/api/order.controller.ts"), 'import { OrderService } from "../service/order.service";\nexport class OrderController { createOrder(dto: CreateOrderDto) { return new OrderService().createOrder(dto); } }\n', "utf8");
   await writeFile(join(root, "src/service/order.service.ts"), "export class OrderService { createOrder(dto: unknown) { return { id: 'order-1', dto }; } }\n", "utf8");
   return root;
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 3_000;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for sequence review event.");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+async function waitForEvent(
+  events: import("../../src/types").SequenceReviewEvent[],
+  state: import("../../src/types").SequenceReviewState
+): Promise<import("../../src/types").SequenceReviewEvent> {
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    const event = events.find((candidate) => candidate.status.state === state);
+    if (event) return event;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Timed out waiting for sequence review ${state} event.`);
 }
 
 function projectFixture(rootPath: string): CodeflowProject {
@@ -390,6 +520,68 @@ function existingBundle(rootPath: string): SequenceDiagramBundle {
     architectural: {
       ...diagramJson([{ id: "existing-message", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "Existing call" }]),
       title: "Existing Architectural"
+    }
+  };
+}
+
+function validSequenceBundle(rootPath: string): SequenceDiagramBundle {
+  return {
+    version: 1,
+    projectName: "sequence-fixture",
+    rootPath,
+    generatedAt: "2026-06-26T04:00:00.000Z",
+    source: "agent",
+    architectural: {
+      id: "architectural-sequence",
+      title: "Architectural Sequence Diagram",
+      kind: "architectural",
+      summary: "Order request flows from the API controller into the order service.",
+      participants: [
+        {
+          id: "order-controller",
+          title: "Order Controller",
+          kind: "gateway",
+          description: "Receives order creation requests.",
+          filePath: "src/api/order.controller.ts",
+          symbol: "OrderController"
+        },
+        {
+          id: "order-service",
+          title: "Order Service",
+          kind: "service",
+          description: "Creates orders.",
+          filePath: "src/service/order.service.ts",
+          symbol: "OrderService"
+        }
+      ],
+      messages: [
+        {
+          id: "controller-calls-service",
+          sequence: 1,
+          from: "order-controller",
+          to: "order-service",
+          kind: "sync",
+          label: "Create order",
+          description: "The controller delegates order creation to the service.",
+          methodName: "createOrder",
+          input: "CreateOrderDto",
+          output: "Order",
+          evidence: [
+            {
+              filePath: "src/api/order.controller.ts",
+              symbol: "OrderController",
+              detail: "OrderController.createOrder constructs OrderService and calls createOrder."
+            }
+          ]
+        }
+      ],
+      evidence: [
+        {
+          filePath: "src/service/order.service.ts",
+          symbol: "OrderService",
+          detail: "OrderService.createOrder returns an order result."
+        }
+      ]
     }
   };
 }

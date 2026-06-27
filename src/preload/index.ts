@@ -7,6 +7,7 @@ import type {
   AgentId,
   ArchitectureAnalysisResult,
   ArchitectureMap,
+  ArchitectureReviewEvent,
   CodeflowCanvas,
   CustomAgentInput,
   GitDiffResult,
@@ -14,6 +15,7 @@ import type {
   FlowWeaveProjectOpenResult,
   FlowWeaveErrorData,
   ProjectScanOptions,
+  SequenceReviewEvent,
   RuntimeAgentId,
   SequenceDiagramBundle,
   SequenceDiagramGenerationResult,
@@ -58,6 +60,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(TOOL_CHANNELS.listRuns, projectId) as Promise<ToolRunSummary[]>,
   readToolRun: (projectId: string, runId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.readRun, projectId, runId) as Promise<ToolRunArtifact>,
+  applyRunArtifact: (projectId: string, runId: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.applyRunArtifact, projectId, runId) as Promise<ToolRunSummary>,
   scanProject: (projectId: string, options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.scanProject, projectId, options) as Promise<FlowWeaveProjectOpenResult>,
   cancelOperation: (operationId: string) =>
@@ -66,6 +70,16 @@ const flowweaveApi = {
     const handler = (_event: Electron.IpcRendererEvent, operation: AnalysisOperation) => listener(operation);
     ipcRenderer.on(PROJECT_CHANNELS.operationProgress, handler);
     return () => ipcRenderer.removeListener(PROJECT_CHANNELS.operationProgress, handler);
+  },
+  onArchitectureReview: (listener: (event: ArchitectureReviewEvent) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, reviewEvent: ArchitectureReviewEvent) => listener(reviewEvent);
+    ipcRenderer.on(PROJECT_CHANNELS.architectureReview, handler);
+    return () => ipcRenderer.removeListener(PROJECT_CHANNELS.architectureReview, handler);
+  },
+  onSequenceReview: (listener: (event: SequenceReviewEvent) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, reviewEvent: SequenceReviewEvent) => listener(reviewEvent);
+    ipcRenderer.on(PROJECT_CHANNELS.sequenceReview, handler);
+    return () => ipcRenderer.removeListener(PROJECT_CHANNELS.sequenceReview, handler);
   },
   gitStatus: (projectId: string) => ipcRenderer.invoke(GIT_CHANNELS.status, projectId) as Promise<GitStatus>,
   gitDiff: (projectId: string, checkpointId?: string) =>
@@ -91,6 +105,19 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.readFile, projectId, filePath) as Promise<string | undefined>,
   saveFlowWeaveDoc: (projectId: string, docId: string, content: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.saveDoc, projectId, docId, content) as Promise<string>,
+  saveModificationDocs: (projectId: string, sequenceInstruction?: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.saveModificationDocs, projectId, sequenceInstruction) as Promise<{
+      guidancePath: string;
+      contextPath: string;
+    }>,
+  readModificationDelta: (projectId: string, sequenceInstruction?: string, canvas?: CodeflowCanvas) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.readModificationDelta, projectId, sequenceInstruction, canvas) as Promise<import("../types").ModificationDeltaResult>,
+  acknowledgeModificationChanges: (
+    projectId: string,
+    snapshot: import("../types").ModificationSnapshot,
+    scope: import("../types").ModificationAcknowledgementScope
+  ) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.acknowledgeModificationChanges, projectId, snapshot, scope) as Promise<import("../types").ModificationBaseline>,
   readCanvas: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readCanvas, projectId) as Promise<CodeflowCanvas | undefined>,
   saveCanvas: (projectId: string, canvas: CodeflowCanvas) =>

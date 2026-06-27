@@ -3,6 +3,8 @@ export const PROJECT_CHANNELS = {
   scanProject: "project:scan",
   cancelOperation: "project:cancel-operation",
   operationProgress: "project:operation-progress",
+  architectureReview: "project:architecture-review",
+  sequenceReview: "project:sequence-review",
   analyzeProject: "project:analyze",
   analyzeArchitecture: "project:analyze-architecture",
   analyzeArchitectureWithAgent: "project:analyze-architecture-with-agent",
@@ -12,6 +14,9 @@ export const PROJECT_CHANNELS = {
   readSequenceDiagrams: "project:read-sequence-diagrams",
   readFile: "project:read-file",
   saveDoc: "project:save-doc",
+  saveModificationDocs: "project:save-modification-docs",
+  readModificationDelta: "project:read-modification-delta",
+  acknowledgeModificationChanges: "project:acknowledge-modification-changes",
   readCanvas: "project:read-canvas",
   saveCanvas: "project:save-canvas",
   exportDiagnostics: "project:export-diagnostics",
@@ -32,6 +37,7 @@ export const TOOL_CHANNELS = {
   runPlan: "tool:run-plan",
   listRuns: "tool:list-runs",
   readRun: "tool:read-run",
+  applyRunArtifact: "tool:apply-run-artifact",
   openProject: "tool:open-project"
 } as const;
 

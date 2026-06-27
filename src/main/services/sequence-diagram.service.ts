@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type {
   AnalysisGenerationOptions,
@@ -13,7 +14,8 @@ import type {
   SequenceMessage,
   SequenceMessageKind,
   SequenceParticipant,
-  SequenceParticipantKind
+  SequenceParticipantKind,
+  ToolRunResult
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readArchitectureMap } from "./architecture-analysis.service";
@@ -21,11 +23,16 @@ import { startToolPlan } from "./agent-run.service";
 import { createScanFingerprint, registerProject } from "./project-registry.service";
 import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
-import { FlowWeaveError, throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
+import { throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { buildAgentPrompt, buildModificationContext } from "../../utils/export-artifacts";
 import { writeModificationDocs } from "./modification-doc.service";
+import {
+  startSequenceReview,
+  writeSequenceReviewStatus,
+  type SequenceReviewRunResult
+} from "./sequence-review.service";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
 const MAX_PROMPT_FILES = 70;
@@ -42,7 +49,8 @@ export async function generateSequenceDiagrams(
   const flightKey = `${project.rootPath}:${agentId}`;
   const existing = sequenceFlights.get(flightKey);
   if (existing) return existing;
-  const flight = generateSequenceDiagramsOnce(project, agentId, undefined).finally(() => sequenceFlights.delete(flightKey));
+  const flight = generateSequenceDiagramsOnce(project, agentId, options)
+    .finally(() => sequenceFlights.delete(flightKey));
   sequenceFlights.set(flightKey, flight);
   return flight;
 }
@@ -83,21 +91,46 @@ async function generateSequenceDiagramsOnce(
     const bundle = withSequenceMetadata(parsed, agentId, "mock", inputFingerprint, quality);
     throwIfAborted(options?.signal, "Sequence analysis");
     await writeSequenceDiagramBundle(project.rootPath, bundle, undefined);
-    return { bundle, outcome: "generated" };
+    const review = {
+      state: "reviewed",
+      reviewId: `sequence-review-${randomUUID()}`,
+      scanFingerprint: inputFingerprint,
+      agentId,
+      runId: "mock",
+      completedAt: bundle.generatedAt
+    } as const;
+    await writeSequenceReviewStatus(project.rootPath, review);
+    return { bundle, outcome: "generated", review };
   }
 
   throwIfAborted(options?.signal, "Sequence analysis");
   const publishedBundle = await writeLocalSequenceDiagramBundle(project.rootPath, localBundle);
-  void enhanceSequenceDiagramWithAgent(project, agentId, prompt, facts, representativeFacts, architectureMap, inputFingerprint, options?.planTimeoutMs)
-    .catch((error: unknown) => {
-      if (error instanceof FlowWeaveError && error.category === "canceled") return;
-      console.warn("FlowWeave sequence diagram Agent enhancement failed.", {
-        projectPath: project.rootPath,
-        agentId,
-        reason: formatErrorMessage(error)
-      });
-    });
-  return { bundle: publishedBundle, outcome: "generated" };
+  const projectId = options?.projectId ?? await registerProject(project.rootPath);
+  const reviewId = options?.resumeSequenceReview?.reviewId ?? `sequence-review-${randomUUID()}`;
+  const review = await startSequenceReview({
+    projectId,
+    projectPath: project.rootPath,
+    reviewId,
+    scanFingerprint: inputFingerprint,
+    agentId,
+    localBundle: publishedBundle,
+    startedAt: publishedBundle.generatedAt,
+    persist: (bundle) => writeSequenceDiagramBundle(project.rootPath, bundle, undefined),
+    run: (onRunId) => runSequenceReview(
+      project,
+      agentId,
+      prompt,
+      facts,
+      representativeFacts,
+      architectureMap,
+      inputFingerprint,
+      reviewId,
+      options?.planTimeoutMs,
+      onRunId
+    ),
+    onEvent: options?.onSequenceReview ?? (() => undefined)
+  });
+  return { bundle: publishedBundle, outcome: "generated", review };
 }
 
 export async function reviseSequenceDiagram(
@@ -148,6 +181,8 @@ export async function reviseSequenceDiagram(
     prompt,
     executionMode: "plan",
     purpose: "artifact-analysis",
+    artifactTarget: "sequence-revision",
+    scanFingerprint: current.metadata?.inputFingerprint,
     planTimeoutMs: options?.planTimeoutMs,
     signal: options?.signal
   });
@@ -514,7 +549,7 @@ function replaceDiagram(bundle: SequenceDiagramBundle, diagram: SequenceDiagram)
   };
 }
 
-async function enhanceSequenceDiagramWithAgent(
+async function runSequenceReview(
   project: CodeflowProject,
   agentId: RuntimeAgentId,
   prompt: string,
@@ -522,8 +557,10 @@ async function enhanceSequenceDiagramWithAgent(
   representativeFacts: ProjectStructureFacts,
   architectureMap: ArchitectureMap | undefined,
   inputFingerprint: string,
-  planTimeoutMs: number | undefined
-): Promise<void> {
+  reviewId: string,
+  planTimeoutMs: number | undefined,
+  onRunId: (runId: string) => Promise<void>
+): Promise<SequenceReviewRunResult> {
   const projectId = await registerProject(project.rootPath);
   const result = await startToolPlan({
     projectId,
@@ -531,16 +568,35 @@ async function enhanceSequenceDiagramWithAgent(
     prompt,
     executionMode: "plan",
     purpose: "artifact-analysis",
+    artifactTarget: "sequence-diagrams",
+    scanFingerprint: inputFingerprint,
+    reviewId,
     planTimeoutMs
   });
-  if (result.status !== "completed") return;
-  const output = result.outputText ?? collectStdout(result.events);
+  await onRunId(result.id);
+  const firstRun = await waitForSequenceRun(project.rootPath, result, planTimeoutMs);
+  if (firstRun.status !== "completed") {
+    return {
+      outcome: "failed",
+      runId: firstRun.id,
+      error: {
+        code: "agent-failed",
+        message: firstRun.stderr ?? firstRun.summary ?? "Agent sequence diagram review failed."
+      }
+    };
+  }
+  const output = firstRun.outputText ?? collectStdout(firstRun.events);
   const parsed = parseSequenceDiagramBundleJson(output, project, facts, architectureMap);
   const quality = parsed ? validateSequenceBundle(parsed, representativeFacts) : undefined;
   if (parsed && quality?.valid) {
-    const bundle = withSequenceMetadata(parsed, agentId, result.id, inputFingerprint, quality);
-    await writeSequenceDiagramBundle(project.rootPath, bundle, undefined);
-    return;
+    const bundle = withSequenceMetadata(parsed, agentId, firstRun.id, inputFingerprint, quality);
+    const { updateRunArtifactAdoption } = await import("./run-log.service");
+    await updateRunArtifactAdoption(project.rootPath, firstRun.id, {
+      status: "applied",
+      message: "Run completed and applied to sequence diagrams.",
+      appliedAt: bundle.generatedAt
+    });
+    return { outcome: "reviewed", bundle, runId: firstRun.id };
   }
 
   const firstFailure = parsed ? quality?.reasons.join("; ") ?? "Sequence quality validation failed." : "Agent returned invalid sequence diagram JSON.";
@@ -550,18 +606,84 @@ async function enhanceSequenceDiagramWithAgent(
     prompt: buildSequenceRepairPrompt(prompt, output, firstFailure),
     executionMode: "plan",
     purpose: "artifact-analysis",
+    artifactTarget: "sequence-diagrams",
+    scanFingerprint: inputFingerprint,
+    reviewId,
     planTimeoutMs
   });
-  if (retry.status !== "completed") return;
-  const retryOutput = retry.outputText ?? collectStdout(retry.events);
+  await onRunId(retry.id);
+  const retryRun = await waitForSequenceRun(project.rootPath, retry, planTimeoutMs);
+  if (retryRun.status !== "completed") {
+    return {
+      outcome: "failed",
+      runId: retryRun.id,
+      error: {
+        code: "agent-failed",
+        message: retryRun.stderr ?? retryRun.summary ?? "Agent sequence diagram repair failed."
+      }
+    };
+  }
+  const retryOutput = retryRun.outputText ?? collectStdout(retryRun.events);
   const retryParsed = parseSequenceDiagramBundleJson(retryOutput, project, facts, architectureMap);
   const retryQuality = retryParsed ? validateSequenceBundle(retryParsed, representativeFacts) : undefined;
-  if (!retryParsed || !retryQuality?.valid) return;
-  const bundle = withSequenceMetadata(retryParsed, agentId, retry.id, inputFingerprint, retryQuality);
-  await writeSequenceDiagramBundle(project.rootPath, bundle, undefined);
+  if (!retryParsed) {
+    return {
+      outcome: "failed",
+      runId: retryRun.id,
+      error: {
+        code: "invalid-output",
+        message: "Agent returned invalid sequence diagram JSON after repair."
+      }
+    };
+  }
+  if (!retryQuality?.valid) {
+    return {
+      outcome: "failed",
+      runId: retryRun.id,
+      error: {
+        code: "quality-rejected",
+        message: retryQuality?.reasons.join("; ") ?? "Sequence quality validation failed after repair."
+      }
+    };
+  }
+  const bundle = withSequenceMetadata(retryParsed, agentId, retryRun.id, inputFingerprint, retryQuality);
+  const { updateRunArtifactAdoption } = await import("./run-log.service");
+  await updateRunArtifactAdoption(project.rootPath, retryRun.id, {
+    status: "applied",
+    message: "Run completed and applied to sequence diagrams.",
+    appliedAt: bundle.generatedAt
+  });
+  return { outcome: "reviewed", bundle, runId: retryRun.id };
 }
 
-function validateSequenceBundle(
+async function waitForSequenceRun(
+  projectPath: string,
+  initial: ToolRunResult,
+  planTimeoutMs: number | undefined
+): Promise<ToolRunResult> {
+  if (initial.status !== "pending") return initial;
+  const deadline = Date.now() + (planTimeoutMs ?? 300_000);
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const { readRunArtifact } = await import("./run-log.service");
+    const artifact = await readRunArtifact(projectPath, initial.id);
+    if (artifact.summary.status === "pending") continue;
+    return {
+      ...initial,
+      status: artifact.summary.status,
+      completedAt: artifact.summary.completedAt,
+      summary: artifact.summary.summary,
+      outputText: artifact.plan
+    };
+  }
+  return {
+    ...initial,
+    status: "failed",
+    summary: `Agent sequence review remained pending without a desktop bridge response.json before timeout: ${initial.id}`
+  };
+}
+
+export function validateSequenceBundle(
   bundle: SequenceDiagramBundle,
   facts: ProjectStructureFacts
 ): { valid: boolean; reasons: string[]; fileCoverage: number; evidenceCoverage: number } {
@@ -597,7 +719,7 @@ function validateSequenceBundle(
   return { valid: reasons.length === 0, reasons: [...new Set(reasons)], fileCoverage, evidenceCoverage };
 }
 
-function withSequenceMetadata(
+export function withSequenceMetadata(
   bundle: SequenceDiagramBundle,
   agentId: RuntimeAgentId,
   runId: string,
@@ -681,7 +803,7 @@ Previous response:
 ${output.slice(0, 40_000)}`;
 }
 
-async function writeSequenceDiagramBundle(
+export async function writeSequenceDiagramBundle(
   projectPath: string,
   bundle: SequenceDiagramBundle,
   sequenceInstruction: string | undefined
@@ -693,7 +815,7 @@ async function writeSequenceDiagramBundle(
 
 async function writeLocalSequenceDiagramBundle(projectPath: string, bundle: SequenceDiagramBundle): Promise<SequenceDiagramBundle> {
   const previous = await readSequenceDiagrams(projectPath);
-  if (previous?.source === "agent") return previous;
+  if (previous?.source === "agent") return bundle;
   await writeSequenceDiagramBundle(projectPath, bundle, undefined);
   return bundle;
 }
@@ -924,9 +1046,4 @@ function safeId(value: string) {
 
 function stringOrUndefined(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function formatErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }

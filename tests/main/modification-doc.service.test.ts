@@ -6,7 +6,7 @@ import { writeModificationDocs } from "../../src/main/services/modification-doc.
 import type { CodeflowCanvas, GraphNode, SequenceDiagramBundle } from "../../src/types";
 
 describe("modification-doc.service", () => {
-  it("writes canonical markdown and json docs from canvas and sequence context", async () => {
+  it("writes canonical delta docs without repeating baseline Canvas or Sequence artifacts", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-"));
     const paths = await writeModificationDocs(projectPath, {
       canvas: canvasFixture(projectPath),
@@ -19,11 +19,12 @@ describe("modification-doc.service", () => {
 
     expect(paths.guidancePath).toBe(join(projectPath, ".flowweave", "docs", "modification-guidance.md"));
     expect(paths.contextPath).toBe(join(projectPath, ".flowweave", "docs", "modification-context.json"));
-    expect(markdown).toContain("Keep controller edits isolated.");
     expect(markdown).toContain("Split payment into authorize and capture.");
-    expect(context.canvas.modules[0].guidanceDraft).toBe("Keep controller edits isolated.");
-    expect(context.sequence.revisionInstruction).toBe("Split payment into authorize and capture.");
-    expect(context.sequence.diagrams.architectural.messages[0].evidence[0].filePath).toBe("src/api.ts");
+    expect(markdown).not.toContain("Keep controller edits isolated.");
+    expect(context.schemaVersion).toBe(2);
+    expect(context.delta.modules.added).toEqual([]);
+    expect(context.delta.sequenceInstruction).toBe("Split payment into authorize and capture.");
+    expect(context.artifactReferences).toContain(".flowweave/sequence-diagrams.json");
   });
 
   it("writes canvas docs when the optional sequence artifact is unreadable", async () => {
@@ -36,8 +37,8 @@ describe("modification-doc.service", () => {
     });
     const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
 
-    expect(context.canvas.modules[0].id).toBe("api");
-    expect(context.sequence).toBeUndefined();
+    expect(context.delta.modules.added).toEqual([]);
+    expect(context.delta.sequenceInstruction).toBeUndefined();
   });
 
   it("writes sequence docs when the optional canvas artifact is unreadable", async () => {
@@ -51,8 +52,8 @@ describe("modification-doc.service", () => {
     });
     const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
 
-    expect(context.canvas.modules).toEqual([]);
-    expect(context.sequence.revisionInstruction).toBe("Keep checkout as one diagram.");
+    expect(context.delta.modules.added).toEqual([]);
+    expect(context.delta.sequenceInstruction).toBe("Keep checkout as one diagram.");
   });
 
   it("does not mark a selected module when generated from persisted artifacts", async () => {
@@ -63,7 +64,22 @@ describe("modification-doc.service", () => {
     });
     const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
 
-    expect(context.canvas.selectedModuleId).toBeUndefined();
+    expect(context).not.toHaveProperty("canvas");
+    expect(context).not.toHaveProperty("selectedModuleId");
+  });
+
+  it("persists a sequence instruction without invoking sequence revision", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-instruction-"));
+    const paths = await writeModificationDocs(projectPath, {
+      canvas: canvasFixture(projectPath),
+      sequence: sequenceFixture(projectPath),
+      sequenceInstruction: "Keep payment as one step."
+    });
+
+    const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
+
+    expect(context.delta.sequenceInstruction).toBe("Keep payment as one step.");
+    expect(context).not.toHaveProperty("sequence");
   });
 });
 

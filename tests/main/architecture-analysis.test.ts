@@ -10,8 +10,10 @@ import {
   readArchitectureMap
 } from "../../src/main/services/architecture-analysis.service";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
+import { adoptArtifactRun } from "../../src/main/services/artifact-run-adoption.service";
 import { listRunSummaries } from "../../src/main/services/run-log.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
+import { registerProject } from "../../src/main/services/project-registry.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject } from "../../src/types";
 import { createNodeCliFixture } from "./test-cli-fixture";
@@ -204,6 +206,12 @@ describe("architecture-analysis.service", () => {
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error("Expected local analysis.");
     expect(result.architectureMap.source).toBe("local");
+    expect(result.review).toMatchObject({
+      state: "reviewing",
+      reviewId: expect.stringMatching(/^review-/),
+      scanFingerprint: expect.any(String),
+      agentId: agent.id
+    });
     expect(result.architectureMap.metadata).toMatchObject({
       source: "local",
       inputFingerprint: expect.any(String)
@@ -214,6 +222,164 @@ describe("architecture-analysis.service", () => {
     });
     expect(result.warning).toBeUndefined();
     expect(summaries).toHaveLength(0);
+  });
+
+  it("publishes an Agent-reviewed architecture event after validating a real custom CLI response", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-architecture-reviewed-"));
+    const root = await createFixtureFiles();
+    const scriptPath = join(configRoot, "review-agent.mjs");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      [
+        "process.stdin.resume();",
+        "process.stdin.on('end', () => {",
+        "  console.log(JSON.stringify({",
+        "    architectureStyle: 'layered service',",
+        "    modules: [",
+        "      {",
+        "        id: 'user-api',",
+        "        title: 'User API',",
+        "        category: 'api-boundary',",
+        "        role: 'Receives user requests.',",
+        "        description: 'Reviewed HTTP boundary.',",
+        "        files: ['src/api/user.controller.ts'],",
+        "        fileRoles: [{ path: 'src/api/user.controller.ts', role: 'Routes requests.' }],",
+        "        symbols: [{ name: 'loadUser', kind: 'function', filePath: 'src/api/user.controller.ts', role: 'handler' }],",
+        "        evidence: [{ filePath: 'src/api/user.controller.ts', symbol: 'loadUser', detail: 'exports handler' }],",
+        "        risk: 'normal'",
+        "      },",
+        "      {",
+        "        id: 'user-service',",
+        "        title: 'User Service',",
+        "        category: 'domain-service',",
+        "        role: 'Coordinates user logic.',",
+        "        description: 'Reviewed domain service.',",
+        "        files: ['src/service/user.service.ts'],",
+        "        fileRoles: [{ path: 'src/service/user.service.ts', role: 'Business service.' }],",
+        "        symbols: [{ name: 'UserService', kind: 'class', filePath: 'src/service/user.service.ts', role: 'service' }],",
+        "        evidence: [{ filePath: 'src/service/user.service.ts', symbol: 'UserService', detail: 'class declaration' }],",
+        "        risk: 'normal'",
+        "      }",
+        "    ],",
+        "    relationships: [{",
+        "      source: 'user-api',",
+        "      target: 'user-service',",
+        "      relation: 'calls',",
+        "      description: 'API calls service.',",
+        "      evidence: [{ filePath: 'src/api/user.controller.ts', detail: 'imports service' }]",
+        "    }]",
+        "  }));",
+        "});"
+      ].join("\n"),
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Reviewed Architecture Agent",
+      command: process.execPath,
+      args: [scriptPath],
+      planArgs: [scriptPath],
+      capabilities: ["artifact-analysis"]
+    });
+    const projectId = await registerProject(root);
+    const events: import("../../src/types").ArchitectureReviewEvent[] = [];
+
+    const result = await analyzeArchitecture(projectFixture(root), agent.id, {
+      projectId,
+      onArchitectureReview: (event) => events.push(event)
+    });
+
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error("Expected local architecture.");
+    expect(result.review.state).toBe("reviewing");
+    await waitForReviewEvent(events, "reviewed");
+    expect(events.at(-1)).toMatchObject({
+      reviewId: result.review.reviewId,
+      status: {
+        state: "reviewed",
+        agentId: agent.id,
+        runId: expect.stringMatching(/^run-/)
+      },
+      architectureMap: { source: "agent" }
+    });
+    expect((await readArchitectureMap(root))?.source).toBe("agent");
+    expect((await listRunSummaries(root))[0].artifactAdoption).toMatchObject({
+      status: "applied",
+      message: "Run completed and applied to module graph."
+    });
+  });
+
+  it("marks completed artifact runs stale when the scan fingerprint changed", async () => {
+    const root = await createFixtureFiles();
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    await writeFile(
+      join(root, FLOWWEAVE_DIR, "project.json"),
+      JSON.stringify({ scanFingerprint: "scan-new" }),
+      "utf8"
+    );
+
+    const adoption = await adoptArtifactRun(
+      root,
+      {
+        id: "run-stale",
+        toolId: "codex-desktop",
+        status: "completed",
+        projectPath: root,
+        startedAt: "2026-06-26T00:00:00.000Z",
+        completedAt: "2026-06-26T00:01:00.000Z",
+        events: [],
+        executionMode: "plan",
+        purpose: "artifact-analysis",
+        artifactTarget: "architecture-map",
+        scanFingerprint: "scan-old"
+      },
+      validArchitectureJson(),
+      "auto"
+    );
+
+    expect(adoption).toMatchObject({
+      status: "stale",
+      message: "Run completed but not applied because the project scan changed."
+    });
+    expect(await readArchitectureMap(root)).toBeUndefined();
+  });
+
+  it("retries invalid Agent output once and publishes a review failure", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-architecture-invalid-"));
+    const root = await createFixtureFiles();
+    const scriptPath = join(configRoot, "invalid-review-agent.mjs");
+    configureAgentRegistry(configRoot);
+    await writeFile(
+      scriptPath,
+      "process.stdin.resume(); process.stdin.on('end', () => console.log('invalid architecture output'));",
+      "utf8"
+    );
+    const agent = await saveCustomAgent({
+      name: "Invalid Architecture Agent",
+      command: process.execPath,
+      args: [scriptPath],
+      planArgs: [scriptPath],
+      capabilities: ["artifact-analysis"]
+    });
+    const projectId = await registerProject(root);
+    const events: import("../../src/types").ArchitectureReviewEvent[] = [];
+
+    const result = await analyzeArchitecture(projectFixture(root), agent.id, {
+      projectId,
+      onArchitectureReview: (event) => events.push(event)
+    });
+
+    expect(result.outcome).toBe("generated");
+    await waitForReviewEvent(events, "review-failed");
+    expect(events.at(-1)?.status).toMatchObject({
+      state: "review-failed",
+      error: {
+        code: "invalid-output",
+        message: expect.stringContaining("after one repair attempt")
+      }
+    });
+    expect(await listRunSummaries(root)).toHaveLength(2);
+    expect((await readArchitectureMap(root))?.source).toBe("local");
   });
 
   it("does not publish architecture artifacts after cancellation", async () => {
@@ -279,6 +445,19 @@ describe("architecture-analysis.service", () => {
   });
 });
 
+async function waitForReviewEvent(
+  events: import("../../src/types").ArchitectureReviewEvent[],
+  state: import("../../src/types").ArchitectureReviewState
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (!events.some((event) => event.status.state === state)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for architecture review state ${state}: ${JSON.stringify(events)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 async function createFixtureFiles() {
   const root = await mkdtemp(join(tmpdir(), "flowweave-architecture-"));
   await mkdir(join(root, "src/api"), { recursive: true });
@@ -324,4 +503,41 @@ function projectFixture(rootPath: string): CodeflowProject {
       }
     ]
   };
+}
+
+function validArchitectureJson() {
+  return JSON.stringify({
+    architectureStyle: "layered service",
+    modules: [
+      {
+        id: "user-api",
+        title: "User API",
+        category: "api-boundary",
+        role: "Receives user requests.",
+        description: "Reviewed HTTP boundary.",
+        files: ["src/api/user.controller.ts"],
+        fileRoles: [{ path: "src/api/user.controller.ts", role: "Routes requests." }],
+        symbols: [{ name: "loadUser", kind: "function", filePath: "src/api/user.controller.ts", role: "handler" }],
+        evidence: [{ filePath: "src/api/user.controller.ts", symbol: "loadUser", detail: "exports handler" }]
+      },
+      {
+        id: "user-service",
+        title: "User Service",
+        category: "domain-service",
+        role: "Coordinates user logic.",
+        description: "Reviewed domain service.",
+        files: ["src/service/user.service.ts"],
+        fileRoles: [{ path: "src/service/user.service.ts", role: "Business service." }],
+        symbols: [{ name: "UserService", kind: "class", filePath: "src/service/user.service.ts", role: "service" }],
+        evidence: [{ filePath: "src/service/user.service.ts", symbol: "UserService", detail: "class declaration" }]
+      }
+    ],
+    relationships: [{
+      source: "user-api",
+      target: "user-service",
+      relation: "calls",
+      description: "API calls service.",
+      evidence: [{ filePath: "src/api/user.controller.ts", detail: "imports service" }]
+    }]
+  });
 }

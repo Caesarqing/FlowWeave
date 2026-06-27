@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   AnalysisOperation,
+  ArchitectureReviewEvent,
+  ArchitectureReviewStatus,
   FlowWeaveProjectOpenResult,
   GraphEdge,
   GraphNode,
@@ -16,6 +18,8 @@ export function useProjectActions({
   projectId,
   projectPath,
   projectFiles,
+  scanFingerprint,
+  architectureReview,
   replaceProjectGraph,
   setIsProjectLoading,
   setLastRunStatus,
@@ -24,12 +28,16 @@ export function useProjectActions({
   setProjectPath,
   setScanFingerprint,
   setArtifactStatuses,
+  setArchitectureReview,
+  setSequenceReview,
   setProjectStatus
 }: {
   maxRenderedTreeRows: number;
   projectId: string;
   projectPath: string;
   projectFiles: ProjectFileNode[];
+  scanFingerprint: string;
+  architectureReview: ArchitectureReviewStatus;
   replaceProjectGraph: (
     nodes: GraphNode[],
     edges: GraphEdge[],
@@ -45,6 +53,13 @@ export function useProjectActions({
   setArtifactStatuses: (
     value: ProjectArtifactStatuses | ((current?: ProjectArtifactStatuses) => ProjectArtifactStatuses | undefined)
   ) => void;
+  setArchitectureReview: (
+    value: ArchitectureReviewStatus | ((current: ArchitectureReviewStatus) => ArchitectureReviewStatus)
+  ) => void;
+  setSequenceReview: (
+    value: import("../types").SequenceReviewStatus |
+      ((current: import("../types").SequenceReviewStatus) => import("../types").SequenceReviewStatus)
+  ) => void;
   setProjectStatus: (value: string) => void;
 }) {
   const { t } = useI18n();
@@ -52,6 +67,11 @@ export function useProjectActions({
   const scanMaxEntries = usePreferencesStore((state) => state.scanMaxEntries);
   const [operation, setOperation] = useState<AnalysisOperation | null>(null);
   const activeOperationId = useRef<string | null>(null);
+  const architectureReviewRef = useRef(architectureReview);
+
+  useEffect(() => {
+    architectureReviewRef.current = architectureReview;
+  }, [architectureReview]);
 
   useEffect(() => {
     if (!window.flowweave) {
@@ -59,6 +79,7 @@ export function useProjectActions({
     }
 
     return window.flowweave.onOperationProgress((nextOperation) => {
+      if (nextOperation.kind === "sequence-analysis") return;
       const isTerminal =
         nextOperation.stage === "completed" ||
         nextOperation.stage === "failed" ||
@@ -72,6 +93,33 @@ export function useProjectActions({
       }));
     });
   }, [setProjectStatus, t]);
+
+  useEffect(() => {
+    if (!window.flowweave) return undefined;
+    return window.flowweave.onArchitectureReview((event) => {
+      if (!shouldApplyArchitectureReviewEvent(event, projectId, scanFingerprint, architectureReviewRef.current)) return;
+      architectureReviewRef.current = event.status;
+      setArchitectureReview(event.status);
+      if (event.status.state === "reviewed" && event.graph) {
+        replaceProjectGraph(event.graph.nodes, event.graph.edges, projectFiles);
+        setArtifactStatuses((current) => current ? { ...current, architecture: "current" } : current);
+        setProjectStatus(t("status.analysisReviewed", { agent: event.status.agentId ?? "" }));
+      } else if (event.status.state === "review-failed") {
+        setProjectStatus(t("status.analysisReviewFailed", {
+          error: event.status.error?.message ?? t("artifact.unavailable")
+        }));
+      }
+    });
+  }, [
+    projectId,
+    projectFiles,
+    replaceProjectGraph,
+    scanFingerprint,
+    setArchitectureReview,
+    setArtifactStatuses,
+    setProjectStatus,
+    t
+  ]);
 
   async function applyProjectOpenResult(result: FlowWeaveProjectOpenResult) {
     if (result.canceled) {
@@ -88,6 +136,9 @@ export function useProjectActions({
     setProjectPath(result.project.rootPath);
     setScanFingerprint(result.scanFingerprint);
     setArtifactStatuses(result.artifacts);
+    architectureReviewRef.current = result.architectureReview;
+    setArchitectureReview(result.architectureReview);
+    setSequenceReview(result.sequenceReview);
     replaceProjectGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout);
 
     const truncateNote = result.project.summary.truncated
@@ -176,6 +227,13 @@ export function useProjectActions({
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
       replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
+      setArchitectureReview((current) => {
+        const next = current.reviewId === result.review.reviewId && current.state === "reviewed"
+          ? current
+          : result.review;
+        architectureReviewRef.current = next;
+        return next;
+      });
       setArtifactStatuses((current) => current ? {
         ...current,
         architecture: "current"
@@ -199,6 +257,17 @@ export function useProjectActions({
   }
 
   return { openProject, refreshProject, analyzeProject, cancelProjectOperation, operation };
+}
+
+export function shouldApplyArchitectureReviewEvent(
+  event: ArchitectureReviewEvent,
+  projectId: string,
+  scanFingerprint: string,
+  current: ArchitectureReviewStatus
+): boolean {
+  if (event.projectId !== projectId || event.scanFingerprint !== scanFingerprint) return false;
+  if (event.status.state === "reviewing") return true;
+  return !current.reviewId || current.reviewId === event.reviewId;
 }
 
 function formatErrorMessage(error: unknown) {

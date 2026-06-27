@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { AgentDefinition, AgentHealthCheckResult, AgentId, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentHealthCheckResult, AgentId, ArtifactRunTarget, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
@@ -23,6 +23,9 @@ export type StartToolPlanOptions = {
   guidancePath?: string;
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
+  artifactTarget?: ArtifactRunTarget;
+  scanFingerprint?: string;
+  reviewId?: string;
   model?: string;
   confirmedExecute?: boolean;
   executeTimeoutMs?: number;
@@ -66,6 +69,9 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     guidancePath: options.guidancePath,
     executionMode,
     purpose: options.purpose,
+    artifactTarget: options.artifactTarget,
+    scanFingerprint: options.scanFingerprint,
+    reviewId: options.reviewId,
     model: options.model,
     signal: options.signal
   }, resolveRunPolicyOverride(executionMode, options));
@@ -86,6 +92,17 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     resultPath: paths.resultPath,
     executionMode,
     purpose: options.purpose,
+    artifactTarget: options.artifactTarget,
+    scanFingerprint: options.scanFingerprint,
+    reviewId: options.reviewId,
+    artifactAdoption: options.purpose === "artifact-analysis"
+      ? {
+          status: "pending",
+          message: result.status === "pending"
+            ? `Waiting for ${adapter.name} response for ${runId}.`
+            : "Artifact response has not been applied yet."
+        }
+      : { status: "not-applicable", message: "Run is not an artifact-analysis run." },
     checkpointId,
     summary: result.failure?.message ?? result.summary ?? firstUsefulLine(planText),
     stderr: result.failure?.message ?? collectStderr(result.events)

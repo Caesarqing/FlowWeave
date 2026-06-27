@@ -193,6 +193,93 @@ export type GraphEdge = {
   evidence?: ArchitectureEvidence[];
 };
 
+export type NormalizedModule = {
+  id: string;
+  title: string;
+  nodeType: GraphNodeType;
+  description: string;
+  files: string[];
+  guidanceDraft: string;
+  riskOverride?: {
+    level: Exclude<AssessmentLevel, "unknown">;
+    reason: string;
+  };
+};
+
+export type NormalizedRelation = {
+  id: string;
+  source: string;
+  target: string;
+  relation: GraphEdgeRelation;
+  guidanceNote?: string;
+};
+
+export type ModificationSnapshot = {
+  scanFingerprint?: string;
+  canvas: {
+    modules: NormalizedModule[];
+    relations: NormalizedRelation[];
+  };
+  sequenceInstruction?: string;
+};
+
+export type ModificationBaseline = ModificationSnapshot & {
+  version: 1;
+  acknowledgedAt: string;
+  moduleGuidanceAcknowledgements?: Record<string, string>;
+};
+
+export type ModificationDelta = {
+  modules: {
+    added: NormalizedModule[];
+    updated: Array<{
+      id: string;
+      title: string;
+      changes: Partial<NormalizedModule>;
+    }>;
+    deleted: Array<{ id: string; title: string }>;
+  };
+  relations: {
+    added: NormalizedRelation[];
+    updated: Array<{
+      id: string;
+      changes: Partial<NormalizedRelation>;
+    }>;
+    deleted: Array<{
+      id: string;
+      source: string;
+      target: string;
+    }>;
+  };
+  sequenceInstruction?: string;
+};
+
+export type ModificationAcknowledgementScope =
+  | { kind: "all" }
+  | { kind: "module-guidance"; moduleId: string }
+  | { kind: "sequence" };
+
+export type ModificationGuidanceContext = {
+  schemaVersion: 2;
+  source: "FlowWeave";
+  generatedAt: string;
+  project: {
+    label: string;
+    path: string;
+    scanFingerprint?: string;
+  };
+  delta: ModificationDelta;
+  hasChanges: boolean;
+  artifactReferences: string[];
+};
+
+export type ModificationDeltaResult = {
+  baseline: ModificationBaseline;
+  snapshot: ModificationSnapshot;
+  delta: ModificationDelta;
+  hasChanges: boolean;
+};
+
 export type GitSummary = {
   isRepo: boolean;
   branch?: string;
@@ -358,6 +445,102 @@ export type ProjectArtifactStatuses = {
   sequences: ProjectArtifactState;
 };
 
+export type ArchitectureReviewState =
+  | "local"
+  | "reviewing"
+  | "reviewed"
+  | "review-failed"
+  | "stale"
+  | "missing";
+
+export type ArchitectureDiffCounts = {
+  modules: {
+    added: number;
+    removed: number;
+    modified: number;
+  };
+  relationships: {
+    added: number;
+    removed: number;
+    modified: number;
+  };
+};
+
+export type ArchitectureReviewError = {
+  code: "agent-failed" | "invalid-output" | "quality-rejected" | "persistence-failed";
+  message: string;
+};
+
+export type ArchitectureReviewStatus = {
+  state: ArchitectureReviewState;
+  reviewId?: string;
+  scanFingerprint?: string;
+  agentId?: RuntimeAgentId;
+  runId?: string;
+  startedAt?: string;
+  completedAt?: string;
+  diff?: ArchitectureDiffCounts;
+  error?: ArchitectureReviewError;
+};
+
+export type ArchitectureReviewEvent = {
+  projectId: string;
+  reviewId: string;
+  scanFingerprint: string;
+  status: ArchitectureReviewStatus;
+  architectureMap?: ArchitectureMap;
+  graph?: {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  };
+};
+
+export type SequenceReviewState =
+  | "local"
+  | "reviewing"
+  | "reviewed"
+  | "review-failed"
+  | "stale"
+  | "missing";
+
+export type SequenceDiffCounts = {
+  participants: {
+    added: number;
+    removed: number;
+    modified: number;
+  };
+  messages: {
+    added: number;
+    removed: number;
+    modified: number;
+  };
+};
+
+export type SequenceReviewError = {
+  code: "agent-failed" | "invalid-output" | "quality-rejected" | "persistence-failed";
+  message: string;
+};
+
+export type SequenceReviewStatus = {
+  state: SequenceReviewState;
+  reviewId?: string;
+  scanFingerprint?: string;
+  agentId?: RuntimeAgentId;
+  runId?: string;
+  startedAt?: string;
+  completedAt?: string;
+  diff?: SequenceDiffCounts;
+  error?: SequenceReviewError;
+};
+
+export type SequenceReviewEvent = {
+  projectId: string;
+  reviewId: string;
+  scanFingerprint: string;
+  status: SequenceReviewStatus;
+  bundle?: SequenceDiagramBundle;
+};
+
 export type ArchitectureModule = {
   id: string;
   title: string;
@@ -489,7 +672,7 @@ export type AnalysisFailure = {
 };
 
 export type SequenceDiagramGenerationResult =
-  | { outcome: "generated"; bundle: SequenceDiagramBundle; warning?: AnalysisFailure }
+  | { outcome: "generated"; bundle: SequenceDiagramBundle; review: SequenceReviewStatus; warning?: AnalysisFailure }
   | { outcome: "cached"; bundle: SequenceDiagramBundle; error: AnalysisFailure }
   | { outcome: "failed"; error: AnalysisFailure };
 
@@ -500,6 +683,13 @@ export type AgentId = BuiltInAgentId | CustomAgentId;
 export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
 export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
+export type ArtifactRunTarget = "architecture-map" | "sequence-diagrams" | "sequence-revision";
+export type ArtifactAdoptionStatus = "not-applicable" | "pending" | "applied" | "rejected" | "stale";
+export type ArtifactAdoption = {
+  status: ArtifactAdoptionStatus;
+  message: string;
+  appliedAt?: string;
+};
 export type AsyncOperationStatus = "idle" | "running" | "succeeded" | "failed";
 export type AsyncOperationState = { status: AsyncOperationStatus; error?: string };
 export type AnalysisOperationStage =
@@ -546,6 +736,11 @@ export type AnalysisGenerationOptions = {
   signal?: AbortSignal;
   onProgress?: (progress: AnalysisProgressUpdate) => void;
   planTimeoutMs?: number;
+  projectId?: string;
+  onArchitectureReview?: (event: ArchitectureReviewEvent) => void;
+  resumeArchitectureReview?: ArchitectureReviewStatus;
+  onSequenceReview?: (event: SequenceReviewEvent) => void;
+  resumeSequenceReview?: SequenceReviewStatus;
 };
 
 export type ProjectAgentPlatform = "codex" | "claude" | "gemini" | "cursor";
@@ -612,6 +807,8 @@ export type FlowWeaveProjectOpenResult =
       projectId: string;
       scanFingerprint: string;
       artifacts: ProjectArtifactStatuses;
+      architectureReview: ArchitectureReviewStatus;
+      sequenceReview: SequenceReviewStatus;
       project: CodeflowProject;
       graph: {
         nodes: GraphNode[];
@@ -714,6 +911,9 @@ export type ToolRunRequest = {
   guidancePath?: string;
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
+  artifactTarget?: ArtifactRunTarget;
+  scanFingerprint?: string;
+  reviewId?: string;
   model?: string;
   signal?: AbortSignal;
   maxOutputBytes?: number;
@@ -767,6 +967,10 @@ export type ToolRunResult = {
   events: ToolRunEvent[];
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
+  artifactTarget?: ArtifactRunTarget;
+  scanFingerprint?: string;
+  reviewId?: string;
+  artifactAdoption?: ArtifactAdoption;
   checkpointId?: string;
   attempts?: number;
   durationMs?: number;
@@ -780,6 +984,10 @@ export type ToolRunSummary = {
   status: ToolRunStatus;
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
+  artifactTarget?: ArtifactRunTarget;
+  scanFingerprint?: string;
+  reviewId?: string;
+  artifactAdoption?: ArtifactAdoption;
   startedAt: string;
   completedAt: string;
   summary?: string;
@@ -880,6 +1088,7 @@ export type ArchitectureAnalysisResult =
       outcome: "generated";
       architectureMap: ArchitectureMap;
       graph: { nodes: GraphNode[]; edges: GraphEdge[] };
+      review: ArchitectureReviewStatus;
       runId?: string;
       warning?: AnalysisFailure;
     }
@@ -905,6 +1114,8 @@ export type FlowWeaveApi = {
   scanProject(projectId: string, options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
   cancelOperation(operationId: string): Promise<AnalysisOperation>;
   onOperationProgress(listener: (operation: AnalysisOperation) => void): () => void;
+  onArchitectureReview(listener: (event: ArchitectureReviewEvent) => void): () => void;
+  onSequenceReview(listener: (event: SequenceReviewEvent) => void): () => void;
   listAgents(): Promise<AgentDefinition[]>;
   saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
   deleteCustomAgent(agentId: AgentId): Promise<void>;
@@ -925,6 +1136,7 @@ export type FlowWeaveApi = {
   }): Promise<ToolRunResult>;
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
+  applyRunArtifact(projectId: string, runId: string): Promise<ToolRunSummary>;
   openToolProject(agentId: RuntimeAgentId, projectId: string): Promise<ToolOpenResult>;
   gitStatus(projectId: string): Promise<GitStatus>;
   gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;
@@ -939,6 +1151,20 @@ export type FlowWeaveApi = {
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectId: string, filePath: string): Promise<string | undefined>;
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;
+  saveModificationDocs(projectId: string, sequenceInstruction?: string): Promise<{
+    guidancePath: string;
+    contextPath: string;
+  }>;
+  readModificationDelta(
+    projectId: string,
+    sequenceInstruction?: string,
+    canvas?: CodeflowCanvas
+  ): Promise<ModificationDeltaResult>;
+  acknowledgeModificationChanges(
+    projectId: string,
+    snapshot: ModificationSnapshot,
+    scope: ModificationAcknowledgementScope
+  ): Promise<ModificationBaseline>;
   readCanvas(projectId: string): Promise<CodeflowCanvas | undefined>;
   saveCanvas(projectId: string, canvas: CodeflowCanvas): Promise<string>;
   exportDiagnostics(projectId: string): Promise<string>;

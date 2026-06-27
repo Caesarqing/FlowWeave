@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { ProjectArtifactStatuses } from "../types";
+import type {
+  ArchitectureReviewStatus,
+  ProjectArtifactStatuses,
+  SequenceReviewStatus
+} from "../types";
 
 type ProjectState = {
   projectLabel: string;
@@ -7,6 +11,8 @@ type ProjectState = {
   projectPath: string;
   scanFingerprint: string;
   artifactStatuses?: ProjectArtifactStatuses;
+  architectureReview: ArchitectureReviewStatus;
+  sequenceReview: SequenceReviewStatus;
   projectStatus: string;
   isProjectLoading: boolean;
   setProjectLabel: (value: string) => void;
@@ -15,6 +21,12 @@ type ProjectState = {
   setScanFingerprint: (value: string) => void;
   setArtifactStatuses: (
     value: ProjectArtifactStatuses | ((current?: ProjectArtifactStatuses) => ProjectArtifactStatuses | undefined)
+  ) => void;
+  setArchitectureReview: (
+    value: ArchitectureReviewStatus | ((current: ArchitectureReviewStatus) => ArchitectureReviewStatus)
+  ) => void;
+  setSequenceReview: (
+    value: SequenceReviewStatus | ((current: SequenceReviewStatus) => SequenceReviewStatus)
   ) => void;
   setProjectStatus: (value: string) => void;
   setIsProjectLoading: (value: boolean) => void;
@@ -25,6 +37,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
   projectId: "",
   projectPath: "",
   scanFingerprint: "",
+  architectureReview: { state: "missing" },
+  sequenceReview: { state: "missing" },
   projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
   setProjectLabel: (projectLabel) => set({ projectLabel }),
@@ -33,6 +47,12 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setScanFingerprint: (scanFingerprint) => set({ scanFingerprint }),
   setArtifactStatuses: (value) => set((state) => ({
     artifactStatuses: typeof value === "function" ? value(state.artifactStatuses) : value
+  })),
+  setArchitectureReview: (value) => set((state) => ({
+    architectureReview: typeof value === "function" ? value(state.architectureReview) : value
+  })),
+  setSequenceReview: (value) => set((state) => ({
+    sequenceReview: typeof value === "function" ? value(state.sequenceReview) : value
   })),
   setProjectStatus: (projectStatus) => set({ projectStatus }),
   setIsProjectLoading: (isProjectLoading) => set({ isProjectLoading })

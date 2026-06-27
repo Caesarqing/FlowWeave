@@ -504,16 +504,27 @@ input:focus-visible {
 }
 
 .artifact-status-stale,
-.artifact-status-missing {
+.artifact-status-missing,
+.artifact-status-local,
+.artifact-status-reviewing {
   color: #e8bf63;
 }
 
-.artifact-status-failed {
+.artifact-status-failed,
+.artifact-status-review-failed {
   color: #ff8f9a;
 }
 
-.artifact-status-current {
+.artifact-status-current,
+.artifact-status-reviewed {
   color: var(--success);
+}
+
+.artifact-review-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
 }
 
 .artifact-status-details {
@@ -2306,6 +2317,44 @@ button:disabled {
   line-height: 1.55;
 }
 
+.agent-guidance-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.agent-guidance-card textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 170px;
+  resize: vertical;
+  padding: 12px;
+  color: var(--editor-text);
+  background: var(--editor-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.agent-guidance-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 10px;
+}
+
+.agent-guidance-actions .ui-button {
+  width: 100%;
+}
+
+.agent-guidance-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .dialog-box {
   display: grid;
   gap: 6px;
@@ -2924,6 +2973,41 @@ button:disabled {
 .run-row span,
 .run-row small {
   font-size: 11px;
+}
+
+.run-adoption {
+  align-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 7px;
+  width: fit-content;
+}
+
+.run-adoption.applied {
+  background: rgba(60, 179, 113, 0.14);
+  border-color: rgba(60, 179, 113, 0.36);
+  color: #63d58d;
+}
+
+.run-adoption.pending {
+  background: rgba(245, 177, 66, 0.14);
+  border-color: rgba(245, 177, 66, 0.36);
+  color: #f1c36d;
+}
+
+.run-adoption.rejected,
+.run-adoption.stale {
+  background: rgba(255, 111, 97, 0.13);
+  border-color: rgba(255, 111, 97, 0.34);
+  color: #ff9588;
+}
+
+.run-adoption.not-applicable {
+  color: var(--muted);
 }
 
 .run-dot {

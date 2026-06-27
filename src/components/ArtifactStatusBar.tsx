@@ -1,4 +1,11 @@
-import type { ProjectArtifactState, ProjectArtifactStatuses } from "../types";
+import type {
+  ArchitectureDiffCounts,
+  ArchitectureReviewStatus,
+  ProjectArtifactState,
+  ProjectArtifactStatuses,
+  SequenceDiffCounts,
+  SequenceReviewStatus
+} from "../types";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 
@@ -7,25 +14,57 @@ const artifactKeys: Array<keyof ProjectArtifactStatuses> = [
   "canvas",
   "task",
   "context",
-  "architecture",
   "sequences"
 ];
 
 export function ArtifactStatusBar({
+  architectureReview,
+  onRetryArchitectureReview,
+  onRetrySequenceReview,
   scanFingerprint,
+  sequenceReview,
   statuses
 }: {
+  architectureReview?: ArchitectureReviewStatus;
+  onRetryArchitectureReview?: () => void;
+  onRetrySequenceReview?: () => void;
   scanFingerprint: string;
+  sequenceReview?: SequenceReviewStatus;
   statuses?: ProjectArtifactStatuses;
 }) {
   const { t } = useI18n();
   if (!statuses) return null;
-  const abnormalKeys = artifactKeys.filter((key) => statuses[key] !== "current");
-  if (abnormalKeys.length === 0) return null;
+  const showSequenceReview = Boolean(sequenceReview) || statuses.sequences === "current";
+  const abnormalKeys = artifactKeys.filter((key) => {
+    if (key === "sequences" && showSequenceReview) return false;
+    return statuses[key] !== "current";
+  });
+  const visibleReview = architectureReview ?? {
+    state: statuses.architecture === "stale"
+      ? "stale"
+      : statuses.architecture === "missing"
+        ? "missing"
+        : "local"
+  };
+  const visibleSequenceReview = sequenceReview ?? {
+    state: statuses.sequences === "stale"
+      ? "stale"
+      : statuses.sequences === "missing"
+        ? "missing"
+        : "local"
+  };
 
   return (
     <details className="artifact-status-bar">
       <summary aria-label={t("artifact.statuses")}>
+        <span className={cn("artifact-status", `artifact-status-${visibleReview.state}`)}>
+          {t("artifact.architecture")}: {t(`artifact.review.${visibleReview.state}`)}
+        </span>
+        {showSequenceReview ? (
+          <span className={cn("artifact-status", `artifact-status-${visibleSequenceReview.state}`)}>
+            {t("artifact.sequences")}: {t(`artifact.review.${visibleSequenceReview.state}`)}
+          </span>
+        ) : null}
         {abnormalKeys.map((key) => (
           <span className={cn("artifact-status", `artifact-status-${statuses[key]}`)} key={key}>
             {t(`artifact.${key}`)}: {t(stateKey(statuses[key]))}
@@ -40,10 +79,92 @@ export function ArtifactStatusBar({
             </span>
           ))}
         </div>
+        <ArchitectureReviewDetails
+          onRetry={onRetryArchitectureReview}
+          review={visibleReview}
+          t={t}
+        />
+        {showSequenceReview ? (
+          <SequenceReviewDetails
+            onRetry={onRetrySequenceReview}
+            review={visibleSequenceReview}
+            t={t}
+          />
+        ) : null}
         <code>{t("artifact.scanFingerprint")}: {scanFingerprint || t("artifact.unavailable")}</code>
       </div>
     </details>
   );
+}
+
+function SequenceReviewDetails({
+  onRetry,
+  review,
+  t
+}: {
+  onRetry?: () => void;
+  review: SequenceReviewStatus;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div className="artifact-review-details">
+      {review.agentId ? <span>{t("artifact.review.agent")}: {review.agentId}</span> : null}
+      {review.completedAt ? <span>{t("artifact.review.completedAt")}: {review.completedAt}</span> : null}
+      {review.runId ? <span>{t("artifact.review.runId")}: {review.runId}</span> : null}
+      {review.diff ? <span>{formatSequenceDiff(review.diff, t)}</span> : null}
+      {review.error ? <span>{review.error.message}</span> : null}
+      {review.state === "review-failed" && onRetry ? (
+        <button type="button" onClick={onRetry}>{t("artifact.review.retry")}</button>
+      ) : null}
+    </div>
+  );
+}
+
+function ArchitectureReviewDetails({
+  onRetry,
+  review,
+  t
+}: {
+  onRetry?: () => void;
+  review: ArchitectureReviewStatus;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div className="artifact-review-details">
+      {review.agentId ? <span>{t("artifact.review.agent")}: {review.agentId}</span> : null}
+      {review.completedAt ? <span>{t("artifact.review.completedAt")}: {review.completedAt}</span> : null}
+      {review.runId ? <span>{t("artifact.review.runId")}: {review.runId}</span> : null}
+      {review.diff ? <span>{formatDiff(review.diff, t)}</span> : null}
+      {review.error ? <span>{review.error.message}</span> : null}
+      {review.state === "review-failed" && onRetry ? (
+        <button type="button" onClick={onRetry}>{t("artifact.review.retry")}</button>
+      ) : null}
+    </div>
+  );
+}
+
+function formatDiff(
+  diff: ArchitectureDiffCounts,
+  t: (key: string, values?: Record<string, string | number>) => string
+): string {
+  const values = [
+    t("artifact.review.diffAdded", { count: diff.modules.added + diff.relationships.added }),
+    t("artifact.review.diffRemoved", { count: diff.modules.removed + diff.relationships.removed }),
+    t("artifact.review.diffModified", { count: diff.modules.modified + diff.relationships.modified })
+  ];
+  return values.join(" · ");
+}
+
+function formatSequenceDiff(
+  diff: SequenceDiffCounts,
+  t: (key: string, values?: Record<string, string | number>) => string
+): string {
+  const values = [
+    t("artifact.review.diffAdded", { count: diff.participants.added + diff.messages.added }),
+    t("artifact.review.diffRemoved", { count: diff.participants.removed + diff.messages.removed }),
+    t("artifact.review.diffModified", { count: diff.participants.modified + diff.messages.modified })
+  ];
+  return values.join(" · ");
 }
 
 function stateKey(state: ProjectArtifactState) {

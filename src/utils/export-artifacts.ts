@@ -1,4 +1,12 @@
-import type { ExecutionMode, GraphEdge, GraphNode, SequenceDiagram, SequenceDiagramBundle } from "../types";
+import type {
+  ExecutionMode,
+  GraphEdge,
+  GraphNode,
+  ModificationDeltaResult,
+  ModificationGuidanceContext,
+  SequenceDiagram,
+  SequenceDiagramBundle
+} from "../types";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -92,6 +100,21 @@ export function buildModificationContext(input: BuildModificationContextInput): 
   };
 }
 
+export function buildCurrentModuleGuidancePrompt(node: GraphNode, guidance: string): string {
+  return `# FlowWeave Current Module Guidance
+
+Send only this user guidance to the agent for the identified Canvas module.
+
+Module ID: ${node.id}
+Module title: ${node.title}
+
+Guidance:
+${guidance.trim()}
+
+Return a focused implementation plan for this guidance. Verify the relevant source files before proposing changes.
+`;
+}
+
 export function buildModificationGuidanceMarkdown(context: FlowWeaveModificationContext): string {
   return `# FlowWeave Modification Guidance
 
@@ -114,6 +137,69 @@ ${context.sequence ? buildLegacySequenceGuidance(context) : "No sequence diagram
 
 export function buildModificationContextJson(context: FlowWeaveModificationContext): string {
   return `${JSON.stringify(context, null, 2)}\n`;
+}
+
+export function buildModificationDeltaContextJson(context: ModificationGuidanceContext): string {
+  return `${JSON.stringify(context, null, 2)}\n`;
+}
+
+export function createModificationGuidanceContext(
+  projectLabel: string,
+  projectPath: string,
+  result: ModificationDeltaResult
+): ModificationGuidanceContext {
+  return {
+    schemaVersion: 2,
+    source: "FlowWeave",
+    generatedAt: new Date().toISOString(),
+    project: {
+      label: projectLabel,
+      path: projectPath,
+      scanFingerprint: result.snapshot.scanFingerprint
+    },
+    delta: result.delta,
+    hasChanges: result.hasChanges,
+    artifactReferences: [
+      ".flowweave/project.json",
+      ".flowweave/canvas/main.canvas.json",
+      ".flowweave/architecture-map.json",
+      ".flowweave/sequence-diagrams.json"
+    ]
+  };
+}
+
+export function buildModificationDeltaGuidanceMarkdown(context: ModificationGuidanceContext): string {
+  const delta = context.delta;
+  return `# FlowWeave Pending Modification Guidance
+
+Generated: ${context.generatedAt}
+Project: ${context.project.label}
+Project path: ${context.project.path}
+
+Read existing project and FlowWeave artifacts when historical context is needed:
+${context.artifactReferences.map((path) => `- ${path}`).join("\n")}
+
+${context.hasChanges ? formatPendingChanges(delta) : "No unacknowledged user modifications."}
+`;
+}
+
+export function buildModificationDeltaAgentPrompt(
+  context: ModificationGuidanceContext,
+  executionMode: ExecutionMode
+): string {
+  return `You are FlowWeave's agent.
+
+Prompt kind: ${executionMode === "execute" ? "execute-change" : "combined-modification-plan"}
+Execution mode: ${executionMode}
+
+Use only the pending user modifications below as new instructions.
+Read the referenced project and FlowWeave artifacts when historical context is needed.
+Do not treat omitted generated content as deleted or irrelevant.
+
+Context JSON:
+\`\`\`json
+${buildModificationDeltaContextJson(context).trimEnd()}
+\`\`\``;
 }
 
 export function buildAgentPrompt(
@@ -387,6 +473,44 @@ function outputContract(promptKind: AgentPromptKind): string {
     return "Return an implementation plan for the selected Canvas module with affected files, risks, and tests.";
   }
   return "Return a combined implementation plan across Canvas and Sequence context with affected files, risks, and tests.";
+}
+
+function formatPendingChanges(delta: ModificationGuidanceContext["delta"]): string {
+  const sections: string[] = [];
+  if (delta.modules.added.length) {
+    sections.push(`## Added Modules\n\n${delta.modules.added.map((module) =>
+      `### ${module.title} (${module.id})\n\n${JSON.stringify(module, null, 2)}`
+    ).join("\n\n")}`);
+  }
+  if (delta.modules.updated.length) {
+    sections.push(`## Updated Modules\n\n${delta.modules.updated.map((module) =>
+      `### ${module.title} (${module.id})\n\n${JSON.stringify(module.changes, null, 2)}`
+    ).join("\n\n")}`);
+  }
+  if (delta.modules.deleted.length) {
+    sections.push(`## Deleted Modules\n\n${delta.modules.deleted.map((module) =>
+      `- ${module.title} (${module.id})`
+    ).join("\n")}`);
+  }
+  if (delta.relations.added.length) {
+    sections.push(`## Added Relations\n\n${delta.relations.added.map((relation) =>
+      `- ${relation.source} -> ${relation.target}: ${relation.relation}${relation.guidanceNote ? ` — ${relation.guidanceNote}` : ""}`
+    ).join("\n")}`);
+  }
+  if (delta.relations.updated.length) {
+    sections.push(`## Updated Relations\n\n${delta.relations.updated.map((relation) =>
+      `- ${relation.id}: ${JSON.stringify(relation.changes)}`
+    ).join("\n")}`);
+  }
+  if (delta.relations.deleted.length) {
+    sections.push(`## Deleted Relations\n\n${delta.relations.deleted.map((relation) =>
+      `- ${relation.source} -> ${relation.target} (${relation.id})`
+    ).join("\n")}`);
+  }
+  if (delta.sequenceInstruction) {
+    sections.push(`## Sequence Diagram Instruction\n\n${delta.sequenceInstruction}`);
+  }
+  return sections.join("\n\n");
 }
 
 function formatCanvasModule(node: GraphNode): string {

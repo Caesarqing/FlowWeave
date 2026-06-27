@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type {
   ArchitectureLayer,
@@ -19,6 +20,7 @@ import type {
   RuntimeAgentId,
   StructureSymbol,
   TechnologyStack,
+  ToolRunResult,
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { startToolPlan } from "./agent-run.service";
@@ -29,6 +31,11 @@ import { FlowWeaveError, throwIfAborted } from "./flowweave-error.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { assessModules, unknownAssessment } from "../../utils/module-assessment";
+import {
+  startArchitectureReview,
+  writeArchitectureReviewStatus,
+  type ArchitectureReviewRunResult
+} from "./architecture-review.service";
 
 const MAX_PROMPT_FILES = 80;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 8;
@@ -44,7 +51,7 @@ export async function analyzeArchitecture(
   const flightKey = `${project.rootPath}:${toolId}`;
   const existing = architectureFlights.get(flightKey);
   if (existing) return existing;
-  const flight = analyzeArchitectureOnce(project, toolId, undefined)
+  const flight = analyzeArchitectureOnce(project, toolId, options)
     .then(async (result) => {
       if (result.outcome === "generated") return result;
       const previous = await readArchitectureMap(project.rootPath);
@@ -100,21 +107,48 @@ async function analyzeArchitectureOnce(
     );
     throwIfAborted(options?.signal, "Architecture analysis");
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
-    return architectureMapToResult(architectureMap, "mock");
+    const review = {
+      state: "reviewed",
+      reviewId: `review-${randomUUID()}`,
+      scanFingerprint: inputFingerprint,
+      agentId: toolId,
+      runId: "mock",
+      completedAt: architectureMap.generatedAt
+    } as const;
+    await writeArchitectureReviewStatus(project.rootPath, review);
+    return architectureMapToResult(architectureMap, review, "mock");
   }
 
   throwIfAborted(options?.signal, "Architecture analysis");
   await writeLocalArchitectureArtifacts(project.rootPath, localArchitecture);
-  void enhanceArchitectureWithAgent(project, toolId, prompt, facts, representativeFacts, index, inputFingerprint)
-    .catch((error: unknown) => {
-      if (error instanceof FlowWeaveError && error.category === "canceled") return;
-      console.warn("FlowWeave architecture Agent enhancement failed.", {
-        projectPath: project.rootPath,
-        agentId: toolId,
-        reason: formatError(error)
-      });
-    });
-  return architectureMapToResult(localArchitecture);
+  const projectId = options?.projectId ?? await registerProject(project.rootPath);
+  const reviewId = options?.resumeArchitectureReview?.reviewId ?? `review-${randomUUID()}`;
+  const review = await startArchitectureReview({
+    projectId,
+    projectPath: project.rootPath,
+    reviewId,
+    scanFingerprint: inputFingerprint,
+    agentId: toolId,
+    localArchitecture,
+    startedAt: localArchitecture.generatedAt,
+    persist: (architectureMap) => writeArchitectureArtifacts(project.rootPath, architectureMap),
+    toGraph: architectureMapToGraph,
+    run: (onRunId) => runArchitectureReview(
+      project,
+      toolId,
+      prompt,
+      facts,
+      representativeFacts,
+      index,
+      inputFingerprint,
+      reviewId,
+      onRunId,
+      options?.resumeArchitectureReview?.runId,
+      options?.planTimeoutMs
+    ),
+    onEvent: options?.onArchitectureReview ?? (() => undefined)
+  });
+  return architectureMapToResult(localArchitecture, review);
 }
 
 export async function readArchitectureMap(projectPath: string): Promise<ArchitectureMap | undefined> {
@@ -211,11 +245,16 @@ export function parseArchitectureJson(output: string, project: CodeflowProject, 
   }
 }
 
-export function architectureMapToResult(architectureMap: ArchitectureMap, runId?: string): ArchitectureAnalysisResult {
+export function architectureMapToResult(
+  architectureMap: ArchitectureMap,
+  review: import("../../types").ArchitectureReviewStatus,
+  runId?: string
+): ArchitectureAnalysisResult {
   return {
     outcome: "generated",
     architectureMap,
     graph: architectureMapToGraph(architectureMap),
+    review,
     runId
   };
 }
@@ -226,56 +265,132 @@ async function writeLocalArchitectureArtifacts(projectPath: string, architecture
   await writeArchitectureArtifacts(projectPath, architectureMap);
 }
 
-async function enhanceArchitectureWithAgent(
+async function runArchitectureReview(
   project: CodeflowProject,
   toolId: RuntimeAgentId,
   prompt: string,
   facts: ProjectStructureFacts,
   representativeFacts: ProjectStructureFacts,
   index: import("../../types").SemanticIndex,
-  inputFingerprint: string
-): Promise<void> {
-  const projectId = await registerProject(project.rootPath);
-  const firstRun = await startToolPlan({
-    projectId,
-    toolId,
-    prompt,
-    executionMode: "plan",
-    purpose: "artifact-analysis"
-  });
-  if (firstRun.status !== "completed") return;
-  const firstOutput = firstRun.outputText ?? collectStdout(firstRun.events);
-  const firstParsed = parseArchitectureJson(firstOutput, project, facts);
-  const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
-  if (firstParsed && firstQuality?.valid) {
+  inputFingerprint: string,
+  reviewId: string,
+  onRunId: (runId: string) => Promise<void>,
+  resumeRunId: string | undefined,
+  planTimeoutMs: number | undefined
+): Promise<ArchitectureReviewRunResult> {
+  try {
+    const projectId = await registerProject(project.rootPath);
+    const firstStarted = resumeRunId
+      ? await readArchitectureRun(project.rootPath, resumeRunId, toolId)
+      : await startToolPlan({
+          projectId,
+          toolId,
+          prompt,
+          executionMode: "plan",
+          purpose: "artifact-analysis",
+          artifactTarget: "architecture-map",
+          scanFingerprint: inputFingerprint,
+          reviewId,
+          planTimeoutMs
+        });
+    await onRunId(firstStarted.id);
+    const firstRun = await waitForArchitectureRun(project.rootPath, firstStarted, planTimeoutMs);
+    if (firstRun.status !== "completed") {
+      return reviewFailure(toolId, "agent-failed", firstRun.failure?.message ?? firstRun.summary ?? "Agent review did not complete.", firstRun.id);
+    }
+    const firstOutput = firstRun.outputText ?? collectStdout(firstRun.events);
+    const firstParsed = parseArchitectureJson(firstOutput, project, facts);
+    const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
+    if (firstParsed && firstQuality?.valid) {
+      const architectureMap = assessArchitectureMap(
+        withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality),
+        index,
+        inputFingerprint
+      );
+      if (!await architectureInputIsCurrent(project.rootPath, inputFingerprint)) {
+        return reviewFailure(toolId, "agent-failed", "Project scan changed before the Agent review completed.", firstRun.id);
+      }
+      const { updateRunArtifactAdoption } = await import("./run-log.service");
+      await updateRunArtifactAdoption(project.rootPath, firstRun.id, {
+        status: "applied",
+        message: "Run completed and applied to module graph.",
+        appliedAt: architectureMap.generatedAt
+      });
+      return { outcome: "reviewed", architectureMap, runId: firstRun.id };
+    }
+
+    const firstFailure = firstParsed
+      ? firstQuality?.reasons.join("; ") ?? "Architecture quality validation failed."
+      : "Agent returned invalid architecture JSON.";
+    const retryStarted = await startToolPlan({
+      projectId,
+      toolId,
+      prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
+      executionMode: "plan",
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map",
+      scanFingerprint: inputFingerprint,
+      reviewId,
+      planTimeoutMs
+    });
+    await onRunId(retryStarted.id);
+    const retry = await waitForArchitectureRun(project.rootPath, retryStarted, planTimeoutMs);
+    if (retry.status !== "completed") {
+      return reviewFailure(toolId, "agent-failed", retry.failure?.message ?? retry.summary ?? "Agent repair review did not complete.", retry.id);
+    }
+    const retryOutput = retry.outputText ?? collectStdout(retry.events);
+    const retryParsed = parseArchitectureJson(retryOutput, project, facts);
+    const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
+    if (!retryParsed) {
+      return reviewFailure(toolId, "invalid-output", "Agent returned invalid architecture JSON after one repair attempt.", retry.id);
+    }
+    if (!retryQuality?.valid) {
+      return reviewFailure(toolId, "quality-rejected", retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed.", retry.id);
+    }
     const architectureMap = assessArchitectureMap(
-      withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality),
+      withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality),
       index,
       inputFingerprint
     );
-    await writeArchitectureArtifacts(project.rootPath, architectureMap);
-    return;
+    if (!await architectureInputIsCurrent(project.rootPath, inputFingerprint)) {
+      return reviewFailure(toolId, "agent-failed", "Project scan changed before the Agent review completed.", retry.id);
+    }
+    const { updateRunArtifactAdoption } = await import("./run-log.service");
+    await updateRunArtifactAdoption(project.rootPath, retry.id, {
+      status: "applied",
+      message: "Run completed and applied to module graph.",
+      appliedAt: architectureMap.generatedAt
+    });
+    return { outcome: "reviewed", architectureMap, runId: retry.id };
+  } catch (error) {
+    if (error instanceof FlowWeaveError && error.category === "canceled") {
+      return reviewFailure(toolId, "agent-failed", error.message, undefined);
+    }
+    return reviewFailure(toolId, "agent-failed", formatError(error), undefined);
   }
+}
 
-  const firstFailure = firstParsed ? firstQuality?.reasons.join("; ") ?? "Architecture quality validation failed." : "Agent returned invalid architecture JSON.";
-  const retry = await startToolPlan({
-    projectId,
+async function readArchitectureRun(
+  projectPath: string,
+  runId: string,
+  toolId: RuntimeAgentId
+): Promise<ToolRunResult> {
+  const { readRunArtifact } = await import("./run-log.service");
+  const artifact = await readRunArtifact(projectPath, runId);
+  return {
+    id: artifact.summary.id,
     toolId,
-    prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
+    status: artifact.summary.status,
+    projectPath,
+    startedAt: artifact.summary.startedAt,
+    completedAt: artifact.summary.completedAt,
+    summary: artifact.summary.summary,
+    outputText: artifact.plan,
+    failure: artifact.summary.failure,
+    events: [],
     executionMode: "plan",
     purpose: "artifact-analysis"
-  });
-  if (retry.status !== "completed") return;
-  const retryOutput = collectStdout(retry.events);
-  const retryParsed = parseArchitectureJson(retryOutput, project, facts);
-  const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
-  if (!retryParsed || !retryQuality?.valid) return;
-  const architectureMap = assessArchitectureMap(
-    withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality),
-    index,
-    inputFingerprint
-  );
-  await writeArchitectureArtifacts(project.rootPath, architectureMap);
+  };
 }
 
 export function architectureMapToGraph(architectureMap: ArchitectureMap): { nodes: GraphNode[]; edges: GraphEdge[] } {
@@ -358,7 +473,7 @@ export function architectureMapToModuleMap(map: ArchitectureMap): ModuleMap {
   };
 }
 
-async function writeArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap) {
+export async function writeArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap) {
   const root = join(projectPath, FLOWWEAVE_DIR);
   await Promise.all([
     writeJsonAtomic(join(root, "architecture-map.json"), architectureMap),
@@ -367,7 +482,59 @@ async function writeArchitectureArtifacts(projectPath: string, architectureMap: 
   ]);
 }
 
-function validateArchitectureMap(
+async function waitForArchitectureRun(
+  projectPath: string,
+  initial: ToolRunResult,
+  planTimeoutMs: number | undefined
+): Promise<ToolRunResult> {
+  if (initial.status !== "pending") return initial;
+  const deadline = Date.now() + (planTimeoutMs ?? 300_000);
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const { readRunArtifact } = await import("./run-log.service");
+    const artifact = await readRunArtifact(projectPath, initial.id);
+    if (artifact.summary.status === "pending") continue;
+    return {
+      ...initial,
+      status: artifact.summary.status,
+      completedAt: artifact.summary.completedAt,
+      summary: artifact.summary.summary,
+      outputText: artifact.plan
+    };
+  }
+  return {
+    ...initial,
+    status: "failed",
+    summary: `Agent review remained pending without a desktop bridge response.json before timeout: ${initial.id}`
+  };
+}
+
+function reviewFailure(
+  agentId: RuntimeAgentId,
+  code: "agent-failed" | "invalid-output" | "quality-rejected" | "persistence-failed",
+  message: string,
+  runId: string | undefined
+): ArchitectureReviewRunResult {
+  return {
+    outcome: "failed",
+    runId,
+    error: { code, message }
+  };
+}
+
+async function architectureInputIsCurrent(
+  projectPath: string,
+  inputFingerprint: string
+): Promise<boolean> {
+  const projectArtifact = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "project.json"));
+  if (projectArtifact === undefined) return true;
+  if (typeof projectArtifact !== "object" || projectArtifact === null || !("scanFingerprint" in projectArtifact)) {
+    return false;
+  }
+  return projectArtifact.scanFingerprint === inputFingerprint;
+}
+
+export function validateArchitectureMap(
   architectureMap: ArchitectureMap,
   representativeFacts: ProjectStructureFacts
 ): { valid: boolean; reasons: string[]; fileCoverage: number; evidenceCoverage: number } {
@@ -407,7 +574,7 @@ function validateArchitectureMap(
   return { valid: reasons.length === 0, reasons: [...new Set(reasons)], fileCoverage, evidenceCoverage };
 }
 
-function withArchitectureMetadata(
+export function withArchitectureMetadata(
   architectureMap: ArchitectureMap,
   agentId: RuntimeAgentId,
   runId: string,
@@ -998,7 +1165,7 @@ function isRelation(value: unknown): value is GraphEdgeRelation {
   return value === "depends_on" || value === "calls" || value === "reads_writes" || value === "external_api" || value === "publishes_event" || value === "subscribes_event" || value === "tests";
 }
 
-function assessArchitectureMap(
+export function assessArchitectureMap(
   architectureMap: ArchitectureMap,
   index: import("../../types").SemanticIndex,
   scanFingerprint: string

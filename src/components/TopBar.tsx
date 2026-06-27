@@ -15,12 +15,14 @@ export function TopBar({
   activePage,
   onExport,
   onSendToTool,
-  projectLabel
+  projectLabel,
+  sendDisabled
 }: {
   activePage: ActivePage;
   onExport: () => void;
   onSendToTool: () => void;
   projectLabel: string;
+  sendDisabled: boolean;
 }) {
   const showPageActions = activePage === "canvas" || activePage === "structure";
   const { t } = useI18n();
@@ -37,10 +39,19 @@ export function TopBar({
 
       {showPageActions ? (
         <div className="top-actions">
-          <button aria-label={t("top.send")} className="ghost-button" title={t("top.send")} type="button" onClick={onSendToTool}>
-            <Send size={16} />
-            <span className="button-label">{t("top.send")}</span>
-          </button>
+          {activePage === "canvas" ? (
+            <button
+              aria-label={sendDisabled ? t("top.noPendingGuidance") : t("top.sendAllGuidance")}
+              className="ghost-button"
+              disabled={sendDisabled}
+              title={sendDisabled ? t("top.noPendingGuidance") : t("top.sendAllGuidance")}
+              type="button"
+              onClick={onSendToTool}
+            >
+              <Send size={16} />
+              <span className="button-label">{t("top.sendAllGuidance")}</span>
+            </button>
+          ) : null}
           <button aria-label={t("top.export")} className="export-button" title={t("top.export")} type="button" onClick={onExport}>
             <Download size={16} />
             <span className="button-label">{t("top.export")}</span>

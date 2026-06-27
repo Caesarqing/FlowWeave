@@ -1,6 +1,6 @@
 import { Activity, CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
@@ -103,11 +103,13 @@ const builtInAgentDescriptionKeys: Partial<Record<RuntimeAgentId, string>> = {
 
 export function AgentPage({
   agents,
+  architectureReview,
   executionMode,
   isRunsLoading,
   isDesktopBridgeAvailable,
   lastRunStatus,
   onAnalyzeCurrentProject,
+  onApplyRunArtifact,
   onDeleteCustomAgent,
   onDetectAgent,
   onExecutionModeChange,
@@ -129,11 +131,13 @@ export function AgentPage({
   toolStatuses
 }: {
   agents: AgentDefinition[];
+  architectureReview: ArchitectureReviewStatus;
   executionMode: ExecutionMode;
   isRunsLoading: boolean;
   isDesktopBridgeAvailable: boolean;
   lastRunStatus: string;
   onAnalyzeCurrentProject: (agentId?: RuntimeAgentId) => void;
+  onApplyRunArtifact: () => void;
   onDeleteCustomAgent: (agentId: AgentId) => void;
   onDetectAgent: (agentId: RuntimeAgentId) => void;
   onExecutionModeChange: (mode: ExecutionMode) => void;
@@ -157,6 +161,7 @@ export function AgentPage({
   const { t } = useI18n();
   const visibleAgents = agents.length > 0 ? agents : fallbackAgents;
   const selectedAgent = visibleAgents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0];
+  const isArchitectureReviewing = architectureReview.state === "reviewing";
   const agentNames = useMemo(() => new Map<string, string>(visibleAgents.map((agent) => [agent.id, agent.name])), [visibleAgents]);
   const [isAddingAgent, setIsAddingAgent] = useState(false);
   const [copiedAgentId, setCopiedAgentId] = useState<string>("");
@@ -180,9 +185,11 @@ export function AgentPage({
           <strong>{selectedAgent?.name ?? t("agent.notSelected")}</strong>
           <span>{selectedAgent ? commandLabel(selectedAgent) : t("agent.addOrSelect")}</span>
         </div>
-        <button className="send-button" disabled={!projectPath || !selectedAgent} type="button" onClick={() => onAnalyzeCurrentProject()}>
+        <button className="send-button" disabled={!projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
           <Play size={14} />
-          {t("agent.analyzeProject")}
+          {isArchitectureReviewing
+            ? t("agent.waitingForRun", { runId: architectureReview.runId ?? architectureReview.reviewId ?? "" })
+            : t("agent.analyzeProject")}
         </button>
       </section>
 
@@ -338,6 +345,11 @@ export function AgentPage({
                   <div>
                     <strong>{run.id}</strong>
                     <span>{agentNames.get(run.toolId) ?? run.toolId} · {run.executionMode} · {run.status}</span>
+                    {run.artifactAdoption ? (
+                      <span className={cn("run-adoption", run.artifactAdoption.status)}>
+                        {artifactAdoptionLabel(run.artifactAdoption.status, t)}
+                      </span>
+                    ) : null}
                     {run.failure ? <span>{run.failure.code} · {run.failure.message}</span> : null}
                   </div>
                   <small>{formatRunTime(run.startedAt)}</small>
@@ -364,6 +376,17 @@ export function AgentPage({
                     : selectedRunArtifact.summary.summary ?? selectedRunArtifact.summary.id}
                 </span>
                 <code>{selectedRunArtifact.summary.planPath ?? selectedRunArtifact.summary.logPath ?? "no output path"}</code>
+                {selectedRunArtifact.summary.artifactAdoption ? (
+                  <span className={cn("run-adoption", selectedRunArtifact.summary.artifactAdoption.status)}>
+                    {artifactAdoptionLabel(selectedRunArtifact.summary.artifactAdoption.status, t)}
+                  </span>
+                ) : null}
+                {canApplyRunArtifact(selectedRunArtifact.summary) ? (
+                  <button className="ghost-button" type="button" onClick={onApplyRunArtifact}>
+                    <CheckCircle2 size={14} />
+                    {t("agent.applyRunArtifact")}
+                  </button>
+                ) : null}
                 {selectedRunArtifact.summary.failure ? (
                   <>
                     <button className="ghost-button" type="button" onClick={() => onRunArtifactTabChange("log")}>
@@ -387,6 +410,12 @@ export function AgentPage({
                   {selectedRunArtifact.summary.failure.suggestedActions.map((action) => (
                     <span key={action}>{action}</span>
                   ))}
+                </div>
+              ) : null}
+              {selectedRunArtifact.summary.artifactAdoption?.message ? (
+                <div className="run-failure-actions">
+                  <strong>{t("agent.artifactLifecycle")}</strong>
+                  <span>{selectedRunArtifact.summary.artifactAdoption.message}</span>
                 </div>
               ) : null}
               <div className="artifact-tabs">
@@ -613,6 +642,16 @@ function artifactContent(artifact: ToolRunArtifact, tab: RunArtifactTab) {
   if (tab === "plan") return artifact.plan;
   if (tab === "log") return artifact.log;
   return artifact.result;
+}
+
+function canApplyRunArtifact(summary: ToolRunSummary) {
+  if (summary.purpose !== "artifact-analysis" || summary.status !== "completed") return false;
+  const status = summary.artifactAdoption?.status;
+  return status === undefined || status === "pending" || status === "rejected" || status === "stale";
+}
+
+function artifactAdoptionLabel(status: NonNullable<ToolRunSummary["artifactAdoption"]>["status"], t: (key: string) => string) {
+  return t(`agent.artifactAdoption.${status}`);
 }
 
 function formatRunTime(value: string) {

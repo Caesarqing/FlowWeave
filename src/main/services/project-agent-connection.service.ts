@@ -337,6 +337,7 @@ function buildManagedInstructionBlock() {
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
     "When the user says `使用 FlowWeave 上下文处理当前待办`, process the newest pending request under `.flowweave/agent-bridge` and write the required response atomically.",
+    "For artifact-analysis requests, write `.flowweave/agent-bridge/<runId>/response.json`; replying only in chat does not complete the FlowWeave review.",
     FLOWWEAVE_BLOCK_END
   ].join("\n");
 }

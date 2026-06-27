@@ -87,9 +87,22 @@ function DesktopApp() {
       <Sidebar activePage={app.activePage} activeUtilityPanel={utilityPanel} onPageChange={changePage} onUtilityPanelChange={setUtilityPanel} />
       <UtilityPanels activePanel={utilityPanel} onClose={() => setUtilityPanel(undefined)} projectId={app.projectId} />
       <section className="main-shell">
-        <TopBar activePage={app.activePage} onExport={app.onExport} onSendToTool={app.onSendToTool} projectLabel={app.projectLabel} />
+        <TopBar
+          activePage={app.activePage}
+          onExport={app.onExport}
+          onSendToTool={app.onSendToTool}
+          projectLabel={app.projectLabel}
+          sendDisabled={!app.hasPendingModifications}
+        />
         <div className="artifact-status-slot">
-          <ArtifactStatusBar scanFingerprint={app.scanFingerprint} statuses={app.artifactStatuses} />
+          <ArtifactStatusBar
+            architectureReview={app.architectureReview}
+            onRetryArchitectureReview={app.canvas.onAnalyzeProject}
+            onRetrySequenceReview={app.sequence.generateDiagrams}
+            scanFingerprint={app.scanFingerprint}
+            sequenceReview={app.sequence.review}
+            statuses={app.artifactStatuses}
+          />
         </div>
         <div className="workspace-host">
         <Suspense fallback={<main className="workspace-page" aria-busy="true" />}>
@@ -125,15 +138,15 @@ function DesktopApp() {
               />
             ) : app.canvas.selectedNode ? (
               <ModulePanel
-                dialogText={app.dialogText}
                 edges={app.canvas.graphRelations}
+                guidanceOperation={app.canvas.guidanceOperation}
                 node={app.canvas.selectedNode}
-                onApplyDialog={app.canvas.onApplyDialog}
                 onDeleteNode={app.canvas.deleteModuleNode}
-                onDialogTextChange={app.canvas.onDialogTextChange}
                 onGuidanceChange={app.canvas.onGuidanceChange}
                 onModuleChange={app.canvas.onUpdateModuleFields}
-                onWriteDraft={app.canvas.onWriteDraft}
+                onSaveGuidance={app.canvas.onSaveGuidance}
+                onSendGuidance={app.canvas.onSendGuidance}
+                sendGuidanceDisabled={!app.canvas.hasPendingGuidance}
               />
             ) : undefined}
             rightAttention={Boolean(app.canvas.selectedNode || app.canvas.connectionPanelMode)}
@@ -187,11 +200,13 @@ function DesktopApp() {
         ) : (
           <AgentPage
             agents={app.tools.agents}
+            architectureReview={app.tools.architectureReview}
             executionMode={app.tools.executionMode}
             isDesktopBridgeAvailable={app.isDesktopBridgeAvailable}
             lastRunStatus={app.tools.lastRunStatus}
             isRunsLoading={app.tools.isRunsLoading}
             onAnalyzeCurrentProject={app.tools.onAnalyzeCurrentProject}
+            onApplyRunArtifact={app.tools.onApplyRunArtifact}
             onDeleteCustomAgent={app.tools.onDeleteCustomAgent}
             onDetectAgent={app.tools.onDetectAgent}
             onExecutionModeChange={app.tools.onExecutionModeChange}

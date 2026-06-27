@@ -30,6 +30,8 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.healthCheck")).toBe("Health check");
     expect(translate("en", "agent.connectorPrompt")).toBe("Connector prompt");
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
+    expect(translate("en", "agent.applyRunArtifact")).toBe("Apply result");
+    expect(translate("en", "agent.artifactAdoption.applied")).toBe("Applied");
     expect(translate("en", "agent.protocolCli")).toBe("CLI stdin");
     expect(translate("en", "agent.protocolDesktop")).toBe("Desktop bridge");
     expect(translate("en", "agent.capabilityArtifactAnalysis")).toBe("Artifact analysis");
@@ -48,7 +50,7 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "canvas.title")).toBe("模块图");
     expect(translate("zh-CN", "project.files")).toBe("项目文件");
     expect(translate("zh-CN", "structure.emptyTitle")).toBe("尚未生成序列图");
-    expect(translate("zh-CN", "structure.sourceFiles", { count: 3, messageCount: "2 条消息" })).toBe("3 个源文件 · 智能体就绪 · 2 条消息");
+    expect(translate("zh-CN", "structure.sourceFiles", { count: 3, messageCount: "2 条消息" })).toBe("3 个源文件 · agent 就绪 · 2 条消息");
     expect(translate("zh-CN", "relation.depends_onDescription")).toContain("依赖目标模块");
     expect(translate("zh-CN", "sequence.generated", { counts: "2 条架构消息" })).toBe(
       "序列图生成完成：2 条架构消息。"
@@ -62,6 +64,8 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.healthCheck")).toBe("健康检查");
     expect(translate("zh-CN", "agent.connectorPrompt")).toBe("连接提示");
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
+    expect(translate("zh-CN", "agent.applyRunArtifact")).toBe("应用结果");
+    expect(translate("zh-CN", "agent.artifactAdoption.applied")).toBe("已应用");
     expect(translate("zh-CN", "agent.protocolCli")).toBe("CLI stdin");
     expect(translate("zh-CN", "agent.protocolDesktop")).toBe("Desktop bridge");
     expect(translate("zh-CN", "agent.capabilityArtifactAnalysis")).toBe("产物分析");

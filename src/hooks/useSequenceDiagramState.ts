@@ -7,7 +7,9 @@ import type {
   SequenceDiagramGenerationResult,
   SequenceMessage,
   SequenceParticipant,
-  ProjectArtifactState
+  ProjectArtifactState,
+  SequenceReviewEvent,
+  SequenceReviewStatus
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { useProjectStore } from "../stores/project.store";
@@ -18,6 +20,9 @@ export type SequenceDiagramState = {
   diagram?: SequenceDiagram;
   fileCount: number;
   instruction: string;
+  guidanceOperation: "save" | "send" | "";
+  hasPendingInstruction: boolean;
+  review: SequenceReviewStatus;
   isBusy: boolean;
   selectedMessage?: SequenceMessage;
   selectedMessageId: string;
@@ -27,6 +32,7 @@ export type SequenceDiagramState = {
   cancelOperation: () => Promise<void>;
   generateDiagrams: () => Promise<void>;
   reviseDiagram: () => Promise<void>;
+  saveInstruction: () => Promise<void>;
   selectMessage: (messageId: string) => void;
   selectParticipant: (participantId: string) => void;
   setInstruction: (instruction: string) => void;
@@ -37,27 +43,47 @@ export function useSequenceDiagramState({
   files,
   projectId,
   projectPath,
-  selectedAgentId
+  selectedAgentId,
+  hasPendingInstruction,
+  onModificationAcknowledged
 }: {
   files: ProjectFileNode[];
   projectId: string;
   projectPath: string;
   selectedAgentId: RuntimeAgentId;
+  hasPendingInstruction: boolean;
+  onModificationAcknowledged: () => void | Promise<void>;
 }): SequenceDiagramState {
   const { t } = useI18n();
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
+  const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
+  const sequenceReview = useProjectStore((state) => state.sequenceReview);
+  const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
   const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [instruction, setInstruction] = useState("");
+  const [guidanceOperation, setGuidanceOperation] = useState<"save" | "send" | "">("");
   const [status, setStatus] = useState(() => t("sequence.openProject"));
   const [isBusy, setIsBusy] = useState(false);
   const activeOperationId = useRef<string | null>(null);
+  const sequenceReviewRef = useRef(sequenceReview);
   const fileCount = useMemo(() => countFiles(files), [files]);
   const diagram = bundle?.architectural;
   const selectedMessage = diagram?.messages.find((message) => message.id === selectedMessageId);
   const selectedParticipant = diagram?.participants.find((participant) => participant.id === selectedParticipantId);
+
+  useEffect(() => {
+    sequenceReviewRef.current = sequenceReview;
+    if (sequenceReview.state === "reviewing") {
+      setStatus(t("sequence.reviewing", { agent: sequenceReview.agentId ?? "" }));
+    } else if (sequenceReview.state === "review-failed") {
+      setStatus(t("sequence.reviewFailed", {
+        error: sequenceReview.error?.message ?? t("artifact.unavailable")
+      }));
+    }
+  }, [sequenceReview, t]);
 
   useEffect(() => {
     if (!window.flowweave) return undefined;
@@ -80,6 +106,33 @@ export function useSequenceDiagramState({
       }));
     });
   }, [t]);
+
+  useEffect(() => {
+    if (!window.flowweave) return undefined;
+    return window.flowweave.onSequenceReview((event) => {
+      if (!shouldApplySequenceReviewEvent(
+        event,
+        projectId,
+        scanFingerprint,
+        sequenceReviewRef.current
+      )) return;
+      sequenceReviewRef.current = event.status;
+      setSequenceReview(event.status);
+      if (event.status.state === "reviewed" && event.bundle) {
+        setBundle(event.bundle);
+        setSelectedMessageId(event.bundle.architectural.messages[0]?.id ?? "");
+        setSelectedParticipantId("");
+        setArtifactStatuses((current) => current ? { ...current, sequences: "current" } : current);
+        setStatus(t("sequence.reviewed", { agent: event.status.agentId ?? "" }));
+      } else if (event.status.state === "review-failed") {
+        setStatus(t("sequence.reviewFailed", {
+          error: event.status.error?.message ?? t("artifact.unavailable")
+        }));
+      } else if (event.status.state === "reviewing") {
+        setStatus(t("sequence.reviewing", { agent: event.status.agentId ?? "" }));
+      }
+    });
+  }, [projectId, scanFingerprint, setArtifactStatuses, setSequenceReview, t]);
 
   useEffect(() => {
     let isMounted = true;
@@ -120,6 +173,10 @@ export function useSequenceDiagramState({
       }
       const nextBundle = result.bundle;
       setBundle(nextBundle);
+      if (result.outcome === "generated") {
+        sequenceReviewRef.current = result.review;
+        setSequenceReview(result.review);
+      }
       setArtifactStatuses((current) => current ? { ...current, sequences: sequenceArtifactStateFromGenerationResult(result) } : current);
       setSelectedMessageId(nextBundle.architectural.messages[0]?.id ?? "");
       setSelectedParticipantId("");
@@ -145,12 +202,16 @@ export function useSequenceDiagramState({
       setStatus(t("sequence.enterRevision"));
       return;
     }
+    setGuidanceOperation("send");
     setIsBusy(true);
     setStatus(t("sequence.revising", { kind: t("structure.architectural") }));
     try {
+      const sent = await persistInstruction();
       const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim(), planTimeoutMinutes * 60_000);
+      await window.flowweave.acknowledgeModificationChanges(projectId, sent.snapshot, { kind: "sequence" });
+      await window.flowweave.saveModificationDocs(projectId, instruction.trim());
       setBundle(nextBundle);
-      setInstruction("");
+      await onModificationAcknowledged();
       setSelectedMessageId(nextBundle.architectural.messages[0]?.id ?? "");
       setSelectedParticipantId("");
       setStatus(t("sequence.revised"));
@@ -160,6 +221,39 @@ export function useSequenceDiagramState({
         : t("sequence.revisionFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
+      setGuidanceOperation("");
+    }
+  }
+
+  async function saveInstruction() {
+    if (!window.flowweave || !projectId) {
+      setStatus(t("docs.needDesktop"));
+      return;
+    }
+    if (!instruction.trim()) {
+      setStatus(t("sequence.enterRevision"));
+      return;
+    }
+    setGuidanceOperation("save");
+    try {
+      await persistInstruction();
+    } finally {
+      setGuidanceOperation("");
+    }
+  }
+
+  async function persistInstruction(): Promise<import("../types").ModificationDeltaResult> {
+    if (!window.flowweave || !projectId) {
+      throw new Error(t("docs.needDesktop"));
+    }
+    try {
+      const paths = await window.flowweave.saveModificationDocs(projectId, instruction.trim());
+      setStatus(t("sequence.instructionSaved", { path: paths.guidancePath }));
+      const result = await window.flowweave.readModificationDelta(projectId, instruction.trim());
+      return result;
+    } catch (error) {
+      setStatus(t("sequence.instructionSaveFailed", { error: formatErrorMessage(error) }));
+      throw error;
     }
   }
 
@@ -185,9 +279,13 @@ export function useSequenceDiagramState({
     diagram,
     fileCount,
     generateDiagrams,
+    guidanceOperation,
+    hasPendingInstruction,
     instruction,
     isBusy,
+    review: sequenceReview,
     reviseDiagram,
+    saveInstruction,
     selectedMessage,
     selectedMessageId,
     selectedParticipant,
@@ -198,6 +296,17 @@ export function useSequenceDiagramState({
     setStatus,
     status
   };
+}
+
+export function shouldApplySequenceReviewEvent(
+  event: SequenceReviewEvent,
+  projectId: string,
+  scanFingerprint: string,
+  current: SequenceReviewStatus
+): boolean {
+  if (event.projectId !== projectId || event.scanFingerprint !== scanFingerprint) return false;
+  if (event.status.state === "reviewing") return true;
+  return !current.reviewId || current.reviewId === event.reviewId;
 }
 
 function countFiles(nodes: ProjectFileNode[]): number {

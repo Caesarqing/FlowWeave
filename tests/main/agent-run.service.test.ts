@@ -80,4 +80,33 @@ describe("agent-run.service", () => {
     expect(artifact.plan).toContain("Desktop Run Plan");
     expect(artifact.result).toContain('"toolId": "codex-desktop"');
   });
+
+  it("imports desktop bridge response.md for implementation-plan runs", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-md-run-"));
+    const runId = "run-1700000000001";
+    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
+    vi.spyOn(Date, "now").mockReturnValue(1700000000001);
+
+    setTimeout(() => {
+      const bridgeDir = join(projectPath, FLOWWEAVE_DIR, "agent-bridge", runId);
+      void mkdir(bridgeDir, { recursive: true }).then(() =>
+        writeFile(join(bridgeDir, "response.md"), "# Desktop Markdown Plan", "utf8")
+      );
+    }, 20);
+
+    const result = await startToolPlan({
+      projectId,
+      toolId: "codex-desktop",
+      prompt: "Review desktop bridge markdown.",
+      executionMode: "plan",
+      purpose: "implementation-plan"
+    });
+
+    expect(result.status).toBe("pending");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const artifact = await readRunArtifact(projectPath, result.id);
+    expect(artifact.summary.status).toBe("completed");
+    expect(artifact.plan).toContain("Desktop Markdown Plan");
+  });
 });

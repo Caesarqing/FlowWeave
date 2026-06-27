@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  buildAgentPrompt,
+  buildCurrentModuleGuidancePrompt,
   buildExecutionAssessmentSummary,
-  buildLegacyCanvasGuidance,
-  buildLegacyCanvasTaskJson,
-  buildLegacySequenceGuidance,
-  buildLegacySequenceTaskJson,
-  buildModificationContext,
-  buildModificationContextJson,
-  buildModificationGuidanceMarkdown,
+  buildModificationDeltaAgentPrompt,
+  buildModificationDeltaContextJson,
+  buildModificationDeltaGuidanceMarkdown,
+  createModificationGuidanceContext,
   downloadText
 } from "../utils/export-artifacts";
 import { useAgentStore } from "../stores/agents.store";
@@ -36,6 +33,7 @@ export function useAppController() {
   const projectPath = useProjectStore((state) => state.projectPath);
   const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
   const artifactStatuses = useProjectStore((state) => state.artifactStatuses);
+  const architectureReview = useProjectStore((state) => state.architectureReview);
   const projectStatus = useProjectStore((state) => state.projectStatus);
   const isProjectLoading = useProjectStore((state) => state.isProjectLoading);
   const agents = useAgentStore((state) => state.agents);
@@ -56,6 +54,8 @@ export function useAppController() {
   const setProjectPath = useProjectStore((state) => state.setProjectPath);
   const setScanFingerprint = useProjectStore((state) => state.setScanFingerprint);
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
+  const setArchitectureReview = useProjectStore((state) => state.setArchitectureReview);
+  const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
   const setProjectStatus = useProjectStore((state) => state.setProjectStatus);
   const setIsProjectLoading = useProjectStore((state) => state.setIsProjectLoading);
   const setAgents = useAgentStore((state) => state.setAgents);
@@ -64,13 +64,18 @@ export function useAppController() {
   const setToolStatuses = useAgentStore((state) => state.setToolStatuses);
   const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
   const setRunArtifactTab = useRunsStore((state) => state.setRunArtifactTab);
-  const [dialogText, setDialogText] = useState("");
+  const [moduleGuidanceOperation, setModuleGuidanceOperation] = useState<"save" | "send" | "">("");
+  const [modificationResult, setModificationResult] = useState<import("../types").ModificationDeltaResult>();
   const flow = useFlowWeaveState();
   const sequence = useSequenceDiagramState({
     files: flow.projectFiles,
     projectId,
     projectPath,
-    selectedAgentId
+    selectedAgentId,
+    hasPendingInstruction: Boolean(modificationResult?.delta.sequenceInstruction),
+    onModificationAcknowledged: async () => {
+      await refreshModificationDelta();
+    }
   });
   const canvasSnapshot = useMemo(
     () =>
@@ -91,12 +96,14 @@ export function useAppController() {
     flow.graphRelations,
     flow.canvasLayout
   );
-  const { openGitReviewFromRun, refreshRuns, selectRun } = useRunHistory(projectId);
+  const { applySelectedRunArtifact, openGitReviewFromRun, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
     maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
     projectId,
     projectPath,
     projectFiles: flow.projectFiles,
+    scanFingerprint,
+    architectureReview,
     replaceProjectGraph: flow.replaceProjectGraph,
     setIsProjectLoading,
     setLastRunStatus,
@@ -105,6 +112,8 @@ export function useAppController() {
     setProjectPath,
     setScanFingerprint,
     setArtifactStatuses,
+    setArchitectureReview,
+    setSequenceReview,
     setProjectStatus
   });
   const toolActions = useToolActions({
@@ -123,53 +132,196 @@ export function useAppController() {
   });
   const moduleActions = useModuleActions({
     addModuleNode: flow.addModuleNode,
-    dialogText,
     selectedNode: flow.selectedNode,
-    setDialogText,
     setSelectedNodeId: flow.setSelectedNodeId,
     togglePath: flow.togglePath,
     updateModule: flow.updateModule
   });
+  const hasPendingModifications = modificationResult?.hasChanges ?? false;
+  const hasPendingModuleGuidance = Boolean(
+    flow.selectedNode && modificationResult && (
+      modificationResult.delta.modules.added.some((module) =>
+        module.id === flow.selectedNode?.id && Boolean(module.guidanceDraft)
+      ) ||
+      modificationResult.delta.modules.updated.some((module) =>
+        module.id === flow.selectedNode?.id &&
+        Object.prototype.hasOwnProperty.call(module.changes, "guidanceDraft")
+      )
+    )
+  );
 
-  function buildCurrentModificationContext() {
-    return buildModificationContext({
-      projectLabel,
+  useEffect(() => {
+    if (!window.flowweave || !projectId || !scanFingerprint || artifactStatuses?.canvas !== "current" || flow.modules.length === 0) {
+      setModificationResult(undefined);
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      void refreshModificationDelta().catch((error) => {
+        setLastRunStatus(t("status.modificationDeltaFailed", { error: formatErrorMessage(error) }));
+      });
+    }, 100);
+    return () => window.clearTimeout(timeout);
+  }, [projectId, scanFingerprint, artifactStatuses?.canvas, canvasSnapshot, sequence.instruction]);
+
+  function buildCurrentCanvas(): import("../types").CodeflowCanvas {
+    return {
+      version: 3,
+      id: "main",
+      title: "Main Canvas",
       projectPath,
+      generatedAt: new Date().toISOString(),
       scanFingerprint,
+      artifactState: "current",
+      layout: flow.canvasLayout,
       nodes: flow.modules,
-      edges: flow.graphRelations,
-      selectedNodeId: flow.selectedNode?.id,
-      sequenceBundle: sequence.bundle,
-      sequenceInstruction: sequence.instruction,
-      selectedSequenceMessageId: sequence.selectedMessageId,
-      selectedSequenceParticipantId: sequence.selectedParticipantId
-    });
+      edges: flow.graphRelations
+    };
   }
 
-  function exportGuidanceFiles() {
-    const context = buildCurrentModificationContext();
-    downloadText("flowweave-modification-guidance.md", buildModificationGuidanceMarkdown(context));
-    downloadText("flowweave-modification-context.json", buildModificationContextJson(context));
-    downloadText("guidance.md", buildLegacyCanvasGuidance(context, t));
-    downloadText("task.json", buildLegacyCanvasTaskJson(context, t));
-    downloadText("sequence-guidance.md", buildLegacySequenceGuidance(context));
-    downloadText("sequence-task.json", buildLegacySequenceTaskJson(context));
+  async function refreshModificationDelta() {
+    if (!window.flowweave || !projectId) return undefined;
+    const next = await window.flowweave.readModificationDelta(
+      projectId,
+      sequence.instruction.trim() || undefined,
+      buildCurrentCanvas()
+    );
+    setModificationResult(next);
+    return next;
+  }
+
+  async function saveCanvasArtifacts() {
+    if (!window.flowweave || !projectId) {
+      throw new Error(t("docs.needDesktop"));
+    }
+    if (!scanFingerprint || artifactStatuses?.canvas !== "current") {
+      throw new Error(t("canvas.saveUnavailable"));
+    }
+    const canvas = buildCurrentCanvas();
+    const canvasPath = await window.flowweave.saveCanvas(projectId, canvas);
+    setLastRunStatus(t("canvas.saved", { path: canvasPath }));
+    return { canvas, canvasPath };
+  }
+
+  async function saveCurrentModuleGuidance() {
+    if (!flow.selectedNode?.guidanceDraft.trim()) return;
+    setModuleGuidanceOperation("save");
+    try {
+      await saveCanvasArtifacts();
+      await window.flowweave?.saveModificationDocs(projectId, sequence.instruction.trim() || undefined);
+      await refreshModificationDelta();
+    } catch (error) {
+      setLastRunStatus(t("canvas.saveFailed", { error: formatErrorMessage(error) }));
+    } finally {
+      setModuleGuidanceOperation("");
+    }
+  }
+
+  async function sendCurrentModuleGuidance() {
+    const selectedNode = flow.selectedNode;
+    const api = window.flowweave;
+    if (!api || !projectId || !selectedNode?.guidanceDraft.trim()) return;
+    setModuleGuidanceOperation("send");
+    try {
+      const { canvas } = await saveCanvasArtifacts();
+      await api.saveModificationDocs(projectId, sequence.instruction.trim() || undefined);
+      const sent = await api.readModificationDelta(
+        projectId,
+        sequence.instruction.trim() || undefined,
+        canvas
+      );
+      const result = await runAgentPrompt(
+        buildCurrentModuleGuidancePrompt(selectedNode, selectedNode.guidanceDraft),
+        [selectedNode],
+        []
+      );
+      if (result?.status === "completed") {
+        await api.acknowledgeModificationChanges(
+          projectId,
+          sent.snapshot,
+          { kind: "module-guidance", moduleId: selectedNode.id }
+        );
+        await api.saveModificationDocs(projectId, sequence.instruction.trim() || undefined);
+        await refreshModificationDelta();
+      }
+    } catch (error) {
+      setLastRunStatus(t("status.agentPlanFailed", {
+        agent: selectedAgentName(),
+        error: formatErrorMessage(error)
+      }));
+    } finally {
+      setModuleGuidanceOperation("");
+    }
+  }
+
+  async function exportGuidanceFiles() {
+    const result = await refreshModificationDelta();
+    if (!result) return;
+    const context = createModificationGuidanceContext(projectLabel, projectPath, result);
+    downloadText("flowweave-modification-guidance.md", buildModificationDeltaGuidanceMarkdown(context));
+    downloadText("flowweave-modification-context.json", buildModificationDeltaContextJson(context));
     setLastRunStatus(t("sequence.exported"));
   }
 
-  async function sendActivePageToTool() {
-    if (!window.flowweave || !projectId) {
+  async function sendCompleteGuidanceToAgent() {
+    const api = window.flowweave;
+    if (!api || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
       return;
     }
+    try {
+      const { canvas } = await saveCanvasArtifacts();
+      await api.saveModificationDocs(
+        projectId,
+        sequence.instruction.trim() || undefined
+      );
+      const sent = await api.readModificationDelta(
+        projectId,
+        sequence.instruction.trim() || undefined,
+        canvas
+      );
+      if (!sent.hasChanges) {
+        setLastRunStatus(t("top.noPendingGuidance"));
+        setModificationResult(sent);
+        return;
+      }
+      const context = createModificationGuidanceContext(projectLabel, projectPath, sent);
+      const result = await runAgentPrompt(
+        buildModificationDeltaAgentPrompt(context, executionMode),
+        flow.modules,
+        flow.graphRelations
+      );
+      if (result?.status === "completed") {
+        await api.acknowledgeModificationChanges(
+          projectId,
+          sent.snapshot,
+          { kind: "all" }
+        );
+        await api.saveModificationDocs(projectId, sequence.instruction.trim() || undefined);
+        await refreshModificationDelta();
+      }
+    } catch (error) {
+      setLastRunStatus(t("status.agentPlanFailed", {
+        agent: selectedAgentName(),
+        error: formatErrorMessage(error)
+      }));
+    }
+  }
 
-    const agentName = agents.find((agent) => agent.id === selectedAgentId)?.name ?? selectedAgentId;
+  async function runAgentPrompt(
+    prompt: string,
+    assessmentNodes: import("../types").GraphNode[],
+    assessmentEdges: import("../types").GraphEdge[]
+  ): Promise<import("../types").ToolRunResult | undefined> {
+    if (!window.flowweave || !projectId) {
+      throw new Error(t("docs.needDesktop"));
+    }
+    const agentName = selectedAgentName();
     if (executionMode === "execute" && !window.confirm(`${t("agent.executeConfirm", {
       agent: agentName,
       project: projectPath
-    })}\n\n${buildExecutionAssessmentSummary(flow.modules, flow.graphRelations)}`)) {
+    })}\n\n${buildExecutionAssessmentSummary(assessmentNodes, assessmentEdges)}`)) {
       setLastRunStatus(t("agent.executeCanceled"));
-      return;
+      return undefined;
     }
     setLastRunStatus(t("status.agentProcessing", { agent: agentName, mode: executionMode }));
     try {
@@ -177,10 +329,9 @@ export function useAppController() {
       setToolStatuses((current) => ({ ...current, [selectedAgentId]: { ...current[selectedAgentId], ...detection, checking: false } }));
       if (!detection.available) {
         setLastRunStatus(t("status.agentCannotPlan", { agent: agentName }));
-        return;
+        return undefined;
       }
 
-      const context = buildCurrentModificationContext();
       const result = await window.flowweave.runToolPlan({
         projectId,
         toolId: selectedAgentId,
@@ -189,7 +340,7 @@ export function useAppController() {
         planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
         executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
-        prompt: buildAgentPrompt(context, "combined-modification-plan", executionMode)
+        prompt
       });
 
       setSelectedAgentId(selectedAgentId);
@@ -203,10 +354,15 @@ export function useAppController() {
       }));
       setLastRunStatus(`${agentName} ${executionMode} ${result.status} · ${result.planPath ?? result.logPath ?? "no output"}`);
       await refreshRuns(result.id);
+      return result;
     } catch (error) {
       setToolStatuses((current) => ({ ...current, [selectedAgentId]: { ...current[selectedAgentId], lastRunStatus: "failed" } }));
-      setLastRunStatus(t("status.agentPlanFailed", { agent: agentName, error: formatErrorMessage(error) }));
+      throw error;
     }
+  }
+
+  function selectedAgentName() {
+    return agents.find((agent) => agent.id === selectedAgentId)?.name ?? selectedAgentId;
   }
 
   useEffect(() => {
@@ -273,6 +429,7 @@ export function useAppController() {
     activePage,
     agentConnection,
     artifactStatuses,
+    architectureReview,
     canvas: {
       connectionPanelMode: flow.connectionPanelMode,
       canvasLayout: flow.canvasLayout,
@@ -282,6 +439,7 @@ export function useAppController() {
       edges: flow.edges,
       expandedPaths: flow.expandedPaths,
       graphRelations: flow.graphRelations,
+      hasPendingGuidance: hasPendingModuleGuidance,
       isProjectLoading,
       maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
       nodes: flow.nodes,
@@ -289,12 +447,13 @@ export function useAppController() {
       onAddConnection: flow.addConnection,
       onAddNode: moduleActions.addNode,
       onAnalyzeProject: () => projectActions.analyzeProject(selectedAgentId),
-      onApplyDialog: moduleActions.applyDialog,
       onClearConnectionSelection: flow.clearConnectionSelection,
       onConnect: flow.handleConnect,
-      onDialogTextChange: setDialogText,
       onEdgesChange: flow.onEdgesChange,
       onGuidanceChange: moduleActions.updateGuidance,
+      guidanceOperation: moduleGuidanceOperation,
+      onSaveGuidance: saveCurrentModuleGuidance,
+      onSendGuidance: sendCurrentModuleGuidance,
       onNodesChange: flow.handleCanvasNodesChange,
       onApplyAutoLayout: flow.handleAutoLayout,
       onOpenConnectionCreator: flow.openConnectionCreator,
@@ -313,7 +472,6 @@ export function useAppController() {
       onUpdateEdgeEndpoints: flow.updateEdgeEndpoints,
       onUpdateEdgeRelation: flow.updateEdgeRelation,
       onUpdateModuleFields: flow.updateModuleFields,
-      onWriteDraft: moduleActions.writeDraft,
       projectFiles: flow.projectFiles,
       projectPath,
       projectStatus,
@@ -323,21 +481,23 @@ export function useAppController() {
       selectedNode: flow.selectedNode,
       analysisLabel: projectStatus.includes(t("status.analysisKeyword")) || projectStatus.includes("Architecture") ? t("canvas.analysisLabel") : t("canvas.subtitle")
     },
-    dialogText,
     isDesktopBridgeAvailable: Boolean(window.flowweave),
+    hasPendingModifications,
     onExport: exportGuidanceFiles,
     onPageChange: setActivePage,
-    onSendToTool: sendActivePageToTool,
+    onSendToTool: sendCompleteGuidanceToAgent,
     projectLabel,
     projectId,
     scanFingerprint,
     sequence,
     tools: {
       agents,
+      architectureReview,
       executionMode,
       isRunsLoading,
       lastRunStatus,
       onAnalyzeCurrentProject: analyzeCurrentProjectWithAgent,
+      onApplyRunArtifact: applySelectedRunArtifact,
       onDeleteCustomAgent: deleteCustomAgent,
       onDetectAgent: toolActions.detectAgent,
       onExecutionModeChange: setExecutionMode,

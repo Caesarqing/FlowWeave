@@ -9,7 +9,7 @@ import {
 } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import { useMemo, useRef, useState } from "react";
-import { Focus, RefreshCcw, Search, Send, Square, Workflow } from "lucide-react";
+import { Focus, RefreshCcw, Search, Square, Workflow } from "lucide-react";
 import type {
   SequenceDiagram,
   SequenceMessage,
@@ -27,6 +27,7 @@ import { cn } from "../utils/classnames";
 import { localizedSequenceDiagram } from "../utils/sequence-text";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { Button } from "./Button";
+import { AgentGuidanceComposer } from "./AgentGuidanceComposer";
 
 const messageKindLabelKeys: Record<SequenceMessage["kind"], string> = {
   sync: "structure.messageSync",
@@ -67,6 +68,11 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
     : "";
   const visibleMessage = visibleDiagram?.messages.find((message) => message.id === visibleMessageId);
   const visibleParticipant = visibleDiagram?.participants.find((participant) => participant.id === visibleParticipantId);
+  const generateLabel = sequence.isBusy
+    ? t("structure.generating")
+    : sequence.review.state === "review-failed"
+      ? t("artifact.review.retry")
+      : t("structure.generate");
 
   function toggleMessageKind(kind: SequenceMessageKind) {
     setSelectedMessageKinds((current) => {
@@ -84,23 +90,21 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
       </div>
       <div className="sequence-detail-stack">
         <SequenceDetails diagram={visibleDiagram} message={visibleMessage} participant={visibleParticipant} />
-        <section className="module-card sequence-agent-card">
-          <small>{t("structure.agentRevision")}</small>
-          <h3>{t("structure.sendRevision")}</h3>
-          <label className="sequence-revision-box">
-            <span>{t("structure.instruction")}</span>
-            <textarea
-              value={sequence.instruction}
-              onChange={(event) => sequence.setInstruction(event.target.value)}
-              placeholder={t("structure.instructionPlaceholder")}
-            />
-          </label>
-          <button className="ghost-button sequence-wide-button" disabled={sequence.isBusy || !sequence.bundle} type="button" onClick={() => void sequence.reviseDiagram()}>
-            <Send size={15} />
-            {t("structure.sendRevision")}
-          </button>
-          <p className="sequence-status">{sequence.status}</p>
-        </section>
+        <AgentGuidanceComposer
+          disabled={sequence.isBusy || !sequence.bundle}
+          isSaving={sequence.guidanceOperation === "save"}
+          isSending={sequence.guidanceOperation === "send"}
+          placeholder={t("structure.instructionPlaceholder")}
+          saveLabel={t("guidance.save")}
+          sendDisabled={!sequence.hasPendingInstruction}
+          sendLabel={t("guidance.sendToAgent")}
+          status={sequence.status}
+          title={t("structure.agentGuidance")}
+          value={sequence.instruction}
+          onChange={sequence.setInstruction}
+          onSave={() => void sequence.saveInstruction()}
+          onSend={() => void sequence.reviseDiagram()}
+        />
       </div>
     </section>
   );
@@ -116,7 +120,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
             variant="primary"
             onClick={() => void sequence.generateDiagrams()}
           >
-            {sequence.isBusy ? t("structure.generating") : t("structure.generate")}
+            {generateLabel}
           </Button>
           {sequence.isBusy ? (
             <Button icon={<Square size={12} />} variant="danger" onClick={() => void sequence.cancelOperation()}>

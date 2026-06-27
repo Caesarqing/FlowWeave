@@ -117,7 +117,11 @@ export class DesktopBridgeAdapter implements ToolAdapter {
     await access(join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id));
     await mkdir(bridgeDir, { recursive: true });
     await writeFile(promptPath, request.prompt, "utf8");
-    await writeFile(instructionsPath, buildDesktopBridgeInstructions(this.name, request.executionMode, this.bridgeInstructions), "utf8");
+    await writeFile(
+      instructionsPath,
+      buildDesktopBridgeInstructions(this.name, request.executionMode, request.purpose, this.bridgeInstructions),
+      "utf8"
+    );
     await writeFile(
       requestPath,
       `${JSON.stringify(buildDesktopBridgeRequest({ request, agentId: this.id, promptPath, instructionsPath }), null, 2)}\n`,
@@ -200,20 +204,39 @@ export function getDesktopBridgeDir(projectPath: string, runId: string) {
   return join(projectPath, FLOWWEAVE_DIR, "agent-bridge", runId);
 }
 
-export function buildDesktopBridgeInstructions(agentName: string, executionMode: ExecutionMode, extraInstructions?: string) {
+export function buildDesktopBridgeInstructions(
+  agentName: string,
+  executionMode: ExecutionMode,
+  purpose: ToolRunRequest["purpose"],
+  extraInstructions?: string
+) {
+  const responseInstructions = purpose === "artifact-analysis"
+    ? [
+        "Artifact analysis requires response.json. Do not answer only in chat.",
+        "Write response.json in this same directory with { \"runId\": string, \"projectId\": string, \"status\": \"completed\" | \"failed\", \"summary\": string, \"content\": string, \"completedAt\": ISO timestamp }.",
+        "The content field must contain the exact structured JSON requested by prompt.md. Markdown plans, response.md, and implementation-plan prose do not update FlowWeave artifact review state."
+      ].join("\n\n")
+    : [
+        "Write one response file in the same directory:",
+        "",
+        "- response.json with { \"runId\": string, \"projectId\": string, \"status\": \"completed\" | \"failed\", \"summary\": string, \"content\": string, \"completedAt\": ISO timestamp }",
+        "- or response.md with the plan markdown",
+        "",
+        "Prefer response.json when possible."
+      ].join("\n");
   const baseInstructions = `# FlowWeave Desktop Bridge Instructions
 
 Agent: ${agentName}
 Execution mode: ${executionMode}
+Purpose: ${purpose}
 
 Read request.json and prompt.md from this directory.
 Inspect the project at the request projectPath.
-Write one response file in the same directory:
+Process only this request directory. Do not switch to another pending FlowWeave request while writing this response.
 
-- response.json with { "runId": string, "projectId": string, "status": "completed" | "failed", "summary": string, "content": string, "completedAt": ISO timestamp }
-- or response.md with the plan markdown
+${responseInstructions}
 
-Prefer response.json when possible. In plan mode, do not modify project files.`;
+In plan mode, do not modify project files.`;
   return extraInstructions?.trim()
     ? `${baseInstructions}\n\n## Agent-specific instructions\n\n${extraInstructions.trim()}\n`
     : baseInstructions;
