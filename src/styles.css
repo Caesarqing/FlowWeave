@@ -565,8 +565,16 @@ input:focus-visible {
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: 48%;
   min-width: 0;
+}
+
+.top-actions .button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wordmark {
@@ -2345,6 +2353,11 @@ button:disabled {
 
 .agent-guidance-actions .ui-button {
   width: 100%;
+  height: auto;
+  min-height: 36px;
+  padding-block: 6px;
+  line-height: 1.2;
+  white-space: normal;
 }
 
 .agent-guidance-status {
@@ -4391,6 +4404,7 @@ button:disabled {
   font-size: 12px;
   font-weight: 750;
   line-height: 1;
+  text-align: center;
   white-space: nowrap;
   transition:
     color 120ms ease,
@@ -4398,6 +4412,12 @@ button:disabled {
     border-color 120ms ease,
     box-shadow 120ms ease,
     transform 120ms ease;
+}
+
+@media (max-width: 1320px) {
+  .agent-guidance-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ui-button-default {

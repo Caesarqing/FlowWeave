@@ -24,7 +24,7 @@ import type {
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { startToolPlan } from "./agent-run.service";
-import { createScanFingerprint, registerProject } from "./project-registry.service";
+import { registerProject } from "./project-registry.service";
 import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
 import { FlowWeaveError, throwIfAborted } from "./flowweave-error.service";
@@ -36,6 +36,8 @@ import {
   writeArchitectureReviewStatus,
   type ArchitectureReviewRunResult
 } from "./architecture-review.service";
+import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
+import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
 const MAX_PROMPT_FILES = 80;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 8;
@@ -77,7 +79,7 @@ async function analyzeArchitectureOnce(
   throwIfAborted(options?.signal, "Architecture analysis");
   const facts = semanticIndexToStructureFacts(project, index);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
-  const inputFingerprint = project.scanFingerprint ?? createScanFingerprint(representativeFacts);
+  const inputFingerprint = await readCurrentProjectScanFingerprint(project.rootPath);
   const prompt = buildArchitecturePrompt(representativeFacts);
   const localArchitectureBase = createLocalArchitectureMap(project, facts, "local");
   const localQuality = validateArchitectureMap(localArchitectureBase, facts);
@@ -144,7 +146,8 @@ async function analyzeArchitectureOnce(
       reviewId,
       onRunId,
       options?.resumeArchitectureReview?.runId,
-      options?.planTimeoutMs
+      options?.planTimeoutMs,
+      options?.signal
     ),
     onEvent: options?.onArchitectureReview ?? (() => undefined)
   });
@@ -276,7 +279,8 @@ async function runArchitectureReview(
   reviewId: string,
   onRunId: (runId: string) => Promise<void>,
   resumeRunId: string | undefined,
-  planTimeoutMs: number | undefined
+  planTimeoutMs: number | undefined,
+  signal: AbortSignal | undefined
 ): Promise<ArchitectureReviewRunResult> {
   try {
     const projectId = await registerProject(project.rootPath);
@@ -294,7 +298,7 @@ async function runArchitectureReview(
           planTimeoutMs
         });
     await onRunId(firstStarted.id);
-    const firstRun = await waitForArchitectureRun(project.rootPath, firstStarted, planTimeoutMs);
+    const firstRun = await waitForArchitectureRun(project.rootPath, firstStarted, toolId, reviewId, inputFingerprint, planTimeoutMs, signal);
     if (firstRun.status !== "completed") {
       return reviewFailure(toolId, "agent-failed", firstRun.failure?.message ?? firstRun.summary ?? "Agent review did not complete.", firstRun.id);
     }
@@ -334,7 +338,7 @@ async function runArchitectureReview(
       planTimeoutMs
     });
     await onRunId(retryStarted.id);
-    const retry = await waitForArchitectureRun(project.rootPath, retryStarted, planTimeoutMs);
+    const retry = await waitForArchitectureRun(project.rootPath, retryStarted, toolId, reviewId, inputFingerprint, planTimeoutMs, signal);
     if (retry.status !== "completed") {
       return reviewFailure(toolId, "agent-failed", retry.failure?.message ?? retry.summary ?? "Agent repair review did not complete.", retry.id);
     }
@@ -485,28 +489,29 @@ export async function writeArchitectureArtifacts(projectPath: string, architectu
 async function waitForArchitectureRun(
   projectPath: string,
   initial: ToolRunResult,
-  planTimeoutMs: number | undefined
+  agentId: RuntimeAgentId,
+  reviewId: string,
+  inputFingerprint: string,
+  planTimeoutMs: number | undefined,
+  signal: AbortSignal | undefined
 ): Promise<ToolRunResult> {
-  if (initial.status !== "pending") return initial;
-  const deadline = Date.now() + (planTimeoutMs ?? 300_000);
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    const { readRunArtifact } = await import("./run-log.service");
-    const artifact = await readRunArtifact(projectPath, initial.id);
-    if (artifact.summary.status === "pending") continue;
-    return {
-      ...initial,
-      status: artifact.summary.status,
-      completedAt: artifact.summary.completedAt,
-      summary: artifact.summary.summary,
-      outputText: artifact.plan
-    };
-  }
-  return {
-    ...initial,
-    status: "failed",
-    summary: `Agent review remained pending without a desktop bridge response.json before timeout: ${initial.id}`
-  };
+  return waitForArtifactRunResponse(projectPath, initial, {
+    softTimeoutMs: planTimeoutMs ?? 300_000,
+    signal,
+    pollIntervalMs: 1_000,
+    onLate: async (late) => {
+      await writeArchitectureReviewStatus(projectPath, {
+        state: "reviewing",
+        reviewId,
+        scanFingerprint: inputFingerprint,
+        agentId,
+        runId: initial.id,
+        startedAt: initial.startedAt,
+        softTimedOutAt: late.softTimedOutAt,
+        message: late.message
+      });
+    }
+  });
 }
 
 function reviewFailure(

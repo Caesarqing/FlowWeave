@@ -464,6 +464,8 @@ async function createFixtureFiles() {
   await mkdir(join(root, "src/service"), { recursive: true });
   await writeFile(join(root, "src/api/user.controller.ts"), 'import { UserService } from "../service/user.service";\nexport function loadUser() { return fetch("/users"); }\n', "utf8");
   await writeFile(join(root, "src/service/user.service.ts"), "export class UserService { load() { return true; } }\n", "utf8");
+  await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+  await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: "scan-test" }), "utf8");
   return root;
 }
 
@@ -473,6 +475,7 @@ function projectFixture(rootPath: string): CodeflowProject {
     projectName: "architecture-fixture",
     rootPath,
     generatedAt: "2026-05-30T00:00:00.000Z",
+    scanFingerprint: "scan-test",
     git: { isRepo: false },
     summary: { totalFiles: 2, totalFolders: 3, languages: { TypeScript: 2 } },
     files: [

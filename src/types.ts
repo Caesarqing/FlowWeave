@@ -479,6 +479,8 @@ export type ArchitectureReviewStatus = {
   runId?: string;
   startedAt?: string;
   completedAt?: string;
+  softTimedOutAt?: string;
+  message?: string;
   diff?: ArchitectureDiffCounts;
   error?: ArchitectureReviewError;
 };
@@ -529,6 +531,8 @@ export type SequenceReviewStatus = {
   runId?: string;
   startedAt?: string;
   completedAt?: string;
+  softTimedOutAt?: string;
+  message?: string;
   diff?: SequenceDiffCounts;
   error?: SequenceReviewError;
 };
@@ -684,7 +688,7 @@ export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
 export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
 export type ArtifactRunTarget = "architecture-map" | "sequence-diagrams" | "sequence-revision";
-export type ArtifactAdoptionStatus = "not-applicable" | "pending" | "applied" | "rejected" | "stale";
+export type ArtifactAdoptionStatus = "not-applicable" | "pending" | "late" | "applied" | "rejected" | "stale";
 export type ArtifactAdoption = {
   status: ArtifactAdoptionStatus;
   message: string;
@@ -1129,6 +1133,9 @@ export type FlowWeaveApi = {
     guidancePath?: string;
     executionMode: ExecutionMode;
     purpose: ToolRunPurpose;
+    artifactTarget?: ArtifactRunTarget;
+    scanFingerprint?: string;
+    reviewId?: string;
     model?: string;
     confirmedExecute?: boolean;
     executeTimeoutMs?: number;
@@ -1137,6 +1144,7 @@ export type FlowWeaveApi = {
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
   applyRunArtifact(projectId: string, runId: string): Promise<ToolRunSummary>;
+  openRunBridge(projectId: string, runId: string): Promise<void>;
   openToolProject(agentId: RuntimeAgentId, projectId: string): Promise<ToolOpenResult>;
   gitStatus(projectId: string): Promise<GitStatus>;
   gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;

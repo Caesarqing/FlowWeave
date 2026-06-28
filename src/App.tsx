@@ -212,8 +212,10 @@ function DesktopApp() {
             onExecutionModeChange={app.tools.onExecutionModeChange}
             onGoToGitReview={app.tools.onGoToGitReview}
             onHealthCheckAgent={app.tools.onHealthCheckAgent}
+            onOpenRunBridge={app.tools.onOpenRunBridge}
             onOpenToolProject={app.tools.onOpenToolProject}
             onRefreshRuns={app.tools.onRefreshRuns}
+            onRetryRunArtifact={app.tools.onRetryRunArtifact}
             onRunToolPlan={app.tools.onRunToolPlan}
             onRunArtifactTabChange={app.tools.onRunArtifactTabChange}
             onSaveCustomAgent={app.tools.onSaveCustomAgent}

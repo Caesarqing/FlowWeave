@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { analyzeProject, buildAnalysisPrompt } from "../../src/main/services/agent-analysis.service";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
+import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject } from "../../src/types";
 
 describe("agent-analysis.service", () => {
@@ -22,6 +23,7 @@ describe("agent-analysis.service", () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-analysis-"));
     await mkdir(join(root, "src/auth"), { recursive: true });
     await writeFile(join(root, "src/auth/index.ts"), "export const auth = true;\n");
+    await writeProjectScan(root);
 
     const result = await analyzeProject(projectFixture(root), "mock");
 
@@ -36,6 +38,7 @@ describe("agent-analysis.service", () => {
     const scriptPath = join(configRoot, "architecture-agent.mjs");
     await mkdir(join(root, "src/auth"), { recursive: true });
     await writeFile(join(root, "src/auth/index.ts"), "export const auth = true;\n");
+    await writeProjectScan(root);
     configureAgentRegistry(configRoot);
     await writeFile(
       scriptPath,
@@ -66,6 +69,7 @@ function projectFixture(rootPath: string): CodeflowProject {
     projectName: "analysis-fixture",
     rootPath,
     generatedAt: "2026-05-27T00:00:00.000Z",
+    scanFingerprint: "scan-test",
     git: { isRepo: false },
     summary: { totalFiles: 1, totalFolders: 2, languages: { TypeScript: 1 } },
     files: [
@@ -97,4 +101,9 @@ function projectFixture(rootPath: string): CodeflowProject {
       }
     ]
   };
+}
+
+async function writeProjectScan(rootPath: string) {
+  await mkdir(join(rootPath, FLOWWEAVE_DIR), { recursive: true });
+  await writeFile(join(rootPath, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: "scan-test" }), "utf8");
 }

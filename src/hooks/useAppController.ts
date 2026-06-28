@@ -22,6 +22,7 @@ import { useAgentConnection } from "./useAgentConnection";
 import { useCanvasPersistence } from "./useCanvasPersistence";
 import { useRunHistory } from "./useRunHistory";
 import { useI18n } from "../utils/i18n";
+import type { ArtifactRunTarget, RuntimeAgentId } from "../types";
 
 const MAX_RENDERED_TREE_ROWS = 900;
 
@@ -96,7 +97,7 @@ export function useAppController() {
     flow.graphRelations,
     flow.canvasLayout
   );
-  const { applySelectedRunArtifact, openGitReviewFromRun, refreshRuns, selectRun } = useRunHistory(projectId);
+  const { applySelectedRunArtifact, openGitReviewFromRun, openSelectedRunBridge, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
     maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
     projectId,
@@ -413,9 +414,19 @@ export function useAppController() {
     }
   }
 
-  async function analyzeCurrentProjectWithAgent(agentId?: import("../types").RuntimeAgentId) {
+  async function analyzeCurrentProjectWithAgent(agentId?: RuntimeAgentId) {
     await projectActions.analyzeProject(agentId ?? selectedAgentId);
     setActivePage("canvas");
+    await refreshRuns();
+  }
+
+  async function retryRunArtifact(target: ArtifactRunTarget | undefined, agentId: RuntimeAgentId) {
+    if (target === "sequence-diagrams" || target === "sequence-revision") {
+      await sequence.generateDiagrams(agentId);
+      setActivePage("structure");
+    } else {
+      await analyzeCurrentProjectWithAgent(agentId);
+    }
     await refreshRuns();
   }
 
@@ -504,7 +515,9 @@ export function useAppController() {
       onGoToGitReview: openGitReviewFromRun,
       onHealthCheckAgent: toolActions.healthCheckAgent,
       onOpenToolProject: toolActions.openToolProject,
+      onOpenRunBridge: openSelectedRunBridge,
       onRefreshRuns: refreshRuns,
+      onRetryRunArtifact: retryRunArtifact,
       onRunToolPlan: toolActions.runToolPlan,
       onRunArtifactTabChange: setRunArtifactTab,
       onSaveCustomAgent: saveCustomAgent,

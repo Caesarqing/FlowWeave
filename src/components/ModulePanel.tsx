@@ -6,9 +6,9 @@ import { useI18n } from "../utils/i18n";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
 import { applyRiskOverride, clearRiskOverride } from "../utils/module-assessment";
 import {
+  editableModuleGuidance,
   localizedArchitectureCategory,
   localizedModuleDescription,
-  localizedModuleGuidance,
   localizedModuleRole
 } from "../utils/module-text";
 import { AgentGuidanceComposer } from "./AgentGuidanceComposer";
@@ -48,7 +48,7 @@ export function ModulePanel({
   const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
   const fileTree = useMemo(() => buildModuleFileTree(node.files, node.fileRoles), [node.fileRoles, node.files]);
   const localizedDescription = localizedModuleDescription(node, t);
-  const localizedGuidance = localizedModuleGuidance(node, t);
+  const guidanceValue = editableModuleGuidance(node, t);
   const localizedRole = localizedModuleRole(node, t);
 
   function toggleSection(section: keyof typeof openSections) {
@@ -261,7 +261,7 @@ export function ModulePanel({
         sendDisabled={sendGuidanceDisabled}
         sendLabel={t("module.sendCurrentGuidance")}
         title={t("module.guidance")}
-        value={localizedGuidance}
+        value={guidanceValue}
         onChange={onGuidanceChange}
         onSave={onSaveGuidance}
         onSend={onSendGuidance}

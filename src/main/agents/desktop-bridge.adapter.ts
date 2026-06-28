@@ -3,11 +3,12 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { ExecutionMode, RuntimeAgentId } from "../../types";
+import type { ArtifactRunTarget, ExecutionMode, RuntimeAgentId } from "../../types";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult, ToolRunStatus } from "./agent-adapter";
 import { resolveAppPath } from "./agent-command";
 import { nowIso } from "./time";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { addDesktopBridgePendingRequest } from "../services/desktop-bridge-manifest.service";
 
 const execFileAsync = promisify(execFile);
 export type DesktopBridgeConfig = {
@@ -30,8 +31,14 @@ type DesktopBridgeRequest = {
   agentId: RuntimeAgentId;
   projectPath: string;
   executionMode: ExecutionMode;
+  purpose: ToolRunRequest["purpose"];
+  artifactTarget?: ArtifactRunTarget;
+  scanFingerprint?: string;
+  reviewId?: string;
+  runDirectory: string;
   promptPath: string;
   instructionsPath: string;
+  responsePath: string;
   skills: DesktopBridgeSkillReference[];
   createdAt: string;
 };
@@ -42,6 +49,7 @@ type DesktopBridgeResponse = {
   content: string;
   runId?: string;
   projectId?: string;
+  artifactTarget?: ArtifactRunTarget;
   completedAt?: string;
   sourcePath: string;
 };
@@ -107,6 +115,7 @@ export class DesktopBridgeAdapter implements ToolAdapter {
     const promptPath = join(bridgeDir, "prompt.md");
     const instructionsPath = join(bridgeDir, "instructions.md");
     const requestPath = join(bridgeDir, "request.json");
+    const responsePath = join(bridgeDir, "response.json");
 
     const pushEvent = (event: ToolRunEvent) => {
       events.push(event);
@@ -122,11 +131,35 @@ export class DesktopBridgeAdapter implements ToolAdapter {
       buildDesktopBridgeInstructions(this.name, request.executionMode, request.purpose, this.bridgeInstructions),
       "utf8"
     );
+    const createdAt = nowIso();
+    const bridgeRequest = buildDesktopBridgeRequest({
+      request,
+      agentId: this.id,
+      bridgeDir,
+      promptPath,
+      instructionsPath,
+      responsePath,
+      createdAt
+    });
     await writeFile(
       requestPath,
-      `${JSON.stringify(buildDesktopBridgeRequest({ request, agentId: this.id, promptPath, instructionsPath }), null, 2)}\n`,
+      `${JSON.stringify(bridgeRequest, null, 2)}\n`,
       "utf8"
     );
+    await addDesktopBridgePendingRequest(request.projectPath, {
+      runId: request.id,
+      projectId: request.projectId,
+      agentId: this.id,
+      purpose: request.purpose,
+      executionMode: request.executionMode,
+      artifactTarget: request.artifactTarget,
+      scanFingerprint: request.scanFingerprint,
+      reviewId: request.reviewId,
+      createdAt,
+      requestPath,
+      responsePath,
+      status: "pending"
+    });
 
     const detection = await this.detect();
     if (detection.available) {
@@ -134,7 +167,7 @@ export class DesktopBridgeAdapter implements ToolAdapter {
         .then(() => {
           pushEvent({
             type: "stdout",
-            content: `${this.name} opened. Use FlowWeave context to process the current pending request.`,
+            content: `${this.name} opened. Use FlowWeave context to process pending requests.`,
             timestamp: nowIso()
           });
         })
@@ -158,7 +191,7 @@ export class DesktopBridgeAdapter implements ToolAdapter {
       executionMode: request.executionMode,
       purpose: request.purpose,
       summary: detection.available
-        ? `Pending ${this.name} response. Use FlowWeave context to process the current pending request.`
+        ? `Pending ${this.name} response. Use FlowWeave context to process pending requests.`
         : `${this.name} is not installed. The pending bridge request remains available for manual processing.`,
       events
     };
@@ -232,7 +265,9 @@ Purpose: ${purpose}
 
 Read request.json and prompt.md from this directory.
 Inspect the project at the request projectPath.
-Process only this request directory. Do not switch to another pending FlowWeave request while writing this response.
+Also read ../pending-requests.json. When multiple requests are pending, process them from oldest createdAt to newest createdAt.
+For each request, write only to that request's responsePath in its own run directory. Do not write one request's result into another run directory.
+Process only the request directory whose prompt you are answering while writing a response.
 
 ${responseInstructions}
 
@@ -245,13 +280,19 @@ In plan mode, do not modify project files.`;
 export function buildDesktopBridgeRequest({
   request,
   agentId,
+  bridgeDir,
   promptPath,
-  instructionsPath
+  instructionsPath,
+  responsePath,
+  createdAt
 }: {
   request: ToolRunRequest;
   agentId: RuntimeAgentId;
+  bridgeDir: string;
   promptPath: string;
   instructionsPath: string;
+  responsePath: string;
+  createdAt: string;
 }): DesktopBridgeRequest {
   return {
     runId: request.id,
@@ -259,10 +300,16 @@ export function buildDesktopBridgeRequest({
     agentId,
     projectPath: request.projectPath,
     executionMode: request.executionMode,
+    purpose: request.purpose,
+    artifactTarget: request.artifactTarget,
+    scanFingerprint: request.scanFingerprint,
+    reviewId: request.reviewId,
+    runDirectory: bridgeDir,
     promptPath,
     instructionsPath,
+    responsePath,
     skills: buildDesktopBridgeSkillReferences(request.projectPath, promptPath, instructionsPath),
-    createdAt: nowIso()
+    createdAt
   };
 }
 
@@ -283,6 +330,7 @@ export async function readDesktopBridgeResponse(bridgeDir: string): Promise<Desk
       content: parsed.content,
       runId: parsed.runId,
       projectId: parsed.projectId,
+      artifactTarget: parsed.artifactTarget,
       completedAt: parsed.completedAt,
       sourcePath: jsonPath
     };

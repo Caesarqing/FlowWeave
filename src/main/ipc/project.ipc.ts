@@ -44,6 +44,7 @@ import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram }
 import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { writeFlowWeaveProject, writeFlowWeaveProjectPreservingCanvas } from "../storage/flowweave-store";
+import { writeJsonAtomic } from "../storage/artifact-store";
 import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString } from "./ipc-validation";
 import { cancelOperation, finishOperation, startOperation, updateOperation } from "../services/operation.service";
 import { exportDiagnostics, recordDiagnostic } from "../services/diagnostic.service";
@@ -53,6 +54,7 @@ import {
   readModificationDelta
 } from "../services/modification-delta.service";
 import { handleIpc } from "./ipc-handler";
+import { readRunArtifact } from "../services/run-log.service";
 
 const TOOL_IDS = ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"] as const;
 
@@ -79,7 +81,10 @@ export function registerProjectIpc() {
 
   handleIpc(PROJECT_CHANNELS.analyzeProject, async (_event, projectId: unknown, toolId: unknown) => {
     const projectPath = resolveProjectPath(requireString(PROJECT_CHANNELS.analyzeProject, projectId, "projectId"));
-    return analyzeProject(await scanProject(projectPath), requireEnum(PROJECT_CHANNELS.analyzeProject, toolId, "toolId", TOOL_IDS) as ToolId);
+    return analyzeProject(
+      await scanProjectWithCurrentProjectArtifact(projectPath),
+      requireEnum(PROJECT_CHANNELS.analyzeProject, toolId, "toolId", TOOL_IDS) as ToolId
+    );
   });
 
   handleIpc(PROJECT_CHANNELS.analyzeArchitecture, (event, projectId: unknown, toolId: unknown) =>
@@ -249,7 +254,7 @@ async function analyzeArchitectureForProject(
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("architecture-analysis", "Preparing architecture analysis.", sender, async (signal, onProgress) => {
-    const result = await analyzeArchitecture(await scanProject(projectPath), agentId, {
+    const result = await analyzeArchitecture(await scanProjectWithCurrentProjectArtifact(projectPath), agentId, {
       signal,
       onProgress,
       projectId,
@@ -268,7 +273,7 @@ async function generateSequenceDiagramsForProject(
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram analysis.", sender, async (signal, onProgress) => {
-    const result = await generateSequenceDiagrams(await scanProject(projectPath), agentId, {
+    const result = await generateSequenceDiagrams(await scanProjectWithCurrentProjectArtifact(projectPath), agentId, {
       signal,
       onProgress,
       planTimeoutMs,
@@ -278,6 +283,22 @@ async function generateSequenceDiagramsForProject(
     if (result.outcome === "failed") throw new Error(result.error.message);
     return result;
   }, projectPath);
+}
+
+async function scanProjectWithCurrentProjectArtifact(projectPath: string) {
+  const project = await scanProject(projectPath);
+  const scanFingerprint = project.scanFingerprint ?? "";
+  if (!scanFingerprint) {
+    throw new Error(`Project scan did not produce a scan fingerprint: ${projectPath}`);
+  }
+  await writeJsonAtomic(join(projectPath, FLOWWEAVE_DIR, "project.json"), {
+    ...project,
+    generatorVersion: "1.0.0",
+    inputFingerprint: scanFingerprint,
+    artifactState: "current",
+    scanFingerprint
+  });
+  return project;
 }
 
 async function reviseSequenceDiagramForProject(
@@ -342,6 +363,10 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       sequences: await artifactStateForFingerprint(projectPath, "sequence-diagrams.json", scanFingerprint)
     };
     let architectureReview = await readArchitectureReviewStatus(projectPath, scanFingerprint);
+    if (architectureReview.state === "reviewing" && architectureReview.runId) {
+      await readRunArtifact(projectPath, architectureReview.runId).catch(() => undefined);
+      architectureReview = await readArchitectureReviewStatus(projectPath, scanFingerprint);
+    }
     if (
       architectureReview.state === "reviewing" &&
       architectureReview.reviewId &&
@@ -358,6 +383,10 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       }
     }
     let sequenceReview = await readSequenceReviewStatus(projectPath, scanFingerprint);
+    if (sequenceReview.state === "reviewing" && sequenceReview.runId) {
+      await readRunArtifact(projectPath, sequenceReview.runId).catch(() => undefined);
+      sequenceReview = await readSequenceReviewStatus(projectPath, scanFingerprint);
+    }
     if (
       sequenceReview.state === "reviewing" &&
       sequenceReview.reviewId &&

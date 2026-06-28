@@ -62,6 +62,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(TOOL_CHANNELS.readRun, projectId, runId) as Promise<ToolRunArtifact>,
   applyRunArtifact: (projectId: string, runId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.applyRunArtifact, projectId, runId) as Promise<ToolRunSummary>,
+  openRunBridge: (projectId: string, runId: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.openRunBridge, projectId, runId) as Promise<void>,
   scanProject: (projectId: string, options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.scanProject, projectId, options) as Promise<FlowWeaveProjectOpenResult>,
   cancelOperation: (operationId: string) =>

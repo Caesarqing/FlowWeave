@@ -6,6 +6,8 @@ import { useCanvasStore } from "../../src/stores/canvas.store";
 import { DEFAULT_LOCALE } from "../../src/stores/preferences.store";
 import type { GraphNode, SequenceDiagram } from "../../src/types";
 import {
+  editableModuleGuidance,
+  isGeneratedModuleGuidance,
   localizedModuleDescription,
   localizedModuleGuidance
 } from "../../src/utils/module-text";
@@ -115,6 +117,13 @@ describe("i18n translations", () => {
     expect(localizedModuleGuidance(node, (key, params) => translate("zh-CN", key, params))).toContain(
       "职责边界"
     );
+    expect(isGeneratedModuleGuidance(node.guidanceDraft)).toBe(true);
+    expect(isGeneratedModuleGuidance("Only update Store tests.")).toBe(false);
+    expect(editableModuleGuidance(node, (key, params) => translate("en", key, params))).toBe("");
+    expect(editableModuleGuidance({
+      ...node,
+      guidanceDraft: "Only update Store tests."
+    }, (key, params) => translate("en", key, params))).toBe("Only update Store tests.");
   });
 
   it("localizes generated Sequence Diagram boilerplate", () => {

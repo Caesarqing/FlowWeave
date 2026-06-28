@@ -38,6 +38,7 @@ export const TOOL_CHANNELS = {
   listRuns: "tool:list-runs",
   readRun: "tool:read-run",
   applyRunArtifact: "tool:apply-run-artifact",
+  openRunBridge: "tool:open-run-bridge",
   openProject: "tool:open-project"
 } as const;
 

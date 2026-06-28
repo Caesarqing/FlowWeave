@@ -30,7 +30,7 @@ export type SequenceDiagramState = {
   selectedParticipantId: string;
   status: string;
   cancelOperation: () => Promise<void>;
-  generateDiagrams: () => Promise<void>;
+  generateDiagrams: (agentId?: RuntimeAgentId) => Promise<void>;
   reviseDiagram: () => Promise<void>;
   saveInstruction: () => Promise<void>;
   selectMessage: (messageId: string) => void;
@@ -77,7 +77,7 @@ export function useSequenceDiagramState({
   useEffect(() => {
     sequenceReviewRef.current = sequenceReview;
     if (sequenceReview.state === "reviewing") {
-      setStatus(t("sequence.reviewing", { agent: sequenceReview.agentId ?? "" }));
+      setStatus(sequenceReview.message ?? t("sequence.reviewing", { agent: sequenceReview.agentId ?? "" }));
     } else if (sequenceReview.state === "review-failed") {
       setStatus(t("sequence.reviewFailed", {
         error: sequenceReview.error?.message ?? t("artifact.unavailable")
@@ -129,7 +129,7 @@ export function useSequenceDiagramState({
           error: event.status.error?.message ?? t("artifact.unavailable")
         }));
       } else if (event.status.state === "reviewing") {
-        setStatus(t("sequence.reviewing", { agent: event.status.agentId ?? "" }));
+        setStatus(event.status.message ?? t("sequence.reviewing", { agent: event.status.agentId ?? "" }));
       }
     });
   }, [projectId, scanFingerprint, setArtifactStatuses, setSequenceReview, t]);
@@ -159,15 +159,16 @@ export function useSequenceDiagramState({
     setSelectedParticipantId(diagram.messages[0] ? "" : diagram.participants[0]?.id ?? "");
   }, [bundle?.generatedAt]);
 
-  async function generateDiagrams() {
+  async function generateDiagrams(agentId?: import("../types").RuntimeAgentId) {
     if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
     }
+    const runAgentId = agentId ?? selectedAgentId;
     setIsBusy(true);
-    setStatus(t("sequence.generatingWith", { agent: selectedAgentId }));
+    setStatus(t("sequence.generatingWith", { agent: runAgentId }));
     try {
-      const result = await window.flowweave.generateSequenceDiagrams(projectId, selectedAgentId, planTimeoutMinutes * 60_000);
+      const result = await window.flowweave.generateSequenceDiagrams(projectId, runAgentId, planTimeoutMinutes * 60_000);
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }

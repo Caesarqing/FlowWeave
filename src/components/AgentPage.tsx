@@ -115,8 +115,10 @@ export function AgentPage({
   onExecutionModeChange,
   onGoToGitReview,
   onHealthCheckAgent,
+  onOpenRunBridge,
   onOpenToolProject,
   onRefreshRuns,
+  onRetryRunArtifact,
   onRunToolPlan,
   onRunArtifactTabChange,
   onSaveCustomAgent,
@@ -143,8 +145,10 @@ export function AgentPage({
   onExecutionModeChange: (mode: ExecutionMode) => void;
   onGoToGitReview: () => void;
   onHealthCheckAgent: (agentId: RuntimeAgentId) => void;
+  onOpenRunBridge: () => void;
   onOpenToolProject: (agentId: RuntimeAgentId) => void;
   onRefreshRuns: () => void;
+  onRetryRunArtifact: (target: ToolRunSummary["artifactTarget"], agentId: RuntimeAgentId) => void;
   onRunToolPlan: (agentId: RuntimeAgentId) => void;
   onRunArtifactTabChange: (tab: RunArtifactTab) => void;
   onSaveCustomAgent: (input: CustomAgentInput) => void;
@@ -158,7 +162,7 @@ export function AgentPage({
   selectedRunId: string;
   toolStatuses: Record<string, ToolUiStatus>;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const visibleAgents = agents.length > 0 ? agents : fallbackAgents;
   const selectedAgent = visibleAgents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0];
   const isArchitectureReviewing = architectureReview.state === "reviewing";
@@ -200,14 +204,14 @@ export function AgentPage({
         </div>
         <div className="segmented-control">
           <button className={cn(executionMode === "plan" && "active")} type="button" onClick={() => onExecutionModeChange("plan")}>
-            Plan
+            {t("agent.mode.plan")}
           </button>
           <button
             className={cn("danger", executionMode === "execute" && "active")}
             type="button"
             onClick={() => onExecutionModeChange("execute")}
           >
-            Execute
+            {t("agent.mode.execute")}
           </button>
         </div>
       </section>
@@ -223,12 +227,12 @@ export function AgentPage({
           const status = toolStatuses[agent.id] ?? createUnknownStatus(agent.id);
           const available = status.available;
           const isSelected = selectedAgentId === agent.id;
-          const connectorPrompt = buildAgentConnectorPrompt({ agentId: agent.id, projectPath: projectPath || "/path/to/project" });
+          const connectorPrompt = buildAgentConnectorPrompt({ agentId: agent.id, locale, projectPath: projectPath || "/path/to/project" });
           return (
             <article className={cn("agent-card", isSelected && "selected default-agent-card")} key={agent.id}>
               <div className="agent-card-header">
                 <div>
-                  <small>{agent.builtIn ? "built-in" : agent.id}</small>
+                  <small>{agent.builtIn ? t("agent.builtIn") : agent.id}</small>
                   <h3>{agent.name}</h3>
                 </div>
                 <div className="agent-card-badges">
@@ -375,7 +379,7 @@ export function AgentPage({
                     ? `${selectedRunArtifact.summary.toolId} · ${selectedRunArtifact.summary.failure.code} · ${selectedRunArtifact.summary.failure.message}`
                     : selectedRunArtifact.summary.summary ?? selectedRunArtifact.summary.id}
                 </span>
-                <code>{selectedRunArtifact.summary.planPath ?? selectedRunArtifact.summary.logPath ?? "no output path"}</code>
+                <code>{selectedRunArtifact.summary.planPath ?? selectedRunArtifact.summary.logPath ?? t("agent.noOutputPath")}</code>
                 {selectedRunArtifact.summary.artifactAdoption ? (
                   <span className={cn("run-adoption", selectedRunArtifact.summary.artifactAdoption.status)}>
                     {artifactAdoptionLabel(selectedRunArtifact.summary.artifactAdoption.status, t)}
@@ -385,6 +389,20 @@ export function AgentPage({
                   <button className="ghost-button" type="button" onClick={onApplyRunArtifact}>
                     <CheckCircle2 size={14} />
                     {t("agent.applyRunArtifact")}
+                  </button>
+                ) : null}
+                {canOpenRunBridge(selectedRunArtifact.summary) ? (
+                  <button className="ghost-button" type="button" onClick={onOpenRunBridge}>
+                    {t("agent.openRunBridge")}
+                  </button>
+                ) : null}
+                {canRetryArtifactRun(selectedRunArtifact.summary) ? (
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => onRetryRunArtifact(selectedRunArtifact.summary.artifactTarget, selectedRunArtifact.summary.toolId)}
+                  >
+                    {t("agent.retrySameAnalysis")}
                   </button>
                 ) : null}
                 {selectedRunArtifact.summary.failure ? (
@@ -421,7 +439,7 @@ export function AgentPage({
               <div className="artifact-tabs">
                 {(["prompt", "plan", "log", "result"] as RunArtifactTab[]).map((tab) => (
                   <button className={cn(runArtifactTab === tab && "active")} key={tab} type="button" onClick={() => onRunArtifactTabChange(tab)}>
-                    {tab}
+                    {artifactTabLabel(tab, t)}
                   </button>
                 ))}
               </div>
@@ -647,11 +665,27 @@ function artifactContent(artifact: ToolRunArtifact, tab: RunArtifactTab) {
 function canApplyRunArtifact(summary: ToolRunSummary) {
   if (summary.purpose !== "artifact-analysis" || summary.status !== "completed") return false;
   const status = summary.artifactAdoption?.status;
-  return status === undefined || status === "pending" || status === "rejected" || status === "stale";
+  return status === undefined || status === "pending" || status === "rejected";
+}
+
+function canOpenRunBridge(summary: ToolRunSummary) {
+  if (summary.purpose !== "artifact-analysis") return false;
+  const status = summary.artifactAdoption?.status;
+  return summary.status === "pending" || status === "pending" || status === "late";
+}
+
+function canRetryArtifactRun(summary: ToolRunSummary) {
+  if (summary.purpose !== "artifact-analysis") return false;
+  const status = summary.artifactAdoption?.status;
+  return status === "rejected" || status === "stale";
 }
 
 function artifactAdoptionLabel(status: NonNullable<ToolRunSummary["artifactAdoption"]>["status"], t: (key: string) => string) {
   return t(`agent.artifactAdoption.${status}`);
+}
+
+function artifactTabLabel(tab: RunArtifactTab, t: (key: string) => string) {
+  return t(`agent.artifactTab.${tab}`);
 }
 
 function formatRunTime(value: string) {

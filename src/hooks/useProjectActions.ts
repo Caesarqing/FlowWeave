@@ -108,6 +108,8 @@ export function useProjectActions({
         setProjectStatus(t("status.analysisReviewFailed", {
           error: event.status.error?.message ?? t("artifact.unavailable")
         }));
+      } else if (event.status.state === "reviewing" && event.status.message) {
+        setProjectStatus(event.status.message);
       }
     });
   }, [

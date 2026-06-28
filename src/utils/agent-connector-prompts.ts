@@ -1,9 +1,11 @@
-import type { RuntimeAgentId } from "../types";
+import type { LocaleId, RuntimeAgentId } from "../types";
+import { translate } from "./i18n";
 
 export type AgentConnectorKind = "codex" | "claude" | "gemini" | "cursor" | "custom";
 
 export type AgentConnectorPromptInput = {
   agentId: RuntimeAgentId;
+  locale: LocaleId;
   projectPath: string;
 };
 
@@ -19,14 +21,14 @@ export function buildAgentConnectorPrompt(input: AgentConnectorPromptInput): Age
   const kind = agentConnectorKind(input.agentId);
   const connectorPath = `${input.projectPath}/.flowweave/agent-context.md`;
   const command = input.agentId === "codex-desktop" || input.agentId === "claude-desktop" || kind === "custom"
-    ? "使用 FlowWeave 上下文处理当前待办"
-    : buildConnectorCommand(kind, connectorPath);
+    ? translate(input.locale, "agent.connectorCommand.pending")
+    : buildConnectorCommand(kind, connectorPath, input.locale);
   return {
     kind,
-    title: connectorTitle(kind),
+    title: connectorTitle(kind, input.locale),
     command,
     connectorPath,
-    description: connectorDescription(kind)
+    description: connectorDescription(kind, input.locale)
   };
 }
 
@@ -38,34 +40,30 @@ export function agentConnectorKind(agentId: RuntimeAgentId): AgentConnectorKind 
   return "cursor";
 }
 
-function buildConnectorCommand(kind: AgentConnectorKind, connectorPath: string) {
+function buildConnectorCommand(kind: AgentConnectorKind, connectorPath: string, locale: LocaleId) {
   if (kind === "codex") {
-    return `Read ${connectorPath} and follow it to connect with FlowWeave. You may modify project files directly.`;
+    return translate(locale, "agent.connectorCommand.readWrite", { connectorPath });
   }
   if (kind === "claude") {
-    return `Read ${connectorPath} and follow it to connect with FlowWeave. You may modify project files directly.`;
+    return translate(locale, "agent.connectorCommand.readWrite", { connectorPath });
   }
   if (kind === "gemini") {
-    return `Read ${connectorPath} and follow it to connect with FlowWeave. You may modify project files directly.`;
+    return translate(locale, "agent.connectorCommand.readWrite", { connectorPath });
   }
   if (kind === "custom") {
-    return `Read ${connectorPath} and follow it to connect with FlowWeave. Use .flowweave/agent-bridge when a pending request is present.`;
+    return translate(locale, "agent.connectorCommand.custom", { connectorPath });
   }
-  return `Open this project in Cursor, read ${connectorPath}, and follow it to connect with FlowWeave. You may modify project files directly.`;
+  return translate(locale, "agent.connectorCommand.cursor", { connectorPath });
 }
 
-function connectorTitle(kind: AgentConnectorKind) {
-  if (kind === "codex") return "Codex FlowWeave connector";
-  if (kind === "claude") return "Claude FlowWeave connector";
-  if (kind === "gemini") return "Gemini FlowWeave connector";
-  if (kind === "custom") return "Custom Agent FlowWeave connector";
-  return "Cursor FlowWeave connector";
+function connectorTitle(kind: AgentConnectorKind, locale: LocaleId) {
+  return translate(locale, `agent.connectorTitle.${kind}`);
 }
 
-function connectorDescription(kind: AgentConnectorKind) {
+function connectorDescription(kind: AgentConnectorKind, locale: LocaleId) {
   if (kind === "cursor") {
-    return "Copy this into Cursor chat after opening the project.";
+    return translate(locale, "agent.connectorDescription.cursor");
   }
-  if (kind === "custom") return "Copy this into the custom Agent chat, CLI, or desktop bridge.";
-  return "Copy this into the external Agent chat or CLI prompt.";
+  if (kind === "custom") return translate(locale, "agent.connectorDescription.custom");
+  return translate(locale, "agent.connectorDescription.default");
 }

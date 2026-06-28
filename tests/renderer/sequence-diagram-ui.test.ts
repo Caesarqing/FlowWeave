@@ -119,7 +119,7 @@ describe("sequence diagram UI helpers", () => {
 
   it("passes the configured plan timeout into sequence agent runs", () => {
     expect(sequenceStateSource).toContain("planTimeoutMinutes * 60_000");
-    expect(sequenceStateSource).toContain("generateSequenceDiagrams(projectId, selectedAgentId, planTimeoutMinutes * 60_000)");
+    expect(sequenceStateSource).toContain("generateSequenceDiagrams(projectId, runAgentId, planTimeoutMinutes * 60_000)");
     expect(sequenceStateSource).toContain("reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim(), planTimeoutMinutes * 60_000)");
   });
 });

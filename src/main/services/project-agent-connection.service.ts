@@ -257,7 +257,7 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
     "- You may modify project files when the user asks you to implement a change.",
     "- After modifying files, report the changed file paths and the verification you ran.",
     "- Ask the user to return to FlowWeave to review Git diff, refresh the project scan, or rollback when needed.",
-    "- When asked to process the current FlowWeave pending request, inspect `.flowweave/agent-bridge/*/request.json`, choose the newest request without a response, and follow its `instructionsPath`.",
+    "- When asked to process FlowWeave pending requests, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest `createdAt` to newest, and follow each entry's `instructionsPath` or `requestPath`.",
     "",
     "## FlowWeave Artifacts",
     "",
@@ -336,7 +336,7 @@ function buildManagedInstructionBlock() {
     "",
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
-    "When the user says `使用 FlowWeave 上下文处理当前待办`, process the newest pending request under `.flowweave/agent-bridge` and write the required response atomically.",
+    "When the user says `Use FlowWeave context to process pending requests.` or `使用 FlowWeave 上下文处理当前待办`, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest to newest, and write each response atomically to that entry's responsePath.",
     "For artifact-analysis requests, write `.flowweave/agent-bridge/<runId>/response.json`; replying only in chat does not complete the FlowWeave review.",
     FLOWWEAVE_BLOCK_END
   ].join("\n");

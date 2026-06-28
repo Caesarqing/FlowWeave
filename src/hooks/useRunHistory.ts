@@ -69,11 +69,20 @@ export function useRunHistory(projectId: string) {
     }
   }
 
+  async function openSelectedRunBridge() {
+    if (!window.flowweave || !projectId || !selectedRunId) return;
+    try {
+      await window.flowweave.openRunBridge(projectId, selectedRunId);
+    } catch (error) {
+      setLastRunStatus(t("agent.openRunBridgeFailed", { error: formatErrorMessage(error) }));
+    }
+  }
+
   useEffect(() => {
     void refreshRuns();
   }, [projectId]);
 
-  return { applySelectedRunArtifact, openGitReviewFromRun, refreshRuns, selectRun };
+  return { applySelectedRunArtifact, openGitReviewFromRun, openSelectedRunBridge, refreshRuns, selectRun };
 }
 
 function formatErrorMessage(error: unknown) {

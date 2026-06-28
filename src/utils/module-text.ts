@@ -39,21 +39,24 @@ export function localizedModuleDescription(node: GraphNode, t: Translate): strin
 }
 
 export function localizedModuleGuidance(node: GraphNode, t: Translate): string {
-  if (
-    node.guidanceDraft.includes("检查这些文件的职责边界") ||
-    node.guidanceDraft.includes("Review the responsibility boundaries of these files")
-  ) {
+  if (isGeneratedScanGuidance(node.guidanceDraft)) {
     return t("module.generatedScanGuidance", { title: node.title });
   }
 
-  if (
-    node.guidanceDraft.includes("功能架构职责修改代码") ||
-    node.guidanceDraft.includes("functional architecture responsibility")
-  ) {
+  if (isGeneratedArchitectureGuidance(node.guidanceDraft)) {
     return t("module.generatedArchitectureGuidance", { title: node.title });
   }
 
   return node.guidanceDraft;
+}
+
+export function editableModuleGuidance(node: GraphNode, t: Translate): string {
+  if (isGeneratedModuleGuidance(node.guidanceDraft)) return "";
+  return localizedModuleGuidance(node, t);
+}
+
+export function isGeneratedModuleGuidance(value: string): boolean {
+  return isGeneratedScanGuidance(value) || isGeneratedArchitectureGuidance(value);
 }
 
 export function localizedModuleRole(node: GraphNode, t: Translate): string | undefined {
@@ -72,4 +75,14 @@ export function localizedArchitectureCategory(
   t: Translate
 ): string {
   return category ? t(`architectureCategory.${category}`) : t(`nodeType.${nodeType}`);
+}
+
+function isGeneratedScanGuidance(value: string): boolean {
+  return value.includes("检查这些文件的职责边界") ||
+    value.includes("Review the responsibility boundaries of these files");
+}
+
+function isGeneratedArchitectureGuidance(value: string): boolean {
+  return value.includes("功能架构职责修改代码") ||
+    value.includes("functional architecture responsibility");
 }

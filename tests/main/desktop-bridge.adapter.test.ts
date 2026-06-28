@@ -11,6 +11,7 @@ import {
   getDesktopBridgeDir,
   readDesktopBridgeResponse
 } from "../../src/main/agents/desktop-bridge.adapter";
+import { readDesktopBridgePendingManifest } from "../../src/main/services/desktop-bridge-manifest.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 
 describe("desktop-bridge.adapter", () => {
@@ -54,6 +55,57 @@ describe("desktop-bridge.adapter", () => {
     await expect(readFile(join(bridgeDir, "request.json"), "utf8")).resolves.toContain('"agentId": "codex-desktop"');
     await expect(readFile(join(bridgeDir, "prompt.md"), "utf8")).resolves.toContain("Inspect the project.");
     await expect(readFile(join(bridgeDir, "instructions.md"), "utf8")).resolves.toContain("response.json");
+    const manifest = await readDesktopBridgePendingManifest(projectPath);
+    expect(manifest.requests).toEqual([
+      expect.objectContaining({
+        runId,
+        projectId: "project-00000000-0000-0000-0000-000000000000",
+        agentId: "codex-desktop",
+        status: "pending",
+        responsePath: join(bridgeDir, "response.json")
+      })
+    ]);
+  });
+
+  it("records multiple concurrent pending bridge requests in the manifest", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-multi-"));
+    const adapter = new DesktopBridgeAdapter({
+      id: "codex-desktop",
+      name: "Codex Desktop Test",
+      appPath: "/definitely/not/Codex.app"
+    });
+    await Promise.all(["run-desktop-1", "run-desktop-2"].map(async (runId) => {
+      await mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true });
+      await adapter.runPlan({
+        id: runId,
+        projectId: "project-00000000-0000-0000-0000-000000000000",
+        projectPath,
+        prompt: `Inspect ${runId}.`,
+        executionMode: "plan",
+        purpose: "artifact-analysis",
+        artifactTarget: runId.endsWith("1") ? "architecture-map" : "sequence-diagrams",
+        scanFingerprint: "scan-test",
+        reviewId: `review-${runId}`
+      });
+    }));
+
+    const manifest = await readDesktopBridgePendingManifest(projectPath);
+
+    expect(manifest.requests).toHaveLength(2);
+    expect(manifest.requests).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        runId: "run-desktop-1",
+        artifactTarget: "architecture-map",
+        scanFingerprint: "scan-test",
+        reviewId: "review-run-desktop-1"
+      }),
+      expect.objectContaining({
+        runId: "run-desktop-2",
+        artifactTarget: "sequence-diagrams",
+        scanFingerprint: "scan-test",
+        reviewId: "review-run-desktop-2"
+      })
+    ]));
   });
 
   it("requires structured response.json for artifact analysis bridge runs", () => {
@@ -136,11 +188,17 @@ describe("desktop-bridge.adapter", () => {
         projectPath: "/tmp/project",
         prompt: "Prompt",
         executionMode: "plan",
-        purpose: "implementation-plan"
+        purpose: "artifact-analysis",
+        artifactTarget: "architecture-map",
+        scanFingerprint: "scan-test",
+        reviewId: "review-test"
       },
       agentId: "claude-desktop",
+      bridgeDir: "/tmp/project/.flowweave/agent-bridge/run-metadata",
       promptPath: "/tmp/project/.flowweave/agent-bridge/run-metadata/prompt.md",
-      instructionsPath: "/tmp/project/.flowweave/agent-bridge/run-metadata/instructions.md"
+      instructionsPath: "/tmp/project/.flowweave/agent-bridge/run-metadata/instructions.md",
+      responsePath: "/tmp/project/.flowweave/agent-bridge/run-metadata/response.json",
+      createdAt: "2026-06-27T00:00:00.000Z"
     });
 
     expect(request.skills.map((skill) => skill.kind)).toEqual([
@@ -150,5 +208,11 @@ describe("desktop-bridge.adapter", () => {
       "skill-root",
       "plugin-root"
     ]);
+    expect(request).toMatchObject({
+      artifactTarget: "architecture-map",
+      scanFingerprint: "scan-test",
+      reviewId: "review-test",
+      responsePath: "/tmp/project/.flowweave/agent-bridge/run-metadata/response.json"
+    });
   });
 });

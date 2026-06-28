@@ -20,7 +20,7 @@ import type {
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readArchitectureMap } from "./architecture-analysis.service";
 import { startToolPlan } from "./agent-run.service";
-import { createScanFingerprint, registerProject } from "./project-registry.service";
+import { registerProject } from "./project-registry.service";
 import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
 import { throwIfAborted, throwIfRunCanceled } from "./flowweave-error.service";
@@ -33,6 +33,8 @@ import {
   writeSequenceReviewStatus,
   type SequenceReviewRunResult
 } from "./sequence-review.service";
+import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
+import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
 const MAX_PROMPT_FILES = 70;
@@ -69,7 +71,7 @@ async function generateSequenceDiagramsOnce(
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const storedArchitecture = await readArchitectureMap(project.rootPath);
   const architectureMap = storedArchitecture;
-  const inputFingerprint = project.scanFingerprint ?? createScanFingerprint({ representativeFacts, architecture: architectureMap?.metadata?.inputFingerprint });
+  const inputFingerprint = await readCurrentProjectScanFingerprint(project.rootPath);
   const prompt = buildSequenceDiagramPrompt(representativeFacts, architectureMap);
   const localBundleBase = createLocalSequenceBundle(project, facts, architectureMap, "local");
   const localQuality = validateSequenceBundle(localBundleBase, facts);
@@ -126,6 +128,7 @@ async function generateSequenceDiagramsOnce(
       inputFingerprint,
       reviewId,
       options?.planTimeoutMs,
+      options?.signal,
       onRunId
     ),
     onEvent: options?.onSequenceReview ?? (() => undefined)
@@ -559,6 +562,7 @@ async function runSequenceReview(
   inputFingerprint: string,
   reviewId: string,
   planTimeoutMs: number | undefined,
+  signal: AbortSignal | undefined,
   onRunId: (runId: string) => Promise<void>
 ): Promise<SequenceReviewRunResult> {
   const projectId = await registerProject(project.rootPath);
@@ -574,7 +578,7 @@ async function runSequenceReview(
     planTimeoutMs
   });
   await onRunId(result.id);
-  const firstRun = await waitForSequenceRun(project.rootPath, result, planTimeoutMs);
+  const firstRun = await waitForSequenceRun(project.rootPath, result, agentId, reviewId, inputFingerprint, planTimeoutMs, signal);
   if (firstRun.status !== "completed") {
     return {
       outcome: "failed",
@@ -612,7 +616,7 @@ async function runSequenceReview(
     planTimeoutMs
   });
   await onRunId(retry.id);
-  const retryRun = await waitForSequenceRun(project.rootPath, retry, planTimeoutMs);
+  const retryRun = await waitForSequenceRun(project.rootPath, retry, agentId, reviewId, inputFingerprint, planTimeoutMs, signal);
   if (retryRun.status !== "completed") {
     return {
       outcome: "failed",
@@ -659,28 +663,29 @@ async function runSequenceReview(
 async function waitForSequenceRun(
   projectPath: string,
   initial: ToolRunResult,
-  planTimeoutMs: number | undefined
+  agentId: RuntimeAgentId,
+  reviewId: string,
+  inputFingerprint: string,
+  planTimeoutMs: number | undefined,
+  signal: AbortSignal | undefined
 ): Promise<ToolRunResult> {
-  if (initial.status !== "pending") return initial;
-  const deadline = Date.now() + (planTimeoutMs ?? 300_000);
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    const { readRunArtifact } = await import("./run-log.service");
-    const artifact = await readRunArtifact(projectPath, initial.id);
-    if (artifact.summary.status === "pending") continue;
-    return {
-      ...initial,
-      status: artifact.summary.status,
-      completedAt: artifact.summary.completedAt,
-      summary: artifact.summary.summary,
-      outputText: artifact.plan
-    };
-  }
-  return {
-    ...initial,
-    status: "failed",
-    summary: `Agent sequence review remained pending without a desktop bridge response.json before timeout: ${initial.id}`
-  };
+  return waitForArtifactRunResponse(projectPath, initial, {
+    softTimeoutMs: planTimeoutMs ?? 300_000,
+    signal,
+    pollIntervalMs: 1_000,
+    onLate: async (late) => {
+      await writeSequenceReviewStatus(projectPath, {
+        state: "reviewing",
+        reviewId,
+        scanFingerprint: inputFingerprint,
+        agentId,
+        runId: initial.id,
+        startedAt: initial.startedAt,
+        softTimedOutAt: late.softTimedOutAt,
+        message: late.message
+      });
+    }
+  });
 }
 
 export function validateSequenceBundle(

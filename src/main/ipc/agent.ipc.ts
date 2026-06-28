@@ -1,8 +1,10 @@
+import { shell } from "electron";
 import { TOOL_CHANNELS } from "../../common/ipc-channels";
 import type { AgentCapability, AgentId, AgentProtocol, CustomAgentInput, RuntimeAgentId } from "../../types";
 import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
 import { applyRunArtifact, listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
+import { getDesktopBridgeDir } from "../agents/desktop-bridge.adapter";
 import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
 import { handleIpc } from "./ipc-handler";
 
@@ -113,6 +115,13 @@ export function registerAgentIpc() {
       resolveProjectPath(requireString(TOOL_CHANNELS.applyRunArtifact, projectId, "projectId")),
       requireRunId(TOOL_CHANNELS.applyRunArtifact, runId)
     );
+  });
+
+  handleIpc(TOOL_CHANNELS.openRunBridge, async (_event, projectId: unknown, runId: unknown) => {
+    const projectPath = resolveProjectPath(requireString(TOOL_CHANNELS.openRunBridge, projectId, "projectId"));
+    const safeRunId = requireRunId(TOOL_CHANNELS.openRunBridge, runId);
+    const error = await shell.openPath(getDesktopBridgeDir(projectPath, safeRunId));
+    if (error) throw new Error(`Opening FlowWeave bridge folder failed: ${error}`);
   });
 
   handleIpc(TOOL_CHANNELS.openProject, async (_event, toolId: unknown, projectId: unknown) => {

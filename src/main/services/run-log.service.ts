@@ -5,6 +5,9 @@ import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { getDesktopBridgeDir, readDesktopBridgeResponse } from "../agents/desktop-bridge.adapter";
 import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
 import { adoptArtifactRun } from "./artifact-run-adoption.service";
+import { markDesktopBridgeRequestStatus } from "./desktop-bridge-manifest.service";
+import { writeArchitectureReviewStatus } from "./architecture-review.service";
+import { writeSequenceReviewStatus } from "./sequence-review.service";
 
 export type RunPaths = {
   runDir: string;
@@ -116,7 +119,7 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
     let result = JSON.parse(resultText) as Partial<ToolRunResult>;
     if (result.status === "pending") {
       try {
-        result = await importDesktopBridgeResponse(projectPath, runId, result);
+        result = await importPendingDesktopBridgeRun(projectPath, runId, result);
       } catch (error) {
         const completedAt = new Date().toISOString();
         result = {
@@ -126,7 +129,10 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
           exitCode: 1,
           summary: `Desktop bridge response rejected: ${formatError(error)}`
         };
-        await writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result);
+        await Promise.all([
+          writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result),
+          markDesktopBridgeRequestStatus(projectPath, runId, "failed")
+        ]);
       }
     }
     return {
@@ -154,7 +160,7 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
   }
 }
 
-async function importDesktopBridgeResponse(
+export async function importPendingDesktopBridgeRun(
   projectPath: string,
   runId: string,
   result: Partial<ToolRunResult>
@@ -170,6 +176,9 @@ async function importDesktopBridgeResponse(
   }
   if (response.sourcePath.endsWith("response.json") && (!result.projectId || response.projectId !== result.projectId)) {
     throw new Error(`Desktop bridge response projectId does not match pending run ${runId}.`);
+  }
+  if (response.artifactTarget && result.artifactTarget && response.artifactTarget !== result.artifactTarget) {
+    throw new Error(`Desktop bridge response artifactTarget does not match pending run ${runId}.`);
   }
   const completedAt = response.completedAt ?? new Date().toISOString();
   if (Number.isNaN(Date.parse(completedAt))) {
@@ -189,11 +198,41 @@ async function importDesktopBridgeResponse(
         message: formatError(error)
       }))
     : updated.artifactAdoption;
+  await reconcileImportedArtifactReview(projectPath, runId, updated, adoption);
   await Promise.all([
     writeTextAtomic(join(runDir, "plan.md"), response.content),
-    writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption })
+    writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption }),
+    markDesktopBridgeRequestStatus(projectPath, runId, response.status)
   ]);
   return { ...updated, artifactAdoption: adoption };
+}
+
+async function reconcileImportedArtifactReview(
+  projectPath: string,
+  runId: string,
+  result: Partial<ToolRunResult>,
+  adoption: ToolRunResult["artifactAdoption"]
+): Promise<void> {
+  if (result.purpose !== "artifact-analysis") return;
+  if (adoption?.status !== "rejected" && adoption?.status !== "stale") return;
+  const status = {
+    state: "review-failed" as const,
+    reviewId: result.reviewId,
+    scanFingerprint: result.scanFingerprint,
+    agentId: result.toolId,
+    runId,
+    completedAt: new Date().toISOString(),
+    error: {
+      code: adoption.status === "rejected" ? "invalid-output" as const : "agent-failed" as const,
+      message: adoption.message
+    }
+  };
+  if (result.artifactTarget === "architecture-map") {
+    await writeArchitectureReviewStatus(projectPath, status);
+  }
+  if (result.artifactTarget === "sequence-diagrams" || result.artifactTarget === "sequence-revision") {
+    await writeSequenceReviewStatus(projectPath, status);
+  }
 }
 
 function getRunDir(projectPath: string, runId: string) {
