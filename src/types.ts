@@ -1174,7 +1174,7 @@ export type FlowWeaveApi = {
     scope: ModificationAcknowledgementScope
   ): Promise<ModificationBaseline>;
   readCanvas(projectId: string): Promise<CodeflowCanvas | undefined>;
-  saveCanvas(projectId: string, canvas: CodeflowCanvas): Promise<string>;
+  saveCanvas(projectId: string, canvas: CodeflowCanvas, options?: { allowStaleNoop?: boolean }): Promise<string>;
   exportDiagnostics(projectId: string): Promise<string>;
   getProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
   enableProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;

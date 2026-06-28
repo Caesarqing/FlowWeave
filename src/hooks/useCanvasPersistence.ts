@@ -19,18 +19,22 @@ export function useCanvasPersistence(
   useEffect(() => {
     if (!window.flowweave || !projectId || modules.length === 0 || artifactState !== "current") return;
     const timeout = window.setTimeout(() => {
-      void window.flowweave?.saveCanvas(projectId, {
-        version: 3,
-        id: "main",
-        title: "Main Canvas",
-        projectPath,
-        generatedAt: new Date().toISOString(),
-        scanFingerprint,
-        artifactState: "current",
-        layout,
-        nodes: modules,
-        edges: relations
-      }).catch((error) => {
+      void window.flowweave?.saveCanvas(
+        projectId,
+        {
+          version: 3,
+          id: "main",
+          title: "Main Canvas",
+          projectPath,
+          generatedAt: new Date().toISOString(),
+          scanFingerprint,
+          artifactState: "current",
+          layout,
+          nodes: modules,
+          edges: relations
+        },
+        { allowStaleNoop: true }
+      ).catch((error) => {
         setLastRunStatus(t("agent.connectionRefreshFailed", { error: formatErrorMessage(error) }));
       });
     }, 500);

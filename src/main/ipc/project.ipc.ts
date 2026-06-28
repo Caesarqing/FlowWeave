@@ -191,10 +191,13 @@ export function registerProjectIpc() {
     return result.state === "loaded" ? result.canvas : undefined;
   });
 
-  handleIpc(PROJECT_CHANNELS.saveCanvas, async (_event, projectId: unknown, canvas: unknown) => {
+  handleIpc(PROJECT_CHANNELS.saveCanvas, async (_event, projectId: unknown, canvas: unknown, options: unknown) => {
     const safeProjectId = requireString(PROJECT_CHANNELS.saveCanvas, projectId, "projectId");
     const projectPath = resolveProjectPath(safeProjectId);
     const value = requireObject(PROJECT_CHANNELS.saveCanvas, canvas, "canvas") as Partial<CodeflowCanvas>;
+    const saveOptions = options === undefined
+      ? { allowStaleNoop: false }
+      : requireObject(PROJECT_CHANNELS.saveCanvas, options, "options") as { allowStaleNoop?: unknown };
     if (value.version !== 3 || value.artifactState !== "current") {
       throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v3 can be saved.`);
     }
@@ -210,10 +213,11 @@ export function registerProjectIpc() {
     const projectArtifact = JSON.parse(
       await readFile(join(projectPath, FLOWWEAVE_DIR, "project.json"), "utf8")
     ) as { scanFingerprint?: string };
+    const canvasPath = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
     if (!value.scanFingerprint || value.scanFingerprint !== projectArtifact.scanFingerprint) {
+      if (saveOptions.allowStaleNoop === true) return canvasPath;
       throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Canvas scan fingerprint is stale.`);
     }
-    const canvasPath = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
     await mkdir(join(projectPath, FLOWWEAVE_DIR, "canvas"), { recursive: true });
     const temporaryPath = `${canvasPath}.${randomUUID()}.tmp`;
     try {

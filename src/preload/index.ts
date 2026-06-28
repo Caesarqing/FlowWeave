@@ -122,8 +122,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.acknowledgeModificationChanges, projectId, snapshot, scope) as Promise<import("../types").ModificationBaseline>,
   readCanvas: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readCanvas, projectId) as Promise<CodeflowCanvas | undefined>,
-  saveCanvas: (projectId: string, canvas: CodeflowCanvas) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.saveCanvas, projectId, canvas) as Promise<string>,
+  saveCanvas: (projectId: string, canvas: CodeflowCanvas, options?: { allowStaleNoop?: boolean }) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.saveCanvas, projectId, canvas, options) as Promise<string>,
   exportDiagnostics: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.exportDiagnostics, projectId) as Promise<string>,
   getProjectAgentConnection: (projectId: string) =>
