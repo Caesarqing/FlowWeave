@@ -57,12 +57,18 @@ export function ArtifactStatusBar({
   return (
     <details className="artifact-status-bar">
       <summary aria-label={t("artifact.statuses")}>
-        <span className={cn("artifact-status", `artifact-status-${visibleReview.state}`)}>
-          {t("artifact.architecture")}: {t(`artifact.review.${visibleReview.state}`)}
+        <span
+          className={cn("artifact-status", `artifact-status-${reviewClassName(visibleReview)}`)}
+          title={reviewTitle(visibleReview)}
+        >
+          {t("artifact.architecture")}: {reviewLabel(visibleReview, t)}
         </span>
         {showSequenceReview ? (
-          <span className={cn("artifact-status", `artifact-status-${visibleSequenceReview.state}`)}>
-            {t("artifact.sequences")}: {t(`artifact.review.${visibleSequenceReview.state}`)}
+          <span
+            className={cn("artifact-status", `artifact-status-${reviewClassName(visibleSequenceReview)}`)}
+            title={reviewTitle(visibleSequenceReview)}
+          >
+            {t("artifact.sequences")}: {reviewLabel(visibleSequenceReview, t)}
           </span>
         ) : null}
         {abnormalKeys.map((key) => (
@@ -111,6 +117,8 @@ function SequenceReviewDetails({
       {review.agentId ? <span>{t("artifact.review.agent")}: {review.agentId}</span> : null}
       {review.completedAt ? <span>{t("artifact.review.completedAt")}: {review.completedAt}</span> : null}
       {review.runId ? <span>{t("artifact.review.runId")}: {review.runId}</span> : null}
+      {review.softTimedOutAt ? <span>{t("artifact.review.softTimedOutAt")}: {review.softTimedOutAt}</span> : null}
+      {review.message ? <span>{review.message}</span> : null}
       {review.diff ? <span>{formatSequenceDiff(review.diff, t)}</span> : null}
       {review.error ? <span>{review.error.message}</span> : null}
       {review.state === "review-failed" && onRetry ? (
@@ -134,6 +142,8 @@ function ArchitectureReviewDetails({
       {review.agentId ? <span>{t("artifact.review.agent")}: {review.agentId}</span> : null}
       {review.completedAt ? <span>{t("artifact.review.completedAt")}: {review.completedAt}</span> : null}
       {review.runId ? <span>{t("artifact.review.runId")}: {review.runId}</span> : null}
+      {review.softTimedOutAt ? <span>{t("artifact.review.softTimedOutAt")}: {review.softTimedOutAt}</span> : null}
+      {review.message ? <span>{review.message}</span> : null}
       {review.diff ? <span>{formatDiff(review.diff, t)}</span> : null}
       {review.error ? <span>{review.error.message}</span> : null}
       {review.state === "review-failed" && onRetry ? (
@@ -169,4 +179,23 @@ function formatSequenceDiff(
 
 function stateKey(state: ProjectArtifactState) {
   return `artifact.state.${state}`;
+}
+
+function reviewClassName(review: ArchitectureReviewStatus | SequenceReviewStatus): string {
+  if (review.state === "reviewing" && review.softTimedOutAt) return "review-late";
+  return review.state;
+}
+
+function reviewLabel(
+  review: ArchitectureReviewStatus | SequenceReviewStatus,
+  t: (key: string, values?: Record<string, string | number>) => string
+): string {
+  if (review.state === "reviewing" && review.softTimedOutAt) return t("artifact.review.late");
+  return t(`artifact.review.${review.state}`);
+}
+
+function reviewTitle(review: ArchitectureReviewStatus | SequenceReviewStatus): string | undefined {
+  if (review.message) return review.message;
+  if (review.state === "reviewing" && review.runId) return review.runId;
+  return undefined;
 }

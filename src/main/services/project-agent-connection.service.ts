@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type {
   ArchitectureMap,
@@ -127,6 +127,7 @@ async function writeProjectAgentConnection(
   for (const update of plannedUpdates) {
     await writeTextAtomic(update.filePath, update.content);
   }
+  await removeLegacyAgentConnectorArtifacts(projectPath);
 
   const config: ProjectAgentConnectionConfig = {
     version: 1,
@@ -435,20 +436,91 @@ async function latestArtifactModificationTime(projectPath: string) {
 
 async function findConnectionFileIssue(projectPath: string, platforms: ProjectAgentPlatform[]) {
   const contextPath = connectionPaths(projectPath).contextPath;
-  if (await readOptionalText(contextPath) === undefined) {
+  const context = await readOptionalText(contextPath);
+  if (context === undefined) {
     return `Connection file is missing: ${contextPath}`;
+  }
+  const contextRoot = /^Project root:\s*(.+)$/m.exec(context)?.[1]?.trim();
+  if (contextRoot !== projectPath) {
+    return `FlowWeave Agent context root is stale: expected "${projectPath}" but found "${contextRoot ?? "unknown"}".`;
+  }
+  if (!context.includes("pending-requests.json")) {
+    return `FlowWeave Agent context is missing pending request instructions: ${contextPath}`;
   }
   for (const entry of platformEntries(projectPath, platforms)) {
     const content = await readOptionalText(entry.filePath);
     if (content === undefined) return `Connection file is missing: ${entry.filePath}`;
-    if (!findManagedBlock(content, entry.filePath)) {
+    const block = findManagedBlock(content, entry.filePath);
+    if (!block) {
       return `FlowWeave managed instructions are missing from: ${entry.filePath}`;
+    }
+    const managedContent = content.slice(block.start, block.end);
+    if (!managedContent.includes("pending-requests.json")) {
+      return `FlowWeave managed instructions are stale in: ${entry.filePath}`;
     }
     if (entry.platform === "cursor" && !content.includes("alwaysApply: true")) {
       return `Cursor FlowWeave rule is not configured as an automatic project rule: ${entry.filePath}`;
     }
   }
   return undefined;
+}
+
+async function removeLegacyAgentConnectorArtifacts(projectPath: string): Promise<void> {
+  const root = join(projectPath, FLOWWEAVE_DIR, "agent-connectors");
+  const legacyFiles = [
+    "codex.md",
+    "claude.md",
+    "gemini.md",
+    "cursor.md",
+    "context.md",
+    "context.json"
+  ];
+  for (const name of legacyFiles) {
+    await removeLegacyFile(join(root, name));
+  }
+  await removeLegacySkillFiles(join(root, "skills"));
+  await removeEmptyDirectory(join(root, "skills"));
+  await removeEmptyDirectory(root);
+}
+
+async function removeLegacySkillFiles(skillsPath: string): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(skillsPath, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw error;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const skillPath = join(skillsPath, entry.name);
+    await removeLegacyFile(join(skillPath, "SKILL.md"));
+    await removeEmptyDirectory(skillPath);
+  }
+}
+
+async function removeLegacyFile(filePath: string): Promise<void> {
+  const content = await readOptionalText(filePath);
+  if (content === undefined) return;
+  if (!isLegacyAgentConnectorContent(content)) return;
+  await rm(filePath, { force: true });
+}
+
+function isLegacyAgentConnectorContent(content: string): boolean {
+  return content.includes(".flowweave/agent-connectors") ||
+    content.includes("FlowWeave connector context:") ||
+    content.includes("FlowWeave connector") ||
+    content.includes("read-flowweave-context");
+}
+
+async function removeEmptyDirectory(directoryPath: string): Promise<void> {
+  try {
+    const entries = await readdir(directoryPath);
+    if (entries.length === 0) await rmdir(directoryPath);
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw error;
+  }
 }
 
 async function listTaskPaths(tasksPath: string, projectPath: string) {

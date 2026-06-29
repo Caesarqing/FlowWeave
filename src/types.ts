@@ -850,16 +850,22 @@ export type AgentHealthCheck = {
 };
 export type AgentHealthCheckResult = {
   agentId: RuntimeAgentId;
+  projectId?: string;
   severity: AgentHealthCheckSeverity;
   checks: AgentHealthCheck[];
   suggestedActions: string[];
   environmentHints: string[];
+  connection?: ProjectAgentConnectionStatus;
   checkedAt: string;
+};
+
+export type AgentReadinessResult = AgentHealthCheckResult & {
+  refreshedConnection?: boolean;
 };
 
 export type ToolUiStatus = ToolDetectionResult & {
   checking: boolean;
-  health?: AgentHealthCheckResult;
+  health?: AgentReadinessResult;
   lastRunStatus?: ToolRunStatus;
   lastOutputPath?: string;
 };
@@ -975,6 +981,7 @@ export type ToolRunResult = {
   scanFingerprint?: string;
   reviewId?: string;
   artifactAdoption?: ArtifactAdoption;
+  agentReadiness?: AgentReadinessResult;
   checkpointId?: string;
   attempts?: number;
   durationMs?: number;
@@ -992,6 +999,7 @@ export type ToolRunSummary = {
   scanFingerprint?: string;
   reviewId?: string;
   artifactAdoption?: ArtifactAdoption;
+  agentReadiness?: AgentReadinessResult;
   startedAt: string;
   completedAt: string;
   summary?: string;
@@ -1124,7 +1132,7 @@ export type FlowWeaveApi = {
   saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
   deleteCustomAgent(agentId: AgentId): Promise<void>;
   detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult>;
-  healthCheckAgent(agentId: RuntimeAgentId): Promise<AgentHealthCheckResult>;
+  healthCheckAgent(agentId: RuntimeAgentId, projectId?: string): Promise<AgentReadinessResult>;
   detectTool(toolId: ToolId): Promise<ToolDetectionResult>;
   runToolPlan(options: {
     projectId: string;

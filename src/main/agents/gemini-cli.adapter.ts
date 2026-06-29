@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
+import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { resolveToolCommand } from "./agent-command";
 import { nowIso } from "./time";
 import { runSpawnedAgent } from "./spawn-agent-process";
@@ -18,6 +18,41 @@ export class GeminiCliAdapter implements ToolAdapter {
       commandPath: result.commandPath,
       version: result.version,
       message: result.installed ? "Gemini CLI detected." : "Gemini CLI was not found in PATH or known locations."
+    };
+  }
+
+  async healthCheck(): Promise<AgentHealthCheckResult> {
+    const result = await resolveToolCommand(this.id);
+    const checks: AgentHealthCheck[] = [{
+      id: "gemini-command",
+      label: "Gemini CLI command",
+      status: result.installed && result.commandPath ? "passed" : "failed",
+      message: result.commandPath ? `Gemini CLI resolved at ${result.commandPath}.` : "Gemini CLI command was not found in PATH or known locations."
+    }, {
+      id: "gemini-version",
+      label: "Gemini CLI version",
+      status: result.version ? "passed" : result.installed ? "warning" : "failed",
+      message: result.version ? `Gemini CLI version ${result.version}.` : "Gemini CLI version could not be read with --version."
+    }, {
+      id: "gemini-stdin",
+      label: "Gemini stdin mode",
+      status: result.installed ? "passed" : "failed",
+      message: result.installed
+        ? "FlowWeave will pass prompts through stdin with approval-mode arguments."
+        : "Gemini CLI cannot run FlowWeave stdin prompts until the command is installed."
+    }];
+    return {
+      agentId: this.id,
+      severity: healthSeverity(checks),
+      checks,
+      suggestedActions: result.installed
+        ? ["Gemini CLI is detectable. Review run logs if provider errors continue."]
+        : ["Install Gemini CLI or add the gemini executable to PATH."],
+      environmentHints: [
+        process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY ? "Gemini API key signal is visible." : "Gemini API key signal is not visible.",
+        process.env.GOOGLE_GENAI_USE_VERTEXAI ? "Vertex AI mode is enabled." : "Vertex AI mode is not enabled."
+      ],
+      checkedAt: nowIso()
     };
   }
 
@@ -52,6 +87,12 @@ export class GeminiCliAdapter implements ToolAdapter {
       stdin: prompt
     }, onEvent);
   }
+}
+
+function healthSeverity(checks: AgentHealthCheck[]): AgentHealthCheckResult["severity"] {
+  if (checks.some((check) => check.status === "failed")) return "error";
+  if (checks.some((check) => check.status === "warning")) return "warning";
+  return "ok";
 }
 
 export function buildGeminiArgs(executionMode: "plan" | "execute", model?: string) {

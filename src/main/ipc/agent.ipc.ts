@@ -55,8 +55,11 @@ export function registerAgentIpc() {
     return detectAgent(requireAgentId(TOOL_CHANNELS.detectAgent, agentId));
   });
 
-  handleIpc(TOOL_CHANNELS.healthCheckAgent, async (_event, agentId: unknown) => {
-    return healthCheckAgent(requireAgentId(TOOL_CHANNELS.healthCheckAgent, agentId));
+  handleIpc(TOOL_CHANNELS.healthCheckAgent, async (_event, agentId: unknown, projectId: unknown) => {
+    return healthCheckAgent(
+      requireAgentId(TOOL_CHANNELS.healthCheckAgent, agentId),
+      projectId === undefined ? undefined : requireString(TOOL_CHANNELS.healthCheckAgent, projectId, "projectId")
+    );
   });
 
   handleIpc(TOOL_CHANNELS.detect, async (_event, toolId: unknown) => {

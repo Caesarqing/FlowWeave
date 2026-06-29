@@ -221,6 +221,7 @@ function DesktopApp() {
             onSaveCustomAgent={app.tools.onSaveCustomAgent}
             onSelectRun={app.tools.onSelectRun}
             onSelectAgent={app.tools.onSelectAgent}
+            projectConnection={app.agentConnection.connection}
             projectPath={app.canvas.projectPath}
             runArtifactTab={app.tools.runArtifactTab}
             runs={app.tools.runs}

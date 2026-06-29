@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { useAgentStore } from "../stores/agents.store";
 import { useGitStore } from "../stores/git.store";
 import { useNavigationStore } from "../stores/navigation.store";
+import { useProjectStore } from "../stores/project.store";
 import { useRunsStore } from "../stores/runs.store";
+import type { ToolRunSummary } from "../types";
 import { useI18n } from "../utils/i18n";
 
 export function useRunHistory(projectId: string) {
@@ -10,6 +12,9 @@ export function useRunHistory(projectId: string) {
   const selectedRunId = useRunsStore((state) => state.selectedRunId);
   const selectedRunArtifact = useRunsStore((state) => state.selectedRunArtifact);
   const setActivePage = useNavigationStore((state) => state.setActivePage);
+  const setArchitectureReview = useProjectStore((state) => state.setArchitectureReview);
+  const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
+  const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
   const setDiff = useGitStore((state) => state.setDiff);
   const setIsRunsLoading = useRunsStore((state) => state.setIsRunsLoading);
   const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
@@ -63,6 +68,7 @@ export function useRunHistory(projectId: string) {
     try {
       const summary = await window.flowweave.applyRunArtifact(projectId, selectedRunId);
       setLastRunStatus(summary.artifactAdoption?.message ?? t("agent.applyRunArtifactComplete"));
+      syncAppliedRunArtifactStatus(summary, setArtifactStatuses, setArchitectureReview, setSequenceReview);
       await refreshRuns(selectedRunId);
     } catch (error) {
       setLastRunStatus(t("agent.applyRunArtifactFailed", { error: formatErrorMessage(error) }));
@@ -83,6 +89,42 @@ export function useRunHistory(projectId: string) {
   }, [projectId]);
 
   return { applySelectedRunArtifact, openGitReviewFromRun, openSelectedRunBridge, refreshRuns, selectRun };
+}
+
+function syncAppliedRunArtifactStatus(
+  summary: ToolRunSummary,
+  setArtifactStatuses: ReturnType<typeof useProjectStore.getState>["setArtifactStatuses"],
+  setArchitectureReview: ReturnType<typeof useProjectStore.getState>["setArchitectureReview"],
+  setSequenceReview: ReturnType<typeof useProjectStore.getState>["setSequenceReview"]
+) {
+  if (summary.purpose !== "artifact-analysis") return;
+  if (summary.artifactAdoption?.status !== "applied") return;
+  const completedAt = summary.artifactAdoption.appliedAt ?? summary.completedAt;
+
+  if (summary.artifactTarget === "architecture-map") {
+    setArtifactStatuses((current) => current ? { ...current, architecture: "current" } : current);
+    setArchitectureReview({
+      state: "reviewed",
+      reviewId: summary.reviewId,
+      scanFingerprint: summary.scanFingerprint,
+      agentId: summary.toolId,
+      runId: summary.id,
+      completedAt
+    });
+    return;
+  }
+
+  if (summary.artifactTarget === "sequence-diagrams" || summary.artifactTarget === "sequence-revision") {
+    setArtifactStatuses((current) => current ? { ...current, sequences: "current" } : current);
+    setSequenceReview({
+      state: "reviewed",
+      reviewId: summary.reviewId,
+      scanFingerprint: summary.scanFingerprint,
+      agentId: summary.toolId,
+      runId: summary.id,
+      completedAt
+    });
+  }
 }
 
 function formatErrorMessage(error: unknown) {

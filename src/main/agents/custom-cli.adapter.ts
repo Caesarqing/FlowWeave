@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { AgentDefinition, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "../../types";
 import { resolveCandidate } from "./agent-command";
 import { prepareCommandInvocation } from "./command-invocation";
 import { nowIso } from "./time";
@@ -25,6 +25,38 @@ export class CustomCliAdapter implements ToolAdapter {
       commandPath,
       version,
       message: commandPath ? `${this.definition.name} CLI detected.` : `${this.definition.name} command was not found.`
+    };
+  }
+
+  async healthCheck(): Promise<AgentHealthCheckResult> {
+    const detection = await this.detect();
+    const checks: AgentHealthCheck[] = [{
+      id: "custom-command",
+      label: `${this.definition.name} command`,
+      status: detection.available ? "passed" : "failed",
+      message: detection.commandPath ? `${this.definition.name} resolved at ${detection.commandPath}.` : `${this.definition.name} command was not found.`
+    }, {
+      id: "custom-stdin-plan",
+      label: "Custom CLI stdin plan mode",
+      status: supportsReadOnlyPurpose(this.definition, "implementation-plan") ? "passed" : "warning",
+      message: supportsReadOnlyPurpose(this.definition, "implementation-plan")
+        ? `Plan args: ${argsForRequest(this.definition, { executionMode: "plan", purpose: "implementation-plan" } as ToolRunRequest).join(" ") || "(none)"}`
+        : "This custom CLI does not declare implementation-plan capability."
+    }, {
+      id: "custom-execute-args",
+      label: "Custom CLI execute args",
+      status: (this.definition.executeArgs?.length ?? 0) > 0 || (this.definition.args?.length ?? 0) > 0 ? "passed" : "warning",
+      message: `Execute args: ${(this.definition.executeArgs?.length ? this.definition.executeArgs : this.definition.args).join(" ") || "(none)"}`
+    }];
+    return {
+      agentId: this.definition.id,
+      severity: healthSeverity(checks),
+      checks,
+      suggestedActions: detection.available
+        ? ["Custom CLI is detectable. Confirm its plan and execute arguments are non-interactive."]
+        : [`Install or configure ${this.definition.name}, then run detection again.`],
+      environmentHints: [],
+      checkedAt: nowIso()
     };
   }
 
@@ -64,6 +96,12 @@ export class CustomCliAdapter implements ToolAdapter {
       stdin: request.prompt
     }, onEvent);
   }
+}
+
+function healthSeverity(checks: AgentHealthCheck[]): AgentHealthCheckResult["severity"] {
+  if (checks.some((check) => check.status === "failed")) return "error";
+  if (checks.some((check) => check.status === "warning")) return "warning";
+  return "ok";
 }
 
 function supportsReadOnlyPurpose(definition: AgentDefinition, purpose: ToolRunRequest["purpose"]): boolean {

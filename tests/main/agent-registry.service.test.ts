@@ -164,10 +164,9 @@ describe("agent-registry.service", () => {
       purpose: "artifact-analysis"
     });
 
-    expect(result.status).toBe("pending");
+    expect(result.status).toBe("failed");
+    expect(result.agentReadiness?.severity).toBe("error");
     const bridgeRequestPath = join(projectPath, FLOWWEAVE_DIR, "agent-bridge", result.id, "request.json");
-    const bridgeInstructionsPath = join(projectPath, FLOWWEAVE_DIR, "agent-bridge", result.id, "instructions.md");
-    await expect(readFile(bridgeRequestPath, "utf8")).resolves.toContain('"agentId": "custom:local-desktop-agent"');
-    await expect(readFile(bridgeInstructionsPath, "utf8")).resolves.toContain("Return a concise response.");
+    await expect(readFile(bridgeRequestPath, "utf8")).rejects.toThrow();
   });
 });

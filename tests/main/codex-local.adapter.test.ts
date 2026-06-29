@@ -1,7 +1,21 @@
-import { describe, expect, it } from "vitest";
-import { buildCodexPlanArgs } from "../../src/main/agents/codex-local.adapter";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { CodexLocalAdapter, buildCodexPlanArgs } from "../../src/main/agents/codex-local.adapter";
+import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("codex-local.adapter", () => {
+  const originalPath = process.env.PATH;
+
+  beforeEach(() => {
+    process.env.PATH = originalPath;
+  });
+
+  afterEach(() => {
+    process.env.PATH = originalPath;
+  });
+
   it("builds read-only Codex plan args", () => {
     expect(
       buildCodexPlanArgs({
@@ -67,4 +81,47 @@ describe("codex-local.adapter", () => {
       })
     ).toContain("workspace-write");
   });
+
+  it("reports Codex exec readiness and CLI warnings", async () => {
+    const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-bin-"));
+    await createNodeCliFixture(binDir, "codex", [
+      "if (process.argv.includes('--version')) { console.error('could not create PATH aliases'); console.log('codex-test 1.0'); process.exit(0); }",
+      "if (process.argv[2] === 'exec' && process.argv.includes('--help')) {",
+      "  console.log('Usage: codex exec [OPTIONS] [PROMPT]');",
+      "  console.log('--cd <DIR> --sandbox <MODE> --output-last-message <FILE> stdin');",
+      "  process.exit(0);",
+      "}",
+      "process.exit(0);"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+
+    const health = await new CodexLocalAdapter().healthCheck();
+
+    expect(health.checks).toContainEqual(expect.objectContaining({
+      id: "codex-exec-flags",
+      status: "passed"
+    }));
+    expect(health.checks).toContainEqual(expect.objectContaining({
+      id: "codex-cli-warning",
+      status: "warning"
+    }));
+  });
+
+  it("fails Codex exec readiness when help output hangs", async () => {
+    const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-bin-"));
+    await createNodeCliFixture(binDir, "codex", [
+      "if (process.argv.includes('--version')) { console.log('codex-test 1.0'); process.exit(0); }",
+      "setInterval(() => undefined, 1000);"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+
+    const health = await new CodexLocalAdapter().healthCheck();
+
+    expect(health.severity).toBe("error");
+    expect(health.checks).toContainEqual(expect.objectContaining({
+      id: "codex-exec-flags",
+      status: "failed",
+      message: expect.stringContaining("timed out after 3000ms")
+    }));
+  }, 8000);
 });

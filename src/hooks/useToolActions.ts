@@ -69,7 +69,7 @@ export function useToolActions({
     setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, checking: true } }));
     setLastRunStatus(t("status.agentHealthChecking", { agent: getAgentName(agentId) }));
     try {
-      const health = await window.flowweave.healthCheckAgent(agentId);
+      const health = await window.flowweave.healthCheckAgent(agentId, projectId || undefined);
       const failedChecks = health.checks.filter((check) => check.status === "failed").length;
       const warningChecks = health.checks.filter((check) => check.status === "warning").length;
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], health, checking: false } }));
@@ -162,6 +162,7 @@ export function useToolActions({
         ...current,
         [agentId]: {
           ...current[agentId],
+          health: result.agentReadiness ?? current[agentId].health,
           lastRunStatus: result.status,
           lastOutputPath: result.planPath ?? result.logPath ?? result.resultPath
         }

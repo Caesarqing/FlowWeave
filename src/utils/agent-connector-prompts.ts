@@ -28,7 +28,7 @@ export function buildAgentConnectorPrompt(input: AgentConnectorPromptInput): Age
     title: connectorTitle(kind, input.locale),
     command,
     connectorPath,
-    description: connectorDescription(kind, input.locale)
+    description: connectorDescription(kind, input.agentId, input.locale)
   };
 }
 
@@ -60,7 +60,10 @@ function connectorTitle(kind: AgentConnectorKind, locale: LocaleId) {
   return translate(locale, `agent.connectorTitle.${kind}`);
 }
 
-function connectorDescription(kind: AgentConnectorKind, locale: LocaleId) {
+function connectorDescription(kind: AgentConnectorKind, agentId: RuntimeAgentId, locale: LocaleId) {
+  if (agentId === "codex-desktop" || agentId === "claude-desktop") {
+    return translate(locale, "agent.connectorDescription.pending");
+  }
   if (kind === "cursor") {
     return translate(locale, "agent.connectorDescription.cursor");
   }

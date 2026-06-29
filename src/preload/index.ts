@@ -3,7 +3,7 @@ import type {
   AgentAnalysisResult,
   AnalysisOperation,
   AgentDefinition,
-  AgentHealthCheckResult,
+  AgentReadinessResult,
   AgentId,
   ArchitectureAnalysisResult,
   ArchitectureMap,
@@ -47,8 +47,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(TOOL_CHANNELS.saveCustomAgent, input) as Promise<AgentDefinition>,
   deleteCustomAgent: (agentId: AgentId) => ipcRenderer.invoke(TOOL_CHANNELS.deleteCustomAgent, agentId) as Promise<void>,
   detectAgent: (agentId: AgentId | "mock") => ipcRenderer.invoke(TOOL_CHANNELS.detectAgent, agentId) as Promise<ToolDetectionResult>,
-  healthCheckAgent: (agentId: AgentId | "mock") =>
-    ipcRenderer.invoke(TOOL_CHANNELS.healthCheckAgent, agentId) as Promise<AgentHealthCheckResult>,
+  healthCheckAgent: (agentId: AgentId | "mock", projectId?: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.healthCheckAgent, agentId, projectId) as Promise<AgentReadinessResult>,
   detectTool: (toolId: ToolId) => ipcRenderer.invoke(TOOL_CHANNELS.detect, toolId) as Promise<ToolDetectionResult>,
   openProject: (options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.openProject, options) as Promise<FlowWeaveProjectOpenResult>,

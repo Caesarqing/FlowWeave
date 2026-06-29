@@ -26,6 +26,8 @@ describe("agent connector prompts", () => {
     ]);
     expect(prompts[1].command).toBe("Use FlowWeave context to process pending requests.");
     expect(prompts[3].command).toBe("Use FlowWeave context to process pending requests.");
+    expect(prompts[0].description).toContain("stdin");
+    expect(prompts[3].description).toContain("pending request");
     expect(prompts[1].command).not.toMatch(/[\u3400-\u9fff]/u);
     expect(chinesePrompts[1].command).toBe("使用 FlowWeave 上下文处理当前待办");
     expect(chinesePrompts[3].command).toBe("使用 FlowWeave 上下文处理当前待办");

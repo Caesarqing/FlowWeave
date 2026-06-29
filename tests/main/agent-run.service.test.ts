@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,6 +6,7 @@ import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import { buildRunPrompt, startToolPlan } from "../../src/main/services/agent-run.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
+import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
 
 describe("agent-run.service", () => {
   afterEach(() => {
@@ -37,6 +38,45 @@ describe("agent-run.service", () => {
     await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Mock plan");
     await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("Plan generated");
     await expect(readFile(result.resultPath ?? "", "utf8")).resolves.toContain('"toolId": "mock"');
+  });
+
+  it("refreshes stale enabled Agent context before spawning a CLI run", async () => {
+    const projectPath = await createProjectWithConnection();
+    const projectId = await registerProject(projectPath);
+    const contextPath = join(projectPath, FLOWWEAVE_DIR, "agent-context.md");
+    const context = await readFile(contextPath, "utf8");
+    await writeFile(contextPath, context.replace(`Project root: ${projectPath}`, "Project root: /old/root"), "utf8");
+
+    const result = await startToolPlan({
+      projectId,
+      toolId: "mock",
+      prompt: "Review auth module.",
+      executionMode: "plan",
+      purpose: "implementation-plan"
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.agentReadiness?.refreshedConnection).toBe(true);
+    await expect(readFile(contextPath, "utf8")).resolves.toContain(`Project root: ${await realpath(projectPath)}`);
+  });
+
+  it("blocks CLI runs when enabled Agent context cannot refresh", async () => {
+    const projectPath = await createProjectWithConnection();
+    const projectId = await registerProject(projectPath);
+    await writeFile(join(projectPath, "AGENTS.md"), "<!-- flowweave:start -->\nBroken block\n", "utf8");
+
+    const result = await startToolPlan({
+      projectId,
+      toolId: "mock",
+      prompt: "Review auth module.",
+      executionMode: "plan",
+      purpose: "implementation-plan"
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.agentReadiness?.severity).toBe("error");
+    expect(result.summary).toContain("Project Agent context");
+    await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("preflight failed");
   });
 
   it("writes desktop bridge responses into run artifacts", async () => {
@@ -110,3 +150,22 @@ describe("agent-run.service", () => {
     expect(artifact.plan).toContain("Desktop Markdown Plan");
   });
 });
+
+async function createProjectWithConnection() {
+  const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-connected-"));
+  await mkdir(join(projectPath, FLOWWEAVE_DIR, "canvas"), { recursive: true });
+  await mkdir(join(projectPath, FLOWWEAVE_DIR, "context"), { recursive: true });
+  await mkdir(join(projectPath, FLOWWEAVE_DIR, "tasks"), { recursive: true });
+  await writeFile(join(projectPath, FLOWWEAVE_DIR, "project.json"), JSON.stringify({
+    version: 1,
+    projectName: "Connected Project",
+    rootPath: projectPath,
+    generatedAt: new Date().toISOString(),
+    git: { isRepo: true, branch: "main" },
+    summary: { totalFiles: 0, totalFolders: 0, languages: {} },
+    files: []
+  }, null, 2), "utf8");
+  await writeFile(join(projectPath, FLOWWEAVE_DIR, "context", "file-tree.md"), "# Project File Tree\n", "utf8");
+  await enableProjectAgentConnection(projectPath);
+  return projectPath;
+}

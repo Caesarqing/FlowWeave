@@ -153,6 +153,7 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
       scanFingerprint: result.scanFingerprint,
       reviewId: result.reviewId,
       artifactAdoption: result.artifactAdoption,
+      agentReadiness: result.agentReadiness,
       failure: result.failure
     };
   } catch {

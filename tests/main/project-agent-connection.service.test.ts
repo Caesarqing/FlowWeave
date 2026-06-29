@@ -85,6 +85,37 @@ describe("project Agent connection", () => {
     expect((await getProjectAgentConnection(projectPath)).state).toBe("ready");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Updated Module");
   });
+
+  it("reports context with an old project root as needing refresh", async () => {
+    const projectPath = await createProject();
+    await enableProjectAgentConnection(projectPath);
+    const contextPath = join(projectPath, ".flowweave", "agent-context.md");
+    const context = await readFile(contextPath, "utf8");
+    await writeFile(contextPath, context.replace(`Project root: ${projectPath}`, "Project root: /old/flowweave/path"), "utf8");
+
+    const status = await getProjectAgentConnection(projectPath);
+
+    expect(status.state).toBe("needs-refresh");
+    expect(status.message).toContain("context root is stale");
+  });
+
+  it("removes recognized legacy agent connector artifacts during refresh", async () => {
+    const projectPath = await createProject();
+    const connectorsPath = join(projectPath, ".flowweave", "agent-connectors");
+    await mkdir(join(connectorsPath, "skills", "codex"), { recursive: true });
+    await writeFile(join(connectorsPath, "codex.md"), "# Codex FlowWeave connector\n\nFlowWeave connector context: old\n", "utf8");
+    await writeFile(join(connectorsPath, "context.md"), "FlowWeave connector context: old\n", "utf8");
+    await writeFile(join(connectorsPath, "skills", "codex", "SKILL.md"), "Read .flowweave/agent-connectors/codex.md\n", "utf8");
+    await writeFile(join(connectorsPath, "custom.md"), "User content\n", "utf8");
+
+    await enableProjectAgentConnection(projectPath);
+    await refreshProjectAgentConnection(projectPath);
+
+    await expect(fileExists(join(connectorsPath, "codex.md"))).resolves.toBe(false);
+    await expect(fileExists(join(connectorsPath, "context.md"))).resolves.toBe(false);
+    await expect(fileExists(join(connectorsPath, "skills", "codex", "SKILL.md"))).resolves.toBe(false);
+    await expect(readFile(join(connectorsPath, "custom.md"), "utf8")).resolves.toBe("User content\n");
+  });
 });
 
 async function createProject() {

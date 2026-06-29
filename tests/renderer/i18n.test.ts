@@ -31,6 +31,7 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.geminiDescription")).toContain("Gemini CLI");
     expect(translate("en", "agent.healthCheck")).toBe("Health check");
     expect(translate("en", "agent.connectorPrompt")).toBe("Connector prompt");
+    expect(translate("en", "agent.contextDisabled")).toBe("context disabled");
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
     expect(translate("en", "agent.applyRunArtifact")).toBe("Apply result");
     expect(translate("en", "agent.artifactAdoption.applied")).toBe("Applied");
@@ -65,6 +66,7 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.geminiDescription")).toContain("Gemini CLI");
     expect(translate("zh-CN", "agent.healthCheck")).toBe("健康检查");
     expect(translate("zh-CN", "agent.connectorPrompt")).toBe("连接提示");
+    expect(translate("zh-CN", "agent.contextDisabled")).toBe("连接未启用");
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
     expect(translate("zh-CN", "agent.applyRunArtifact")).toBe("应用结果");
     expect(translate("zh-CN", "agent.artifactAdoption.applied")).toBe("已应用");

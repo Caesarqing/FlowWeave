@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { AgentDefinition, AgentHealthCheckResult, AgentId, ArtifactRunTarget, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentReadinessResult, AgentId, ArtifactRunTarget, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
@@ -15,6 +15,7 @@ import { executeAgentWithPolicy } from "./agent-execution.service";
 import { redactSensitiveText } from "./sensitive-data.service";
 import { writeTextAtomic } from "../storage/artifact-store";
 import { recordDiagnostic } from "./diagnostic.service";
+import { checkAgentReadiness } from "./agent-readiness.service";
 
 export type StartToolPlanOptions = {
   projectId: string;
@@ -60,6 +61,24 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
   if (executionMode === "execute" && options.confirmedExecute !== true) {
     throw new Error("Execute mode requires explicit user confirmation.");
   }
+  const agentReadiness = await checkAgentReadiness(adapter, {
+    agentId: options.toolId,
+    projectId: options.projectId,
+    projectPath,
+    refreshConnection: true
+  });
+  if (agentReadiness.severity === "error") {
+    const failed = await writePreflightFailureRun({
+      adapter,
+      agentReadiness,
+      executionMode,
+      options,
+      paths,
+      projectPath
+    });
+    await recordAgentRunFailure(projectPath, failed);
+    return failed;
+  }
   const checkpointId = executionMode === "execute" ? await createCheckpoint(projectPath) : undefined;
   const result = await executeAgentWithPolicy(adapter, {
     id: runId,
@@ -103,6 +122,7 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
             : "Artifact response has not been applied yet."
         }
       : { status: "not-applicable", message: "Run is not an artifact-analysis run." },
+    agentReadiness,
     checkpointId,
     summary: result.failure?.message ?? result.summary ?? firstUsefulLine(planText),
     stderr: result.failure?.message ?? collectStderr(result.events)
@@ -137,6 +157,75 @@ export async function recordAgentRunFailure(projectPath: string, result: ToolRun
   });
 }
 
+async function writePreflightFailureRun({
+  adapter,
+  agentReadiness,
+  executionMode,
+  options,
+  paths,
+  projectPath
+}: {
+  adapter: ToolAdapter;
+  agentReadiness: AgentReadinessResult;
+  executionMode: ExecutionMode;
+  options: StartToolPlanOptions;
+  paths: Awaited<ReturnType<typeof prepareRunPaths>>;
+  projectPath: string;
+}): Promise<StartToolPlanResult> {
+  const timestamp = new Date().toISOString();
+  const failedMessages = agentReadiness.checks
+    .filter((check) => check.status === "failed")
+    .map((check) => `${check.label}: ${check.message}`);
+  const message = failedMessages[0] ?? "Agent preflight failed.";
+  const events: ToolRunResult["events"] = [
+    { type: "error", message, timestamp },
+    { type: "status", status: "failed", timestamp }
+  ];
+  const result: StartToolPlanResult = {
+    id: basename(paths.runDir),
+    projectId: options.projectId,
+    toolId: options.toolId,
+    status: "failed",
+    projectPath,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    exitCode: 1,
+    promptPath: paths.promptPath,
+    planPath: paths.planPath,
+    logPath: paths.logPath,
+    resultPath: paths.resultPath,
+    summary: message,
+    stderr: message,
+    failure: {
+      code: "process",
+      message,
+      transient: false,
+      source: "error",
+      exitCode: 1,
+      suggestedActions: agentReadiness.suggestedActions
+    },
+    events,
+    executionMode,
+    purpose: options.purpose,
+    artifactTarget: options.artifactTarget,
+    scanFingerprint: options.scanFingerprint,
+    reviewId: options.reviewId,
+    artifactAdoption: options.purpose === "artifact-analysis"
+      ? { status: "rejected", message }
+      : { status: "not-applicable", message: "Run is not an artifact-analysis run." },
+    agentReadiness,
+    terminationReason: "failed"
+  };
+  const logText = redactSensitiveText(serializeAgentEvents(events));
+  const planText = fallbackPlan({ ...result, toolId: adapter.id }, logText);
+  await Promise.all([
+    writeTextAtomic(paths.logPath, logText),
+    writeTextAtomic(paths.planPath, planText),
+    writeRunResult(paths.resultPath, result, {})
+  ]);
+  return result;
+}
+
 export function buildRunPrompt(prompt: string, executionMode: ExecutionMode, purpose: ToolRunPurpose) {
   if (executionMode === "execute" || purpose === "artifact-analysis") return prompt;
   return `${prompt}
@@ -152,27 +241,15 @@ export async function detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectio
   return (await getAgentAdapter(agentId)).detect();
 }
 
-export async function healthCheckAgent(agentId: RuntimeAgentId): Promise<AgentHealthCheckResult> {
+export async function healthCheckAgent(agentId: RuntimeAgentId, projectId?: string): Promise<AgentReadinessResult> {
   const adapter = await getAgentAdapter(agentId);
-  if (adapter.healthCheck) {
-    return adapter.healthCheck();
-  }
-  const detection = await adapter.detect();
-  return {
+  const projectPath = projectId ? resolveProjectPath(projectId) : undefined;
+  return checkAgentReadiness(adapter, {
     agentId,
-    severity: detection.available ? "ok" : "error",
-    checks: [{
-      id: "agent-detection",
-      label: "Agent detection",
-      status: detection.available ? "passed" : "failed",
-      message: detection.message ?? (detection.available ? `${adapter.name} detected.` : `${adapter.name} was not detected.`)
-    }],
-    suggestedActions: detection.available
-      ? [`${adapter.name} is detectable. Review the run log if executions fail.`]
-      : [`Install or configure ${adapter.name}, then run detection again.`],
-    environmentHints: [],
-    checkedAt: new Date().toISOString()
-  };
+    projectId,
+    projectPath,
+    refreshConnection: false
+  });
 }
 
 export function getToolAdapter(toolId: ToolId): ToolAdapter {

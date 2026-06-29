@@ -1,6 +1,6 @@
 import { Activity, CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, ProjectAgentConnectionStatus, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
@@ -125,6 +125,7 @@ export function AgentPage({
   onSelectAgent,
   onSelectRun,
   projectPath,
+  projectConnection,
   runArtifactTab,
   runs,
   selectedAgentId,
@@ -155,6 +156,7 @@ export function AgentPage({
   onSelectAgent: (agentId: AgentId) => void;
   onSelectRun: (runId: string) => void;
   projectPath: string;
+  projectConnection?: ProjectAgentConnectionStatus;
   runArtifactTab: RunArtifactTab;
   runs: ToolRunSummary[];
   selectedAgentId: AgentId;
@@ -228,6 +230,7 @@ export function AgentPage({
           const available = status.available;
           const isSelected = selectedAgentId === agent.id;
           const connectorPrompt = buildAgentConnectorPrompt({ agentId: agent.id, locale, projectPath: projectPath || "/path/to/project" });
+          const runDisabled = isGeneratePlanDisabled(status);
           return (
             <article className={cn("agent-card", isSelected && "selected default-agent-card")} key={agent.id}>
               <div className="agent-card-header">
@@ -267,6 +270,9 @@ export function AgentPage({
                 <span>{t("agent.kind")}: {agent.kind}</span>
                 <span>{t("agent.protocol")}: {agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin")}</span>
                 <span>{t("agent.capabilities")}: {(agent.capabilities ?? []).join(", ") || t("agent.none")}</span>
+                <span>{t("agent.commandStatus")}: {commandStatusLabel(status, t)}</span>
+                <span>{t("agent.projectContext")}: {connectionStatusLabel(status.health?.connection ?? projectConnection, t)}</span>
+                <span>{t("agent.runReadiness")}: {runReadinessLabel(status, t)}</span>
                 <span>{t("agent.cli")}: {status.commandPath ?? t("agent.notDetected")}</span>
                 <span>{t("agent.app")}: {status.appPath ?? t("agent.notDetected")}</span>
                 <span>{t("agent.version")}: {status.version ?? t("agent.notDetected")}</span>
@@ -301,7 +307,7 @@ export function AgentPage({
                   <Settings2 size={14} />
                   {isSelected ? t("agent.currentDefault") : t("agent.setDefault")}
                 </button>
-                <button className="send-button" type="button" onClick={() => onRunToolPlan(agent.id)}>
+                <button className="send-button" disabled={runDisabled} type="button" onClick={() => onRunToolPlan(agent.id)}>
                   <Play size={14} />
                   {t("agent.generatePlan")}
                 </button>
@@ -354,6 +360,11 @@ export function AgentPage({
                         {artifactAdoptionLabel(run.artifactAdoption.status, t)}
                       </span>
                     ) : null}
+                    {run.agentReadiness ? (
+                      <span className={cn("run-adoption", run.agentReadiness.severity)}>
+                        {agentReadinessLabel(run.agentReadiness, t)}
+                      </span>
+                    ) : null}
                     {run.failure ? <span>{run.failure.code} · {run.failure.message}</span> : null}
                   </div>
                   <small>{formatRunTime(run.startedAt)}</small>
@@ -373,69 +384,88 @@ export function AgentPage({
           {selectedRunArtifact ? (
             <>
               <div className="run-summary-strip">
-                <FileText size={15} />
-                <span>
-                  {selectedRunArtifact.summary.failure
-                    ? `${selectedRunArtifact.summary.toolId} · ${selectedRunArtifact.summary.failure.code} · ${selectedRunArtifact.summary.failure.message}`
-                    : selectedRunArtifact.summary.summary ?? selectedRunArtifact.summary.id}
-                </span>
-                <code>{selectedRunArtifact.summary.planPath ?? selectedRunArtifact.summary.logPath ?? t("agent.noOutputPath")}</code>
-                {selectedRunArtifact.summary.artifactAdoption ? (
-                  <span className={cn("run-adoption", selectedRunArtifact.summary.artifactAdoption.status)}>
-                    {artifactAdoptionLabel(selectedRunArtifact.summary.artifactAdoption.status, t)}
+                <div className="run-summary-content">
+                  <FileText size={15} />
+                  <span className="run-summary-message">
+                    {selectedRunArtifact.summary.failure
+                      ? `${selectedRunArtifact.summary.toolId} · ${selectedRunArtifact.summary.failure.code} · ${selectedRunArtifact.summary.failure.message}`
+                      : selectedRunArtifact.summary.summary ?? selectedRunArtifact.summary.id}
                   </span>
-                ) : null}
-                {canApplyRunArtifact(selectedRunArtifact.summary) ? (
-                  <button className="ghost-button" type="button" onClick={onApplyRunArtifact}>
-                    <CheckCircle2 size={14} />
-                    {t("agent.applyRunArtifact")}
-                  </button>
-                ) : null}
-                {canOpenRunBridge(selectedRunArtifact.summary) ? (
-                  <button className="ghost-button" type="button" onClick={onOpenRunBridge}>
-                    {t("agent.openRunBridge")}
-                  </button>
-                ) : null}
-                {canRetryArtifactRun(selectedRunArtifact.summary) ? (
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => onRetryRunArtifact(selectedRunArtifact.summary.artifactTarget, selectedRunArtifact.summary.toolId)}
-                  >
-                    {t("agent.retrySameAnalysis")}
-                  </button>
-                ) : null}
-                {selectedRunArtifact.summary.failure ? (
-                  <>
-                    <button className="ghost-button" type="button" onClick={() => onRunArtifactTabChange("log")}>
-                      {t("agent.viewRunLog")}
+                  <code className="run-summary-path">{selectedRunArtifact.summary.planPath ?? selectedRunArtifact.summary.logPath ?? t("agent.noOutputPath")}</code>
+                  {selectedRunArtifact.summary.artifactAdoption ? (
+                    <span className={cn("run-adoption", selectedRunArtifact.summary.artifactAdoption.status)}>
+                      {artifactAdoptionLabel(selectedRunArtifact.summary.artifactAdoption.status, t)}
+                    </span>
+                  ) : null}
+                  {selectedRunArtifact.summary.agentReadiness ? (
+                    <span className={cn("run-adoption", selectedRunArtifact.summary.agentReadiness.severity)}>
+                      {agentReadinessLabel(selectedRunArtifact.summary.agentReadiness, t)}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="run-summary-actions">
+                  {canApplyRunArtifact(selectedRunArtifact.summary) ? (
+                    <button className="ghost-button" type="button" onClick={onApplyRunArtifact}>
+                      <CheckCircle2 size={14} />
+                      {t("agent.applyRunArtifact")}
                     </button>
+                  ) : null}
+                  {canOpenRunBridge(selectedRunArtifact.summary) ? (
+                    <button className="ghost-button" type="button" onClick={onOpenRunBridge}>
+                      {t("agent.openRunBridge")}
+                    </button>
+                  ) : null}
+                  {canRetryArtifactRun(selectedRunArtifact.summary) ? (
                     <button
                       className="ghost-button"
                       type="button"
-                      onClick={() => selectedRunArtifact.summary.purpose === "artifact-analysis"
-                        ? onAnalyzeCurrentProject(selectedRunArtifact.summary.toolId)
-                        : onRunToolPlan(selectedRunArtifact.summary.toolId)}
+                      onClick={() => onRetryRunArtifact(selectedRunArtifact.summary.artifactTarget, selectedRunArtifact.summary.toolId)}
                     >
-                      {t("agent.retryRun")}
+                      {t("agent.retrySameAnalysis")}
                     </button>
-                  </>
+                  ) : null}
+                  {selectedRunArtifact.summary.failure ? (
+                    <>
+                      <button className="ghost-button" type="button" onClick={() => onRunArtifactTabChange("log")}>
+                        {t("agent.viewRunLog")}
+                      </button>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => selectedRunArtifact.summary.purpose === "artifact-analysis"
+                          ? onAnalyzeCurrentProject(selectedRunArtifact.summary.toolId)
+                          : onRunToolPlan(selectedRunArtifact.summary.toolId)}
+                      >
+                        {t("agent.retryRun")}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              <div className="run-artifact-notices">
+                {selectedRunArtifact.summary.failure?.suggestedActions?.length ? (
+                  <div className="run-failure-actions">
+                    <strong>{t("agent.suggestedActions")}</strong>
+                    {selectedRunArtifact.summary.failure.suggestedActions.map((action) => (
+                      <span key={action}>{action}</span>
+                    ))}
+                  </div>
+                ) : null}
+                {selectedRunArtifact.summary.artifactAdoption?.message ? (
+                  <div className="run-failure-actions">
+                    <strong>{t("agent.artifactLifecycle")}</strong>
+                    <span>{selectedRunArtifact.summary.artifactAdoption.message}</span>
+                  </div>
+                ) : null}
+                {selectedRunArtifact.summary.agentReadiness ? (
+                  <div className="run-failure-actions">
+                    <strong>{t("agent.preflight")}</strong>
+                    {selectedRunArtifact.summary.agentReadiness.checks.map((check) => (
+                      <span key={check.id}>{check.label}: {check.status} · {check.message}</span>
+                    ))}
+                  </div>
                 ) : null}
               </div>
-              {selectedRunArtifact.summary.failure?.suggestedActions?.length ? (
-                <div className="run-failure-actions">
-                  <strong>{t("agent.suggestedActions")}</strong>
-                  {selectedRunArtifact.summary.failure.suggestedActions.map((action) => (
-                    <span key={action}>{action}</span>
-                  ))}
-                </div>
-              ) : null}
-              {selectedRunArtifact.summary.artifactAdoption?.message ? (
-                <div className="run-failure-actions">
-                  <strong>{t("agent.artifactLifecycle")}</strong>
-                  <span>{selectedRunArtifact.summary.artifactAdoption.message}</span>
-                </div>
-              ) : null}
               <div className="artifact-tabs">
                 {(["prompt", "plan", "log", "result"] as RunArtifactTab[]).map((tab) => (
                   <button className={cn(runArtifactTab === tab && "active")} key={tab} type="button" onClick={() => onRunArtifactTabChange(tab)}>
@@ -682,6 +712,68 @@ function canRetryArtifactRun(summary: ToolRunSummary) {
 
 function artifactAdoptionLabel(status: NonNullable<ToolRunSummary["artifactAdoption"]>["status"], t: (key: string) => string) {
   return t(`agent.artifactAdoption.${status}`);
+}
+
+function commandStatusLabel(status: ToolUiStatus, t: (key: string) => string): string {
+  if (status.available) return t("agent.commandReady");
+  if (status.message || status.health) return t("agent.commandMissing");
+  return t("agent.notDetected");
+}
+
+function connectionStatusLabel(connection: ProjectAgentConnectionStatus | undefined, t: (key: string) => string): string {
+  if (!connection) return t("agent.notDetected");
+  return t(`agent.connectionState.${connection.state}`);
+}
+
+function runReadinessLabel(status: ToolUiStatus, t: (key: string) => string): string {
+  if (!status.health) return t("agent.notDetected");
+  if (status.health.severity === "error") return failedReadinessLabel(status.health, t);
+  if (status.health.refreshedConnection) return t("agent.contextRefreshed");
+  if (status.health.severity === "warning") return warningReadinessLabel(status.health, t);
+  if (status.health.severity === "ok") return t("agent.ready");
+  return t("agent.notDetected");
+}
+
+function isGeneratePlanDisabled(status: ToolUiStatus): boolean {
+  if (status.checking) return true;
+  if (status.health?.severity === "error") return true;
+  return !status.available && Boolean(status.message);
+}
+
+function agentReadinessLabel(
+  readiness: NonNullable<ToolRunSummary["agentReadiness"]>,
+  t: (key: string) => string
+): string {
+  if (readiness.refreshedConnection) return t("agent.contextRefreshed");
+  if (readiness.severity === "error") {
+    return failedReadinessLabel(readiness, t);
+  }
+  if (readiness.severity === "warning") {
+    return warningReadinessLabel(readiness, t);
+  }
+  return t("agent.ready");
+}
+
+function failedReadinessLabel(
+  readiness: NonNullable<ToolRunSummary["agentReadiness"]>,
+  t: (key: string) => string
+): string {
+  const failed = readiness.checks.find((check) => check.status === "failed");
+  if (failed?.id.includes("command")) return t("agent.commandMissing");
+  return t("agent.preflightFailed");
+}
+
+function warningReadinessLabel(
+  readiness: NonNullable<ToolRunSummary["agentReadiness"]>,
+  t: (key: string) => string
+): string {
+  const context = readiness.checks.find((check) => check.id === "project-agent-connection");
+  if (context?.status === "warning") {
+    return readiness.connection?.state === "disabled"
+      ? t("agent.contextDisabled")
+      : t("agent.contextStale");
+  }
+  return t("agent.providerAuthWarning");
 }
 
 function artifactTabLabel(tab: RunArtifactTab, t: (key: string) => string) {

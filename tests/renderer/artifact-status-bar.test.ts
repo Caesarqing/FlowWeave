@@ -109,4 +109,39 @@ describe("ArtifactStatusBar", () => {
     expect(html).toContain("claude-code");
     expect(html).toContain("run-sequence-1");
   });
+
+  it("labels soft-timed-out reviews as slow while keeping the run visible", () => {
+    const statuses: ProjectArtifactStatuses = {
+      project: "current",
+      canvas: "current",
+      task: "current",
+      context: "current",
+      architecture: "current",
+      sequences: "current"
+    };
+    const sequenceReview: SequenceReviewStatus = {
+      state: "reviewing",
+      reviewId: "sequence-review-late",
+      scanFingerprint: "scan-1",
+      agentId: "codex-desktop",
+      runId: "run-late-1",
+      startedAt: "2026-06-26T02:42:27.000Z",
+      softTimedOutAt: "2026-06-26T02:43:27.000Z",
+      message: "Still waiting for run-late-1."
+    };
+
+    const html = renderToStaticMarkup(createElement(ArtifactStatusBar, {
+      scanFingerprint: "scan-1",
+      sequenceReview,
+      statuses
+    }));
+    const summary = html.slice(html.indexOf("<summary"), html.indexOf("</summary>"));
+
+    expect(summary).toContain("Agent response slow");
+    expect(summary).toContain("artifact-status-review-late");
+    expect(summary).not.toContain("Agent reviewing");
+    expect(html).toContain("run-late-1");
+    expect(html).toContain("Still waiting for run-late-1.");
+    expect(html).toContain("Slow since");
+  });
 });
