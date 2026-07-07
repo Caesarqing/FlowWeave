@@ -39,7 +39,11 @@ export const TOOL_CHANNELS = {
   readRun: "tool:read-run",
   applyRunArtifact: "tool:apply-run-artifact",
   openRunBridge: "tool:open-run-bridge",
-  openProject: "tool:open-project"
+  openProject: "tool:open-project",
+  getAgentPluginStatuses: "tool:get-agent-plugin-statuses",
+  installAgentPlugin: "tool:install-agent-plugin",
+  openAgentPlugin: "tool:open-agent-plugin",
+  openAgentPluginInstructions: "tool:open-agent-plugin-instructions"
 } as const;
 
 export const GIT_CHANNELS = {

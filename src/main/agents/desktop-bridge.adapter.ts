@@ -3,12 +3,19 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { ArtifactRunTarget, ExecutionMode, RuntimeAgentId } from "../../types";
+import type { AgentExpectedContentKind, AgentProtocolVersion, ArtifactRunTarget, ExecutionMode, RuntimeAgentId } from "../../types";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult, ToolRunStatus } from "./agent-adapter";
 import { resolveAppPath } from "./agent-command";
 import { nowIso } from "./time";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { addDesktopBridgePendingRequest } from "../services/desktop-bridge-manifest.service";
+import {
+  AGENT_PROTOCOL_VERSION,
+  buildDesktopBridgeResponseInstructions,
+  expectedContentKindForPurpose,
+  FLOWWEAVE_PLUGIN_ID,
+  parseBridgeResponse
+} from "../services/agent-protocol.service";
 
 const execFileAsync = promisify(execFile);
 export type DesktopBridgeConfig = {
@@ -26,12 +33,14 @@ type DesktopBridgeSkillReference = {
 };
 
 type DesktopBridgeRequest = {
+  protocolVersion: AgentProtocolVersion;
   runId: string;
   projectId: string;
   agentId: RuntimeAgentId;
   projectPath: string;
   executionMode: ExecutionMode;
   purpose: ToolRunRequest["purpose"];
+  expectedContentKind: AgentExpectedContentKind;
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
   reviewId?: string;
@@ -39,6 +48,7 @@ type DesktopBridgeRequest = {
   promptPath: string;
   instructionsPath: string;
   responsePath: string;
+  pluginHint: string;
   skills: DesktopBridgeSkillReference[];
   createdAt: string;
 };
@@ -47,11 +57,15 @@ type DesktopBridgeResponse = {
   status: Extract<ToolRunStatus, "completed" | "failed">;
   summary: string;
   content: string;
+  protocolVersion?: AgentProtocolVersion;
   runId?: string;
   projectId?: string;
   artifactTarget?: ArtifactRunTarget;
+  scanFingerprint?: string;
+  reviewId?: string;
   completedAt?: string;
   sourcePath: string;
+  warnings: string[];
 };
 
 export class DesktopBridgeAdapter implements ToolAdapter {
@@ -155,6 +169,9 @@ export class DesktopBridgeAdapter implements ToolAdapter {
       artifactTarget: request.artifactTarget,
       scanFingerprint: request.scanFingerprint,
       reviewId: request.reviewId,
+      protocolVersion: AGENT_PROTOCOL_VERSION,
+      expectedContentKind: expectedContentKindForPurpose(request.purpose),
+      pluginHint: FLOWWEAVE_PLUGIN_ID,
       createdAt,
       requestPath,
       responsePath,
@@ -243,20 +260,7 @@ export function buildDesktopBridgeInstructions(
   purpose: ToolRunRequest["purpose"],
   extraInstructions?: string
 ) {
-  const responseInstructions = purpose === "artifact-analysis"
-    ? [
-        "Artifact analysis requires response.json. Do not answer only in chat.",
-        "Write response.json in this same directory with { \"runId\": string, \"projectId\": string, \"status\": \"completed\" | \"failed\", \"summary\": string, \"content\": string, \"completedAt\": ISO timestamp }.",
-        "The content field must contain the exact structured JSON requested by prompt.md. Markdown plans, response.md, and implementation-plan prose do not update FlowWeave artifact review state."
-      ].join("\n\n")
-    : [
-        "Write one response file in the same directory:",
-        "",
-        "- response.json with { \"runId\": string, \"projectId\": string, \"status\": \"completed\" | \"failed\", \"summary\": string, \"content\": string, \"completedAt\": ISO timestamp }",
-        "- or response.md with the plan markdown",
-        "",
-        "Prefer response.json when possible."
-      ].join("\n");
+  const responseInstructions = buildDesktopBridgeResponseInstructions(purpose);
   const baseInstructions = `# FlowWeave Desktop Bridge Instructions
 
 Agent: ${agentName}
@@ -268,6 +272,7 @@ Inspect the project at the request projectPath.
 Also read ../pending-requests.json. When multiple requests are pending, process them from oldest createdAt to newest createdAt.
 For each request, write only to that request's responsePath in its own run directory. Do not write one request's result into another run directory.
 Process only the request directory whose prompt you are answering while writing a response.
+Use Agent Protocol v${AGENT_PROTOCOL_VERSION}. Copy runId and projectId exactly from request.json.
 
 ${responseInstructions}
 
@@ -295,12 +300,14 @@ export function buildDesktopBridgeRequest({
   createdAt: string;
 }): DesktopBridgeRequest {
   return {
+    protocolVersion: AGENT_PROTOCOL_VERSION,
     runId: request.id,
     projectId: request.projectId,
     agentId,
     projectPath: request.projectPath,
     executionMode: request.executionMode,
     purpose: request.purpose,
+    expectedContentKind: expectedContentKindForPurpose(request.purpose),
     artifactTarget: request.artifactTarget,
     scanFingerprint: request.scanFingerprint,
     reviewId: request.reviewId,
@@ -308,6 +315,7 @@ export function buildDesktopBridgeRequest({
     promptPath,
     instructionsPath,
     responsePath,
+    pluginHint: FLOWWEAVE_PLUGIN_ID,
     skills: buildDesktopBridgeSkillReferences(request.projectPath, promptPath, instructionsPath),
     createdAt
   };
@@ -317,22 +325,20 @@ export async function readDesktopBridgeResponse(bridgeDir: string): Promise<Desk
   const jsonPath = join(bridgeDir, "response.json");
   const jsonContent = await readFile(jsonPath, "utf8").catch(() => "");
   if (jsonContent.trim()) {
-    const parsed = JSON.parse(jsonContent) as Partial<DesktopBridgeResponse>;
-    if (parsed.status !== "completed" && parsed.status !== "failed") {
-      throw new Error(`Invalid desktop bridge response status in ${jsonPath}.`);
-    }
-    if (!parsed.content?.trim()) {
-      throw new Error(`Desktop bridge response content is required in ${jsonPath}.`);
-    }
+    const parsed = parseBridgeResponse(jsonContent, jsonPath);
     return {
       status: parsed.status,
-      summary: parsed.summary?.trim() || `${parsed.status} desktop bridge response.`,
+      summary: parsed.summary,
       content: parsed.content,
+      protocolVersion: parsed.protocolVersion,
       runId: parsed.runId,
       projectId: parsed.projectId,
       artifactTarget: parsed.artifactTarget,
+      scanFingerprint: parsed.scanFingerprint,
+      reviewId: parsed.reviewId,
       completedAt: parsed.completedAt,
-      sourcePath: jsonPath
+      sourcePath: jsonPath,
+      warnings: parsed.warnings
     };
   }
 
@@ -343,7 +349,8 @@ export async function readDesktopBridgeResponse(bridgeDir: string): Promise<Desk
       status: "completed",
       summary: "Desktop bridge response loaded from response.md.",
       content: markdown,
-      sourcePath: markdownPath
+      sourcePath: markdownPath,
+      warnings: []
     };
   }
 

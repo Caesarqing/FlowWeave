@@ -143,6 +143,50 @@ describe("agent-execution.service", () => {
     });
   });
 
+  it("classifies model_not_found gateway failures as model availability errors", async () => {
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Gateway model failure",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => result(runRequest, "failed", "503 model_not_found: No available channel for model deepseek-v4-pro")
+    };
+
+    const execution = await executeAgentWithPolicy(adapter, request("plan"), {
+      timeoutMs: 1000,
+      maxOutputBytes: 1024,
+      retryCount: 0,
+      retryDelayMs: 0
+    });
+
+    expect(execution.failure).toMatchObject({
+      code: "model-not-found",
+      message: expect.stringContaining("model_not_found")
+    });
+  });
+
+  it("classifies repeated reconnect output as a connection failure", async () => {
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Reconnect failure",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => result(runRequest, "failed", "ERROR: Reconnecting... 5/5")
+    };
+
+    const execution = await executeAgentWithPolicy(adapter, request("plan"), {
+      timeoutMs: 1000,
+      maxOutputBytes: 1024,
+      retryCount: 0,
+      retryDelayMs: 0
+    });
+
+    expect(execution.failure).toMatchObject({
+      code: "connection",
+      message: expect.stringContaining("Reconnecting")
+    });
+  });
+
   it("retries connection failures written to stdout once", async () => {
     let calls = 0;
     const adapter: ToolAdapter = {

@@ -66,6 +66,10 @@
         "to": "flowweave-app-icon.png"
       },
       {
+        "from": "flowweave-plugin",
+        "to": "flowweave-plugin"
+      },
+      {
         "from": "node_modules/web-tree-sitter/web-tree-sitter.wasm",
         "to": "parsers/web-tree-sitter.wasm"
       },

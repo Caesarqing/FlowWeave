@@ -1,6 +1,6 @@
 import { Activity, CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, ProjectAgentConnectionStatus, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentPluginHostId, AgentPluginStatus, AgentProtocol, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, ProjectAgentConnectionStatus, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
@@ -16,6 +16,9 @@ const fallbackAgents: AgentDefinition[] = [
     command: "claude",
     args: ["--print", "--permission-mode", "plan"],
     protocol: "cli-stdin",
+    protocolVersion: 1,
+    pluginId: "flowweave",
+    installTarget: "Project .flowweave/agent-plugins/flowweave",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Calls Claude Code in plan mode.",
     builtIn: true,
@@ -29,6 +32,9 @@ const fallbackAgents: AgentDefinition[] = [
     command: "/Applications/Claude.app",
     args: [".flowweave/agent-bridge"],
     protocol: "desktop-bridge",
+    protocolVersion: 1,
+    pluginId: "flowweave",
+    installTarget: "Project .flowweave/agent-plugins/flowweave",
     appPath: "/Applications/Claude.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Opens Claude Desktop and waits for file bridge responses.",
@@ -43,6 +49,9 @@ const fallbackAgents: AgentDefinition[] = [
     command: "codex",
     args: ["exec", "--sandbox", "read-only"],
     protocol: "cli-stdin",
+    protocolVersion: 1,
+    pluginId: "flowweave",
+    installTarget: "Project .flowweave/agent-plugins/flowweave",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Calls the local Codex CLI with FlowWeave context.",
     builtIn: true,
@@ -56,6 +65,9 @@ const fallbackAgents: AgentDefinition[] = [
     command: "/Applications/Codex.app",
     args: [".flowweave/agent-bridge"],
     protocol: "desktop-bridge",
+    protocolVersion: 1,
+    pluginId: "flowweave",
+    installTarget: "Project .flowweave/agent-plugins/flowweave",
     appPath: "/Applications/Codex.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Opens Codex Desktop and waits for file bridge responses.",
@@ -70,6 +82,9 @@ const fallbackAgents: AgentDefinition[] = [
     command: "gemini",
     args: [],
     protocol: "cli-stdin",
+    protocolVersion: 1,
+    pluginId: "flowweave",
+    installTarget: "Project .flowweave/agent-plugins/flowweave",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Calls the local Gemini CLI through stdin.",
     builtIn: true,
@@ -83,6 +98,9 @@ const fallbackAgents: AgentDefinition[] = [
     command: "cursor",
     args: [],
     protocol: "desktop-bridge",
+    protocolVersion: 1,
+    pluginId: "flowweave",
+    installTarget: "Project .flowweave/agent-plugins/flowweave",
     appPath: "cursor",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Detects Cursor for project review.",
@@ -115,8 +133,12 @@ export function AgentPage({
   onExecutionModeChange,
   onGoToGitReview,
   onHealthCheckAgent,
+  onInstallAgentPlugins = noop,
+  onOpenAgentPluginFolder = noop,
+  onOpenAgentPluginInstructions = noop,
   onOpenRunBridge,
   onOpenToolProject,
+  onRefreshAgentPlugins = noop,
   onRefreshRuns,
   onRetryRunArtifact,
   onRunToolPlan,
@@ -125,6 +147,7 @@ export function AgentPage({
   onSelectAgent,
   onSelectRun,
   projectPath,
+  pluginStatuses = [],
   projectConnection,
   runArtifactTab,
   runs,
@@ -146,8 +169,12 @@ export function AgentPage({
   onExecutionModeChange: (mode: ExecutionMode) => void;
   onGoToGitReview: () => void;
   onHealthCheckAgent: (agentId: RuntimeAgentId) => void;
+  onInstallAgentPlugins: () => void;
+  onOpenAgentPluginFolder: () => void;
+  onOpenAgentPluginInstructions: (hostId: AgentPluginHostId) => void;
   onOpenRunBridge: () => void;
   onOpenToolProject: (agentId: RuntimeAgentId) => void;
+  onRefreshAgentPlugins: () => void;
   onRefreshRuns: () => void;
   onRetryRunArtifact: (target: ToolRunSummary["artifactTarget"], agentId: RuntimeAgentId) => void;
   onRunToolPlan: (agentId: RuntimeAgentId) => void;
@@ -156,6 +183,7 @@ export function AgentPage({
   onSelectAgent: (agentId: AgentId) => void;
   onSelectRun: (runId: string) => void;
   projectPath: string;
+  pluginStatuses: AgentPluginStatus[];
   projectConnection?: ProjectAgentConnectionStatus;
   runArtifactTab: RunArtifactTab;
   runs: ToolRunSummary[];
@@ -224,6 +252,40 @@ export function AgentPage({
         </section>
       ) : null}
 
+      <section className="agent-plugin-panel">
+        <div>
+          <strong>{t("agent.pluginPanelTitle")}</strong>
+          <span>{t("agent.pluginPanelBody")}</span>
+        </div>
+        <div className="agent-plugin-statuses">
+          {pluginStatuses.length > 0 ? pluginStatuses.map((status) => (
+            <span className={cn("agent-plugin-status", status.status)} key={status.hostId}>
+              {status.displayName}: {t(`agent.pluginStatus.${status.status}`)} · {status.installedVersion ?? status.bundledVersion}
+              <button className="inline-link-button" type="button" onClick={() => onOpenAgentPluginInstructions(status.hostId)}>
+                <FileText size={13} />
+                {t("agent.pluginOpenInstructions")}
+              </button>
+            </span>
+          )) : (
+            <span>{t("agent.pluginStatusUnknown")}</span>
+          )}
+        </div>
+        <div className="agent-actions">
+          <button className="ghost-button" disabled={!projectPath} type="button" onClick={onRefreshAgentPlugins}>
+            <RefreshCw size={14} />
+            {t("agent.pluginRefresh")}
+          </button>
+          <button className="ghost-button" disabled={!projectPath} type="button" onClick={onInstallAgentPlugins}>
+            <Settings2 size={14} />
+            {t("agent.pluginInstall")}
+          </button>
+          <button className="ghost-button" disabled={!projectPath} type="button" onClick={onOpenAgentPluginFolder}>
+            <Folder size={14} />
+            {t("agent.pluginOpen")}
+          </button>
+        </div>
+      </section>
+
       <section className="agent-grid">
         {visibleAgents.map((agent) => {
           const status = toolStatuses[agent.id] ?? createUnknownStatus(agent.id);
@@ -269,6 +331,9 @@ export function AgentPage({
               <div className="agent-detail-list">
                 <span>{t("agent.kind")}: {agent.kind}</span>
                 <span>{t("agent.protocol")}: {agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin")}</span>
+                <span>{t("agent.protocolVersion")}: {agent.protocolVersion ?? t("agent.notDetected")}</span>
+                <span>{t("agent.plugin")}: {agent.pluginId ?? t("agent.none")}</span>
+                <span>{t("agent.pluginInstallTarget")}: {agent.installTarget ?? t("agent.none")}</span>
                 <span>{t("agent.capabilities")}: {(agent.capabilities ?? []).join(", ") || t("agent.none")}</span>
                 <span>{t("agent.commandStatus")}: {commandStatusLabel(status, t)}</span>
                 <span>{t("agent.projectContext")}: {connectionStatusLabel(status.health?.connection ?? projectConnection, t)}</span>
@@ -708,6 +773,10 @@ function canRetryArtifactRun(summary: ToolRunSummary) {
   if (summary.purpose !== "artifact-analysis") return false;
   const status = summary.artifactAdoption?.status;
   return status === "rejected" || status === "stale";
+}
+
+function noop() {
+  return undefined;
 }
 
 function artifactAdoptionLabel(status: NonNullable<ToolRunSummary["artifactAdoption"]>["status"], t: (key: string) => string) {

@@ -1,4 +1,4 @@
-import type { AgentDefinition, AgentId, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolUiStatus } from "../types";
+import type { AgentDefinition, AgentId, AgentPluginHostId, AgentPluginStatus, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolUiStatus } from "../types";
 import { useI18n } from "../utils/i18n";
 import { usePreferencesStore } from "../stores/preferences.store";
 import { buildAgentPrompt, buildExecutionAssessmentSummary, buildModificationContext, scopeGraphForModule } from "../utils/export-artifacts";
@@ -14,6 +14,7 @@ export function useToolActions({
   selectedNode,
   onRunCompleted,
   setLastRunStatus,
+  setPluginStatuses,
   setSelectedAgentId,
   setToolStatuses
 }: {
@@ -27,6 +28,7 @@ export function useToolActions({
   selectedNode?: GraphNode;
   onRunCompleted?: (runId: string) => void | Promise<void>;
   setLastRunStatus: (value: string) => void;
+  setPluginStatuses: (statuses: AgentPluginStatus[]) => void;
   setSelectedAgentId: (agentId: AgentId) => void;
   setToolStatuses: (updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)) => void;
 }) {
@@ -175,7 +177,61 @@ export function useToolActions({
     }
   }
 
-  return { detectAgent, healthCheckAgent, openToolProject, runToolPlan };
+  async function refreshAgentPlugins() {
+    if (!window.flowweave || !projectId) {
+      setLastRunStatus(t("docs.needDesktop"));
+      return;
+    }
+    try {
+      const statuses = await window.flowweave.getAgentPluginStatuses(projectId);
+      setPluginStatuses(statuses);
+      setLastRunStatus(t("agent.pluginStatusRefreshed"));
+    } catch (error) {
+      setLastRunStatus(t("agent.pluginStatusFailed", { error: formatErrorMessage(error) }));
+    }
+  }
+
+  async function installAgentPlugins() {
+    if (!window.flowweave || !projectId) {
+      setLastRunStatus(t("docs.needDesktop"));
+      return;
+    }
+    try {
+      const statuses = await window.flowweave.installAgentPlugin(projectId);
+      setPluginStatuses(statuses);
+      setLastRunStatus(t("agent.pluginInstalled", { path: statuses[0]?.installTarget ?? "" }));
+    } catch (error) {
+      setLastRunStatus(t("agent.pluginInstallFailed", { error: formatErrorMessage(error) }));
+    }
+  }
+
+  async function openAgentPluginFolder() {
+    if (!window.flowweave || !projectId) {
+      setLastRunStatus(t("docs.needDesktop"));
+      return;
+    }
+    try {
+      await window.flowweave.openAgentPlugin(projectId);
+      setLastRunStatus(t("agent.pluginFolderOpened", { path: pluginStatusesPathLabel(projectPath) }));
+    } catch (error) {
+      setLastRunStatus(t("agent.pluginOpenFailed", { error: formatErrorMessage(error) }));
+    }
+  }
+
+  async function openAgentPluginInstructions(hostId: AgentPluginHostId) {
+    if (!window.flowweave || !projectId) {
+      setLastRunStatus(t("docs.needDesktop"));
+      return;
+    }
+    try {
+      await window.flowweave.openAgentPluginInstructions(projectId, hostId);
+      setLastRunStatus(t("agent.pluginInstructionsOpened", { host: hostId }));
+    } catch (error) {
+      setLastRunStatus(t("agent.pluginInstructionsOpenFailed", { error: formatErrorMessage(error) }));
+    }
+  }
+
+  return { detectAgent, healthCheckAgent, installAgentPlugins, openAgentPluginFolder, openAgentPluginInstructions, openToolProject, refreshAgentPlugins, runToolPlan };
 }
 
 function isOpenableAgent(agentId: RuntimeAgentId, agents: AgentDefinition[]): boolean {
@@ -195,4 +251,8 @@ function isOpenableAgent(agentId: RuntimeAgentId, agents: AgentDefinition[]): bo
 function formatErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+function pluginStatusesPathLabel(projectPath: string): string {
+  return projectPath ? `${projectPath}/.flowweave/agent-plugins/flowweave` : "";
 }

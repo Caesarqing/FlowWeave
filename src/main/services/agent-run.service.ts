@@ -65,7 +65,8 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     agentId: options.toolId,
     projectId: options.projectId,
     projectPath,
-    refreshConnection: true
+    refreshConnection: true,
+    runModelProbe: false
   });
   if (agentReadiness.severity === "error") {
     const failed = await writePreflightFailureRun({
@@ -248,7 +249,8 @@ export async function healthCheckAgent(agentId: RuntimeAgentId, projectId?: stri
     agentId,
     projectId,
     projectPath,
-    refreshConnection: false
+    refreshConnection: false,
+    runModelProbe: true
   });
 }
 

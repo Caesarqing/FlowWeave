@@ -95,7 +95,7 @@ describe("codex-local.adapter", () => {
     ].join("\n"), process.platform);
     process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
 
-    const health = await new CodexLocalAdapter().healthCheck();
+    const health = await new CodexLocalAdapter().healthCheck({ runModelProbe: true });
 
     expect(health.checks).toContainEqual(expect.objectContaining({
       id: "codex-exec-flags",
@@ -105,6 +105,27 @@ describe("codex-local.adapter", () => {
       id: "codex-cli-warning",
       status: "warning"
     }));
+    expect(health.checks).toContainEqual(expect.objectContaining({
+      id: "codex-model-probe",
+      status: "passed"
+    }));
+  });
+
+  it("does not run Codex model probe unless explicitly requested", async () => {
+    const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-bin-"));
+    await createNodeCliFixture(binDir, "codex", [
+      "if (process.argv.includes('--version')) { console.log('codex-test 1.0'); process.exit(0); }",
+      "if (process.argv[2] === 'exec' && process.argv.includes('--help')) {",
+      "  console.log('Usage: codex exec [OPTIONS] [PROMPT] stdin --cd --sandbox --output-last-message');",
+      "  process.exit(0);",
+      "}",
+      "process.exit(7);"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+
+    const health = await new CodexLocalAdapter().healthCheck();
+
+    expect(health.checks.some((check) => check.id === "codex-model-probe")).toBe(false);
   });
 
   it("fails Codex exec readiness when help output hangs", async () => {

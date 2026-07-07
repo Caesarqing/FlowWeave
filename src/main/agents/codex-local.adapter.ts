@@ -8,6 +8,7 @@ import { resolveToolCommand } from "./agent-command";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { runSpawnedAgent } from "./spawn-agent-process";
 import { prepareCommandInvocation } from "./command-invocation";
+import { runAgentModelProbe } from "./agent-probe";
 
 const execFileAsync = promisify(execFile);
 const CODEX_HEALTH_TIMEOUT_MS = 3_000;
@@ -29,7 +30,7 @@ export class CodexLocalAdapter implements ToolAdapter {
     };
   }
 
-  async healthCheck(): Promise<AgentHealthCheckResult> {
+  async healthCheck(options?: { runModelProbe: boolean }): Promise<AgentHealthCheckResult> {
     const resolved = await resolveToolCommand(this.id);
     const checks: AgentHealthCheck[] = [{
       id: "codex-command",
@@ -53,6 +54,16 @@ export class CodexLocalAdapter implements ToolAdapter {
         });
       }
       checks.push(...await codexExecChecks(resolved.commandPath));
+      if (options?.runModelProbe === true && !checks.some((check) => check.status === "failed")) {
+        checks.push(await runAgentModelProbe({
+          toolId: this.id,
+          commandPath: resolved.commandPath,
+          args: ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "-"],
+          stdin: "FlowWeave health check. Reply with OK only. Do not edit files.",
+          checkId: "codex-model-probe",
+          label: "Codex model probe"
+        }));
+      }
     }
     return {
       agentId: this.id,

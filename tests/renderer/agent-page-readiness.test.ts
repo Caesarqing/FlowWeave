@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AgentPage } from "../../src/components/AgentPage";
 import type {
   AgentDefinition,
+  AgentPluginStatus,
   AgentReadinessResult,
   ArchitectureReviewStatus,
   ProjectAgentConnectionStatus,
@@ -79,9 +80,26 @@ describe("AgentPage readiness", () => {
     expect(generatePlanButtonOpeningTag(missingCommandHtml)).toContain("disabled");
     expect(generatePlanButtonOpeningTag(preflightErrorHtml)).toContain("disabled");
   });
+
+  it("renders project plugin host instructions as an action instead of raw paths", () => {
+    const html = renderAgentPage(cliStatus({ severity: "ok", checks: [] }), [{
+      pluginId: "flowweave",
+      hostId: "codex",
+      displayName: "Codex",
+      status: "installed",
+      installedVersion: "0.2.0",
+      bundledVersion: "0.2.0",
+      installTarget: "/tmp/project/.flowweave/agent-plugins/flowweave",
+      hostInstructionPath: "/tmp/project/.flowweave/agent-plugins/flowweave/hosts/codex.md",
+      message: "Project FlowWeave plugin copy is installed for Codex."
+    }]);
+
+    expect(html).toContain("View instructions");
+    expect(html).not.toContain("hosts/codex.md");
+  });
 });
 
-function renderAgentPage(status: ToolUiStatus): string {
+function renderAgentPage(status: ToolUiStatus, pluginStatuses: AgentPluginStatus[] = []): string {
   return renderToStaticMarkup(createElement(AgentPage, {
     agents: [agent()],
     architectureReview: architectureReview(),
@@ -96,8 +114,12 @@ function renderAgentPage(status: ToolUiStatus): string {
     onExecutionModeChange: noop,
     onGoToGitReview: noop,
     onHealthCheckAgent: noop,
+    onInstallAgentPlugins: noop,
+    onOpenAgentPluginFolder: noop,
+    onOpenAgentPluginInstructions: noop,
     onOpenRunBridge: noop,
     onOpenToolProject: noop,
+    onRefreshAgentPlugins: noop,
     onRefreshRuns: noop,
     onRetryRunArtifact: noop,
     onRunArtifactTabChange: noop,
@@ -105,6 +127,7 @@ function renderAgentPage(status: ToolUiStatus): string {
     onSaveCustomAgent: noop,
     onSelectAgent: noop,
     onSelectRun: noop,
+    pluginStatuses,
     projectConnection: status.health?.connection,
     projectPath: "/tmp/project",
     runArtifactTab: "prompt",

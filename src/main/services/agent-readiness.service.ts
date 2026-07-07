@@ -10,21 +10,23 @@ import {
   getProjectAgentConnection,
   refreshProjectAgentConnection
 } from "./project-agent-connection.service";
+import { getBuiltInAgentPluginStatuses } from "./agent-plugin.service";
 
 export type AgentReadinessOptions = {
   agentId: RuntimeAgentId;
   projectId?: string;
   projectPath?: string;
   refreshConnection: boolean;
+  runModelProbe: boolean;
 };
 
 export async function checkAgentReadiness(
   adapter: ToolAdapter,
   options: AgentReadinessOptions
 ): Promise<AgentReadinessResult> {
-  const base = await adapterHealth(adapter, options.agentId);
+  const base = await adapterHealth(adapter, options.agentId, options.runModelProbe);
   const connectionResult = options.projectId && options.projectPath
-    ? await projectConnectionChecks(options.projectId, options.projectPath, options.refreshConnection)
+    ? await projectReadinessChecks(options.projectId, options.projectPath, options.refreshConnection)
     : { checks: [], suggestedActions: [], connection: undefined, refreshedConnection: false };
   const checks = [...base.checks, ...connectionResult.checks];
   return {
@@ -40,9 +42,31 @@ export async function checkAgentReadiness(
   };
 }
 
-async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId): Promise<AgentHealthCheckResult> {
+async function projectReadinessChecks(
+  projectId: string,
+  projectPath: string,
+  refreshConnection: boolean
+): Promise<{
+  checks: AgentHealthCheck[];
+  suggestedActions: string[];
+  connection?: ProjectAgentConnectionStatus;
+  refreshedConnection: boolean;
+}> {
+  const [connection, plugin] = await Promise.all([
+    projectConnectionChecks(projectId, projectPath, refreshConnection),
+    projectPluginChecks(projectPath)
+  ]);
+  return {
+    checks: [...connection.checks, ...plugin.checks],
+    suggestedActions: [...connection.suggestedActions, ...plugin.suggestedActions],
+    connection: connection.connection,
+    refreshedConnection: connection.refreshedConnection
+  };
+}
+
+async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId, runModelProbe: boolean): Promise<AgentHealthCheckResult> {
   if (adapter.healthCheck) {
-    return adapter.healthCheck();
+    return adapter.healthCheck({ runModelProbe });
   }
   const detection = await adapter.detect();
   const check: AgentHealthCheck = {
@@ -60,6 +84,40 @@ async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId): Pro
       : [`Install or configure ${adapter.name}, then run detection again.`],
     environmentHints: [],
     checkedAt: new Date().toISOString()
+  };
+}
+
+async function projectPluginChecks(projectPath: string): Promise<{
+  checks: AgentHealthCheck[];
+  suggestedActions: string[];
+}> {
+  const statuses = await getBuiltInAgentPluginStatuses(projectPath);
+  const first = statuses[0];
+  if (!first) {
+    return {
+      checks: [{
+        id: "project-agent-plugin",
+        label: "Project Agent plugin",
+        status: "failed",
+        message: "FlowWeave project plugin status could not be determined."
+      }],
+      suggestedActions: ["Refresh the FlowWeave project plugin status."]
+    };
+  }
+  const failed = statuses.some((status) => status.status === "error" || status.status === "unavailable");
+  const warning = statuses.some((status) => status.status === "missing" || status.status === "outdated");
+  return {
+    checks: [{
+      id: "project-agent-plugin",
+      label: "Project Agent plugin",
+      status: failed ? "failed" : warning ? "warning" : "passed",
+      message: first.message
+    }],
+    suggestedActions: failed
+      ? ["Repair the bundled FlowWeave plugin resources, then retry health check."]
+      : warning
+        ? ["Install or refresh the project FlowWeave plugin copy before desktop/manual bridge review."]
+        : []
   };
 }
 

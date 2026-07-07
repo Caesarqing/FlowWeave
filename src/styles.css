@@ -2529,6 +2529,85 @@ button:disabled {
   font-size: 12px;
 }
 
+.agent-plugin-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.4fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.agent-plugin-panel strong,
+.agent-plugin-panel span {
+  display: block;
+}
+
+.agent-plugin-panel > div:first-child {
+  min-width: 0;
+}
+
+.agent-plugin-panel > div:first-child span,
+.agent-plugin-statuses > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agent-plugin-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-plugin-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+}
+
+.inline-link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inline-link-button:hover {
+  color: var(--success);
+}
+
+.agent-plugin-status.installed {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.32);
+}
+
+.agent-plugin-status.missing,
+.agent-plugin-status.outdated {
+  color: #f8d889;
+  border-color: rgba(251, 191, 36, 0.32);
+}
+
+.agent-plugin-status.error,
+.agent-plugin-status.unavailable {
+  color: #fecdd3;
+  border-color: rgba(244, 63, 94, 0.32);
+}
+
 .segmented-control {
   display: inline-grid;
   grid-template-columns: repeat(2, 84px);

@@ -1,0 +1,37 @@
+{
+  "id": "flowweave",
+  "name": "FlowWeave Agent Bridge",
+  "version": "0.2.0",
+  "protocolVersion": 1,
+  "description": "Built-in plugin package for processing FlowWeave Agent Protocol v1 desktop bridge requests.",
+  "hosts": [
+    {
+      "id": "codex",
+      "displayName": "Codex",
+      "installTarget": "Codex skills/plugins directory",
+      "capabilities": ["artifact-analysis", "implementation-plan", "execute"],
+      "protocols": ["desktop-bridge", "cli-stdin"]
+    },
+    {
+      "id": "claude",
+      "displayName": "Claude",
+      "installTarget": "Claude skills/plugins directory",
+      "capabilities": ["artifact-analysis", "implementation-plan", "execute"],
+      "protocols": ["desktop-bridge", "cli-stdin"]
+    },
+    {
+      "id": "gemini",
+      "displayName": "Gemini",
+      "installTarget": "Gemini agent instructions or skills directory",
+      "capabilities": ["artifact-analysis", "implementation-plan", "execute"],
+      "protocols": ["desktop-bridge", "cli-stdin"]
+    },
+    {
+      "id": "cursor",
+      "displayName": "Cursor",
+      "installTarget": "Cursor rules or project instructions directory",
+      "capabilities": ["artifact-analysis", "implementation-plan"],
+      "protocols": ["desktop-bridge"]
+    }
+  ]
+}

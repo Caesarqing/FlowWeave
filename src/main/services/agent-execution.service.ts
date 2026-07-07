@@ -254,14 +254,24 @@ function classifyFailureCode(
   message: string,
   terminationReason: ToolRunResult["terminationReason"]
 ): ToolRunFailure["code"] {
+  return classifyFailureCodeForMessage(message, terminationReason);
+}
+
+export function classifyFailureCodeForMessage(
+  message: string,
+  terminationReason: ToolRunResult["terminationReason"]
+): ToolRunFailure["code"] {
   if (terminationReason === "timeout") return "timeout";
   if (/exit code 143|sigterm/i.test(message)) return "timeout";
   if (/(appidnoautherror|noauth|unauthori[sz]ed|authentication|invalid api key|permission denied|forbidden|oauth|credential)/i.test(message)) {
     return "authentication";
   }
+  if (/(model[_ -]?not[_ -]?found|unknown model|model is not available|no available channel for model)/i.test(message)) {
+    return "model-not-found";
+  }
   if (/(429|rate.?limit|too many requests)/i.test(message)) return "rate-limit";
   if (/(usage limit|quota|credits|billing)/i.test(message)) return "rate-limit";
-  if (/(connectionrefused|econnrefused|econnreset|etimedout|unable to connect|network unavailable|dns|socket hang up)/i.test(message)) {
+  if (/(connectionrefused|econnrefused|econnreset|etimedout|unable to connect|network unavailable|dns|socket hang up|reconnecting)/i.test(message)) {
     return "connection";
   }
   if (/(http\s*5\d\d|\b5\d\d\b|server-side issue|service unavailable|provider|temporar(?:y|ily))/i.test(message)) return "provider";
@@ -292,6 +302,12 @@ function suggestedActionsForFailure(code: ToolRunFailure["code"]): string[] {
     return [
       "Retry after the provider recovers.",
       "Check the configured Claude provider status and gateway logs."
+    ];
+  }
+  if (code === "model-not-found") {
+    return [
+      "Choose a model available to the configured provider.",
+      "Check provider routing and model alias configuration."
     ];
   }
   if (code === "timeout") return ["Increase the plan timeout or retry with a smaller prompt."];

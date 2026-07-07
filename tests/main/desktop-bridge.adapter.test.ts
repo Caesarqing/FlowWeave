@@ -112,6 +112,8 @@ describe("desktop-bridge.adapter", () => {
     const instructions = buildDesktopBridgeInstructions("Codex Desktop Test", "plan", "artifact-analysis");
 
     expect(instructions).toContain("Artifact analysis requires response.json");
+    expect(instructions).toContain("protocolVersion");
+    expect(instructions).toContain("content field must contain the exact structured artifact JSON");
     expect(instructions).toContain("Do not answer only in chat");
     expect(instructions).not.toContain("or response.md with the plan markdown");
   });
@@ -209,9 +211,12 @@ describe("desktop-bridge.adapter", () => {
       "plugin-root"
     ]);
     expect(request).toMatchObject({
+      protocolVersion: 1,
       artifactTarget: "architecture-map",
+      expectedContentKind: "artifact-json",
       scanFingerprint: "scan-test",
       reviewId: "review-test",
+      pluginHint: "flowweave",
       responsePath: "/tmp/project/.flowweave/agent-bridge/run-metadata/response.json"
     });
   });

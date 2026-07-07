@@ -23,7 +23,10 @@ describe("project Agent connection", () => {
     expect(status.platforms).toEqual(["codex", "claude", "gemini", "cursor"]);
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), ".flowweave/project.json");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "You may modify project files");
+    await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Agent Protocol v1");
     await expectFileToContain(join(projectPath, "AGENTS.md"), "<!-- flowweave:start -->");
+    await expectFileToContain(join(projectPath, "AGENTS.md"), "protocolVersion");
+    await expectFileToContain(join(projectPath, "AGENTS.md"), "Do not edit `.flowweave/architecture-review.json`");
     await expectFileToContain(join(projectPath, "CLAUDE.md"), ".flowweave/agent-context.md");
     await expectFileToContain(join(projectPath, "GEMINI.md"), ".flowweave/agent-context.md");
     await expectFileToContain(join(projectPath, ".cursor", "rules", "flowweave.mdc"), "alwaysApply: true");

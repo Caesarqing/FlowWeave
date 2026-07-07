@@ -3,6 +3,7 @@ import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEven
 import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
 import { runSpawnedAgent } from "./spawn-agent-process";
+import { runAgentModelProbe } from "./agent-probe";
 
 export class ClaudeCodeAdapter implements ToolAdapter {
   id = "claude-code" as const;
@@ -21,7 +22,7 @@ export class ClaudeCodeAdapter implements ToolAdapter {
     };
   }
 
-  async healthCheck(): Promise<AgentHealthCheckResult> {
+  async healthCheck(options?: { runModelProbe: boolean }): Promise<AgentHealthCheckResult> {
     const resolvedCommand = await resolveToolCommand(this.id);
     const checks: AgentHealthCheck[] = [
       {
@@ -44,6 +45,16 @@ export class ClaudeCodeAdapter implements ToolAdapter {
       buildClaudeProviderCheck(process.env),
       buildClaudeProxyCheck(process.env)
     ];
+    if (options?.runModelProbe === true && resolvedCommand.commandPath && !checks.some((check) => check.status === "failed")) {
+      checks.push(await runAgentModelProbe({
+        toolId: this.id,
+        commandPath: resolvedCommand.commandPath,
+        args: buildClaudeArgs("plan", undefined, "implementation-plan"),
+        stdin: "FlowWeave health check. Reply with OK only. Do not edit files.",
+        checkId: "claude-model-probe",
+        label: "Claude model probe"
+      }));
+    }
     return {
       agentId: this.id,
       severity: healthSeverity(checks),

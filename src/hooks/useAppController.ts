@@ -41,6 +41,7 @@ export function useAppController() {
   const selectedAgentId = useAgentStore((state) => state.selectedAgentId);
   const executionMode = useAgentStore((state) => state.executionMode);
   const toolStatuses = useAgentStore((state) => state.toolStatuses);
+  const pluginStatuses = useAgentStore((state) => state.pluginStatuses);
   const lastRunStatus = useAgentStore((state) => state.lastRunStatus);
   const runs = useRunsStore((state) => state.runs);
   const selectedRunId = useRunsStore((state) => state.selectedRunId);
@@ -63,6 +64,7 @@ export function useAppController() {
   const setSelectedAgentId = useAgentStore((state) => state.setSelectedAgentId);
   const setExecutionMode = useAgentStore((state) => state.setExecutionMode);
   const setToolStatuses = useAgentStore((state) => state.setToolStatuses);
+  const setPluginStatuses = useAgentStore((state) => state.setPluginStatuses);
   const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
   const setRunArtifactTab = useRunsStore((state) => state.setRunArtifactTab);
   const [moduleGuidanceOperation, setModuleGuidanceOperation] = useState<"save" | "send" | "">("");
@@ -128,6 +130,7 @@ export function useAppController() {
     selectedNode: flow.selectedNode,
     onRunCompleted: refreshRuns,
     setLastRunStatus,
+    setPluginStatuses,
     setSelectedAgentId,
     setToolStatuses
   });
@@ -514,9 +517,13 @@ export function useAppController() {
       onExecutionModeChange: setExecutionMode,
       onGoToGitReview: openGitReviewFromRun,
       onHealthCheckAgent: toolActions.healthCheckAgent,
+      onInstallAgentPlugins: toolActions.installAgentPlugins,
+      onOpenAgentPluginFolder: toolActions.openAgentPluginFolder,
+      onOpenAgentPluginInstructions: toolActions.openAgentPluginInstructions,
       onOpenToolProject: toolActions.openToolProject,
       onOpenRunBridge: openSelectedRunBridge,
       onRefreshRuns: refreshRuns,
+      onRefreshAgentPlugins: toolActions.refreshAgentPlugins,
       onRetryRunArtifact: retryRunArtifact,
       onRunToolPlan: toolActions.runToolPlan,
       onRunArtifactTabChange: setRunArtifactTab,
@@ -528,6 +535,7 @@ export function useAppController() {
       selectedRunArtifact,
       selectedRunId,
       selectedAgentId,
+      pluginStatuses,
       toolStatuses
     }
   };

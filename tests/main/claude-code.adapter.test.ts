@@ -83,7 +83,7 @@ describe("claude-code.adapter", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-flowweave-secret";
     process.env.ANTHROPIC_BASE_URL = "https://provider.example";
     try {
-      const health = await new ClaudeCodeAdapter().healthCheck();
+      const health = await new ClaudeCodeAdapter().healthCheck({ runModelProbe: true });
       const serialized = JSON.stringify(health);
 
       expect(health.agentId).toBe("claude-code");
@@ -94,10 +94,32 @@ describe("claude-code.adapter", () => {
         id: "claude-provider",
         status: "warning"
       }));
+      expect(health.checks).toContainEqual(expect.objectContaining({
+        id: "claude-model-probe",
+        status: "passed"
+      }));
     } finally {
       process.env.PATH = originalPath;
       restoreEnv("ANTHROPIC_API_KEY", originalApiKey);
       restoreEnv("ANTHROPIC_BASE_URL", originalBaseUrl);
+    }
+  });
+
+  it("does not run Claude model probe unless explicitly requested", async () => {
+    const originalPath = process.env.PATH;
+    const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-no-probe-"));
+    await createNodeCliFixture(binRoot, "claude", [
+      "if (process.argv.includes('--version')) { console.log('claude-test 2.0'); process.exit(0); }",
+      "process.stderr.write('unexpected probe');",
+      "process.exit(7);"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
+    try {
+      const health = await new ClaudeCodeAdapter().healthCheck();
+
+      expect(health.checks.some((check) => check.id === "claude-model-probe")).toBe(false);
+    } finally {
+      process.env.PATH = originalPath;
     }
   });
 });

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   AgentDefinition,
   AgentId,
+  AgentPluginStatus,
   AsyncOperationState,
   ExecutionMode,
   ProjectAgentConnectionStatus,
@@ -14,6 +15,7 @@ type AgentState = {
   selectedAgentId: AgentId;
   executionMode: ExecutionMode;
   toolStatuses: Record<string, ToolUiStatus>;
+  pluginStatuses: AgentPluginStatus[];
   lastRunStatus: string;
   connection?: ProjectAgentConnectionStatus;
   connectionOperation: AsyncOperationState;
@@ -23,6 +25,7 @@ type AgentState = {
   setToolStatuses: (
     updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)
   ) => void;
+  setPluginStatuses: (pluginStatuses: AgentPluginStatus[]) => void;
   setLastRunStatus: (lastRunStatus: string) => void;
   setConnection: (connection?: ProjectAgentConnectionStatus) => void;
   setConnectionOperation: (connectionOperation: AsyncOperationState) => void;
@@ -41,6 +44,7 @@ export const useAgentStore = create<AgentState>((set) => ({
     cursor: createUnknownToolStatus("cursor"),
     mock: createUnknownToolStatus("mock")
   },
+  pluginStatuses: [],
   lastRunStatus: "Select a project before asking the default Agent to generate a plan.",
   connectionOperation: { status: "idle" },
   setAgents: (agents) => set({ agents }),
@@ -49,6 +53,7 @@ export const useAgentStore = create<AgentState>((set) => ({
   setToolStatuses: (updater) => set((state) => ({
     toolStatuses: typeof updater === "function" ? updater(state.toolStatuses) : updater
   })),
+  setPluginStatuses: (pluginStatuses) => set({ pluginStatuses }),
   setLastRunStatus: (lastRunStatus) => set({ lastRunStatus }),
   setConnection: (connection) => set({ connection }),
   setConnectionOperation: (connectionOperation) => set({ connectionOperation })

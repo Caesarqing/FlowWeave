@@ -11,6 +11,7 @@ import type {
   SequenceDiagramBundle
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { buildAgentProtocolContextInstructions } from "./agent-protocol.service";
 
 const FLOWWEAVE_BLOCK_START = "<!-- flowweave:start -->";
 const FLOWWEAVE_BLOCK_END = "<!-- flowweave:end -->";
@@ -260,6 +261,7 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
     "- Ask the user to return to FlowWeave to review Git diff, refresh the project scan, or rollback when needed.",
     "- When asked to process FlowWeave pending requests, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest `createdAt` to newest, and follow each entry's `instructionsPath` or `requestPath`.",
     "",
+    ...buildAgentProtocolContextInstructions(),
     "## FlowWeave Artifacts",
     "",
     "- Project scan: `.flowweave/project.json`",
@@ -337,8 +339,10 @@ function buildManagedInstructionBlock() {
     "",
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
-    "When the user says `Use FlowWeave context to process pending requests.` or `使用 FlowWeave 上下文处理当前待办`, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest to newest, and write each response atomically to that entry's responsePath.",
-    "For artifact-analysis requests, write `.flowweave/agent-bridge/<runId>/response.json`; replying only in chat does not complete the FlowWeave review.",
+    "When the user says `Use FlowWeave context to process pending requests.` or `使用 FlowWeave 上下文处理当前待办`, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest to newest, and write each Agent Protocol v1 response atomically to that entry's responsePath.",
+    "For artifact-analysis requests, write `.flowweave/agent-bridge/<runId>/response.json` with `protocolVersion: 1`; replying only in chat does not complete the FlowWeave review.",
+    "For artifact-analysis requests, `response.json.content` must be the exact structured artifact JSON requested by the prompt, not an approval summary or markdown plan.",
+    "Do not edit `.flowweave/architecture-review.json` or `.flowweave/sequence-review.json`; FlowWeave Core validates responses and updates review state.",
     FLOWWEAVE_BLOCK_END
   ].join("\n");
 }

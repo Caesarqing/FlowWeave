@@ -1,6 +1,6 @@
 {
   "name": "flowweave",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Codex Desktop skill for processing FlowWeave pending bridge requests."
+  "description": "Built-in FlowWeave Agent Protocol v1 plugin for Codex, Claude, Gemini, and Cursor hosts."
 }

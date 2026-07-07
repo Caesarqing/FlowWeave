@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer as electronIpcRenderer } from "electron";
 import type {
   AgentAnalysisResult,
+  AgentPluginHostId,
   AnalysisOperation,
   AgentDefinition,
   AgentReadinessResult,
@@ -23,7 +24,8 @@ import type {
   ToolId,
   ToolOpenResult,
   ToolRunArtifact,
-  ToolRunSummary
+  ToolRunSummary,
+  AgentPluginStatus
 } from "../types";
 import type { StartToolPlanOptions, StartToolPlanResult } from "../main/services/agent-run.service";
 import { GIT_CHANNELS, PROJECT_CHANNELS, TOOL_CHANNELS } from "../common/ipc-channels";
@@ -54,6 +56,14 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.openProject, options) as Promise<FlowWeaveProjectOpenResult>,
   openToolProject: (agentId: RuntimeAgentId, projectId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.openProject, agentId, projectId) as Promise<ToolOpenResult>,
+  getAgentPluginStatuses: (projectId: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.getAgentPluginStatuses, projectId) as Promise<AgentPluginStatus[]>,
+  installAgentPlugin: (projectId: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.installAgentPlugin, projectId) as Promise<AgentPluginStatus[]>,
+  openAgentPlugin: (projectId: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.openAgentPlugin, projectId) as Promise<void>,
+  openAgentPluginInstructions: (projectId: string, hostId: AgentPluginHostId) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.openAgentPluginInstructions, projectId, hostId) as Promise<void>,
   runToolPlan: (options: StartToolPlanOptions) =>
     ipcRenderer.invoke(TOOL_CHANNELS.runPlan, options) as Promise<StartToolPlanResult>,
   listToolRuns: (projectId: string) =>

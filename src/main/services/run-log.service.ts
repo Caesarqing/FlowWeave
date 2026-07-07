@@ -8,6 +8,7 @@ import { adoptArtifactRun } from "./artifact-run-adoption.service";
 import { markDesktopBridgeRequestStatus } from "./desktop-bridge-manifest.service";
 import { writeArchitectureReviewStatus } from "./architecture-review.service";
 import { writeSequenceReviewStatus } from "./sequence-review.service";
+import { validateBridgeResponseForRun } from "./agent-protocol.service";
 
 export type RunPaths = {
   runDir: string;
@@ -122,13 +123,19 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
         result = await importPendingDesktopBridgeRun(projectPath, runId, result);
       } catch (error) {
         const completedAt = new Date().toISOString();
+        const artifactAdoption = {
+          status: "rejected" as const,
+          message: formatError(error)
+        };
         result = {
           ...result,
           status: "failed",
           completedAt,
           exitCode: 1,
-          summary: `Desktop bridge response rejected: ${formatError(error)}`
+          summary: `Desktop bridge response rejected: ${formatError(error)}`,
+          artifactAdoption
         };
+        await reconcileImportedArtifactReview(projectPath, runId, result, artifactAdoption);
         await Promise.all([
           writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result),
           markDesktopBridgeRequestStatus(projectPath, runId, "failed")
@@ -172,15 +179,7 @@ export async function importPendingDesktopBridgeRun(
   if (purpose === "artifact-analysis" && !response.sourcePath.endsWith("response.json")) {
     throw new Error(`Desktop bridge response.json is required for artifact-analysis pending run ${runId}.`);
   }
-  if (response.runId !== undefined && response.runId !== runId) {
-    throw new Error(`Desktop bridge response runId does not match pending run ${runId}.`);
-  }
-  if (response.sourcePath.endsWith("response.json") && (!result.projectId || response.projectId !== result.projectId)) {
-    throw new Error(`Desktop bridge response projectId does not match pending run ${runId}.`);
-  }
-  if (response.artifactTarget && result.artifactTarget && response.artifactTarget !== result.artifactTarget) {
-    throw new Error(`Desktop bridge response artifactTarget does not match pending run ${runId}.`);
-  }
+  validateBridgeResponseForRun(response, { ...result, id: runId });
   const completedAt = response.completedAt ?? new Date().toISOString();
   if (Number.isNaN(Date.parse(completedAt))) {
     throw new Error(`Desktop bridge response completedAt is invalid for run ${runId}.`);

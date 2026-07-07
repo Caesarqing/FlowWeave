@@ -66,4 +66,36 @@ describe("gemini-cli.adapter", () => {
     expect(result.status).toBe("completed");
     expect(result.events.map((event) => ("content" in event ? event.content : "")).join("\n")).toContain("received prompt");
   });
+
+  it("reports Gemini model probe failures without running project writes", async () => {
+    const binDir = await mkdtemp(join(tmpdir(), "flowweave-gemini-bin-"));
+    await createNodeCliFixture(binDir, "gemini", [
+      "if (process.argv.includes('--version')) { console.log('gemini-test 1.0'); process.exit(0); }",
+      "console.error('model_not_found: no available channel for model');",
+      "process.exit(1);"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+
+    const health = await new GeminiCliAdapter().healthCheck({ runModelProbe: true });
+
+    expect(health.severity).toBe("error");
+    expect(health.checks).toContainEqual(expect.objectContaining({
+      id: "gemini-model-probe",
+      status: "failed",
+      message: expect.stringContaining("model-not-found")
+    }));
+  });
+
+  it("does not run Gemini model probe unless explicitly requested", async () => {
+    const binDir = await mkdtemp(join(tmpdir(), "flowweave-gemini-bin-"));
+    await createNodeCliFixture(binDir, "gemini", [
+      "if (process.argv.includes('--version')) { console.log('gemini-test 1.0'); process.exit(0); }",
+      "process.exit(7);"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+
+    const health = await new GeminiCliAdapter().healthCheck();
+
+    expect(health.checks.some((check) => check.id === "gemini-model-probe")).toBe(false);
+  });
 });

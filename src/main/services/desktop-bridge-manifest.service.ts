@@ -1,16 +1,18 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ArtifactRunTarget, ExecutionMode, RuntimeAgentId, ToolRunPurpose } from "../../types";
+import type { AgentExpectedContentKind, AgentProtocolVersion, ArtifactRunTarget, ExecutionMode, RuntimeAgentId, ToolRunPurpose } from "../../types";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 
 export type DesktopBridgeRequestStatus = "pending" | "completed" | "failed";
 
 export type DesktopBridgePendingRequest = {
+  protocolVersion?: AgentProtocolVersion;
   runId: string;
   projectId: string;
   agentId: RuntimeAgentId;
   purpose: ToolRunPurpose;
+  expectedContentKind?: AgentExpectedContentKind;
   executionMode: ExecutionMode;
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
@@ -18,6 +20,7 @@ export type DesktopBridgePendingRequest = {
   createdAt: string;
   requestPath: string;
   responsePath: string;
+  pluginHint?: string;
   status: DesktopBridgeRequestStatus;
 };
 

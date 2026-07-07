@@ -212,8 +212,12 @@ function DesktopApp() {
             onExecutionModeChange={app.tools.onExecutionModeChange}
             onGoToGitReview={app.tools.onGoToGitReview}
             onHealthCheckAgent={app.tools.onHealthCheckAgent}
+            onInstallAgentPlugins={app.tools.onInstallAgentPlugins}
+            onOpenAgentPluginFolder={app.tools.onOpenAgentPluginFolder}
+            onOpenAgentPluginInstructions={app.tools.onOpenAgentPluginInstructions}
             onOpenRunBridge={app.tools.onOpenRunBridge}
             onOpenToolProject={app.tools.onOpenToolProject}
+            onRefreshAgentPlugins={app.tools.onRefreshAgentPlugins}
             onRefreshRuns={app.tools.onRefreshRuns}
             onRetryRunArtifact={app.tools.onRetryRunArtifact}
             onRunToolPlan={app.tools.onRunToolPlan}
@@ -223,6 +227,7 @@ function DesktopApp() {
             onSelectAgent={app.tools.onSelectAgent}
             projectConnection={app.agentConnection.connection}
             projectPath={app.canvas.projectPath}
+            pluginStatuses={app.tools.pluginStatuses}
             runArtifactTab={app.tools.runArtifactTab}
             runs={app.tools.runs}
             selectedRunArtifact={app.tools.selectedRunArtifact}

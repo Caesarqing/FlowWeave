@@ -3,6 +3,7 @@ import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEven
 import { resolveToolCommand } from "./agent-command";
 import { nowIso } from "./time";
 import { runSpawnedAgent } from "./spawn-agent-process";
+import { runAgentModelProbe } from "./agent-probe";
 
 export class GeminiCliAdapter implements ToolAdapter {
   id = "gemini-cli" as const;
@@ -21,7 +22,7 @@ export class GeminiCliAdapter implements ToolAdapter {
     };
   }
 
-  async healthCheck(): Promise<AgentHealthCheckResult> {
+  async healthCheck(options?: { runModelProbe: boolean }): Promise<AgentHealthCheckResult> {
     const result = await resolveToolCommand(this.id);
     const checks: AgentHealthCheck[] = [{
       id: "gemini-command",
@@ -41,6 +42,16 @@ export class GeminiCliAdapter implements ToolAdapter {
         ? "FlowWeave will pass prompts through stdin with approval-mode arguments."
         : "Gemini CLI cannot run FlowWeave stdin prompts until the command is installed."
     }];
+    if (options?.runModelProbe === true && result.commandPath && !checks.some((check) => check.status === "failed")) {
+      checks.push(await runAgentModelProbe({
+        toolId: this.id,
+        commandPath: result.commandPath,
+        args: buildGeminiArgs("plan"),
+        stdin: "FlowWeave health check. Reply with OK only. Do not edit files.",
+        checkId: "gemini-model-probe",
+        label: "Gemini model probe"
+      }));
+    }
     return {
       agentId: this.id,
       severity: healthSeverity(checks),

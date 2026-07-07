@@ -688,6 +688,8 @@ export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
 export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
 export type ArtifactRunTarget = "architecture-map" | "sequence-diagrams" | "sequence-revision";
+export type AgentProtocolVersion = 1;
+export type AgentExpectedContentKind = "artifact-json" | "markdown-plan";
 export type ArtifactAdoptionStatus = "not-applicable" | "pending" | "late" | "applied" | "rejected" | "stale";
 export type ArtifactAdoption = {
   status: ArtifactAdoptionStatus;
@@ -847,6 +849,7 @@ export type AgentHealthCheck = {
   label: string;
   status: AgentHealthCheckStatus;
   message: string;
+  blocking?: boolean;
 };
 export type AgentHealthCheckResult = {
   agentId: RuntimeAgentId;
@@ -875,6 +878,10 @@ export type AgentDefinition = {
   name: string;
   kind: "cli" | "desktop";
   protocol?: AgentProtocol;
+  protocolVersion?: AgentProtocolVersion;
+  pluginId?: string;
+  pluginStatus?: AgentPluginInstallState;
+  installTarget?: string;
   command: string;
   args: string[];
   planArgs?: string[];
@@ -890,6 +897,34 @@ export type AgentDefinition = {
 
 export type AgentProtocol = "cli-stdin" | "desktop-bridge";
 export type AgentCapability = "artifact-analysis" | "implementation-plan" | "execute";
+export type AgentPluginHostId = "codex" | "claude" | "gemini" | "cursor";
+export type AgentPluginInstallState = "missing" | "installed" | "outdated" | "unavailable" | "error";
+export type AgentPluginHostManifest = {
+  id: AgentPluginHostId;
+  displayName: string;
+  installTarget: string;
+  capabilities: AgentCapability[];
+  protocols: AgentProtocol[];
+};
+export type AgentPluginManifest = {
+  id: string;
+  name: string;
+  version: string;
+  protocolVersion: AgentProtocolVersion;
+  description: string;
+  hosts: AgentPluginHostManifest[];
+};
+export type AgentPluginStatus = {
+  pluginId: string;
+  hostId: AgentPluginHostId;
+  displayName: string;
+  status: AgentPluginInstallState;
+  installedVersion?: string;
+  bundledVersion: string;
+  installTarget: string;
+  hostInstructionPath?: string;
+  message: string;
+};
 
 export type CustomAgentInput = {
   name: string;
@@ -924,6 +959,9 @@ export type ToolRunRequest = {
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
   reviewId?: string;
+  protocolVersion?: AgentProtocolVersion;
+  expectedContentKind?: AgentExpectedContentKind;
+  pluginHint?: string;
   model?: string;
   signal?: AbortSignal;
   maxOutputBytes?: number;
@@ -940,6 +978,7 @@ export type ToolRunTerminationReason = "completed" | "failed" | "timeout" | "can
 export type ToolRunFailureCode =
   | "authentication"
   | "connection"
+  | "model-not-found"
   | "rate-limit"
   | "provider"
   | "timeout"
@@ -1115,7 +1154,7 @@ export interface ToolAdapter {
   name: string;
   kind: ToolKind;
   detect(): Promise<ToolDetectionResult>;
-  healthCheck?(): Promise<AgentHealthCheckResult>;
+  healthCheck?(options?: { runModelProbe: boolean }): Promise<AgentHealthCheckResult>;
   runPlan(request: ToolRunRequest, onEvent?: (event: ToolRunEvent) => void): Promise<ToolRunResult>;
   openProject?(projectPath: string): Promise<ToolOpenResult>;
 }
@@ -1154,6 +1193,10 @@ export type FlowWeaveApi = {
   applyRunArtifact(projectId: string, runId: string): Promise<ToolRunSummary>;
   openRunBridge(projectId: string, runId: string): Promise<void>;
   openToolProject(agentId: RuntimeAgentId, projectId: string): Promise<ToolOpenResult>;
+  getAgentPluginStatuses(projectId: string): Promise<AgentPluginStatus[]>;
+  installAgentPlugin(projectId: string): Promise<AgentPluginStatus[]>;
+  openAgentPlugin(projectId: string): Promise<void>;
+  openAgentPluginInstructions(projectId: string, hostId: AgentPluginHostId): Promise<void>;
   gitStatus(projectId: string): Promise<GitStatus>;
   gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;
   gitCheckpoint(projectId: string): Promise<string>;

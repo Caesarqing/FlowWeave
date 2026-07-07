@@ -1,16 +1,20 @@
 import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import { buildRunPrompt, startToolPlan } from "../../src/main/services/agent-run.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
+import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("agent-run.service", () => {
+  const originalPath = process.env.PATH;
+
   afterEach(() => {
     vi.restoreAllMocks();
+    process.env.PATH = originalPath;
   });
 
   it("does not append implementation-plan instructions to artifact analysis prompts", () => {
@@ -38,6 +42,41 @@ describe("agent-run.service", () => {
     await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Mock plan");
     await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("Plan generated");
     await expect(readFile(result.resultPath ?? "", "utf8")).resolves.toContain('"toolId": "mock"');
+  });
+
+  it("does not run model probes during CLI run preflight", async () => {
+    const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-no-probe-"));
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-"));
+    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
+    await createNodeCliFixture(binDir, "codex", [
+      "if (process.argv.includes('--version')) { console.log('codex-test 1.0'); process.exit(0); }",
+      "if (process.argv[2] === 'exec' && process.argv.includes('--help')) {",
+      "  console.log('Usage: codex exec [OPTIONS] [PROMPT]');",
+      "  console.log('--cd <DIR> --sandbox <MODE> --output-last-message <FILE> stdin');",
+      "  process.exit(0);",
+      "}",
+      "let input = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { input += chunk; });",
+      "process.stdin.on('end', () => {",
+      "  if (input.includes('FlowWeave health check')) { console.error('unexpected model probe'); process.exit(7); }",
+      "  console.log('# Codex Plan');",
+      "});"
+    ].join("\n"), process.platform);
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
+
+    const result = await startToolPlan({
+      projectId,
+      toolId: "codex-local",
+      prompt: "Review auth module.",
+      executionMode: "plan",
+      purpose: "implementation-plan"
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.agentReadiness?.checks.some((check) => check.id === "codex-model-probe")).toBe(false);
+    await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Codex Plan");
   });
 
   it("refreshes stale enabled Agent context before spawning a CLI run", async () => {

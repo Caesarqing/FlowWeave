@@ -1,10 +1,11 @@
 import { shell } from "electron";
 import { TOOL_CHANNELS } from "../../common/ipc-channels";
-import type { AgentCapability, AgentId, AgentProtocol, CustomAgentInput, RuntimeAgentId } from "../../types";
+import type { AgentCapability, AgentId, AgentPluginHostId, AgentProtocol, CustomAgentInput, RuntimeAgentId } from "../../types";
 import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
 import { applyRunArtifact, listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
 import { getDesktopBridgeDir } from "../agents/desktop-bridge.adapter";
+import { getBuiltInAgentPluginStatuses, installBuiltInAgentPlugin, resolveAgentPluginInstructionPath } from "../services/agent-plugin.service";
 import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
 import { handleIpc } from "./ipc-handler";
 
@@ -132,6 +133,35 @@ export function registerAgentIpc() {
       requireAgentId(TOOL_CHANNELS.openProject, toolId),
       resolveProjectPath(requireString(TOOL_CHANNELS.openProject, projectId, "projectId"))
     );
+  });
+
+  handleIpc(TOOL_CHANNELS.getAgentPluginStatuses, async (_event, projectId: unknown) => {
+    return getBuiltInAgentPluginStatuses(resolveProjectPath(requireString(TOOL_CHANNELS.getAgentPluginStatuses, projectId, "projectId")));
+  });
+
+  handleIpc(TOOL_CHANNELS.installAgentPlugin, async (_event, projectId: unknown) => {
+    return installBuiltInAgentPlugin(resolveProjectPath(requireString(TOOL_CHANNELS.installAgentPlugin, projectId, "projectId")));
+  });
+
+  handleIpc(TOOL_CHANNELS.openAgentPlugin, async (_event, projectId: unknown) => {
+    const statuses = await getBuiltInAgentPluginStatuses(resolveProjectPath(requireString(TOOL_CHANNELS.openAgentPlugin, projectId, "projectId")));
+    const target = statuses[0]?.installTarget;
+    if (!target) throw new Error("FlowWeave plugin install target could not be resolved.");
+    const error = await shell.openPath(target);
+    if (error) throw new Error(`Opening FlowWeave plugin folder failed: ${error}`);
+  });
+
+  handleIpc(TOOL_CHANNELS.openAgentPluginInstructions, async (_event, projectId: unknown, hostId: unknown) => {
+    const projectPath = resolveProjectPath(requireString(TOOL_CHANNELS.openAgentPluginInstructions, projectId, "projectId"));
+    const safeHostId = requireEnum(
+      TOOL_CHANNELS.openAgentPluginInstructions,
+      hostId,
+      "hostId",
+      ["codex", "claude", "gemini", "cursor"]
+    ) as AgentPluginHostId;
+    const instructionPath = await resolveAgentPluginInstructionPath(projectPath, safeHostId);
+    const error = await shell.openPath(instructionPath);
+    if (error) throw new Error(`Opening FlowWeave plugin instructions failed: ${error}`);
   });
 }
 
