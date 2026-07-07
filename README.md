@@ -5,7 +5,7 @@
 <h1 align="center">FlowWeave</h1>
 
 <p align="center">
-  Make code projects easier to understand and AI-assisted development easier to control.
+  A local-first desktop workbench for understanding codebases and coordinating AI coding agents.
 </p>
 
 <p align="center">
@@ -15,9 +15,18 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6" />
 </p>
 
-FlowWeave makes code projects easier to understand and AI-assisted development easier to control.
+> FlowWeave makes code projects easier to understand and AI-assisted development easier to control.
 
 FlowWeave is a local-first desktop workbench for reading software projects, visualizing architecture, and coordinating programming agents such as Codex, Claude, Gemini, Cursor, and custom local tools. It scans a project, builds a functional module graph, stores reviewable artifacts under `.flowweave/`, and keeps agent output tied to prompts, logs, plans, checkpoints, and Git diffs.
+
+## At a Glance
+
+| Area | What FlowWeave provides |
+| --- | --- |
+| Project understanding | File tree scanning, semantic indexing, architecture maps, module evidence, sequence diagrams. |
+| Agent orchestration | Built-in adapters for Codex, Claude, Gemini, Cursor, desktop bridge agents, and custom agents. |
+| Review workflow | Prompt/plan/log/result artifacts, artifact adoption state, Git diff inspection, checkpoints, rollback. |
+| Local-first storage | Project state and run artifacts stay under the opened repository's `.flowweave/` directory. |
 
 ## Why FlowWeave
 
@@ -41,17 +50,16 @@ FlowWeave is an active local desktop app. The current implementation focuses on:
 
 Generated project state is intentionally stored in `.flowweave/`, which is ignored by this repository's `.gitignore` for normal development.
 
-## Core Features
+## What You Can Do
 
-- **Local project scanning**: reads a local repository, ignores unsafe or noisy paths, detects languages, and writes project metadata into `.flowweave/`.
-- **Semantic indexing**: extracts imports, exports, symbols, HTTP endpoints, render targets, external calls, and cross-stack relationships across TypeScript, JavaScript, Vue, Python, Java, Go, and lightweight fallback languages.
-- **Architecture canvas**: visualizes functional modules, relationships, risks, confidence, evidence, files, symbols, and editable guidance with React Flow.
-- **Sequence workspace**: generates and revises structured architectural sequence diagrams with participant/message filtering and evidence panels.
-- **Document workspace**: edits project-local FlowWeave docs such as PRD, README, API docs, and task specs under `.flowweave/docs/`.
-- **Agent workspace**: detects, configures, runs, and health-checks built-in or custom agents; stores prompt, plan, log, and result artifacts for every run.
-- **Built-in agent bridge**: installs a project-local FlowWeave plugin copy for Codex, Claude, Gemini, and Cursor desktop/CLI workflows.
-- **Git review**: reads status and diffs, creates FlowWeave checkpoints, and supports explicit rollback from checkpoints.
-- **Local artifact status**: tracks whether project, canvas, architecture, sequence, context, and task artifacts are current, missing, failed, or stale.
+- **Scan a repository** and create a structured `.flowweave/` project context.
+- **Inspect a functional architecture graph** with modules, relationships, file roles, symbols, evidence, confidence, and risk.
+- **Generate sequence diagrams** for high-level architecture and detailed design flows.
+- **Compose guidance** for selected modules or connections and send it to a local agent.
+- **Run agent plans** while preserving prompt, log, plan, result, readiness, and artifact adoption metadata.
+- **Install project-local agent bridge instructions** for Codex, Claude, Gemini, and Cursor.
+- **Review Git changes** against current state or FlowWeave checkpoints before accepting work.
+- **Create project-local documentation drafts** under `.flowweave/docs/`.
 
 ## Supported Agents
 
@@ -68,6 +76,16 @@ FlowWeave includes built-in adapters for:
 | Custom agents | CLI stdin or desktop bridge | User-configured command/app, args, protocol, and capabilities. |
 
 Plan mode is the default. Execute mode requires explicit user confirmation, and FlowWeave creates a Git checkpoint before forwarding execute-mode work to an external agent.
+
+## Product Flow
+
+1. Open a local repository in the desktop app.
+2. Scan files and build a semantic project index.
+3. Generate or review the architecture canvas.
+4. Add guidance to modules, connections, or sequence diagrams.
+5. Send context to a selected local agent.
+6. Inspect prompt, plan, log, result, and readiness artifacts.
+7. Review Git diffs and checkpoint state before accepting changes.
 
 ## How It Works
 
@@ -126,7 +144,6 @@ FlowWeave persists project-specific state in a `.flowweave/` directory inside th
 │   ├── utils/         # Graph, i18n, sequence, and UI helpers
 │   └── common/        # Shared IPC channel definitions
 ├── flowweave-plugin/  # Built-in Agent Protocol v1 bridge package
-├── docs/              # Architecture, MVP, design notes, and showcase artifacts
 ├── logo/              # App icons and README branding assets
 ├── scripts/           # Build, smoke, benchmark, and asset checks
 └── tests/             # Main-process and renderer tests
@@ -224,18 +241,13 @@ FlowWeave is designed as a local, review-first tool:
 - Artifact reads are restricted to known `.flowweave/runs/<run-id>/` files.
 - Git rollback only accepts FlowWeave checkpoint IDs generated for the same project.
 
-## Project Documentation
-
-More detailed design notes are in:
-
-- [Architecture](docs/architecture.md)
-- [MVP spec](docs/mvp-spec.md)
-- [Frontend design system](docs/frontend-design-system.md)
-- [Creative showcase](docs/flowweave-creative-showcase.html)
-
 ## Current Scope
 
 FlowWeave focuses on local project understanding, local agent orchestration, artifact review, and Git review. It does not currently provide cloud sync, multi-user collaboration, remote PR diff import, or a full IDE editing experience.
+
+## Notes for GitHub
+
+The `docs/` directory is intentionally ignored in this repository. Local showcase files, screenshots, generated HTML demos, and other bulky presentation assets should remain local unless they are explicitly prepared for release.
 
 ## License
 
