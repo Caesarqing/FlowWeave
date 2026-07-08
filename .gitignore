@@ -1,5 +1,16 @@
 node_modules/
 
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+credentials.*
+
 dist/
 out/
 release/

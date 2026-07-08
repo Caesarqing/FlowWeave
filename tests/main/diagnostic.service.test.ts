@@ -16,7 +16,7 @@ describe("diagnostic.service", () => {
       await recordDiagnostic(root, {
         category: "analysis",
         code: `failure-${index}`,
-        message: `OPENAI_API_KEY=sk-1234567890abcdefghijkl failure ${index}`,
+        message: `OPENAI_API_KEY=not-a-real-openai-key failure ${index}`,
         context: { index }
       });
     }
@@ -27,7 +27,7 @@ describe("diagnostic.service", () => {
 
     expect(history).toHaveLength(100);
     expect(history[0].code).toBe("failure-5");
-    expect(exported).not.toContain("sk-1234567890abcdefghijkl");
+    expect(exported).not.toContain("not-a-real-openai-key");
     expect(exported).toContain("[REDACTED]");
   });
 
@@ -47,7 +47,7 @@ describe("diagnostic.service", () => {
       terminationReason: "failed",
       events: [{
         type: "stderr",
-        content: "OPENAI_API_KEY=sk-1234567890abcdefghijkl unavailable",
+        content: "OPENAI_API_KEY=not-a-real-openai-key unavailable",
         timestamp: "2026-06-12T00:00:01.000Z"
       }]
     });

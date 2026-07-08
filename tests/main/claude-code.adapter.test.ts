@@ -80,7 +80,7 @@ describe("claude-code.adapter", () => {
       "process.stdout.write('ok');"
     ].join("\n"), process.platform);
     process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
-    process.env.ANTHROPIC_API_KEY = "sk-ant-flowweave-secret";
+    process.env.ANTHROPIC_API_KEY = "not-a-real-anthropic-key";
     process.env.ANTHROPIC_BASE_URL = "https://provider.example";
     try {
       const health = await new ClaudeCodeAdapter().healthCheck({ runModelProbe: true });
@@ -89,7 +89,7 @@ describe("claude-code.adapter", () => {
       expect(health.agentId).toBe("claude-code");
       expect(health.severity).toBe("warning");
       expect(serialized).toContain("ANTHROPIC_API_KEY");
-      expect(serialized).not.toContain("sk-ant-flowweave-secret");
+      expect(serialized).not.toContain("not-a-real-anthropic-key");
       expect(health.checks).toContainEqual(expect.objectContaining({
         id: "claude-provider",
         status: "warning"
