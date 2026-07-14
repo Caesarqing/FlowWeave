@@ -69,10 +69,11 @@ async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId, runM
     return adapter.healthCheck({ runModelProbe });
   }
   const detection = await adapter.detect();
+  const unavailableDesktopBridge = adapter.kind === "desktop" && !detection.available;
   const check: AgentHealthCheck = {
     id: "agent-command",
     label: "Agent command",
-    status: detection.available ? "passed" : "failed",
+    status: detection.available ? "passed" : unavailableDesktopBridge ? "warning" : "failed",
     message: detection.message ?? (detection.available ? `${adapter.name} is available.` : `${adapter.name} is not available.`)
   };
   return {
@@ -81,7 +82,9 @@ async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId, runM
     checks: [check],
     suggestedActions: detection.available
       ? [`${adapter.name} is detectable. Review the run log if executions fail.`]
-      : [`Install or configure ${adapter.name}, then run detection again.`],
+      : unavailableDesktopBridge
+        ? [`Install or open ${adapter.name} to process pending desktop bridge requests, or process the generated request files manually.`]
+        : [`Install or configure ${adapter.name}, then run detection again.`],
     environmentHints: [],
     checkedAt: new Date().toISOString()
   };
