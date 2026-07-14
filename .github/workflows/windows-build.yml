@@ -41,6 +41,7 @@ jobs:
         with:
           name: flowweave-macos-arm64
           if-no-files-found: error
+          retention-days: 1
           path: |
             release/FlowWeave-0.1.0-mac-arm64.zip
             release/FlowWeave-0.1.0-mac-arm64.zip.sha256
@@ -75,6 +76,7 @@ jobs:
         with:
           name: flowweave-windows-x64
           if-no-files-found: error
+          retention-days: 1
           path: |
             release/FlowWeave-0.1.0-win-x64-setup.exe
             release/FlowWeave-0.1.0-win-x64-setup.exe.sha256
@@ -109,6 +111,7 @@ jobs:
         with:
           name: flowweave-windows-arm64-native
           if-no-files-found: error
+          retention-days: 1
           path: |
             release/FlowWeave-0.1.0-win-arm64-setup.exe
             release/FlowWeave-0.1.0-win-arm64-setup.exe.sha256
@@ -142,6 +145,7 @@ jobs:
         with:
           name: flowweave-windows-arm64-unvalidated
           if-no-files-found: error
+          retention-days: 1
           path: |
             release/FlowWeave-0.1.0-win-arm64-setup.exe
             release/FlowWeave-0.1.0-win-arm64-setup.exe.sha256
