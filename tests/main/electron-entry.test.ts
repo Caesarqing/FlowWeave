@@ -15,6 +15,9 @@ describe("Electron desktop entry", () => {
     expect(mainSource).toContain('"--flowweave-smoke-test"');
     expect(mainSource).toContain('"did-finish-load"');
     expect(mainSource).toContain('"did-fail-load"');
+    expect(mainSource).toContain("function exitSmokeTest(window: BrowserWindow, exitCode: number): never");
+    expect(mainSource).toContain("window.destroy();");
+    expect(mainSource).toContain("process.exit(exitCode);");
     expect(configSource).toContain('format: "cjs"');
     expect(configSource).toContain('entryFileNames: "index.cjs"');
     expect(mainSource).toContain('"flowweave-app-icon.png"');

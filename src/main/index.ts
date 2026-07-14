@@ -72,12 +72,12 @@ app.on("window-all-closed", () => {
 function runSmokeTest(window: BrowserWindow): void {
   const timeout = setTimeout(() => {
     console.error("FlowWeave packaged smoke test timed out.");
-    app.exit(1);
+    exitSmokeTest(window, 1);
   }, SMOKE_TEST_TIMEOUT_MS);
   window.webContents.once("did-finish-load", () => {
     clearTimeout(timeout);
     console.log("FlowWeave packaged smoke test passed.");
-    app.exit(0);
+    exitSmokeTest(window, 0);
   });
   window.webContents.once("did-fail-load", (_event, errorCode, errorDescription) => {
     clearTimeout(timeout);
@@ -85,6 +85,14 @@ function runSmokeTest(window: BrowserWindow): void {
       errorCode,
       errorDescription
     });
-    app.exit(1);
+    exitSmokeTest(window, 1);
   });
+}
+
+function exitSmokeTest(window: BrowserWindow, exitCode: number): never {
+  if (!window.isDestroyed()) {
+    window.destroy();
+  }
+  app.exit(exitCode);
+  process.exit(exitCode);
 }

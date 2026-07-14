@@ -191,6 +191,12 @@ npm run dist:win:x64
 npm run dist:win:arm64
 ```
 
+### GitHub Actions packages
+
+The `Desktop packages` workflow builds macOS ARM64, Windows x64, and Windows ARM64 desktop packages on pushes to `main` and manual dispatches. Downloadable GitHub artifacts are uploaded only after the build, typecheck, test suite, packaged-app smoke test, installer smoke test, and checksum steps all pass.
+
+If a workflow run shows `Artifacts -`, inspect the failed job before looking for a download link. A failed pre-upload step prevents `actions/upload-artifact` from running, so GitHub has no package zip or installer artifact to offer for that run.
+
 ## Useful Scripts
 
 | Command | Purpose |
@@ -208,10 +214,22 @@ There are also internal CLI entry points under `src/main/cli/` for project scann
 
 ## Agent Plugin Bridge
 
-The bundled plugin package lives in `flowweave-plugin/` and defines FlowWeave Agent Protocol v1. From the Agent workspace, FlowWeave can install or refresh a project-local copy at:
+The bundled plugin package lives in `flowweave-plugin/` and defines FlowWeave Agent Protocol v1. From the Agent workspace, FlowWeave can install or refresh the project-local protocol copy and external Agent discovery files at:
 
 ```txt
 .flowweave/agent-plugins/flowweave/
+plugins/flowweave/
+.agents/plugins/marketplace.json
+.claude-plugin/marketplace.json
+```
+
+After refreshing the project plugin, register the project marketplace with the external clients you want to use:
+
+```bash
+codex plugin marketplace add .
+codex plugin add flowweave@flowweave-local
+claude plugin marketplace add .
+claude plugin install flowweave@flowweave-local --scope user
 ```
 
 Desktop bridge agents read pending requests from `.flowweave/agent-bridge/`, process the request in plan or execute mode, and atomically write `response.json` or `response.md`. FlowWeave imports and validates those responses before updating review state.
