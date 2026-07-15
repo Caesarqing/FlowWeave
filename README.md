@@ -195,6 +195,16 @@ npm run dist:win:arm64
 
 The `Desktop packages` workflow builds macOS ARM64, Windows x64, and Windows ARM64 desktop packages on pushes to `main` and manual dispatches. Downloadable GitHub artifacts are uploaded only after the build, typecheck, test suite, packaged-app smoke test, installer smoke test, and checksum steps all pass.
 
+Current packaged artifacts are available from the latest successful `Desktop packages` run:
+
+| Platform | Artifact | Download |
+| --- | --- | --- |
+| macOS ARM64 | `flowweave-macos-arm64` | [Download zip](https://github.com/Caesarqing/FlowWeave/actions/runs/29303671936/artifacts/8331611690) |
+| Windows x64 | `flowweave-windows-x64` | [Download installer artifact](https://github.com/Caesarqing/FlowWeave/actions/runs/29303671936/artifacts/8331635846) |
+| Windows ARM64 | `flowweave-windows-arm64-native` | [Download installer artifact](https://github.com/Caesarqing/FlowWeave/actions/runs/29303671936/artifacts/8331679242) |
+
+GitHub Actions artifacts are short-lived CI outputs. If one of the direct artifact links has expired, open the [Desktop packages workflow](https://github.com/Caesarqing/FlowWeave/actions/workflows/windows-build.yml), select the latest successful run, and download the matching artifact from the run summary.
+
 If a workflow run shows `Artifacts -`, inspect the failed job before looking for a download link. A failed pre-upload step prevents `actions/upload-artifact` from running, so GitHub has no package zip or installer artifact to offer for that run.
 
 ## Useful Scripts
