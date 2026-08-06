@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   compareArchitectureMaps,
   readArchitectureReviewStatus,
-  startArchitectureReview
+  startArchitectureReview,
+  writeArchitectureReviewStatus
 } from "../../src/main/services/architecture-review.service";
 import type { ArchitectureMap } from "../../src/types";
 
@@ -146,6 +147,90 @@ describe("architecture-review.service", () => {
       scanFingerprint: "scan-1",
       agentId: "codex-local",
       runId: "run-existing"
+    });
+  });
+
+  it("marks a legacy architecture artifact without an input fingerprint stale", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-legacy-stale-"));
+    await mkdir(join(root, ".flowweave"), { recursive: true });
+    await writeFile(
+      join(root, ".flowweave", "architecture-map.json"),
+      `${JSON.stringify(architectureMap([], []))}\n`,
+      "utf8"
+    );
+
+    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+      state: "stale"
+    });
+  });
+
+  it("keeps a local architecture artifact current when its input fingerprint matches", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-local-current-"));
+    const local = {
+      ...architectureMap([], []),
+      metadata: {
+        source: "local" as const,
+        generatedAt: "2026-06-25T00:00:00.000Z",
+        inputFingerprint: "scan-1",
+        fileCoverage: 1,
+        evidenceCoverage: 1
+      }
+    };
+    await mkdir(join(root, ".flowweave"), { recursive: true });
+    await writeFile(
+      join(root, ".flowweave", "architecture-map.json"),
+      `${JSON.stringify(local)}\n`,
+      "utf8"
+    );
+
+    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+      state: "local",
+      scanFingerprint: "scan-1"
+    });
+  });
+
+  it("does not let a legacy local review status hide a stale architecture artifact", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-local-status-stale-"));
+    await mkdir(join(root, ".flowweave"), { recursive: true });
+    await writeFile(
+      join(root, ".flowweave", "architecture-map.json"),
+      `${JSON.stringify(architectureMap([], []))}\n`,
+      "utf8"
+    );
+    await writeArchitectureReviewStatus(root, { state: "local" });
+
+    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+      state: "stale"
+    });
+  });
+
+  it("does not let a stored local status hide a current Agent architecture artifact", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-local-status-reviewed-"));
+    const reviewed = {
+      ...architectureMap([], []),
+      source: "agent" as const,
+      metadata: {
+        source: "agent" as const,
+        agentId: "codex-local" as const,
+        runId: "run-1",
+        generatedAt: "2026-06-25T00:00:00.000Z",
+        inputFingerprint: "scan-1",
+        fileCoverage: 1,
+        evidenceCoverage: 1
+      }
+    };
+    await mkdir(join(root, ".flowweave"), { recursive: true });
+    await writeFile(
+      join(root, ".flowweave", "architecture-map.json"),
+      `${JSON.stringify(reviewed)}\n`,
+      "utf8"
+    );
+    await writeArchitectureReviewStatus(root, { state: "local", scanFingerprint: "scan-1" });
+
+    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+      state: "reviewed",
+      agentId: "codex-local",
+      runId: "run-1"
     });
   });
 });

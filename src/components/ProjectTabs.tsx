@@ -1,15 +1,18 @@
 import { FolderOpen, Plus, X } from 'lucide-react';
 import type { RegisteredProject } from '../types';
 import { useI18n } from '../utils/i18n';
+import { ProjectStatusIndicator, type ActiveProjectStatus } from './ProjectStatusIndicator';
 
 export function ProjectTabs({
   activeProjectId,
+  activeProjectStatus,
   onActivate,
   onClose,
   onOpenProject,
   projects
 }: {
   activeProjectId?: string;
+  activeProjectStatus?: ActiveProjectStatus;
   onActivate: (projectId: string) => void;
   onClose: (projectId: string) => void;
   onOpenProject: () => void;
@@ -23,6 +26,7 @@ export function ProjectTabs({
           <ProjectTab
             key={project.id}
             active={project.id === activeProjectId}
+            activeProjectStatus={project.id === activeProjectId ? activeProjectStatus : undefined}
             project={project}
             onActivate={onActivate}
             onClose={onClose}
@@ -38,11 +42,13 @@ export function ProjectTabs({
 
 function ProjectTab({
   active,
+  activeProjectStatus,
   onActivate,
   onClose,
   project
 }: {
   active: boolean;
+  activeProjectStatus?: ActiveProjectStatus;
   onActivate: (projectId: string) => void;
   onClose: (projectId: string) => void;
   project: RegisteredProject;
@@ -61,6 +67,7 @@ function ProjectTab({
         <FolderOpen size={14} />
         <span>{project.name}</span>
       </button>
+      {activeProjectStatus ? <ProjectStatusIndicator {...activeProjectStatus} /> : null}
       <button
         aria-label={closeLabel}
         className="project-tab-close"

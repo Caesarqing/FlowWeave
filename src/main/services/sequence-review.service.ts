@@ -67,12 +67,13 @@ export async function readSequenceReviewStatus(
   if (!isSequenceReviewStatus(value)) {
     return deriveReviewStatusFromBundle(projectPath, scanFingerprint);
   }
-  if (value.scanFingerprint && value.scanFingerprint !== scanFingerprint) {
+  const derived = await deriveReviewStatusFromBundle(projectPath, scanFingerprint);
+  if (!value.scanFingerprint) return derived;
+  if (value.scanFingerprint !== scanFingerprint) {
     return { ...value, state: "stale" };
   }
-  if (value.state === "reviewed") {
-    const derived = await deriveReviewStatusFromBundle(projectPath, scanFingerprint);
-    if (derived.state !== "reviewed") return derived;
+  if (value.state === "local" || value.state === "reviewed") {
+    if (derived.state !== value.state) return derived;
   }
   return value;
 }
@@ -243,10 +244,13 @@ async function deriveReviewStatusFromBundle(
   const inputFingerprint = metadata && "inputFingerprint" in metadata
     ? metadata.inputFingerprint
     : undefined;
-  if (typeof inputFingerprint === "string" && inputFingerprint !== scanFingerprint) {
+  if (typeof inputFingerprint !== "string") {
+    return { state: "stale" };
+  }
+  if (inputFingerprint !== scanFingerprint) {
     return { state: "stale", scanFingerprint: inputFingerprint };
   }
-  if (source !== "agent" || typeof inputFingerprint !== "string") {
+  if (source !== "agent") {
     return { state: "local", scanFingerprint };
   }
   return {

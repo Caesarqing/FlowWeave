@@ -5,7 +5,6 @@ import { ProjectExplorer } from "./components/ProjectExplorer";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { UtilityPanels } from "./components/UtilityPanels";
-import { ArtifactStatusBar } from "./components/ArtifactStatusBar";
 import { useAppController } from "./hooks/useAppController";
 import { useProjectWorkspaceTabs } from "./hooks/useProjectWorkspaceTabs";
 import { usePreferencesStore } from "./stores/preferences.store";
@@ -112,22 +111,21 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
         />
         <ProjectTabs
           activeProjectId={workspace.activeProjectId}
+          activeProjectStatus={{
+            architectureReview: app.architectureReview,
+            isProjectLoading: app.canvas.isProjectLoading,
+            onRefreshProject: () => void app.canvas.onRefreshProject(),
+            onUpdateArchitecture: () => void app.canvas.onAnalyzeProject(),
+            onUpdateSequences: () => void app.sequence.generateDiagrams(),
+            sequenceReview: app.sequence.review,
+            statuses: app.artifactStatuses
+          }}
           projects={workspace.openProjects}
           onActivate={workspace.activateProject}
           onClose={workspace.closeProject}
           onOpenProject={app.canvas.onOpenProject}
         />
         {workspace.workspaceError ? <p className="workspace-session-error" role="alert">{workspace.workspaceError}</p> : null}
-        <div className="artifact-status-slot">
-          <ArtifactStatusBar
-            architectureReview={app.architectureReview}
-            onRetryArchitectureReview={app.canvas.onAnalyzeProject}
-            onRetrySequenceReview={app.sequence.generateDiagrams}
-            scanFingerprint={app.scanFingerprint}
-            sequenceReview={app.sequence.review}
-            statuses={app.artifactStatuses}
-          />
-        </div>
         <div className="workspace-host">
         <Suspense fallback={<main className="workspace-page" aria-busy="true" />}>
         {app.activePage === "canvas" ? (

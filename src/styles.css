@@ -466,13 +466,8 @@ input:focus-visible {
   overflow: hidden;
 }
 
-.main-shell > .top-bar,
-.main-shell > .artifact-status-slot {
+.main-shell > .top-bar {
   flex: 0 0 auto;
-}
-
-.artifact-status-slot:empty {
-  display: none;
 }
 
 .canvas-layout-error {
@@ -498,97 +493,6 @@ input:focus-visible {
   box-shadow: var(--panel-shadow);
   font-size: 12px;
   transform: translateX(-50%);
-}
-
-.artifact-status-bar {
-  position: relative;
-  z-index: 5;
-  padding: 6px 14px;
-  color: var(--muted);
-  background: var(--surface);
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 11px;
-}
-
-.artifact-status-bar summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 24px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.artifact-status-bar summary::-webkit-details-marker {
-  display: none;
-}
-
-.artifact-status-bar summary::before {
-  content: "›";
-  color: var(--muted);
-  font-size: 16px;
-  transform: rotate(0deg);
-}
-
-.artifact-status-bar[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.artifact-status,
-.artifact-status-list {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.artifact-status {
-  padding: 3px 7px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
-.artifact-status-stale,
-.artifact-status-missing,
-.artifact-status-local,
-.artifact-status-reviewing,
-.artifact-status-review-late {
-  color: var(--warning);
-}
-
-.artifact-status-failed,
-.artifact-status-review-failed {
-  color: var(--danger);
-}
-
-.artifact-status-current,
-.artifact-status-reviewed {
-  color: var(--success);
-}
-
-.artifact-review-details {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-}
-
-.artifact-status-details {
-  display: grid;
-  gap: 8px;
-  max-height: min(260px, 34dvh);
-  padding: 8px 24px 4px;
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
-.artifact-status-list {
-  flex-wrap: wrap;
-}
-
-.artifact-status-details code {
-  overflow-wrap: anywhere;
-  color: var(--muted);
 }
 
 .top-bar {
@@ -653,6 +557,133 @@ input:focus-visible {
   color: inherit;
   background: transparent;
   border: 0;
+}
+
+.project-status-indicator {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--muted);
+}
+
+.project-status-trigger {
+  anchor-name: --project-status-anchor;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 6px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.project-status-trigger:hover,
+.project-status-trigger:focus-visible {
+  background: var(--overlay-soft);
+  border-color: var(--line-soft);
+}
+
+.project-status-ready {
+  color: var(--success);
+}
+
+.project-status-checking {
+  color: var(--accent);
+}
+
+.project-status-stale {
+  color: var(--warning);
+}
+
+.project-status-failed {
+  color: var(--danger);
+}
+
+.project-status-spinner {
+  animation: project-status-spin 900ms linear infinite;
+}
+
+.project-status-popover {
+  position: fixed;
+  position-anchor: --project-status-anchor;
+  inset: auto;
+  top: anchor(bottom);
+  right: anchor(right);
+  z-index: 40;
+  width: min(280px, calc(100vw - 24px));
+  margin: 6px 0 0;
+  padding: 8px;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--panel-shadow);
+  font-size: 11px;
+}
+
+.project-status-popover:popover-open {
+  display: grid;
+  gap: 6px;
+}
+
+.project-status-healthy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px;
+  color: var(--success);
+  font-weight: 750;
+}
+
+.project-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.project-status-item > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.project-status-item strong,
+.project-status-item span,
+.project-status-item small {
+  overflow-wrap: anywhere;
+}
+
+.project-status-item span,
+.project-status-item small {
+  color: var(--muted);
+}
+
+.project-status-item button {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--overlay-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+@keyframes project-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .project-tab-select {
@@ -3507,6 +3538,14 @@ button:disabled {
 }
 
 @media (max-width: 1040px) {
+  .project-status-label {
+    display: none;
+  }
+
+  .project-status-trigger {
+    padding-inline: 5px;
+  }
+
   .canvas-page.has-selection {
     grid-template-columns: 200px minmax(0, 1fr) 286px;
   }
@@ -4712,8 +4751,7 @@ button:disabled {
   color: var(--muted);
 }
 
-.top-bar,
-.artifact-status-bar {
+.top-bar {
   background-color: var(--panel);
 }
 
