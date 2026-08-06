@@ -8,6 +8,7 @@ import {
   buildDesktopBridgeRequest,
   DesktopBridgeAdapter,
   desktopBridgePlatformSupport,
+  getCodexDesktopAppPathCandidates,
   getDesktopBridgeDir,
   readDesktopBridgeResponse
 } from "../../src/main/agents/desktop-bridge.adapter";
@@ -28,6 +29,13 @@ describe("desktop-bridge.adapter", () => {
       "-a",
       "/Applications/Codex.app",
       "/tmp/project"
+    ]);
+  });
+
+  it("prefers ChatGPT.app while retaining Codex.app as a Codex Desktop fallback", () => {
+    expect(getCodexDesktopAppPathCandidates()).toEqual([
+      "/Applications/ChatGPT.app",
+      "/Applications/Codex.app"
     ]);
   });
 

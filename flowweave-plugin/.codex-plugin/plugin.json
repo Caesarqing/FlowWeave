@@ -1,0 +1,21 @@
+{
+  "name": "flowweave",
+  "version": "0.2.0",
+  "description": "Process FlowWeave Agent Protocol v1 desktop bridge requests.",
+  "author": {
+    "name": "FlowWeave"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "FlowWeave Agent Bridge",
+    "shortDescription": "Process FlowWeave bridge requests from Codex.",
+    "longDescription": "FlowWeave Agent Bridge lets Codex read pending FlowWeave Agent Protocol v1 desktop bridge requests and write validated response files back to the project.",
+    "developerName": "FlowWeave",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ]
+  }
+}

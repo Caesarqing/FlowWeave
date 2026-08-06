@@ -48,7 +48,7 @@ export function useToolActions({
     setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], toolId: agentId, available: false, method: "none", checking: true } }));
     setLastRunStatus(t("status.detectingAgent", { agent: getAgentName(agentId) }));
     try {
-      const result = await window.flowweave.detectAgent(agentId);
+      const result = await window.flowweave.detectAgent(agentId, projectId || undefined);
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...result, checking: false } }));
       setLastRunStatus(
         result.available
@@ -131,7 +131,7 @@ export function useToolActions({
 
     setLastRunStatus(t("status.agentProcessing", { agent: getAgentName(agentId), mode: executionMode }));
     try {
-      const detection = await window.flowweave.detectAgent(agentId);
+      const detection = await window.flowweave.detectAgent(agentId, projectId || undefined);
       setToolStatuses((current) => ({ ...current, [agentId]: { ...current[agentId], ...detection, checking: false } }));
       if (!detection.available) {
         setLastRunStatus(t("status.agentCannotPlan", { agent: getAgentName(agentId) }));

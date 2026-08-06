@@ -55,6 +55,14 @@ describe("agent-command", () => {
     ]));
   });
 
+  it("includes ChatGPT bundled Codex CLI candidates", () => {
+    expect(getCommandCandidates("codex-local")).toEqual(expect.arrayContaining([
+      "codex",
+      "/Applications/ChatGPT.app/Contents/Resources/codex",
+      "/Applications/Codex.app/Contents/Resources/codex"
+    ]));
+  });
+
   it("keeps desktop agents on app detection instead of CLI candidate lookup", () => {
     expect(getCommandCandidates("claude-desktop")).toEqual([]);
     expect(getCommandCandidates("codex-desktop")).toEqual([]);
@@ -71,7 +79,8 @@ describe("agent-command", () => {
   it("includes user local bin in command search paths", () => {
     expect(buildCommandSearchPaths("/Users/dev", "darwin", {})).toEqual(expect.arrayContaining([
       "/Users/dev/.local/bin",
-      "/Users/dev/bin"
+      "/Users/dev/bin",
+      "/Applications/ChatGPT.app/Contents/Resources"
     ]));
   });
 

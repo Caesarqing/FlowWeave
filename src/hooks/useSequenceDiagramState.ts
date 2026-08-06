@@ -88,7 +88,7 @@ export function useSequenceDiagramState({
   useEffect(() => {
     if (!window.flowweave) return undefined;
     return window.flowweave.onOperationProgress((operation) => {
-      if (operation.kind !== "sequence-analysis") return;
+      if (operation.kind !== "sequence-analysis" || operation.projectId !== projectId) return;
       const isTerminal =
         operation.stage === "completed" ||
         operation.stage === "failed" ||
@@ -105,7 +105,7 @@ export function useSequenceDiagramState({
         total: operation.total
       }));
     });
-  }, [t]);
+  }, [projectId, t]);
 
   useEffect(() => {
     if (!window.flowweave) return undefined;

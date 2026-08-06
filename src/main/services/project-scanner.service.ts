@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import fg from "fast-glob";
 import type { CodeflowProject, GitSummary, ProjectFileNode, ProjectScanSummary } from "../storage/schemas";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { sortProjectFileNodes } from "../../utils/project-file-sort";
 import { createStructureFingerprint } from "./project-registry.service";
 
 const execFileAsync = promisify(execFile);
@@ -24,7 +25,6 @@ const DEFAULT_IGNORE = [
 const DEFAULT_MAX_DEPTH = 8;
 const DEFAULT_MAX_ENTRIES = 10_000;
 const DEFAULT_SCAN_CONCURRENCY = 32;
-
 const LANGUAGE_BY_EXT: Record<string, string> = {
   ".js": "JavaScript",
   ".jsx": "JavaScript React",
@@ -203,7 +203,7 @@ function buildTree(entries: string[], metadata: Map<string, { size: number; modi
     }
   }
 
-  return rootNodes;
+  return sortProjectFileNodes(rootNodes);
 }
 
 function buildSummary(entries: string[]): ProjectScanSummary {

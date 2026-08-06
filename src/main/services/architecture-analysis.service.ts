@@ -418,7 +418,13 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     evidence: module.evidence,
     assessment: module.assessment,
     technologyStack: technologyStackForModule(module),
-    architectureLayer: architectureLayerForCategory(module.category)
+    technologyTags: technologyStacksForModule(module),
+    architectureLayer: architectureLayerForCategory(module.category),
+    classification: {
+      role: architectureLayerForCategory(module.category),
+      runtimeTags: technologyStacksForModule(module),
+      domain: domainForModule(module)
+    }
   }));
   const edges = architectureMap.relationships.map((relationship): GraphEdge => ({
     id: relationship.id,
@@ -432,13 +438,19 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
 }
 
 function technologyStackForModule(module: ArchitectureModule): TechnologyStack {
+  return technologyStacksForModule(module)[0] ?? "unknown";
+}
+
+function technologyStacksForModule(module: ArchitectureModule): TechnologyStack[] {
   const paths = module.files.map((file) => file.toLowerCase());
-  if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file))) return "frontend";
-  if (paths.some((file) => /\.(swift|kt|kts|dart)$/.test(file))) return "mobile";
-  if (module.category === "data-access" || paths.some((file) => /\.(sql|prisma)$/.test(file))) return "data";
-  if (module.category === "external-integration") return "infrastructure";
-  if (paths.some((file) => /\.(py|java|go|rs|php|cs|rb)$/.test(file))) return "backend";
-  return module.category === "api-boundary" || module.category === "domain-service" ? "backend" : "shared";
+  const detected: TechnologyStack[] = [];
+  if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file))) detected.push("frontend");
+  if (paths.some((file) => /\.(swift|kt|kts|dart)$/.test(file))) detected.push("mobile");
+  if (paths.some((file) => /\.(py|java|go|rs|php|cs|rb)$/.test(file))) detected.push("backend");
+  if (module.category === "data-access" || paths.some((file) => /\.(sql|prisma)$/.test(file))) detected.push("data");
+  if (module.category === "external-integration") detected.push("infrastructure");
+  if (detected.length === 0) detected.push(module.category === "api-boundary" || module.category === "domain-service" ? "backend" : "shared");
+  return ["frontend", "mobile", "backend", "data", "infrastructure", "shared"].filter((technology) => detected.includes(technology as TechnologyStack)) as TechnologyStack[];
 }
 
 function architectureLayerForCategory(category: ArchitectureModuleCategory): ArchitectureLayer {
@@ -448,6 +460,21 @@ function architectureLayerForCategory(category: ArchitectureModuleCategory): Arc
   if (category === "external-integration") return "integration";
   if (category === "test-surface") return "test";
   return "infrastructure";
+}
+
+function domainForModule(module: ArchitectureModule): string {
+  for (const file of module.files) {
+    const segments = file.split("/").filter(Boolean);
+    const marker = segments.findIndex((segment) => ["features", "feature", "modules", "module", "domains", "domain"].includes(segment.toLowerCase()));
+    const candidate = marker >= 0 ? segments[marker + 1] : undefined;
+    if (candidate) return normalizeDomain(candidate);
+  }
+  return normalizeDomain(module.role || module.title || module.id);
+}
+
+function normalizeDomain(value: string): string {
+  const normalized = value.replace(/\.[^.]+$/, "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return normalized || "shared";
 }
 
 export function architectureMapToProjectMap(map: ArchitectureMap): ProjectMap {

@@ -15,7 +15,7 @@ export function createCanvasArtifact(
   scanFingerprint: string
 ): CodeflowCanvas {
   return {
-    version: 3,
+    version: 4,
     generatorVersion: GENERATOR_VERSION,
     inputFingerprint: scanFingerprint,
     id: "main",

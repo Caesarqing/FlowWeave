@@ -21,21 +21,14 @@ import { RequirementNode } from "./nodes/RequirementNode";
 import { TaskNode } from "./nodes/TaskNode";
 import type { FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
-import type {
-  ArchitectureLayer,
-  CanvasLayoutMode,
-  CanvasLayoutState,
-  GraphEdgeRelation,
-  TechnologyStack
-} from "../types";
+import type { ArchitectureLayer, CanvasLayoutMode, CanvasLayoutState, GraphEdgeRelation, TechnologyStack } from "../types";
 import {
   layoutCanvasNodes,
-  nodeArchitectureLayer,
   nodeGroupKey,
-  nodeTechnologyStack,
   traceNodeIds,
   type TraceDirection
 } from "../utils/canvas-layout";
+import { filterCanvasNodes, getCanvasFilterResult } from "../utils/canvas-filters";
 import { Button } from "./Button";
 
 const nodeTypes = {
@@ -147,23 +140,25 @@ function ControlledFlowCanvas({
   */
   const { t } = useI18n();
   const [relationFilter, setRelationFilter] = useState<GraphEdgeRelation | "all">("all");
-  const [technologyFilter, setTechnologyFilter] = useState<TechnologyStack | "all">("all");
-  const [layerFilter, setLayerFilter] = useState<ArchitectureLayer | "all">("all");
+  const [runtimeFilter, setRuntimeFilter] = useState<TechnologyStack | "all">("all");
+  const [roleFilter, setRoleFilter] = useState<ArchitectureLayer | "all">("all");
   const [layoutMode, setLayoutMode] = useState<CanvasLayoutMode>("dependency");
   const [traceDirection, setTraceDirection] = useState<TraceDirection | "off">("off");
   const [focusedNodeId, setFocusedNodeId] = useState("");
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [layoutError, setLayoutError] = useState("");
+  const runtimeTags = runtimeFilter === "all" ? [] : [runtimeFilter];
   const tracedNodeIds = useMemo(
     () => focusedNodeId && traceDirection !== "off" ? traceNodeIds(focusedNodeId, edges, traceDirection) : undefined,
     [edges, focusedNodeId, traceDirection]
   );
+  const filterResult = useMemo(
+    () => getCanvasFilterResult(nodes, { role: roleFilter, runtimeTags, domain: "all" }),
+    [nodes, roleFilter, runtimeTags]
+  );
   const filterVisibleNodeIds = useMemo(
-    () => new Set(nodes.filter((node) =>
-      (technologyFilter === "all" || nodeTechnologyStack(node.data) === technologyFilter) &&
-      (layerFilter === "all" || nodeArchitectureLayer(node.data) === layerFilter)
-    ).map((node) => node.id)),
-    [nodes, technologyFilter, layerFilter]
+    () => new Set(filterCanvasNodes(nodes, { role: roleFilter, runtimeTags, domain: "all" }).map((node) => node.id)),
+    [nodes, roleFilter, runtimeTags]
   );
   const collapsedVisibleNodeIds = useMemo(() => {
     if (layoutMode === "dependency" || canvasLayout.collapsedGroups.length === 0) {
@@ -247,14 +242,14 @@ function ControlledFlowCanvas({
             <span>{t("canvas.layoutMode")}</span>
             <select value={layoutMode} onChange={(event) => setLayoutMode(event.target.value as CanvasLayoutMode)}>
               <option value="dependency">{t("canvas.layoutDependency")}</option>
-              <option value="technology">{t("canvas.layoutTechnology")}</option>
-              <option value="architecture">{t("canvas.layoutArchitecture")}</option>
-              <option value="functional">{t("canvas.layoutFunctional")}</option>
+              <option value="role">{t("canvas.layoutArchitecture")}</option>
+              <option value="runtime">{t("canvas.layoutTechnology")}</option>
+              <option value="domain">{t("canvas.layoutFunctional")}</option>
             </select>
           </label>
           <label>
             <span>{t("canvas.technologyFilter")}</span>
-            <select value={technologyFilter} onChange={(event) => setTechnologyFilter(event.target.value as TechnologyStack | "all")}>
+            <select value={runtimeFilter} onChange={(event) => setRuntimeFilter(event.target.value as TechnologyStack | "all")}>
               <option value="all">{t("canvas.filterAll")}</option>
               {(["frontend", "backend", "mobile", "data", "infrastructure", "shared", "unknown"] as TechnologyStack[])
                 .map((stack) => <option key={stack} value={stack}>{t(`technology.${stack}`)}</option>)}
@@ -262,7 +257,7 @@ function ControlledFlowCanvas({
           </label>
           <label>
             <span>{t("canvas.layerFilter")}</span>
-            <select value={layerFilter} onChange={(event) => setLayerFilter(event.target.value as ArchitectureLayer | "all")}>
+            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as ArchitectureLayer | "all")}>
               <option value="all">{t("canvas.filterAll")}</option>
               {(["presentation", "api", "domain", "data", "integration", "infrastructure", "test", "unknown"] as ArchitectureLayer[])
                 .map((layer) => <option key={layer} value={layer}>{t(`architectureLayer.${layer}`)}</option>)}
@@ -276,15 +271,25 @@ function ControlledFlowCanvas({
                 .map((relation) => <option key={relation} value={relation}>{t(`relation.${relation}`)}</option>)}
             </select>
           </label>
-          <label>
-            <GitBranch size={14} />
-            <select value={traceDirection} onChange={(event) => setTraceDirection(event.target.value as TraceDirection | "off")}>
-              <option value="off">{t("canvas.traceOff")}</option>
-              <option value="upstream">{t("canvas.traceUpstream")}</option>
-              <option value="downstream">{t("canvas.traceDownstream")}</option>
-              <option value="all">{t("canvas.traceAll")}</option>
-            </select>
-          </label>
+          {focusedNodeId ? (
+            <div className="canvas-trace-controls" aria-label={t("canvas.traceControls")}>
+              <GitBranch size={14} />
+              {(["upstream", "downstream", "all"] as TraceDirection[]).map((direction) => (
+                <Button
+                  key={direction}
+                  aria-pressed={traceDirection === direction}
+                  className={traceDirection === direction ? "canvas-trace-active" : undefined}
+                  label={t(`canvas.trace${direction[0].toUpperCase()}${direction.slice(1)}`)}
+                  size="tool"
+                  type="button"
+                  variant="subtle"
+                  onClick={() => setTraceDirection(direction)}
+                >
+                  {t(`canvas.trace${direction[0].toUpperCase()}${direction.slice(1)}`)}
+                </Button>
+              ))}
+            </div>
+          ) : null}
           {tracedNodeIds ? (
             <Button label={t("canvas.clearTrace")} variant="icon" type="button" onClick={() => {
               setTraceDirection("off");
@@ -296,6 +301,24 @@ function ControlledFlowCanvas({
         </div>
       </div>
       <div className="canvas-flow-stage">
+        {filterResult.state === "no-matches" ? (
+          <div className="canvas-filter-empty" role="status">
+            <span>{t("canvas.filterEmpty")}</span>
+            <Button
+              label={t("canvas.clearFilters")}
+              size="tool"
+              type="button"
+              variant="subtle"
+              onClick={() => {
+                setRuntimeFilter("all");
+                setRoleFilter("all");
+                setRelationFilter("all");
+              }}
+            >
+              {t("canvas.clearFilters")}
+            </Button>
+          </div>
+        ) : null}
         <ReactFlow
           className="flow-canvas"
           edges={localizedEdges}
@@ -314,8 +337,13 @@ function ControlledFlowCanvas({
             setFocusedNodeId(node.id);
             onSelectNode(node.id);
           }}
-          onPaneClick={onPaneClick}
+          onPaneClick={() => {
+            setFocusedNodeId("");
+            setTraceDirection("off");
+            onPaneClick();
+          }}
           panOnDrag
+          proOptions={{ hideAttribution: true }}
         >
           <Background color="var(--graph-grid)" gap={28} size={1} />
           <Controls position="bottom-left" showInteractive={false} />

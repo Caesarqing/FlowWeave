@@ -70,9 +70,9 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     protocolVersion: 1,
     pluginId: "flowweave",
     installTarget: "Codex skills/plugins directory",
-    command: "/Applications/Codex.app",
+    command: "/Applications/ChatGPT.app",
     args: [".flowweave/agent-bridge"],
-    appPath: "/Applications/Codex.app",
+    appPath: "/Applications/ChatGPT.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Codex 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
     builtIn: true,
@@ -114,9 +114,16 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
 ];
 
 let configuredRoot: string | undefined;
+const GLOBAL_DISCOVERY_SCOPE = "global";
+let discoveredDefinitionsByProject = new Map<string, Map<AgentId, AgentDefinition>>();
 
 export function configureAgentRegistry(rootPath: string) {
   configuredRoot = rootPath;
+  discoveredDefinitionsByProject = new Map();
+}
+
+export function getAgentRegistryRoot(): string {
+  return agentConfigRoot();
 }
 
 export async function listAgentDefinitions(): Promise<AgentDefinition[]> {
@@ -196,7 +203,7 @@ export async function deleteCustomAgent(agentId: AgentId): Promise<void> {
   await writeCustomAgents(agents.filter((agent) => agent.id !== agentId));
 }
 
-export async function getAgentDefinition(agentId: RuntimeAgentId): Promise<AgentDefinition | undefined> {
+export async function getAgentDefinition(agentId: RuntimeAgentId, projectId?: string): Promise<AgentDefinition | undefined> {
   if (agentId === "mock") {
     return {
       id: "custom:mock",
@@ -212,10 +219,22 @@ export async function getAgentDefinition(agentId: RuntimeAgentId): Promise<Agent
       updatedAt: "builtin"
     };
   }
-  return (await listAgentDefinitions()).find((agent) => agent.id === agentId);
+  const projectDefinition = projectId
+    ? discoveredDefinitionsByProject.get(projectId)?.get(agentId as AgentId)
+    : undefined;
+  const globalDefinition = discoveredDefinitionsByProject.get(GLOBAL_DISCOVERY_SCOPE)?.get(agentId as AgentId);
+  return projectDefinition ?? globalDefinition ?? (await listAgentDefinitions()).find((agent) => agent.id === agentId);
 }
 
-export async function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdapter> {
+export function registerDiscoveredAgentDefinitions(projectId: string | undefined, definitions: AgentDefinition[]): void {
+  const scope = projectId ?? GLOBAL_DISCOVERY_SCOPE;
+  discoveredDefinitionsByProject.set(
+    scope,
+    new Map(definitions.filter((definition) => !definition.builtIn).map((definition) => [definition.id, definition]))
+  );
+}
+
+export async function getAgentAdapter(agentId: RuntimeAgentId, projectId?: string): Promise<ToolAdapter> {
   if (agentId === "mock") return new MockAgentAdapter();
   if (agentId === "claude-code") return new ClaudeCodeAdapter();
   if (agentId === "claude-desktop") return new ClaudeDesktopAdapter();
@@ -224,10 +243,14 @@ export async function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdap
   if (agentId === "gemini-cli") return new GeminiCliAdapter();
   if (agentId === "cursor") return new CursorAdapter();
 
-  const definition = await getAgentDefinition(agentId);
+  const definition = await getAgentDefinition(agentId, projectId);
   if (!definition || definition.builtIn) {
     throw new Error(`Agent not found: ${agentId}`);
   }
+  return createAdapterFromDefinition(definition);
+}
+
+export function createAdapterFromDefinition(definition: AgentDefinition): ToolAdapter {
   if (definition.protocol === "desktop-bridge") {
     return new DesktopBridgeAdapter({
       id: definition.id,

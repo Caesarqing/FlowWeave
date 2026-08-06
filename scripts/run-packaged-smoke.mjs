@@ -43,18 +43,41 @@ async function firstExistingPath(paths) {
 function runSmoke(executable) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, [SMOKE_ARGUMENT], {
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true
     });
+    let settled = false;
     const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
       child.kill();
       reject(new Error(`Packaged smoke test timed out after ${SMOKE_TIMEOUT_MS}ms: ${executable}`));
     }, SMOKE_TIMEOUT_MS);
+    function resolvePassedOutput(output) {
+      if (settled || !output.includes("FlowWeave packaged smoke test passed.")) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.kill();
+      resolve();
+      setImmediate(() => process.exit(0));
+    }
+    child.stdout.on("data", (chunk) => {
+      const output = String(chunk);
+      process.stdout.write(output);
+      resolvePassedOutput(output);
+    });
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+    });
     child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
       reject(error);
     });
     child.once("exit", (code, signal) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
       if (code === 0) {
         resolve();

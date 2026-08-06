@@ -89,7 +89,7 @@ describe("canvas-migration.service", () => {
     const migrated = migrateCanvasToScan(canvas, "/project", "scan-new", files);
 
     expect(migrated).toMatchObject({
-      version: 3,
+      version: 4,
       projectPath: "/project",
       scanFingerprint: "scan-new",
       artifactState: "current",

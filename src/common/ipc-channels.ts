@@ -1,5 +1,9 @@
 export const PROJECT_CHANNELS = {
   openProject: "project:open",
+  listRegisteredProjects: "project:list-registered",
+  restoreRegisteredProject: "project:restore-registered",
+  readWorkspaceSession: "project:read-workspace-session",
+  saveWorkspaceSession: "project:save-workspace-session",
   scanProject: "project:scan",
   cancelOperation: "project:cancel-operation",
   operationProgress: "project:operation-progress",
@@ -29,6 +33,7 @@ export const PROJECT_CHANNELS = {
 
 export const TOOL_CHANNELS = {
   listAgents: "tool:list-agents",
+  discoverAgents: "tool:discover-agents",
   saveCustomAgent: "tool:save-custom-agent",
   deleteCustomAgent: "tool:delete-custom-agent",
   detectAgent: "tool:detect-agent",

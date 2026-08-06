@@ -23,6 +23,9 @@ export default defineConfig({
   },
   renderer: {
     root: __dirname,
+    define: {
+      "import.meta.env.VITE_BUILD_TIME": JSON.stringify(new Date().toISOString())
+    },
     plugins: [react()],
     publicDir: "logo",
     server: {

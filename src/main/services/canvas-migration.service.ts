@@ -1,4 +1,4 @@
-import type { AssessmentLevel, CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphNode, LegacyGraphRisk, ProjectFileNode } from "../../types";
+import type { ArchitectureLayer, AssessmentLevel, CanvasClassification, CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphNode, LegacyGraphRisk, ProjectFileNode, TechnologyStack } from "../../types";
 import { unknownAssessment } from "../../utils/module-assessment";
 
 export function migrateCanvasToScan(
@@ -15,7 +15,7 @@ export function migrateCanvasToScan(
 
   return {
     ...canvas,
-    version: 3,
+    version: 4,
     projectPath,
     generatedAt: new Date().toISOString(),
     scanFingerprint,
@@ -75,8 +75,53 @@ function sanitizeNodeFiles(node: GraphNode, knownFiles: Set<string>, knownFileOr
     files: node.files.filter((filePath) => knownFiles.has(filePath)),
     fileRoles: node.fileRoles?.filter((item) => knownFileOrFolderPaths.has(item.path)),
     symbols: node.symbols?.filter((symbol) => knownFiles.has(symbol.filePath)),
-    evidence: node.evidence?.filter((item) => !item.filePath || knownFiles.has(item.filePath))
+    evidence: node.evidence?.filter((item) => !item.filePath || knownFiles.has(item.filePath)),
+    classification: node.classification ?? inferClassification(node)
   };
+}
+
+function inferClassification(node: GraphNode): CanvasClassification {
+  const runtimeTags = inferRuntimeTags(node);
+  return {
+    role: node.architectureLayer ?? roleForCategory(node.category, runtimeTags),
+    runtimeTags,
+    domain: inferDomain(node)
+  };
+}
+
+function inferRuntimeTags(node: GraphNode): TechnologyStack[] {
+  const paths = node.files.map((file) => file.toLowerCase());
+  const tags = [...(node.technologyTags ?? []), ...(node.technologyStack ? [node.technologyStack] : [])];
+  if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file))) tags.push("frontend");
+  if (paths.some((file) => /\.(py|java|go|rs|php|cs|rb)$/.test(file))) tags.push("backend");
+  if (paths.some((file) => /\.(sql|prisma)$/.test(file))) tags.push("data");
+  const ordered = ["frontend", "backend", "mobile", "data", "infrastructure", "shared", "unknown"] as TechnologyStack[];
+  const result = ordered.filter((tag) => tags.includes(tag));
+  return result.length > 0 ? result : ["shared"];
+}
+
+function roleForCategory(category: GraphNode["category"], runtimeTags: TechnologyStack[]): ArchitectureLayer {
+  if (category === "api-boundary") return "api";
+  if (category === "domain-service") return "domain";
+  if (category === "data-access") return "data";
+  if (category === "external-integration") return "integration";
+  if (category === "test-surface") return "test";
+  return runtimeTags.includes("frontend") ? "presentation" : "infrastructure";
+}
+
+function inferDomain(node: GraphNode): string {
+  for (const file of node.files) {
+    const parts = file.split("/").filter(Boolean);
+    const marker = parts.findIndex((part) => ["features", "feature", "modules", "module", "domains", "domain"].includes(part.toLowerCase()));
+    const candidate = marker >= 0 ? parts[marker + 1] : undefined;
+    if (candidate) return normalizeDomain(candidate);
+  }
+  return normalizeDomain(node.role || node.title || node.id);
+}
+
+function normalizeDomain(value: string): string {
+  const normalized = value.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return normalized || "shared";
 }
 
 function folderPathsForFiles(files: string[]) {

@@ -1,7 +1,9 @@
 import { ChevronDown, ChevronRight, FileCode2, Folder, RefreshCw, Square } from "lucide-react";
+import { useMemo } from "react";
 import type { ProjectFileNode, ProjectFileRow } from "../types";
 import { flattenVisibleProjectFiles } from "../utils/file-utils";
 import { cn } from "../utils/classnames";
+import { sortProjectFileNodes } from "../utils/project-file-sort";
 import { useI18n } from "../utils/i18n";
 import { Button } from "./Button";
 
@@ -30,7 +32,8 @@ export function ProjectExplorer({
   projectPath: string;
   statusMessage: string;
 }) {
-  const { rows, truncated } = flattenVisibleProjectFiles(files, expandedPaths, maxVisibleRows);
+  const sortedFiles = useMemo(() => sortProjectFileNodes(files), [files]);
+  const { rows, truncated } = flattenVisibleProjectFiles(sortedFiles, expandedPaths, maxVisibleRows);
   const { t } = useI18n();
 
   return (

@@ -6,6 +6,7 @@ import { registerAgentIpc } from "./ipc/agent.ipc";
 import { registerGitIpc } from "./ipc/git.ipc";
 import { registerProjectIpc } from "./ipc/project.ipc";
 import { configureAgentRegistry } from "./services/agent-registry.service";
+import { configureProjectRegistry } from "./services/project-registry.service";
 
 const SMOKE_TEST_ARGUMENT = "--flowweave-smoke-test";
 const SMOKE_TEST_TIMEOUT_MS = 15_000;
@@ -39,7 +40,7 @@ function createWindow(): BrowserWindow {
   return window;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (process.platform === "darwin" && app.dock) {
     const iconPath = app.isPackaged
       ? join(process.resourcesPath, "flowweave-app-icon.png")
@@ -47,6 +48,7 @@ app.whenReady().then(() => {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
   }
   configureAgentRegistry(app.getPath("userData"));
+  await configureProjectRegistry(app.getPath("userData"));
   registerProjectIpc();
   registerAgentIpc();
   registerGitIpc();

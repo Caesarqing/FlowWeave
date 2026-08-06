@@ -22,7 +22,7 @@ export function useCanvasPersistence(
       void window.flowweave?.saveCanvas(
         projectId,
         {
-          version: 3,
+          version: 4,
           id: "main",
           title: "Main Canvas",
           projectPath,

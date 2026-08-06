@@ -73,7 +73,12 @@ export type ModuleAssessment = {
 };
 export type TechnologyStack = "frontend" | "backend" | "mobile" | "data" | "infrastructure" | "shared" | "unknown";
 export type ArchitectureLayer = "presentation" | "api" | "domain" | "data" | "integration" | "infrastructure" | "test" | "unknown";
-export type CanvasLayoutMode = "dependency" | "technology" | "architecture" | "functional";
+export type CanvasLayoutMode = "dependency" | "role" | "runtime" | "domain" | "technology" | "architecture" | "functional";
+export type CanvasClassification = {
+  role: ArchitectureLayer;
+  runtimeTags: TechnologyStack[];
+  domain: string;
+};
 export type CanvasPosition = { x: number; y: number };
 export type CanvasLayoutState = {
   activeMode: "manual" | CanvasLayoutMode;
@@ -181,7 +186,9 @@ export type GraphNode = {
   confidence?: number;
   assessment?: ModuleAssessment;
   technologyStack?: TechnologyStack;
+  technologyTags?: TechnologyStack[];
   architectureLayer?: ArchitectureLayer;
+  classification?: CanvasClassification;
 };
 
 export type GraphEdge = {
@@ -420,7 +427,7 @@ export type ScanDelta = {
 };
 
 export type CodeflowCanvas = {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   generatorVersion?: string;
   inputFingerprint?: string;
   id: string;
@@ -718,6 +725,7 @@ export type AnalysisProgressUpdate = {
 };
 export type AnalysisOperation = {
   operationId: string;
+  projectId: string;
   kind: "project-scan" | "architecture-analysis" | "sequence-analysis";
   stage: AnalysisOperationStage;
   completed: number;
@@ -823,6 +831,31 @@ export type FlowWeaveProjectOpenResult =
       written: CodeflowWriteResult;
     };
 
+export type RegisteredProject = {
+  id: string;
+  name: string;
+  path: string;
+  lastOpenedAt: string;
+};
+
+export type ProjectWorkspaceSession = {
+  openProjectIds: string[];
+  activeProjectId?: string;
+  lastPageByProject: Partial<Record<string, ActivePage>>;
+  contextsByProject: Partial<Record<string, ProjectWorkspaceContext>>;
+};
+
+export type ProjectWorkspaceContext = {
+  activePage: ActivePage;
+  expandedPaths: string[];
+  selectedNodeId: string;
+  selectedAgentId: AgentId;
+  executionMode: ExecutionMode;
+  selectedRunId: string;
+  runArtifactTab: "prompt" | "plan" | "log" | "result";
+  checkpointId: string;
+};
+
 export type ToolKind = "cli" | "desktop" | "mock";
 export type ToolRunStatus = "pending" | "running" | "completed" | "failed";
 
@@ -893,6 +926,14 @@ export type AgentDefinition = {
   builtIn: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type AgentDiscoverySource = "builtin" | "user-manifest" | "project-manifest";
+
+export type AgentDiscoveryResult = {
+  definition: AgentDefinition;
+  availability: ToolDetectionResult;
+  source: AgentDiscoverySource;
 };
 
 export type AgentProtocol = "cli-stdin" | "desktop-bridge";
@@ -1162,15 +1203,20 @@ export interface ToolAdapter {
 export type FlowWeaveApi = {
   onFlowWeaveError(listener: (error: FlowWeaveErrorData) => void): () => void;
   openProject(options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
+  listRegisteredProjects(): Promise<RegisteredProject[]>;
+  restoreRegisteredProject(projectId: string, options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
+  readProjectWorkspaceSession(): Promise<ProjectWorkspaceSession>;
+  saveProjectWorkspaceSession(session: ProjectWorkspaceSession): Promise<void>;
   scanProject(projectId: string, options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
   cancelOperation(operationId: string): Promise<AnalysisOperation>;
   onOperationProgress(listener: (operation: AnalysisOperation) => void): () => void;
   onArchitectureReview(listener: (event: ArchitectureReviewEvent) => void): () => void;
   onSequenceReview(listener: (event: SequenceReviewEvent) => void): () => void;
   listAgents(): Promise<AgentDefinition[]>;
+  discoverAgents(projectId?: string): Promise<AgentDiscoveryResult[]>;
   saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition>;
   deleteCustomAgent(agentId: AgentId): Promise<void>;
-  detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult>;
+  detectAgent(agentId: RuntimeAgentId, projectId?: string): Promise<ToolDetectionResult>;
   healthCheckAgent(agentId: RuntimeAgentId, projectId?: string): Promise<AgentReadinessResult>;
   detectTool(toolId: ToolId): Promise<ToolDetectionResult>;
   runToolPlan(options: {

@@ -13,7 +13,7 @@ describe("operation.service", () => {
   });
 
   it("tracks progress and aborts the active operation on cancellation", () => {
-    const started = startOperation("project-scan", "Discovering files.");
+    const started = startOperation("project-scan", "Discovering files.", "project-a");
     const progress = updateOperation(started.operation.operationId, {
       stage: "parsing",
       completed: 4,
@@ -23,6 +23,7 @@ describe("operation.service", () => {
     });
 
     expect(progress).toMatchObject({
+      projectId: "project-a",
       stage: "parsing",
       completed: 4,
       total: 10,
@@ -44,7 +45,7 @@ describe("operation.service", () => {
   it("rejects malformed and completed operation identifiers", () => {
     expect(() => cancelOperation("invalid")).toThrow("Invalid FlowWeave operation id");
 
-    const started = startOperation("sequence-analysis", "Analyzing sequences.");
+    const started = startOperation("sequence-analysis", "Analyzing sequences.", "project-a");
     finishOperation(started.operation.operationId);
 
     expect(() => cancelOperation(started.operation.operationId)).toThrow("FlowWeave operation not found");

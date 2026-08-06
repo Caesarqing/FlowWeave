@@ -25,7 +25,8 @@ import type {
   ToolOpenResult,
   ToolRunArtifact,
   ToolRunSummary,
-  AgentPluginStatus
+  AgentPluginStatus,
+  AgentDiscoveryResult
 } from "../types";
 import type { StartToolPlanOptions, StartToolPlanResult } from "../main/services/agent-run.service";
 import { GIT_CHANNELS, PROJECT_CHANNELS, TOOL_CHANNELS } from "../common/ipc-channels";
@@ -45,15 +46,25 @@ const flowweaveApi = {
     return () => flowweaveErrorListeners.delete(listener);
   },
   listAgents: () => ipcRenderer.invoke(TOOL_CHANNELS.listAgents) as Promise<AgentDefinition[]>,
+  discoverAgents: (projectId?: string) => ipcRenderer.invoke(TOOL_CHANNELS.discoverAgents, projectId) as Promise<AgentDiscoveryResult[]>,
   saveCustomAgent: (input: CustomAgentInput) =>
     ipcRenderer.invoke(TOOL_CHANNELS.saveCustomAgent, input) as Promise<AgentDefinition>,
   deleteCustomAgent: (agentId: AgentId) => ipcRenderer.invoke(TOOL_CHANNELS.deleteCustomAgent, agentId) as Promise<void>,
-  detectAgent: (agentId: AgentId | "mock") => ipcRenderer.invoke(TOOL_CHANNELS.detectAgent, agentId) as Promise<ToolDetectionResult>,
+  detectAgent: (agentId: AgentId | "mock", projectId?: string) =>
+    ipcRenderer.invoke(TOOL_CHANNELS.detectAgent, agentId, projectId) as Promise<ToolDetectionResult>,
   healthCheckAgent: (agentId: AgentId | "mock", projectId?: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.healthCheckAgent, agentId, projectId) as Promise<AgentReadinessResult>,
   detectTool: (toolId: ToolId) => ipcRenderer.invoke(TOOL_CHANNELS.detect, toolId) as Promise<ToolDetectionResult>,
   openProject: (options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.openProject, options) as Promise<FlowWeaveProjectOpenResult>,
+  listRegisteredProjects: () =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.listRegisteredProjects) as Promise<import("../types").RegisteredProject[]>,
+  restoreRegisteredProject: (projectId: string, options: ProjectScanOptions) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.restoreRegisteredProject, projectId, options) as Promise<FlowWeaveProjectOpenResult>,
+  readProjectWorkspaceSession: () =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.readWorkspaceSession) as Promise<import("../types").ProjectWorkspaceSession>,
+  saveProjectWorkspaceSession: (session: import("../types").ProjectWorkspaceSession) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.saveWorkspaceSession, session) as Promise<void>,
   openToolProject: (agentId: RuntimeAgentId, projectId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.openProject, agentId, projectId) as Promise<ToolOpenResult>,
   getAgentPluginStatuses: (projectId: string) =>

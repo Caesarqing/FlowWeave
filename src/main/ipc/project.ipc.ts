@@ -6,6 +6,7 @@ import { PROJECT_CHANNELS } from "../../common/ipc-channels";
 import type {
   AnalysisOperation,
   AnalysisProgressUpdate,
+  ActivePage,
   ArchitectureReviewEvent,
   CodeflowCanvas,
   ProjectArtifactState,
@@ -15,7 +16,8 @@ import type {
   SequenceReviewEvent,
   ToolId,
   ModificationAcknowledgementScope,
-  ModificationSnapshot
+  ModificationSnapshot,
+  ProjectWorkspaceSession
 } from "../../types";
 import { analyzeProject } from "../services/agent-analysis.service";
 import { analyzeArchitecture, readArchitectureMap } from "../services/architecture-analysis.service";
@@ -36,7 +38,15 @@ import {
   refreshProjectAgentConnection,
   refreshProjectAgentConnectionIfEnabled
 } from "../services/project-agent-connection.service";
-import { registerProject, resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
+import {
+  listRegisteredProjects,
+  readProjectWorkspaceSession,
+  registerProject,
+  resolveProjectFile,
+  resolveProjectPath,
+  restoreRegisteredProject,
+  saveProjectWorkspaceSession
+} from "../services/project-registry.service";
 import { scanProject } from "../services/project-scanner.service";
 import { buildSemanticIndex } from "../services/semantic-index.service";
 import { assessModules } from "../../utils/module-assessment";
@@ -45,7 +55,7 @@ import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { writeFlowWeaveProject, writeFlowWeaveProjectPreservingCanvas } from "../storage/flowweave-store";
 import { writeJsonAtomic } from "../storage/artifact-store";
-import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString } from "./ipc-validation";
+import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString, requireStringArray } from "./ipc-validation";
 import { cancelOperation, finishOperation, startOperation, updateOperation } from "../services/operation.service";
 import { exportDiagnostics, recordDiagnostic } from "../services/diagnostic.service";
 import { writeModificationDocs } from "../services/modification-doc.service";
@@ -57,6 +67,7 @@ import { handleIpc } from "./ipc-handler";
 import { readRunArtifact } from "../services/run-log.service";
 
 const TOOL_IDS = ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"] as const;
+const WORKSPACE_PAGES: ActivePage[] = ["canvas", "structure", "docs", "git-review", "tools"];
 
 export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.openProject, async (event, options: unknown) => {
@@ -64,6 +75,24 @@ export function registerProjectIpc() {
     if (result.canceled || !result.filePaths[0]) return { canceled: true as const };
     const projectId = await registerProject(result.filePaths[0]);
     return scanAndPersistProject(projectId, event.sender, requireScanOptions(PROJECT_CHANNELS.openProject, options));
+  });
+
+  handleIpc(PROJECT_CHANNELS.listRegisteredProjects, async () => listRegisteredProjects());
+
+  handleIpc(PROJECT_CHANNELS.restoreRegisteredProject, async (event, projectId: unknown, options: unknown) => {
+    const safeProjectId = requireString(PROJECT_CHANNELS.restoreRegisteredProject, projectId, "projectId");
+    await restoreRegisteredProject(safeProjectId);
+    return scanAndPersistProject(
+      safeProjectId,
+      event.sender,
+      requireScanOptions(PROJECT_CHANNELS.restoreRegisteredProject, options)
+    );
+  });
+
+  handleIpc(PROJECT_CHANNELS.readWorkspaceSession, async () => readProjectWorkspaceSession());
+
+  handleIpc(PROJECT_CHANNELS.saveWorkspaceSession, async (_event, session: unknown) => {
+    await saveProjectWorkspaceSession(requireProjectWorkspaceSession(PROJECT_CHANNELS.saveWorkspaceSession, session));
   });
 
   handleIpc(PROJECT_CHANNELS.scanProject, (event, projectId: unknown, options: unknown) =>
@@ -198,7 +227,7 @@ export function registerProjectIpc() {
     const saveOptions = options === undefined
       ? { allowStaleNoop: false }
       : requireObject(PROJECT_CHANNELS.saveCanvas, options, "options") as { allowStaleNoop?: unknown };
-    if (value.version !== 3 || value.artifactState !== "current") {
+    if ((value.version !== 3 && value.version !== 4) || value.artifactState !== "current") {
       throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v3 can be saved.`);
     }
     if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
@@ -266,7 +295,7 @@ async function analyzeArchitectureForProject(
     });
     if (result.outcome === "failed") throw new Error(result.error.message);
     return result;
-  }, projectPath);
+  }, projectId, projectPath);
 }
 
 async function generateSequenceDiagramsForProject(
@@ -286,7 +315,7 @@ async function generateSequenceDiagramsForProject(
     });
     if (result.outcome === "failed") throw new Error(result.error.message);
     return result;
-  }, projectPath);
+  }, projectId, projectPath);
 }
 
 async function scanProjectWithCurrentProjectArtifact(projectPath: string) {
@@ -315,11 +344,11 @@ async function reviseSequenceDiagramForProject(
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram revision.", sender, async (signal, onProgress) => {
     return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { signal, onProgress, planTimeoutMs });
-  }, projectPath);
+  }, projectId, projectPath);
 }
 
 async function scanAndPersistProject(projectId: string, sender: WebContents, options: ProjectScanOptions) {
-  const started = startOperation("project-scan", "Discovering project files.");
+  const started = startOperation("project-scan", "Discovering project files.", projectId);
   const notify = (operation: import("../../types").AnalysisOperation) => {
     if (!sender.isDestroyed()) sender.send(PROJECT_CHANNELS.operationProgress, operation);
   };
@@ -473,9 +502,10 @@ async function runTrackedAnalysis<T>(
   message: string,
   sender: WebContents,
   task: (signal: AbortSignal, onProgress: (progress: AnalysisProgressUpdate) => void) => Promise<T>,
+  projectId: string,
   projectPath: string
 ): Promise<T> {
-  const started = startOperation(kind, message);
+  const started = startOperation(kind, message, projectId);
   const notify = (operation: AnalysisOperation) => {
     if (!sender.isDestroyed()) sender.send(PROJECT_CHANNELS.operationProgress, operation);
   };
@@ -557,8 +587,8 @@ function requireRuntimeAgentId(channel: string, value: unknown): RuntimeAgentId 
 
 function requireCanvas(channel: string, value: unknown): CodeflowCanvas {
   const canvas = requireObject(channel, value, "canvas") as Partial<CodeflowCanvas>;
-  if (canvas.version !== 3 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
-    throw new Error(`[${channel}] Canvas must be a valid v3 Canvas.`);
+  if ((canvas.version !== 3 && canvas.version !== 4) || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
+    throw new Error(`[${channel}] Canvas must be a valid v3 or v4 Canvas.`);
   }
   return canvas as CodeflowCanvas;
 }
@@ -584,6 +614,50 @@ function requireModificationAcknowledgementScope(
     };
   }
   throw new Error(`[${channel}] Unsupported modification acknowledgement scope.`);
+}
+
+export function requireProjectWorkspaceSession(channel: string, value: unknown): ProjectWorkspaceSession {
+  const session = requireObject(channel, value, "session");
+  const openProjectIds = requireStringArray(channel, session.openProjectIds, "session.openProjectIds");
+  const activeProjectId = session.activeProjectId === undefined
+    ? undefined
+    : requireString(channel, session.activeProjectId, "session.activeProjectId");
+  const pages = requireObject(channel, session.lastPageByProject, "session.lastPageByProject");
+  const lastPageByProject: ProjectWorkspaceSession["lastPageByProject"] = {};
+  for (const [projectId, page] of Object.entries(pages)) {
+    lastPageByProject[requireString(channel, projectId, "session.lastPageByProject key")] = requireEnum(
+      channel,
+      page,
+      "session.lastPageByProject",
+      WORKSPACE_PAGES
+    );
+  }
+  const contexts = session.contextsByProject === undefined
+    ? {}
+    : requireObject(channel, session.contextsByProject, "session.contextsByProject");
+  const contextsByProject: ProjectWorkspaceSession["contextsByProject"] = {};
+  for (const [projectId, value] of Object.entries(contexts)) {
+    const context = requireObject(channel, value, "session.contextsByProject value");
+    const safeProjectId = requireString(channel, projectId, "session.contextsByProject key");
+    contextsByProject[safeProjectId] = {
+      activePage: requireEnum(channel, context.activePage, "session.context.activePage", WORKSPACE_PAGES),
+      expandedPaths: requireStringArray(channel, context.expandedPaths, "session.context.expandedPaths"),
+      selectedNodeId: requireWorkspaceText(channel, context.selectedNodeId, "session.context.selectedNodeId"),
+      selectedAgentId: requireString(channel, context.selectedAgentId, "session.context.selectedAgentId") as import("../../types").AgentId,
+      executionMode: requireEnum(channel, context.executionMode, "session.context.executionMode", ["plan", "execute"] as const),
+      selectedRunId: requireWorkspaceText(channel, context.selectedRunId, "session.context.selectedRunId"),
+      runArtifactTab: requireEnum(channel, context.runArtifactTab, "session.context.runArtifactTab", ["prompt", "plan", "log", "result"] as const),
+      checkpointId: requireWorkspaceText(channel, context.checkpointId, "session.context.checkpointId")
+    };
+  }
+  return { openProjectIds, activeProjectId, lastPageByProject, contextsByProject };
+}
+
+function requireWorkspaceText(channel: string, value: unknown, name: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`[${channel}] Invalid "${name}": expected a string.`);
+  }
+  return value;
 }
 
 function isMissing(error: unknown) {

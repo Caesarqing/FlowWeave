@@ -62,13 +62,13 @@ const fallbackAgents: AgentDefinition[] = [
     id: "codex-desktop",
     name: "Codex Desktop",
     kind: "desktop",
-    command: "/Applications/Codex.app",
+    command: "/Applications/ChatGPT.app",
     args: [".flowweave/agent-bridge"],
     protocol: "desktop-bridge",
     protocolVersion: 1,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
-    appPath: "/Applications/Codex.app",
+    appPath: "/Applications/ChatGPT.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "Opens Codex Desktop and waits for file bridge responses.",
     builtIn: true,
@@ -227,6 +227,23 @@ export function AgentPage({
         </button>
       </section>
 
+      <section className="agent-selector-panel">
+        <label>
+          <span>{t("agent.defaultAgent")}</span>
+          <select value={selectedAgent?.id ?? ""} onChange={(event) => onSelectAgent(event.target.value as AgentId)}>
+            {visibleAgents.map((agent) => {
+              const status = toolStatuses[agent.id] ?? createUnknownStatus(agent.id);
+              return (
+                <option key={agent.id} value={agent.id}>
+                  {status.available ? "●" : "○"} {agent.name} · {getToolStatusLabel(status, t)}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <span>{t("agent.intro")}</span>
+      </section>
+
       <section className="execution-mode-panel">
         <div>
           <strong>{t("agent.executionMode")}</strong>
@@ -287,7 +304,7 @@ export function AgentPage({
       </section>
 
       <section className="agent-grid">
-        {visibleAgents.map((agent) => {
+        {(selectedAgent ? [selectedAgent] : []).map((agent) => {
           const status = toolStatuses[agent.id] ?? createUnknownStatus(agent.id);
           const available = status.available;
           const isSelected = selectedAgentId === agent.id;
@@ -328,21 +345,24 @@ export function AgentPage({
                   {copiedAgentId === agent.id ? t("agent.copied") : t("agent.copyConnector")}
                 </button>
               </div>
-              <div className="agent-detail-list">
-                <span>{t("agent.kind")}: {agent.kind}</span>
-                <span>{t("agent.protocol")}: {agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin")}</span>
-                <span>{t("agent.protocolVersion")}: {agent.protocolVersion ?? t("agent.notDetected")}</span>
-                <span>{t("agent.plugin")}: {agent.pluginId ?? t("agent.none")}</span>
-                <span>{t("agent.pluginInstallTarget")}: {agent.installTarget ?? t("agent.none")}</span>
-                <span>{t("agent.capabilities")}: {(agent.capabilities ?? []).join(", ") || t("agent.none")}</span>
-                <span>{t("agent.commandStatus")}: {commandStatusLabel(status, t)}</span>
-                <span>{t("agent.projectContext")}: {connectionStatusLabel(status.health?.connection ?? projectConnection, t)}</span>
-                <span>{t("agent.runReadiness")}: {runReadinessLabel(status, t)}</span>
-                <span>{t("agent.cli")}: {status.commandPath ?? t("agent.notDetected")}</span>
-                <span>{t("agent.app")}: {status.appPath ?? t("agent.notDetected")}</span>
-                <span>{t("agent.version")}: {status.version ?? t("agent.notDetected")}</span>
-                <span>{t("agent.lastOutput")}: {status.lastOutputPath ?? t("agent.none")}</span>
-              </div>
+              <details className="agent-advanced-info">
+                <summary>{t("agent.advancedInfo")}</summary>
+                <div className="agent-detail-list">
+                  <span>{t("agent.kind")}: {agent.kind}</span>
+                  <span>{t("agent.protocol")}: {agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin")}</span>
+                  <span>{t("agent.protocolVersion")}: {agent.protocolVersion ?? t("agent.notDetected")}</span>
+                  <span>{t("agent.plugin")}: {agent.pluginId ?? t("agent.none")}</span>
+                  <span>{t("agent.pluginInstallTarget")}: {agent.installTarget ?? t("agent.none")}</span>
+                  <span>{t("agent.capabilities")}: {(agent.capabilities ?? []).join(", ") || t("agent.none")}</span>
+                  <span>{t("agent.commandStatus")}: {commandStatusLabel(status, t)}</span>
+                  <span>{t("agent.projectContext")}: {connectionStatusLabel(status.health?.connection ?? projectConnection, t)}</span>
+                  <span>{t("agent.runReadiness")}: {runReadinessLabel(status, t)}</span>
+                  <span>{t("agent.cli")}: {status.commandPath ?? t("agent.notDetected")}</span>
+                  <span>{t("agent.app")}: {status.appPath ?? t("agent.notDetected")}</span>
+                  <span>{t("agent.version")}: {status.version ?? t("agent.notDetected")}</span>
+                  <span>{t("agent.lastOutput")}: {status.lastOutputPath ?? t("agent.none")}</span>
+                </div>
+              </details>
               {status.health ? (
                 <div className={cn("agent-health-box", status.health.severity)}>
                   <strong>{t("agent.health")}: {status.health.severity}</strong>

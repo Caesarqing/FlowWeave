@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { usePreferencesStore } from "../stores/preferences.store";
+import { createAsyncRequestGuard } from "../utils/async-request-guard";
 
 export function useProjectActions({
   maxRenderedTreeRows,
@@ -30,7 +31,9 @@ export function useProjectActions({
   setArtifactStatuses,
   setArchitectureReview,
   setSequenceReview,
-  setProjectStatus
+  setProjectStatus,
+  onProjectOpenStarted,
+  onProjectOpened
 }: {
   maxRenderedTreeRows: number;
   projectId: string;
@@ -61,13 +64,22 @@ export function useProjectActions({
       ((current: import("../types").SequenceReviewStatus) => import("../types").SequenceReviewStatus)
   ) => void;
   setProjectStatus: (value: string) => void;
+  onProjectOpenStarted?: () => void;
+  onProjectOpened?: (result: Exclude<FlowWeaveProjectOpenResult, { canceled: true }>) => void;
 }) {
   const { t } = useI18n();
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
   const scanMaxEntries = usePreferencesStore((state) => state.scanMaxEntries);
   const [operation, setOperation] = useState<AnalysisOperation | null>(null);
   const activeOperationId = useRef<string | null>(null);
+  const acceptsNewProjectScan = useRef(false);
   const architectureReviewRef = useRef(architectureReview);
+  const requestGuard = useRef(createAsyncRequestGuard()).current;
+
+  useEffect(() => {
+    requestGuard.activate();
+    return () => requestGuard.invalidate();
+  }, [requestGuard]);
 
   useEffect(() => {
     architectureReviewRef.current = architectureReview;
@@ -80,6 +92,7 @@ export function useProjectActions({
 
     return window.flowweave.onOperationProgress((nextOperation) => {
       if (nextOperation.kind === "sequence-analysis") return;
+      if (nextOperation.projectId !== projectId && !(acceptsNewProjectScan.current && nextOperation.kind === "project-scan")) return;
       const isTerminal =
         nextOperation.stage === "completed" ||
         nextOperation.stage === "failed" ||
@@ -92,7 +105,7 @@ export function useProjectActions({
         total: nextOperation.total
       }));
     });
-  }, [setProjectStatus, t]);
+  }, [projectId, setProjectStatus, t]);
 
   useEffect(() => {
     if (!window.flowweave) return undefined;
@@ -123,7 +136,8 @@ export function useProjectActions({
     t
   ]);
 
-  async function applyProjectOpenResult(result: FlowWeaveProjectOpenResult) {
+  async function applyProjectOpenResult(result: FlowWeaveProjectOpenResult, requestId: number) {
+    if (!requestGuard.isCurrent(requestId)) return;
     if (result.canceled) {
       setProjectStatus(t("status.cancelRead"));
       setLastRunStatus(t("status.cancelRead"));
@@ -131,6 +145,7 @@ export function useProjectActions({
     }
 
     const persistedCanvas = await window.flowweave?.readCanvas(result.projectId);
+    if (!requestGuard.isCurrent(requestId)) return;
     const inferredModules = persistedCanvas?.nodes ?? result.graph.nodes;
     const inferredEdges = persistedCanvas?.edges ?? result.graph.edges;
     setProjectLabel(result.project.projectName);
@@ -149,6 +164,7 @@ export function useProjectActions({
     const message = t("status.projectRead", { files: result.project.summary.totalFiles, modules: inferredModules.length, note: truncateNote });
     setProjectStatus(message);
     setLastRunStatus(message);
+    onProjectOpened?.(result);
   }
 
   async function openProject() {
@@ -159,6 +175,9 @@ export function useProjectActions({
       return;
     }
 
+    onProjectOpenStarted?.();
+    const requestId = requestGuard.begin();
+    acceptsNewProjectScan.current = true;
     setIsProjectLoading(true);
     setProjectStatus(t("status.openingPicker"));
     try {
@@ -166,13 +185,49 @@ export function useProjectActions({
         concurrency: scanConcurrency,
         maxEntries: scanMaxEntries
       });
-      await applyProjectOpenResult(result);
+      await applyProjectOpenResult(result, requestId);
     } catch (error) {
+      if (!requestGuard.isCurrent(requestId)) return;
       const message = t("status.readFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
-      setIsProjectLoading(false);
+      if (requestGuard.isCurrent(requestId)) {
+        acceptsNewProjectScan.current = false;
+        setIsProjectLoading(false);
+      }
+    }
+  }
+
+  async function restoreProject(projectToRestoreId: string) {
+    if (!window.flowweave) {
+      const message = t("status.browserNoOpen");
+      setProjectStatus(message);
+      setLastRunStatus(message);
+      return;
+    }
+
+    onProjectOpenStarted?.();
+    const requestId = requestGuard.begin();
+    acceptsNewProjectScan.current = true;
+    setIsProjectLoading(true);
+    setProjectStatus(t("status.rescanning"));
+    try {
+      const result = await window.flowweave.restoreRegisteredProject(projectToRestoreId, {
+        concurrency: scanConcurrency,
+        maxEntries: scanMaxEntries
+      });
+      await applyProjectOpenResult(result, requestId);
+    } catch (error) {
+      if (!requestGuard.isCurrent(requestId)) return;
+      const message = t("status.rescanFailed", { error: formatErrorMessage(error) });
+      setProjectStatus(message);
+      setLastRunStatus(message);
+    } finally {
+      if (requestGuard.isCurrent(requestId)) {
+        acceptsNewProjectScan.current = false;
+        setIsProjectLoading(false);
+      }
     }
   }
 
@@ -189,20 +244,26 @@ export function useProjectActions({
       return;
     }
 
+    const requestId = requestGuard.begin();
     setIsProjectLoading(true);
+    acceptsNewProjectScan.current = true;
     setProjectStatus(t("status.rescanning"));
     try {
       const result = await window.flowweave.scanProject(projectId, {
         concurrency: scanConcurrency,
         maxEntries: scanMaxEntries
       });
-      await applyProjectOpenResult(result);
+      await applyProjectOpenResult(result, requestId);
     } catch (error) {
+      if (!requestGuard.isCurrent(requestId)) return;
       const message = t("status.rescanFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
-      setIsProjectLoading(false);
+      if (requestGuard.isCurrent(requestId)) {
+        acceptsNewProjectScan.current = false;
+        setIsProjectLoading(false);
+      }
     }
   }
 
@@ -221,10 +282,12 @@ export function useProjectActions({
       return;
     }
 
+    const requestId = requestGuard.begin();
     setIsProjectLoading(true);
     setProjectStatus(t("status.generatingGraph"));
     try {
       const result = await window.flowweave.analyzeArchitectureWithAgent(projectId, agentId);
+      if (!requestGuard.isCurrent(requestId)) return;
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
@@ -250,15 +313,16 @@ export function useProjectActions({
       setProjectStatus(message);
       setLastRunStatus(message);
     } catch (error) {
+      if (!requestGuard.isCurrent(requestId)) return;
       const message = t("status.analysisFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
-      setIsProjectLoading(false);
+      if (requestGuard.isCurrent(requestId)) setIsProjectLoading(false);
     }
   }
 
-  return { openProject, refreshProject, analyzeProject, cancelProjectOperation, operation };
+  return { openProject, restoreProject, refreshProject, analyzeProject, cancelProjectOperation, operation };
 }
 
 export function shouldApplyArchitectureReviewEvent(

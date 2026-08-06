@@ -5,9 +5,11 @@ import type { ElkNode } from "elkjs/lib/elk-api";
 import {
   layoutCanvasNodesWithEngine,
   nodeArchitectureLayer,
+  nodeClassification,
   nodeFunctionalModule,
   nodeGroupKey,
   nodeTechnologyStack,
+  nodeTechnologyStacks,
   traceNodeIds
 } from "../../src/utils/canvas-layout";
 import { createFlowNode } from "../../src/utils/graph-converters";
@@ -54,6 +56,20 @@ describe("canvas layout and tracing", () => {
     expect(nodeTechnologyStack(node("backend", ["app/service.py"]))).toBe("backend");
     expect(nodeArchitectureLayer({ ...node("api", []), category: "api-boundary" })).toBe("api");
     expect(nodeArchitectureLayer({ ...node("data", []), category: "data-access" })).toBe("data");
+  });
+
+  it("keeps every detected technology tag so mixed modules remain filterable", () => {
+    expect(nodeTechnologyStacks(node("full-stack", ["src/App.tsx", "server/app.py"]))).toEqual(["frontend", "backend"]);
+  });
+
+  it("derives a stable role, runtime tags, and domain from legacy module data", () => {
+    const classification = nodeClassification(node("account", ["src/features/account/view.tsx", "server/account.py"]));
+
+    expect(classification).toEqual({
+      role: "presentation",
+      runtimeTags: ["frontend", "backend"],
+      domain: "account"
+    });
   });
 
   it("orders technology partitions from frontend through backend to data", async () => {

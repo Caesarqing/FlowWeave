@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildCurrentModuleGuidancePrompt,
   buildExecutionAssessmentSummary,
@@ -22,12 +22,24 @@ import { useAgentConnection } from "./useAgentConnection";
 import { useCanvasPersistence } from "./useCanvasPersistence";
 import { useRunHistory } from "./useRunHistory";
 import { useI18n } from "../utils/i18n";
-import type { ArtifactRunTarget, RuntimeAgentId } from "../types";
+import { sortAgentsForSelection } from "../utils/agent-display";
+import { createAsyncRequestGuard } from "../utils/async-request-guard";
+import type { ArtifactRunTarget, FlowWeaveProjectOpenResult, RuntimeAgentId } from "../types";
 
 const MAX_RENDERED_TREE_ROWS = 900;
 
-export function useAppController() {
+export function useAppController({
+  onProjectOpenStarted,
+  onProjectOpened,
+  restoreProjectId
+}: {
+  onProjectOpenStarted?: () => void;
+  onProjectOpened?: (result: Exclude<FlowWeaveProjectOpenResult, { canceled: true }>) => void;
+  restoreProjectId?: string;
+}) {
   const { t } = useI18n();
+  const requestedRestoreProjectId = useRef<string | undefined>(undefined);
+  const agentDiscoveryGuard = useRef(createAsyncRequestGuard()).current;
   const activePage = useNavigationStore((state) => state.activePage);
   const projectLabel = useProjectStore((state) => state.projectLabel);
   const projectId = useProjectStore((state) => state.projectId);
@@ -117,7 +129,9 @@ export function useAppController() {
     setArtifactStatuses,
     setArchitectureReview,
     setSequenceReview,
-    setProjectStatus
+    setProjectStatus,
+    onProjectOpenStarted,
+    onProjectOpened
   });
   const toolActions = useToolActions({
     agents,
@@ -134,6 +148,7 @@ export function useAppController() {
     setSelectedAgentId,
     setToolStatuses
   });
+  const displayAgents = useMemo(() => sortAgentsForSelection(agents, toolStatuses), [agents, toolStatuses]);
   const moduleActions = useModuleActions({
     addModuleNode: flow.addModuleNode,
     selectedNode: flow.selectedNode,
@@ -141,6 +156,17 @@ export function useAppController() {
     togglePath: flow.togglePath,
     updateModule: flow.updateModule
   });
+
+  useEffect(() => {
+    if (!restoreProjectId || projectId === restoreProjectId || requestedRestoreProjectId.current === restoreProjectId) return;
+    requestedRestoreProjectId.current = restoreProjectId;
+    void projectActions.restoreProject(restoreProjectId);
+  }, [projectActions.restoreProject, projectId, restoreProjectId]);
+
+  useEffect(() => {
+    agentDiscoveryGuard.activate();
+    return () => agentDiscoveryGuard.invalidate();
+  }, [agentDiscoveryGuard]);
   const hasPendingModifications = modificationResult?.hasChanges ?? false;
   const hasPendingModuleGuidance = Boolean(
     flow.selectedNode && modificationResult && (
@@ -169,7 +195,7 @@ export function useAppController() {
 
   function buildCurrentCanvas(): import("../types").CodeflowCanvas {
     return {
-      version: 3,
+      version: 4,
       id: "main",
       title: "Main Canvas",
       projectPath,
@@ -329,7 +355,7 @@ export function useAppController() {
     }
     setLastRunStatus(t("status.agentProcessing", { agent: agentName, mode: executionMode }));
     try {
-      const detection = await window.flowweave.detectAgent(selectedAgentId);
+      const detection = await window.flowweave.detectAgent(selectedAgentId, projectId);
       setToolStatuses((current) => ({ ...current, [selectedAgentId]: { ...current[selectedAgentId], ...detection, checking: false } }));
       if (!detection.available) {
         setLastRunStatus(t("status.agentCannotPlan", { agent: agentName }));
@@ -372,19 +398,31 @@ export function useAppController() {
   useEffect(() => {
     if (!window.flowweave) return;
     void refreshAgents();
-  }, []);
+  }, [projectId]);
 
   async function refreshAgents(selectAgentId?: import("../types").AgentId) {
     if (!window.flowweave) return;
+    const requestId = agentDiscoveryGuard.begin();
     try {
-      const nextAgents = await window.flowweave.listAgents();
+      const discovery = await window.flowweave.discoverAgents(projectId || undefined);
+      if (!agentDiscoveryGuard.isCurrent(requestId)) return;
+      const nextAgents = discovery.map((result) => result.definition);
       setAgents(nextAgents);
+      setToolStatuses((current) => ({
+        ...current,
+        ...Object.fromEntries(discovery.map((result) => [result.definition.id, {
+          ...current[result.definition.id],
+          ...result.availability,
+          checking: false
+        }]))
+      }));
       const preferredAgentId = selectAgentId || selectedAgentId;
       const nextAgentId = nextAgents.some((agent) => agent.id === preferredAgentId) ? preferredAgentId : nextAgents[0]?.id;
       if (nextAgentId && nextAgentId !== selectedAgentId) {
         setSelectedAgentId(nextAgentId);
       }
     } catch (error) {
+      if (!agentDiscoveryGuard.isCurrent(requestId)) return;
       setLastRunStatus(t("status.agentConfigFailed", { error: formatErrorMessage(error) }));
     }
   }
@@ -505,7 +543,7 @@ export function useAppController() {
     scanFingerprint,
     sequence,
     tools: {
-      agents,
+      agents: displayAgents,
       architectureReview,
       executionMode,
       isRunsLoading,

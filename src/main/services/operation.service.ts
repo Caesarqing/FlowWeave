@@ -10,11 +10,13 @@ const operations = new Map<string, ActiveOperation>();
 
 export function startOperation(
   kind: AnalysisOperation["kind"],
-  message: string
+  message: string,
+  projectId: string
 ): { operation: AnalysisOperation; signal: AbortSignal } {
   const timestamp = new Date().toISOString();
   const operation: AnalysisOperation = {
     operationId: `operation-${randomUUID()}`,
+    projectId,
     kind,
     stage: "discovery",
     completed: 0,

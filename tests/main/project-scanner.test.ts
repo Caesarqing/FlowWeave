@@ -22,6 +22,33 @@ describe("project-scanner.service", () => {
     expect(project.files.find((node) => node.path === "src")?.children?.[0].path).toBe("src/auth");
   });
 
+  it("orders dot entries first, then large folders, then ordinary files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-order-"));
+    await mkdir(join(root, ".config"), { recursive: true });
+    await mkdir(join(root, "10-services"), { recursive: true });
+    await mkdir(join(root, "2-components", "nested"), { recursive: true });
+    await writeFile(join(root, ".editorconfig"), "root = true\n");
+    await writeFile(join(root, ".config", "settings.json"), "{}\n");
+    await writeFile(join(root, "2-components", "button.tsx"), "export const button = true;\n");
+    await writeFile(join(root, "2-components", "nested", "panel.tsx"), "export const panel = true;\n");
+    await writeFile(join(root, "10-services", "api.ts"), "export const api = true;\n");
+    await writeFile(join(root, "10-config.ts"), "export {};\n");
+    await writeFile(join(root, "2-config.ts"), "export {};\n");
+    await writeFile(join(root, "README.md"), "# Project\n");
+
+    const project = await scanProject(root);
+
+    expect(project.files.map((node) => node.path)).toEqual([
+      ".config",
+      ".editorconfig",
+      "2-components",
+      "10-services",
+      "2-config.ts",
+      "10-config.ts",
+      "README.md"
+    ]);
+  });
+
   it("ignores generated .flowweave output", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-ignore-"));
     await mkdir(join(root, FLOWWEAVE_DIR, "runs"), { recursive: true });

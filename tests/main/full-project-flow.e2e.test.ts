@@ -65,7 +65,7 @@ describe("full project flow", () => {
       detailedDesign?: unknown;
     };
 
-    expect(canvasArtifact.version).toBe(3);
+    expect(canvasArtifact.version).toBe(4);
     expect(canvasArtifact.scanFingerprint).toBe(projectArtifact.scanFingerprint);
     expect(architectureArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);
     expect(sequenceArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);

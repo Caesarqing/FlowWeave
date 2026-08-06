@@ -6,12 +6,17 @@ import { applyRunArtifact, listRunSummaries, readRunArtifact } from "../services
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
 import { getDesktopBridgeDir } from "../agents/desktop-bridge.adapter";
 import { getBuiltInAgentPluginStatuses, installBuiltInAgentPlugin, resolveAgentPluginInstructionPath } from "../services/agent-plugin.service";
+import { discoverAgents } from "../services/agent-discovery.service";
 import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
 import { handleIpc } from "./ipc-handler";
 
 export function registerAgentIpc() {
   handleIpc(TOOL_CHANNELS.listAgents, async () => {
     return listAgents();
+  });
+
+  handleIpc(TOOL_CHANNELS.discoverAgents, async (_event, projectId: unknown) => {
+    return discoverAgents(projectId === undefined ? undefined : requireString(TOOL_CHANNELS.discoverAgents, projectId, "projectId"));
   });
 
   handleIpc(TOOL_CHANNELS.saveCustomAgent, async (_event, input: unknown) => {
@@ -52,8 +57,11 @@ export function registerAgentIpc() {
     return deleteAgent(requireCustomAgentId(TOOL_CHANNELS.deleteCustomAgent, agentId));
   });
 
-  handleIpc(TOOL_CHANNELS.detectAgent, async (_event, agentId: unknown) => {
-    return detectAgent(requireAgentId(TOOL_CHANNELS.detectAgent, agentId));
+  handleIpc(TOOL_CHANNELS.detectAgent, async (_event, agentId: unknown, projectId: unknown) => {
+    return detectAgent(
+      requireAgentId(TOOL_CHANNELS.detectAgent, agentId),
+      projectId === undefined ? undefined : requireString(TOOL_CHANNELS.detectAgent, projectId, "projectId")
+    );
   });
 
   handleIpc(TOOL_CHANNELS.healthCheckAgent, async (_event, agentId: unknown, projectId: unknown) => {
@@ -129,9 +137,11 @@ export function registerAgentIpc() {
   });
 
   handleIpc(TOOL_CHANNELS.openProject, async (_event, toolId: unknown, projectId: unknown) => {
+    const safeProjectId = requireString(TOOL_CHANNELS.openProject, projectId, "projectId");
     return openToolProject(
       requireAgentId(TOOL_CHANNELS.openProject, toolId),
-      resolveProjectPath(requireString(TOOL_CHANNELS.openProject, projectId, "projectId"))
+      safeProjectId,
+      resolveProjectPath(safeProjectId)
     );
   });
 

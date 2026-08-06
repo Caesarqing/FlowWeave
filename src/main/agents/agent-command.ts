@@ -14,6 +14,7 @@ const commandCandidates: Record<ToolId, string[]> = {
   "claude-desktop": [],
   "codex-local": [
     "codex",
+    "/Applications/ChatGPT.app/Contents/Resources/codex",
     "/Applications/Codex.app/Contents/Resources/codex",
     "/opt/homebrew/bin/codex",
     "/usr/local/bin/codex"
@@ -66,6 +67,14 @@ export async function resolveAppPath(appPath: string) {
     .catch(() => undefined);
 }
 
+export async function resolveAppPathFromCandidates(appPaths: string[]) {
+  for (const appPath of appPaths) {
+    const resolved = await resolveAppPath(appPath);
+    if (resolved) return resolved;
+  }
+  return undefined;
+}
+
 export function getCommandCandidates(toolId: ToolId) {
   return [...commandCandidates[toolId]];
 }
@@ -103,6 +112,7 @@ export function buildCommandSearchPaths(
     "/usr/local/bin",
     "/usr/bin",
     "/bin",
+    "/Applications/ChatGPT.app/Contents/Resources",
     "/Applications/Codex.app/Contents/Resources",
     "/Applications/Claude.app/Contents/Resources",
     "/Applications/Cursor.app/Contents/Resources/app/bin"

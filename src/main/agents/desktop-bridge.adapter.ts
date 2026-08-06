@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentExpectedContentKind, AgentProtocolVersion, ArtifactRunTarget, ExecutionMode, RuntimeAgentId } from "../../types";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult, ToolRunStatus } from "./agent-adapter";
-import { resolveAppPath } from "./agent-command";
+import { resolveAppPathFromCandidates } from "./agent-command";
 import { nowIso } from "./time";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { addDesktopBridgePendingRequest } from "../services/desktop-bridge-manifest.service";
@@ -22,6 +22,7 @@ export type DesktopBridgeConfig = {
   id: RuntimeAgentId;
   name: string;
   appPath: string;
+  appPathCandidates?: string[];
   bridgeInstructions?: string;
 };
 
@@ -72,13 +73,13 @@ export class DesktopBridgeAdapter implements ToolAdapter {
   id: DesktopBridgeConfig["id"];
   name: string;
   kind = "desktop" as const;
-  private appPath: string;
+  private appPathCandidates: string[];
   private bridgeInstructions?: string;
 
   constructor(config: DesktopBridgeConfig) {
     this.id = config.id;
     this.name = config.name;
-    this.appPath = config.appPath;
+    this.appPathCandidates = config.appPathCandidates ?? [config.appPath];
     this.bridgeInstructions = config.bridgeInstructions;
   }
 
@@ -92,13 +93,13 @@ export class DesktopBridgeAdapter implements ToolAdapter {
         message: platformSupport.message
       };
     }
-    const appPath = await resolveAppPath(this.appPath);
+    const appPath = await resolveAppPathFromCandidates(this.appPathCandidates);
     return {
       toolId: this.id,
       available: Boolean(appPath),
       method: appPath ? ("app" as const) : ("none" as const),
       appPath,
-      message: appPath ? `${this.name} app detected.` : `${this.name} app was not found at ${this.appPath}.`
+      message: appPath ? `${this.name} app detected.` : `${this.name} app was not found at ${this.appPathCandidates.join(", ")}.`
     };
   }
 
@@ -230,9 +231,20 @@ export class CodexDesktopAdapter extends DesktopBridgeAdapter {
     super({
       id: "codex-desktop",
       name: "Codex Desktop",
-      appPath: "/Applications/Codex.app"
+      appPath: "/Applications/ChatGPT.app",
+      appPathCandidates: [
+        "/Applications/ChatGPT.app",
+        "/Applications/Codex.app"
+      ]
     });
   }
+}
+
+export function getCodexDesktopAppPathCandidates(): string[] {
+  return [
+    "/Applications/ChatGPT.app",
+    "/Applications/Codex.app"
+  ];
 }
 
 export function buildDesktopAppOpenArgs(appPath: string, projectPath: string) {

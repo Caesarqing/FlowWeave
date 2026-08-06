@@ -6,6 +6,7 @@ import { usePreferencesStore } from "../stores/preferences.store";
 import type { GraphEdgeRelation, UiThemeId, UtilityPanel } from "../types";
 import { cn } from "../utils/classnames";
 import { localeOptions, useI18n } from "../utils/i18n";
+import packageJson from "../../package.json";
 
 const themeOptions: Array<{ id: UiThemeId; labelKey: string; descriptionKey: string; swatches: string[] }> = [
   { id: "system", labelKey: "theme.system", descriptionKey: "theme.systemDesc", swatches: ["#030506", "#89ecff", "#42f5a7"] },
@@ -131,6 +132,13 @@ function SettingsPanel({ onClose, projectId }: { onClose: () => void; projectId?
           <span>
             <small>{t("settings.language")}</small>
             <strong>{localeOptions.find((option) => option.id === locale)?.label ?? locale}</strong>
+          </span>
+        </div>
+        <div className="settings-overview-card build-metadata">
+          <MonitorCog size={16} />
+          <span>
+            <small>{t("settings.build")}</small>
+            <strong>v{packageJson.version} · {new Date(import.meta.env.VITE_BUILD_TIME).toLocaleString()}</strong>
           </span>
         </div>
       </div>

@@ -56,7 +56,7 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
 
   await writeTextAtomic(paths.promptPath, prompt);
 
-  const adapter = await getAgentAdapter(options.toolId);
+  const adapter = await getAgentAdapter(options.toolId, options.projectId);
   const executionMode = options.executionMode;
   if (executionMode === "execute" && options.confirmedExecute !== true) {
     throw new Error("Execute mode requires explicit user confirmation.");
@@ -238,12 +238,12 @@ export async function detectTool(toolId: ToolId): Promise<ToolDetectionResult> {
   return adapters[toolId].detect();
 }
 
-export async function detectAgent(agentId: RuntimeAgentId): Promise<ToolDetectionResult> {
-  return (await getAgentAdapter(agentId)).detect();
+export async function detectAgent(agentId: RuntimeAgentId, projectId?: string): Promise<ToolDetectionResult> {
+  return (await getAgentAdapter(agentId, projectId)).detect();
 }
 
 export async function healthCheckAgent(agentId: RuntimeAgentId, projectId?: string): Promise<AgentReadinessResult> {
-  const adapter = await getAgentAdapter(agentId);
+  const adapter = await getAgentAdapter(agentId, projectId);
   const projectPath = projectId ? resolveProjectPath(projectId) : undefined;
   return checkAgentReadiness(adapter, {
     agentId,
@@ -258,15 +258,15 @@ export function getToolAdapter(toolId: ToolId): ToolAdapter {
   return adapters[toolId];
 }
 
-export function getAgentAdapter(agentId: RuntimeAgentId): Promise<ToolAdapter> {
+export function getAgentAdapter(agentId: RuntimeAgentId, projectId?: string): Promise<ToolAdapter> {
   if (agentId === "mock" || isBuiltInAgentId(agentId)) {
     return Promise.resolve(adapters[agentId]);
   }
-  return getRegistryAgentAdapter(agentId);
+  return getRegistryAgentAdapter(agentId, projectId);
 }
 
-export async function openToolProject(agentId: RuntimeAgentId, projectPath: string): Promise<ToolOpenResult> {
-  const adapter = await getAgentAdapter(agentId);
+export async function openToolProject(agentId: RuntimeAgentId, projectId: string, projectPath: string): Promise<ToolOpenResult> {
+  const adapter = await getAgentAdapter(agentId, projectId);
   if (!adapter.openProject) {
     return {
       toolId: agentId,

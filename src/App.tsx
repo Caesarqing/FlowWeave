@@ -7,6 +7,7 @@ import { TopBar } from "./components/TopBar";
 import { UtilityPanels } from "./components/UtilityPanels";
 import { ArtifactStatusBar } from "./components/ArtifactStatusBar";
 import { useAppController } from "./hooks/useAppController";
+import { useProjectWorkspaceTabs } from "./hooks/useProjectWorkspaceTabs";
 import { usePreferencesStore } from "./stores/preferences.store";
 import { lazy, Suspense, useEffect } from "react";
 import { cn } from "./utils/classnames";
@@ -16,6 +17,7 @@ import { OnboardingDialog } from "./components/OnboardingDialog";
 import { ErrorCenter } from "./components/ErrorCenter";
 import { WorkspaceLayout } from "./components/WorkspaceLayout";
 import { Button } from "./components/Button";
+import { ProjectTabs } from "./components/ProjectTabs";
 import { BrainCircuit, Link2, Plus } from "lucide-react";
 
 const CanvasWorkspace = lazy(() => import("./components/CanvasWorkspace").then((module) => ({ default: module.CanvasWorkspace })));
@@ -70,7 +72,21 @@ export function App() {
 }
 
 function DesktopApp() {
-  const app = useAppController();
+  const workspace = useProjectWorkspaceTabs();
+
+  if (!workspace.isReady) {
+    return <main className="workspace-page" aria-busy="true" />;
+  }
+
+  return <WorkspaceApp key={workspace.activeProjectId ?? "home"} workspace={workspace} />;
+}
+
+function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWorkspaceTabs> }) {
+  const app = useAppController({
+    onProjectOpenStarted: workspace.handleProjectOpenStarted,
+    onProjectOpened: workspace.handleProjectOpened,
+    restoreProjectId: workspace.restoreProjectId
+  });
   const { t } = useI18n();
   const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
   const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
@@ -94,6 +110,14 @@ function DesktopApp() {
           projectLabel={app.projectLabel}
           sendDisabled={!app.hasPendingModifications}
         />
+        <ProjectTabs
+          activeProjectId={workspace.activeProjectId}
+          projects={workspace.openProjects}
+          onActivate={workspace.activateProject}
+          onClose={workspace.closeProject}
+          onOpenProject={app.canvas.onOpenProject}
+        />
+        {workspace.workspaceError ? <p className="workspace-session-error" role="alert">{workspace.workspaceError}</p> : null}
         <div className="artifact-status-slot">
           <ArtifactStatusBar
             architectureReview={app.architectureReview}

@@ -15,7 +15,7 @@ describe("task-generator.service", () => {
   it("creates a canvas artifact from FlowWeave modules", () => {
     const canvas = createCanvasArtifact("/tmp/project", graphNodes, graphEdges, "scan-1");
 
-    expect(canvas.version).toBe(3);
+    expect(canvas.version).toBe(4);
     expect(canvas.artifactState).toBe("current");
     expect(canvas.generatorVersion).toBe("1.0.0");
     expect(canvas.inputFingerprint).toBe("scan-1");

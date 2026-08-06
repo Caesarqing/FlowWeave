@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readOptionalProjectTextFile } from "../../src/main/ipc/project.ipc";
+import { readOptionalProjectTextFile, requireProjectWorkspaceSession } from "../../src/main/ipc/project.ipc";
 
 describe("project ipc document reads", () => {
   it("returns undefined for missing FlowWeave docs files", async () => {
@@ -27,5 +27,24 @@ describe("project ipc document reads", () => {
 
     await expect(readOptionalProjectTextFile(resolvedPath, ".flowweave/docs/task-spec.md")).resolves.toBe("# Existing task\n");
     await expect(readFile(resolvedPath, "utf8")).resolves.toBe("# Existing task\n");
+  });
+
+  it("accepts only known workspace pages in project tab sessions", () => {
+    expect(requireProjectWorkspaceSession("project:save-workspace-session", {
+      openProjectIds: ["project-00000000-0000-0000-0000-000000000000"],
+      activeProjectId: "project-00000000-0000-0000-0000-000000000000",
+      lastPageByProject: { "project-00000000-0000-0000-0000-000000000000": "canvas" },
+      contextsByProject: {}
+    })).toEqual({
+      openProjectIds: ["project-00000000-0000-0000-0000-000000000000"],
+      activeProjectId: "project-00000000-0000-0000-0000-000000000000",
+      lastPageByProject: { "project-00000000-0000-0000-0000-000000000000": "canvas" },
+      contextsByProject: {}
+    });
+
+    expect(() => requireProjectWorkspaceSession("project:save-workspace-session", {
+      openProjectIds: [],
+      lastPageByProject: { "project-00000000-0000-0000-0000-000000000000": "unknown" }
+    })).toThrow("lastPageByProject");
   });
 });

@@ -3,7 +3,7 @@ import ELK from "elkjs/lib/elk-api.js";
 import elkWorkerUrl from "elkjs/lib/elk-worker.min.js?url";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import type { FlowWeaveNode } from "./graph-converters";
-import type { ArchitectureLayer, CanvasLayoutMode, GraphNode, TechnologyStack } from "../types";
+import type { ArchitectureLayer, CanvasClassification, CanvasLayoutMode, GraphNode, TechnologyStack } from "../types";
 
 let elk: InstanceType<typeof ELK> | undefined;
 const NODE_WIDTH = 280;
@@ -105,20 +105,33 @@ function buildPartitionConstraintEdges(
 }
 
 export function nodeTechnologyStack(node: GraphNode): TechnologyStack {
-  if (node.technologyStack) return node.technologyStack;
-  const paths = node.files.map((file) => file.toLowerCase());
-  if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file) || /(^|\/)(components|pages|views|frontend|client)\//.test(file))) {
-    return "frontend";
-  }
-  if (paths.some((file) => /\.(swift|kt|kts|dart)$/.test(file) || /(^|\/)(ios|android|mobile)\//.test(file))) return "mobile";
-  if (paths.some((file) => /\.(sql|prisma)$/.test(file) || /(^|\/)(database|db|migrations|schema)\//.test(file))) return "data";
-  if (paths.some((file) => /\.(py|java|go|rs|php|cs|rb)$/.test(file) || /(^|\/)(server|backend|api)\//.test(file))) return "backend";
-  if (paths.some((file) => /(^|\/)(infra|infrastructure|deploy|docker|k8s|terraform)\//.test(file))) return "infrastructure";
-  if (paths.some((file) => /\.(ts|js|mjs|cjs)$/.test(file))) return node.category === "api-boundary" ? "backend" : "shared";
-  return "unknown";
+  return nodeTechnologyStacks(node)[0] ?? "unknown";
+}
+
+export function nodeTechnologyStacks(node: GraphNode): TechnologyStack[] {
+  if (node.classification) return node.classification.runtimeTags;
+  const detected = detectedTechnologyStacks(node.files);
+  const candidates = [...(node.technologyTags ?? []), ...detected, ...(node.technologyStack ? [node.technologyStack] : [])];
+  const tags = TECHNOLOGY_ORDER.filter((technology) => candidates.includes(technology));
+  return tags.length > 0 ? tags : ["unknown"];
+}
+
+const TECHNOLOGY_ORDER: TechnologyStack[] = ["frontend", "mobile", "backend", "data", "infrastructure", "shared", "unknown"];
+
+function detectedTechnologyStacks(files: string[]): TechnologyStack[] {
+  const paths = files.map((file) => file.toLowerCase());
+  const detected: TechnologyStack[] = [];
+  if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file) || /(^|\/)(components|pages|views|frontend|client)\//.test(file))) detected.push("frontend");
+  if (paths.some((file) => /\.(swift|kt|kts|dart)$/.test(file) || /(^|\/)(ios|android|mobile)\//.test(file))) detected.push("mobile");
+  if (paths.some((file) => /\.(py|java|go|rs|php|cs|rb)$/.test(file) || /(^|\/)(server|backend|api)\//.test(file))) detected.push("backend");
+  if (paths.some((file) => /\.(sql|prisma)$/.test(file) || /(^|\/)(database|db|migrations|schema)\//.test(file))) detected.push("data");
+  if (paths.some((file) => /(^|\/)(infra|infrastructure|deploy|docker|k8s|terraform)\//.test(file))) detected.push("infrastructure");
+  if (detected.length === 0 && paths.some((file) => /\.(ts|js|mjs|cjs)$/.test(file))) detected.push("shared");
+  return detected;
 }
 
 export function nodeArchitectureLayer(node: GraphNode): ArchitectureLayer {
+  if (node.classification) return node.classification.role;
   if (node.architectureLayer) return node.architectureLayer;
   if (node.category === "api-boundary") return "api";
   if (node.category === "domain-service") return "domain";
@@ -130,7 +143,23 @@ export function nodeArchitectureLayer(node: GraphNode): ArchitectureLayer {
   return "unknown";
 }
 
+export function nodeClassification(node: GraphNode): CanvasClassification {
+  if (node.classification) {
+    return {
+      role: node.classification.role,
+      runtimeTags: [...node.classification.runtimeTags],
+      domain: node.classification.domain
+    };
+  }
+  return {
+    role: nodeArchitectureLayer(node),
+    runtimeTags: nodeTechnologyStacks(node),
+    domain: nodeFunctionalModule(node)
+  };
+}
+
 export function nodeFunctionalModule(node: GraphNode): string {
+  if (node.classification?.domain) return node.classification.domain;
   for (const file of node.files) {
     const segments = file.split("/").filter(Boolean);
     const markerIndex = segments.findIndex((segment) =>
@@ -143,9 +172,9 @@ export function nodeFunctionalModule(node: GraphNode): string {
 }
 
 export function nodeGroupKey(node: GraphNode, mode: Exclude<CanvasLayoutMode, "dependency">): string {
-  if (mode === "technology") return `technology:${nodeTechnologyStack(node)}`;
-  if (mode === "architecture") return `architecture:${nodeArchitectureLayer(node)}`;
-  return `functional:${nodeFunctionalModule(node)}`;
+  if (mode === "runtime" || mode === "technology") return `runtime:${nodeTechnologyStack(node)}`;
+  if (mode === "role" || mode === "architecture") return `role:${nodeArchitectureLayer(node)}`;
+  return `${mode === "functional" ? "functional" : "domain"}:${nodeFunctionalModule(node)}`;
 }
 
 export function traceNodeIds(rootId: string, edges: Edge[], direction: TraceDirection): Set<string> {
@@ -170,15 +199,15 @@ export function traceNodeIds(rootId: string, edges: Edge[], direction: TraceDire
 }
 
 function groupDepths(nodes: FlowWeaveNode[], mode: Exclude<CanvasLayoutMode, "dependency">): Map<string, number> {
-  const order = mode === "technology"
+  const order = mode === "runtime" || mode === "technology"
     ? ["frontend", "backend", "mobile", "data", "infrastructure", "shared", "unknown"]
-    : mode === "architecture"
+    : mode === "role" || mode === "architecture"
       ? ["presentation", "api", "domain", "data", "integration", "infrastructure", "test", "unknown"]
       : [...new Set(nodes.map((node) => nodeFunctionalModule(node.data)))].sort();
   return new Map(nodes.map((node) => {
-    const group = mode === "technology"
+    const group = mode === "runtime" || mode === "technology"
       ? nodeTechnologyStack(node.data)
-      : mode === "architecture"
+      : mode === "role" || mode === "architecture"
         ? nodeArchitectureLayer(node.data)
         : nodeFunctionalModule(node.data);
     const index = order.indexOf(group);

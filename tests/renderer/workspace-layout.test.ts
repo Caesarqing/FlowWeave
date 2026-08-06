@@ -53,7 +53,7 @@ describe("workspace panel preferences", () => {
     expect(styles).toContain("min-height: 58px;\n  padding: 7px 14px 5px;");
   });
 
-  it("shows full centered canvas tools only when both panels are collapsed", () => {
+  it("keeps canvas tools compact and centered near the top of the canvas", () => {
     expect(styles.match(/^\.canvas-view-tools \{/gm)).toHaveLength(1);
     expect(styles).toContain(".canvas-view-tools {\n  position: relative;");
     expect(styles).toContain(".canvas-view-tools-content {\n  display: flex;");

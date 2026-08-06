@@ -48,7 +48,8 @@
     "vitest": "^4.1.6"
   },
   "overrides": {
-    "dompurify": "^3.4.0"
+    "dompurify": "3.4.13",
+    "postcss": "8.5.25"
   },
   "build": {
     "appId": "com.flowweave.app",
