@@ -266,32 +266,66 @@ describe("agent-execution.service", () => {
 
   it("queues concurrent read executions for the same project", async () => {
     resetAgentExecutionStateForTests();
-    const adapter = abortAwareAdapter();
-    const first = executeAgentWithPolicy(adapter, request("plan"), policy());
-    const second = executeAgentWithPolicy(adapter, request("plan"), policy());
-    const third = executeAgentWithPolicy(adapter, request("plan"), policy());
+    let active = 0;
+    let maxActive = 0;
+    const adapter = delayedAdapter(() => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      return () => {
+        active -= 1;
+      };
+    });
+    const first = executeAgentWithPolicy(adapter, request("plan", "run-1"), policy(1000));
+    const second = executeAgentWithPolicy(adapter, request("plan", "run-2"), policy(1000));
+    const third = executeAgentWithPolicy(adapter, request("plan", "run-3"), policy(1000));
 
     const results = await Promise.all([first, second, third]);
 
     expect(results).toHaveLength(3);
-    expect(results.every((result) => result.terminationReason === "timeout")).toBe(true);
+    expect(maxActive).toBe(1);
+    expect(results.every((result) => result.status === "completed")).toBe(true);
+  });
+
+  it("allows concurrent read executions for different projects", async () => {
+    resetAgentExecutionStateForTests();
+    let active = 0;
+    let maxActive = 0;
+    const adapter = delayedAdapter(() => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      return () => {
+        active -= 1;
+      };
+    });
+    const first = executeAgentWithPolicy(adapter, request("plan", "run-1", "/tmp/flowweave-agent-execution-a"), policy(1000));
+    const second = executeAgentWithPolicy(adapter, request("plan", "run-2", "/tmp/flowweave-agent-execution-b"), policy(1000));
+
+    const results = await Promise.all([first, second]);
+
+    expect(results).toHaveLength(2);
+    expect(maxActive).toBe(2);
+    expect(results.every((result) => result.status === "completed")).toBe(true);
   });
 });
 
-function policy() {
+function policy(timeoutMs = 150) {
   return {
-    timeoutMs: 150,
+    timeoutMs,
     maxOutputBytes: 1024,
     retryCount: 0,
     retryDelayMs: 0
   };
 }
 
-function request(executionMode: "plan" | "execute"): ToolRunRequest {
+function request(
+  executionMode: "plan" | "execute",
+  id = "run-test",
+  projectPath = "/tmp/flowweave-agent-execution"
+): ToolRunRequest {
   return {
-    id: "run-test",
+    id,
     projectId: "project-test",
-    projectPath: "/tmp/flowweave-agent-execution",
+    projectPath,
     prompt: "test",
     executionMode,
     purpose: "implementation-plan"
@@ -312,6 +346,21 @@ function abortAwareAdapter(): ToolAdapter {
         });
       }, { once: true });
     })
+  };
+}
+
+function delayedAdapter(onStart: () => () => void): ToolAdapter {
+  return {
+    id: "mock",
+    name: "Delayed",
+    kind: "mock",
+    detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+    runPlan: async (runRequest) => {
+      const release = onStart();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      release();
+      return result(runRequest, "completed", "ok");
+    }
   };
 }
 

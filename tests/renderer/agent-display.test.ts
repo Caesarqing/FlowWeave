@@ -21,8 +21,8 @@ function agent(id: string): AgentDefinition {
     name: id,
     kind: 'cli',
     command: id,
-    protocol: 'cli-stdin',
-    protocolVersion: 1,
+    protocol: 'agent-inbox',
+    protocolVersion: 2,
     capabilities: ['implementation-plan'],
     builtIn: false
   };

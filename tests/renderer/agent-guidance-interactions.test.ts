@@ -27,6 +27,10 @@ const sequenceStateSource = readFileSync(
   new URL("../../src/hooks/useSequenceDiagramState.ts", import.meta.url),
   "utf8"
 );
+const runHistorySource = readFileSync(
+  new URL("../../src/hooks/useRunHistory.ts", import.meta.url),
+  "utf8"
+);
 
 describe("agent guidance interactions", () => {
   it("builds a current-module prompt without other Canvas modules or relations", () => {
@@ -125,6 +129,12 @@ describe("agent guidance interactions", () => {
 
     expect(saveCall).toBeGreaterThan(-1);
     expect(reviseCall).toBeGreaterThan(saveCall);
+  });
+
+  it("opens Agent Inbox through the new frontend API name", () => {
+    expect(runHistorySource).toContain("openSelectedAgentInbox");
+    expect(runHistorySource).toContain("window.flowweave.openAgentInbox");
+    expect(runHistorySource).not.toContain("window.flowweave.openRunBridge");
   });
 });
 

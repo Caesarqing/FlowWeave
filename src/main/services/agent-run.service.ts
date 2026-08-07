@@ -116,12 +116,14 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     scanFingerprint: options.scanFingerprint,
     reviewId: options.reviewId,
     artifactAdoption: options.purpose === "artifact-analysis"
-      ? {
-          status: "pending",
-          message: result.status === "pending"
-            ? `Waiting for ${adapter.name} response for ${runId}.`
-            : "Artifact response has not been applied yet."
-        }
+      ? result.status === "failed"
+        ? { status: "rejected", message: result.failure?.message ?? result.summary ?? "Agent run failed before artifact output was applied." }
+        : {
+            status: "pending",
+            message: result.status === "pending"
+              ? `Waiting for ${adapter.name} Agent Inbox response for ${runId}.`
+              : "Artifact response has not been applied yet."
+          }
       : { status: "not-applicable", message: "Run is not an artifact-analysis run." },
     agentReadiness,
     checkpointId,

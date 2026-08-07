@@ -4,7 +4,7 @@ import type { AgentCapability, AgentId, AgentPluginHostId, AgentProtocol, Custom
 import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
 import { applyRunArtifact, listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
-import { getDesktopBridgeDir } from "../agents/desktop-bridge.adapter";
+import { getAgentInboxCurrentDir } from "../services/agent-inbox.service";
 import { getBuiltInAgentPluginStatuses, installBuiltInAgentPlugin, resolveAgentPluginInstructionPath } from "../services/agent-plugin.service";
 import { discoverAgents } from "../services/agent-discovery.service";
 import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
@@ -25,7 +25,7 @@ export function registerAgentIpc() {
       name: requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.name, "name", 120),
       protocol: value.protocol === undefined
         ? undefined
-        : requireEnum(TOOL_CHANNELS.saveCustomAgent, value.protocol, "protocol", ["cli-stdin", "desktop-bridge"]) as AgentProtocol,
+        : requireEnum(TOOL_CHANNELS.saveCustomAgent, value.protocol, "protocol", ["agent-inbox"]) as AgentProtocol,
       command: value.command === undefined
         ? undefined
         : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.command, "command", 2048),
@@ -129,11 +129,19 @@ export function registerAgentIpc() {
     );
   });
 
+  const openAgentInbox = async (channel: string, projectId: unknown, runId: unknown) => {
+    const projectPath = resolveProjectPath(requireString(channel, projectId, "projectId"));
+    requireRunId(channel, runId);
+    const error = await shell.openPath(getAgentInboxCurrentDir(projectPath));
+    if (error) throw new Error(`Opening FlowWeave Agent Inbox folder failed: ${error}`);
+  };
+
+  handleIpc(TOOL_CHANNELS.openAgentInbox, async (_event, projectId: unknown, runId: unknown) => {
+    await openAgentInbox(TOOL_CHANNELS.openAgentInbox, projectId, runId);
+  });
+
   handleIpc(TOOL_CHANNELS.openRunBridge, async (_event, projectId: unknown, runId: unknown) => {
-    const projectPath = resolveProjectPath(requireString(TOOL_CHANNELS.openRunBridge, projectId, "projectId"));
-    const safeRunId = requireRunId(TOOL_CHANNELS.openRunBridge, runId);
-    const error = await shell.openPath(getDesktopBridgeDir(projectPath, safeRunId));
-    if (error) throw new Error(`Opening FlowWeave bridge folder failed: ${error}`);
+    await openAgentInbox(TOOL_CHANNELS.openRunBridge, projectId, runId);
   });
 
   handleIpc(TOOL_CHANNELS.openProject, async (_event, toolId: unknown, projectId: unknown) => {

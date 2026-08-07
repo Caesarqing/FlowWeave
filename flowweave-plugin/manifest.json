@@ -1,37 +1,37 @@
 {
   "id": "flowweave",
-  "name": "FlowWeave Agent Bridge",
+  "name": "FlowWeave Agent Inbox",
   "version": "0.2.0",
-  "protocolVersion": 1,
-  "description": "Built-in plugin package for processing FlowWeave Agent Protocol v1 desktop bridge requests.",
+  "protocolVersion": 2,
+  "description": "Built-in plugin package for processing FlowWeave Agent Inbox v2 requests.",
   "hosts": [
     {
       "id": "codex",
       "displayName": "Codex",
       "installTarget": "Codex skills/plugins directory",
       "capabilities": ["artifact-analysis", "implementation-plan", "execute"],
-      "protocols": ["desktop-bridge", "cli-stdin"]
+      "protocols": ["agent-inbox"]
     },
     {
       "id": "claude",
       "displayName": "Claude",
       "installTarget": "Claude skills/plugins directory",
       "capabilities": ["artifact-analysis", "implementation-plan", "execute"],
-      "protocols": ["desktop-bridge", "cli-stdin"]
+      "protocols": ["agent-inbox"]
     },
     {
       "id": "gemini",
       "displayName": "Gemini",
       "installTarget": "Gemini agent instructions or skills directory",
       "capabilities": ["artifact-analysis", "implementation-plan", "execute"],
-      "protocols": ["desktop-bridge", "cli-stdin"]
+      "protocols": ["agent-inbox"]
     },
     {
       "id": "cursor",
       "displayName": "Cursor",
       "installTarget": "Cursor rules or project instructions directory",
       "capabilities": ["artifact-analysis", "implementation-plan"],
-      "protocols": ["desktop-bridge"]
+      "protocols": ["agent-inbox"]
     }
   ]
 }

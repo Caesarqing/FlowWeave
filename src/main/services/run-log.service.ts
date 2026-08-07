@@ -2,13 +2,11 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, ToolRunPurpose, ToolRunResult, ToolRunStatus, ToolRunSummary } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { getDesktopBridgeDir, readDesktopBridgeResponse } from "../agents/desktop-bridge.adapter";
 import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
 import { adoptArtifactRun } from "./artifact-run-adoption.service";
-import { markDesktopBridgeRequestStatus } from "./desktop-bridge-manifest.service";
 import { writeArchitectureReviewStatus } from "./architecture-review.service";
 import { writeSequenceReviewStatus } from "./sequence-review.service";
-import { validateBridgeResponseForRun } from "./agent-protocol.service";
+import { archiveAndClearAgentInbox, readAgentInboxResponseForRun } from "./agent-inbox.service";
 
 export type RunPaths = {
   runDir: string;
@@ -120,26 +118,21 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
     let result = JSON.parse(resultText) as Partial<ToolRunResult>;
     if (result.status === "pending") {
       try {
-        result = await importPendingDesktopBridgeRun(projectPath, runId, result);
+        result = await importPendingAgentInboxRun(projectPath, runId, result);
       } catch (error) {
         const completedAt = new Date().toISOString();
-        const artifactAdoption = {
-          status: "rejected" as const,
-          message: formatError(error)
-        };
+        const artifactAdoption = rejectedAdoptionForFailedImport(result, formatError(error));
         result = {
           ...result,
           status: "failed",
           completedAt,
           exitCode: 1,
-          summary: `Desktop bridge response rejected: ${formatError(error)}`,
+          summary: `Agent Inbox response rejected: ${formatError(error)}`,
           artifactAdoption
         };
         await reconcileImportedArtifactReview(projectPath, runId, result, artifactAdoption);
-        await Promise.all([
-          writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result),
-          markDesktopBridgeRequestStatus(projectPath, runId, "failed")
-        ]);
+        await writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result);
+        await archiveAgentInboxBestEffort(projectPath, runId);
       }
     }
     return {
@@ -168,21 +161,16 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
   }
 }
 
-export async function importPendingDesktopBridgeRun(
+export async function importPendingAgentInboxRun(
   projectPath: string,
   runId: string,
   result: Partial<ToolRunResult>
 ): Promise<Partial<ToolRunResult>> {
-  const response = await readDesktopBridgeResponse(getDesktopBridgeDir(projectPath, runId));
+  const response = await readAgentInboxResponseForRun(projectPath, runId, result);
   if (!response) return result;
-  const purpose = isPurpose(result.purpose) ? result.purpose : "implementation-plan";
-  if (purpose === "artifact-analysis" && !response.sourcePath.endsWith("response.json")) {
-    throw new Error(`Desktop bridge response.json is required for artifact-analysis pending run ${runId}.`);
-  }
-  validateBridgeResponseForRun(response, { ...result, id: runId });
   const completedAt = response.completedAt ?? new Date().toISOString();
   if (Number.isNaN(Date.parse(completedAt))) {
-    throw new Error(`Desktop bridge response completedAt is invalid for run ${runId}.`);
+    throw new Error(`Agent Inbox response completedAt is invalid for run ${runId}.`);
   }
   const runDir = getRunDir(projectPath, runId);
   const updated: Partial<ToolRunResult> = {
@@ -190,21 +178,41 @@ export async function importPendingDesktopBridgeRun(
     status: response.status,
     completedAt,
     exitCode: response.status === "completed" ? 0 : 1,
-    summary: response.summary
+    summary: response.status === "failed" ? response.error?.message ?? response.summary : response.summary
   };
   const adoption = response.status === "completed"
     ? await adoptArtifactRun(projectPath, updated, response.content, "auto").catch((error) => ({
         status: "rejected" as const,
         message: formatError(error)
       }))
-    : updated.artifactAdoption;
+    : rejectedAdoptionForFailedImport(updated, response.error?.message ?? response.summary);
   await reconcileImportedArtifactReview(projectPath, runId, updated, adoption);
   await Promise.all([
     writeTextAtomic(join(runDir, "plan.md"), response.content),
-    writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption }),
-    markDesktopBridgeRequestStatus(projectPath, runId, response.status)
+    writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption })
   ]);
+  await archiveAgentInboxBestEffort(projectPath, runId);
   return { ...updated, artifactAdoption: adoption };
+}
+
+function rejectedAdoptionForFailedImport(
+  result: Partial<ToolRunResult>,
+  message: string
+): ToolRunResult["artifactAdoption"] {
+  if (result.purpose !== "artifact-analysis") {
+    return result.artifactAdoption ?? { status: "not-applicable", message: "Run is not an artifact-analysis run." };
+  }
+  return { status: "rejected", message };
+}
+
+async function archiveAgentInboxBestEffort(projectPath: string, runId: string): Promise<void> {
+  await archiveAndClearAgentInbox(projectPath, runId).catch((error) => {
+    console.warn("Failed to archive Agent Inbox after run import.", {
+      projectPath,
+      runId,
+      error: formatError(error)
+    });
+  });
 }
 
 async function reconcileImportedArtifactReview(

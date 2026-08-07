@@ -19,7 +19,7 @@ describe("agent-plugin.service", () => {
 
     expect(manifest).toMatchObject({
       id: "flowweave",
-      protocolVersion: 1,
+      protocolVersion: 2,
       hosts: expect.arrayContaining([
         expect.objectContaining({ id: "codex" }),
         expect.objectContaining({ id: "claude" }),
@@ -42,7 +42,7 @@ describe("agent-plugin.service", () => {
 
     expect(after.every((status) => status.status === "installed")).toBe(true);
     expect(after.every((status) => status.hostInstructionPath?.startsWith(join(pluginRoot, "hosts")))).toBe(true);
-    await expect(readFile(join(pluginRoot, "manifest.json"), "utf8")).resolves.toContain('"protocolVersion": 1');
+    await expect(readFile(join(pluginRoot, "manifest.json"), "utf8")).resolves.toContain('"protocolVersion": 2');
   });
 
   it("installs native plugin manifests and marketplace discovery files for external agents", async () => {
@@ -128,9 +128,9 @@ describe("agent-plugin.service", () => {
       join(externalPluginRoot, "manifest.json"),
       JSON.stringify({
         id: "flowweave",
-        name: "FlowWeave Agent Bridge",
+        name: "FlowWeave Agent Inbox",
         version: "0.1.0",
-        protocolVersion: 1,
+        protocolVersion: 2,
         description: "old",
         hosts: []
       }),

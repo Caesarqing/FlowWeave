@@ -75,12 +75,12 @@ export function useRunHistory(projectId: string) {
     }
   }
 
-  async function openSelectedRunBridge() {
+  async function openSelectedAgentInbox() {
     if (!window.flowweave || !projectId || !selectedRunId) return;
     try {
-      await window.flowweave.openRunBridge(projectId, selectedRunId);
+      await window.flowweave.openAgentInbox(projectId, selectedRunId);
     } catch (error) {
-      setLastRunStatus(t("agent.openRunBridgeFailed", { error: formatErrorMessage(error) }));
+      setLastRunStatus(t("agent.openAgentInboxFailed", { error: formatErrorMessage(error) }));
     }
   }
 
@@ -88,7 +88,7 @@ export function useRunHistory(projectId: string) {
     void refreshRuns();
   }, [projectId]);
 
-  return { applySelectedRunArtifact, openGitReviewFromRun, openSelectedRunBridge, refreshRuns, selectRun };
+  return { applySelectedRunArtifact, openGitReviewFromRun, openSelectedAgentInbox, refreshRuns, selectRun };
 }
 
 function syncAppliedRunArtifactStatus(

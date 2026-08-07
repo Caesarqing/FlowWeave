@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,13 @@ import { startToolPlan } from "../../src/main/services/agent-run.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
+import { readArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
+import {
+  getAgentInboxArchiveInvalidResponsePath,
+  getAgentInboxRequestPath,
+  getAgentInboxResponsePath,
+  writeAgentInboxRequest
+} from "../../src/main/services/agent-inbox.service";
 
 describe("run-log.service", () => {
   it("lists run summaries newest first", async () => {
@@ -63,6 +70,100 @@ describe("run-log.service", () => {
     expect(artifact.plan).toContain("Mock plan");
     expect(artifact.result).toContain('"toolId": "mock"');
   });
+
+  it("imports failed Agent Inbox artifact responses as rejected review failures", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-failed-inbox-"));
+    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
+    const runId = "run-failed-inbox";
+    await writePendingRunResult(projectPath, runId, projectId, {
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map",
+      scanFingerprint: "scan-1",
+      reviewId: "review-1"
+    });
+    await writeAgentInboxRequest({
+      id: runId,
+      projectId,
+      projectPath,
+      prompt: "Return architecture JSON.",
+      executionMode: "plan",
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map",
+      scanFingerprint: "scan-1",
+      reviewId: "review-1"
+    }, "codex-desktop");
+    await writeFile(getAgentInboxResponsePath(projectPath), JSON.stringify({
+      protocolVersion: 2,
+      runId,
+      projectId,
+      status: "failed",
+      summary: "Agent could not inspect project.",
+      content: "",
+      completedAt: "2026-08-07T00:00:00.000Z",
+      error: { code: "agent-error", message: "Tool crashed during analysis." }
+    }), "utf8");
+
+    const summaries = await listRunSummaries(projectPath);
+    const review = await readArchitectureReviewStatus(projectPath, "scan-1");
+
+    expect(summaries[0]).toMatchObject({
+      id: runId,
+      status: "failed",
+      summary: "Tool crashed during analysis.",
+      artifactAdoption: {
+        status: "rejected",
+        message: "Tool crashed during analysis."
+      }
+    });
+    expect(review).toMatchObject({
+      state: "review-failed",
+      reviewId: "review-1",
+      runId,
+      error: {
+        code: "invalid-output",
+        message: "Tool crashed during analysis."
+      }
+    });
+  });
+
+  it("records malformed Agent Inbox responses as failed runs and preserves invalid response text", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-malformed-inbox-"));
+    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
+    const runId = "run-malformed-inbox";
+    await writePendingRunResult(projectPath, runId, projectId, {
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map",
+      scanFingerprint: "scan-1",
+      reviewId: "review-1"
+    });
+    await writeAgentInboxRequest({
+      id: runId,
+      projectId,
+      projectPath,
+      prompt: "Return architecture JSON.",
+      executionMode: "plan",
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map",
+      scanFingerprint: "scan-1",
+      reviewId: "review-1"
+    }, "codex-desktop");
+    await writeFile(getAgentInboxResponsePath(projectPath), "{not valid json", "utf8");
+
+    const summaries = await listRunSummaries(projectPath);
+
+    expect(summaries[0]).toMatchObject({
+      id: runId,
+      status: "failed",
+      artifactAdoption: {
+        status: "rejected",
+        message: expect.stringContaining("Expected property name")
+      }
+    });
+    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(getAgentInboxArchiveInvalidResponsePath(projectPath, runId), "utf8")).resolves.toBe("{not valid json");
+  });
 });
 
 async function writeRunResult(projectPath: string, runId: string, startedAt: string) {
@@ -84,6 +185,47 @@ async function writeRunResult(projectPath: string, runId: string, startedAt: str
         completedAt: startedAt,
         summary: `Summary for ${runId}`,
         events: []
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+}
+
+async function writePendingRunResult(
+  projectPath: string,
+  runId: string,
+  projectId: string,
+  overrides: {
+    purpose: "implementation-plan" | "artifact-analysis";
+    artifactTarget?: "architecture-map" | "sequence-diagrams" | "sequence-revision";
+    scanFingerprint?: string;
+    reviewId?: string;
+  }
+) {
+  const runDir = join(projectPath, FLOWWEAVE_DIR, "runs", runId);
+  await mkdir(runDir, { recursive: true });
+  await writeFile(join(runDir, "prompt.md"), `Prompt for ${runId}\n`, "utf8");
+  await writeFile(join(runDir, "plan.md"), "", "utf8");
+  await writeFile(join(runDir, "agent.log"), "", "utf8");
+  await writeFile(
+    join(runDir, "result.json"),
+    `${JSON.stringify(
+      {
+        id: runId,
+        projectId,
+        toolId: "codex-desktop",
+        status: "pending",
+        executionMode: "plan",
+        projectPath,
+        startedAt: "2026-08-07T00:00:00.000Z",
+        completedAt: "2026-08-07T00:00:00.000Z",
+        events: [],
+        artifactAdoption: overrides.purpose === "artifact-analysis"
+          ? { status: "pending", message: "Waiting for Agent Inbox response." }
+          : { status: "not-applicable", message: "Run is not an artifact-analysis run." },
+        ...overrides
       },
       null,
       2

@@ -1,11 +1,9 @@
 import { execFile } from "node:child_process";
-import { access, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { promisify } from "node:util";
 import type { ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { nowIso } from "./time";
 import { resolveAppPath, resolveToolCommand } from "./agent-command";
-import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { buildAgentInboxInstruction, writeAgentInboxRequest } from "../services/agent-inbox.service";
 
 const execFileAsync = promisify(execFile);
 const CURSOR_APP_PATH = "/Applications/Cursor.app";
@@ -88,7 +86,6 @@ export class CursorAdapter implements ToolAdapter {
 
   async runPlan(request: ToolRunRequest, onEvent?: (event: ToolRunEvent) => void): Promise<ToolRunResult> {
     const startedAt = nowIso();
-    const planPath = join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id, "plan.md");
     const detection = await this.detect();
     const events: ToolRunEvent[] = [];
     const pushEvent = (event: ToolRunEvent) => {
@@ -97,48 +94,30 @@ export class CursorAdapter implements ToolAdapter {
     };
 
     pushEvent({ type: "status", status: "running", timestamp: startedAt });
-
-    const plan = `# Cursor ${request.executionMode === "execute" ? "Execute" : "Plan"} Context
-
-Cursor v1 integration writes this plan for manual review in Cursor.
-
-## How to use
-
-1. Open the project in Cursor.
-2. Attach or paste this plan and the generated FlowWeave guidance.
-3. Review Cursor's proposed edits before applying them.
-
-## FlowWeave Prompt
-
-${request.prompt}
-`;
-
-    await access(join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id));
-    await writeFile(planPath, plan, "utf8");
-    if (request.executionMode === "execute" && detection.available) {
+    await writeAgentInboxRequest(request, this.id);
+    if (detection.available) {
       await this.openProject(request.projectPath);
     }
     pushEvent({
       type: "stdout",
       content: detection.available
-        ? `Cursor context plan written. ${detection.message ?? ""}`
-        : `Cursor context plan written, but Cursor was not detected. ${detection.message ?? ""}`,
+        ? `Cursor opened. ${buildAgentInboxInstruction(request.projectPath)}`
+        : `Agent Inbox request written, but Cursor was not detected. ${detection.message ?? ""}`,
       timestamp: nowIso()
     });
-    pushEvent({ type: "status", status: detection.available ? "completed" : "failed", timestamp: nowIso() });
+    pushEvent({ type: "status", status: "pending", timestamp: nowIso() });
 
     return {
       id: request.id,
       toolId: this.id,
-      status: detection.available ? "completed" : "failed",
+      status: "pending",
       projectPath: request.projectPath,
       startedAt,
       completedAt: nowIso(),
-      exitCode: detection.available ? 0 : 1,
-      planPath,
+      exitCode: undefined,
       executionMode: request.executionMode,
       purpose: request.purpose,
-      summary: detection.available ? "Cursor plan generated. Open the project in Cursor to review." : detection.message,
+      summary: detection.available ? `Pending Cursor Agent Inbox response for ${request.id}.` : detection.message,
       events
     };
   }

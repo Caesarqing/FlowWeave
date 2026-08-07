@@ -24,13 +24,13 @@ describe("agent connector prompts", () => {
       "/tmp/project/.flowweave/agent-context.md",
       "/tmp/project/.flowweave/agent-context.md"
     ]);
-    expect(prompts[1].command).toBe("Use FlowWeave context to process pending requests.");
-    expect(prompts[3].command).toBe("Use FlowWeave context to process pending requests.");
+    expect(prompts[1].command).toBe("Use FlowWeave context to process the Agent Inbox.");
+    expect(prompts[3].command).toBe("Use FlowWeave context to process the Agent Inbox.");
     expect(prompts[0].description).toContain("stdin");
-    expect(prompts[3].description).toContain("pending request");
+    expect(prompts[3].description).toContain("response.json");
     expect(prompts[1].command).not.toMatch(/[\u3400-\u9fff]/u);
-    expect(chinesePrompts[1].command).toBe("使用 FlowWeave 上下文处理当前待办");
-    expect(chinesePrompts[3].command).toBe("使用 FlowWeave 上下文处理当前待办");
+    expect(chinesePrompts[1].command).toBe("使用 FlowWeave 上下文处理当前 Agent Inbox");
+    expect(chinesePrompts[3].command).toBe("使用 FlowWeave 上下文处理当前 Agent Inbox");
     expect([prompts[0], prompts[2], prompts[4], prompts[5]].every((prompt) =>
       prompt.command.includes("You may modify project files directly.")
     )).toBe(true);

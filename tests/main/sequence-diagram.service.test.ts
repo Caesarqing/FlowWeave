@@ -234,7 +234,7 @@ describe("sequence-diagram.service", () => {
     });
   });
 
-  it("waits for desktop bridge response.json before completing sequence review", async () => {
+  it("waits for Agent Inbox response.json before completing sequence review", async () => {
     const root = await createFixtureFiles();
     const projectId = await registerProject(root);
     const events: import("../../src/types").SequenceReviewEvent[] = [];
@@ -270,12 +270,13 @@ describe("sequence-diagram.service", () => {
     const running = await waitForRunId(events);
     const runId = running.status.runId;
     if (!runId) throw new Error("Expected sequence review run id.");
-    const bridgeDir = join(root, FLOWWEAVE_DIR, "agent-bridge", runId);
-    await waitForPath(join(bridgeDir, "request.json"));
-    await mkdir(bridgeDir, { recursive: true });
+    const inboxDir = join(root, FLOWWEAVE_DIR, "agent-inbox", "current");
+    await waitForPath(join(inboxDir, "request.json"));
+    await mkdir(inboxDir, { recursive: true });
     await writeFile(
-      join(bridgeDir, "response.json"),
+      join(inboxDir, "response.json"),
       JSON.stringify({
+        protocolVersion: 2,
         runId,
         projectId,
         status: "completed",

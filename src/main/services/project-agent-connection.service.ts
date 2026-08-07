@@ -259,7 +259,7 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
     "- You may modify project files when the user asks you to implement a change.",
     "- After modifying files, report the changed file paths and the verification you ran.",
     "- Ask the user to return to FlowWeave to review Git diff, refresh the project scan, or rollback when needed.",
-    "- When asked to process FlowWeave pending requests, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest `createdAt` to newest, and follow each entry's `instructionsPath` or `requestPath`.",
+    "- When asked to process the FlowWeave Agent Inbox, read `.flowweave/agent-inbox/current/request.json` and write exactly one response to the request's `responsePath`.",
     "",
     ...buildAgentProtocolContextInstructions(),
     "## FlowWeave Artifacts",
@@ -339,9 +339,9 @@ function buildManagedInstructionBlock() {
     "",
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
-    "When the user says `Use FlowWeave context to process pending requests.` or `使用 FlowWeave 上下文处理当前待办`, read `.flowweave/agent-bridge/pending-requests.json`, process pending entries from oldest to newest, and write each Agent Protocol v1 response atomically to that entry's responsePath.",
-    "For artifact-analysis requests, write `.flowweave/agent-bridge/<runId>/response.json` with `protocolVersion: 1`; replying only in chat does not complete the FlowWeave review.",
-    "For artifact-analysis requests, `response.json.content` must be the exact structured artifact JSON requested by the prompt, not an approval summary or markdown plan.",
+    "When the user says `Use FlowWeave context to process the Agent Inbox.` or `使用 FlowWeave 上下文处理当前 Inbox`, read `.flowweave/agent-inbox/current/request.json` and write one Agent Inbox v2 response atomically to the request's responsePath.",
+    "For artifact-analysis requests, write `response.json` with `protocolVersion: 2`; replying only in chat does not complete the FlowWeave review.",
+    "For artifact-analysis requests, `response.json.content` must be the exact structured artifact JSON requested by `request.json.prompt`, not an approval summary or markdown plan.",
     "Do not edit `.flowweave/architecture-review.json` or `.flowweave/sequence-review.json`; FlowWeave Core validates responses and updates review state.",
     FLOWWEAVE_BLOCK_END
   ].join("\n");
@@ -448,8 +448,8 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
   if (contextRoot !== projectPath) {
     return `FlowWeave Agent context root is stale: expected "${projectPath}" but found "${contextRoot ?? "unknown"}".`;
   }
-  if (!context.includes("pending-requests.json")) {
-    return `FlowWeave Agent context is missing pending request instructions: ${contextPath}`;
+  if (!context.includes("agent-inbox/current/request.json")) {
+    return `FlowWeave Agent context is missing Agent Inbox instructions: ${contextPath}`;
   }
   for (const entry of platformEntries(projectPath, platforms)) {
     const content = await readOptionalText(entry.filePath);
@@ -459,7 +459,7 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
       return `FlowWeave managed instructions are missing from: ${entry.filePath}`;
     }
     const managedContent = content.slice(block.start, block.end);
-    if (!managedContent.includes("pending-requests.json")) {
+    if (!managedContent.includes("agent-inbox/current/request.json")) {
       return `FlowWeave managed instructions are stale in: ${entry.filePath}`;
     }
     if (entry.platform === "cursor" && !content.includes("alwaysApply: true")) {

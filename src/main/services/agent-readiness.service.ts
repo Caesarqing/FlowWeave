@@ -83,7 +83,7 @@ async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId, runM
     suggestedActions: detection.available
       ? [`${adapter.name} is detectable. Review the run log if executions fail.`]
       : unavailableDesktopBridge
-        ? [`Install or open ${adapter.name} to process pending desktop bridge requests, or process the generated request files manually.`]
+        ? [`Install or open ${adapter.name} to process Agent Inbox requests, or process the generated request file manually.`]
         : [`Install or configure ${adapter.name}, then run detection again.`],
     environmentHints: [],
     checkedAt: new Date().toISOString()

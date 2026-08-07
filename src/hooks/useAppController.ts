@@ -111,7 +111,7 @@ export function useAppController({
     flow.graphRelations,
     flow.canvasLayout
   );
-  const { applySelectedRunArtifact, openGitReviewFromRun, openSelectedRunBridge, refreshRuns, selectRun } = useRunHistory(projectId);
+  const { applySelectedRunArtifact, openGitReviewFromRun, openSelectedAgentInbox, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
     maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
     projectId,
@@ -559,7 +559,7 @@ export function useAppController({
       onOpenAgentPluginFolder: toolActions.openAgentPluginFolder,
       onOpenAgentPluginInstructions: toolActions.openAgentPluginInstructions,
       onOpenToolProject: toolActions.openToolProject,
-      onOpenRunBridge: openSelectedRunBridge,
+      onOpenAgentInbox: openSelectedAgentInbox,
       onRefreshRuns: refreshRuns,
       onRefreshAgentPlugins: toolActions.refreshAgentPlugins,
       onRetryRunArtifact: retryRunArtifact,

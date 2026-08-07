@@ -232,9 +232,12 @@ describe("architecture-analysis.service", () => {
     await writeFile(
       scriptPath,
       [
+        "import { mkdir, readFile, writeFile } from 'node:fs/promises';",
+        "import { dirname } from 'node:path';",
         "process.stdin.resume();",
-        "process.stdin.on('end', () => {",
-        "  console.log(JSON.stringify({",
+        "process.stdin.on('end', async () => {",
+        "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  const content = {",
         "    architectureStyle: 'layered service',",
         "    modules: [",
         "      {",
@@ -269,7 +272,17 @@ describe("architecture-analysis.service", () => {
         "      description: 'API calls service.',",
         "      evidence: [{ filePath: 'src/api/user.controller.ts', detail: 'imports service' }]",
         "    }]",
-        "  }));",
+        "  };",
+        "  await mkdir(dirname(request.responsePath), { recursive: true });",
+        "  await writeFile(request.responsePath, JSON.stringify({",
+        "    protocolVersion: 2,",
+        "    runId: request.runId,",
+        "    projectId: request.projectId,",
+        "    status: 'completed',",
+        "    summary: 'Reviewed architecture.',",
+        "    content,",
+        "    completedAt: new Date().toISOString()",
+        "  }, null, 2), 'utf8');",
         "});"
       ].join("\n"),
       "utf8"
@@ -351,7 +364,24 @@ describe("architecture-analysis.service", () => {
     configureAgentRegistry(configRoot);
     await writeFile(
       scriptPath,
-      "process.stdin.resume(); process.stdin.on('end', () => console.log('invalid architecture output'));",
+      [
+        "import { mkdir, readFile, writeFile } from 'node:fs/promises';",
+        "import { dirname } from 'node:path';",
+        "process.stdin.resume();",
+        "process.stdin.on('end', async () => {",
+        "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  await mkdir(dirname(request.responsePath), { recursive: true });",
+        "  await writeFile(request.responsePath, JSON.stringify({",
+        "    protocolVersion: 2,",
+        "    runId: request.runId,",
+        "    projectId: request.projectId,",
+        "    status: 'completed',",
+        "    summary: 'Invalid architecture.',",
+        "    content: 'invalid architecture output',",
+        "    completedAt: new Date().toISOString()",
+        "  }, null, 2), 'utf8');",
+        "});"
+      ].join("\n"),
       "utf8"
     );
     const agent = await saveCustomAgent({

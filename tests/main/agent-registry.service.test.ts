@@ -46,7 +46,7 @@ describe("agent-registry.service", () => {
       id: "custom:gemini-cli",
       command: process.execPath,
       args: ["--model", "pro"],
-      protocol: "cli-stdin",
+      protocol: "agent-inbox",
       capabilities: ["execute"]
     }));
 
@@ -73,12 +73,22 @@ describe("agent-registry.service", () => {
     await writeFile(
       scriptPath,
       [
+        "import { readFileSync, writeFileSync } from 'node:fs';",
         "let input = '';",
         "process.stdin.setEncoding('utf8');",
         "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', () => {",
-        "  console.log('# Custom CLI Plan');",
-        "  console.log(input.includes('Analyze auth module') ? 'received prompt' : 'missing prompt');",
+        "  const request = JSON.parse(readFileSync('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  writeFileSync(request.responsePath, JSON.stringify({",
+        "    protocolVersion: 2,",
+        "    runId: request.runId,",
+        "    projectId: request.projectId,",
+        "    status: 'completed',",
+        "    summary: 'custom inbox response',",
+        "    content: '# Custom CLI Plan\\nreceived prompt',",
+        "    completedAt: '2026-06-09T12:00:00.000Z'",
+        "  }));",
+        "  console.log(input.includes('Agent Inbox') ? 'received inbox instruction' : 'missing inbox instruction');",
         "});"
       ].join("\n"),
       "utf8"
@@ -109,12 +119,22 @@ describe("agent-registry.service", () => {
     await writeFile(
       scriptPath,
       [
+        "import { readFileSync, writeFileSync } from 'node:fs';",
         "let input = '';",
         "process.stdin.setEncoding('utf8');",
         "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', () => {",
-        "  console.log('# Custom CLI Plan');",
-        "  console.log(input.includes('Analyze auth module') ? 'received prompt' : 'missing prompt');",
+        "  const request = JSON.parse(readFileSync('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  writeFileSync(request.responsePath, JSON.stringify({",
+        "    protocolVersion: 2,",
+        "    runId: request.runId,",
+        "    projectId: request.projectId,",
+        "    status: 'completed',",
+        "    summary: 'custom inbox response',",
+        "    content: '# Custom CLI Plan\\nreceived prompt',",
+        "    completedAt: '2026-06-09T12:00:00.000Z'",
+        "  }));",
+        "  console.log(input.includes('Agent Inbox') ? 'received inbox instruction' : 'missing inbox instruction');",
         "});"
       ].join("\n"),
       "utf8"
@@ -138,21 +158,22 @@ describe("agent-registry.service", () => {
 
     expect(result.status).toBe("completed");
     expect(result.planPath).toBeTruthy();
-    await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("received prompt");
+    await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Custom CLI Plan");
+    await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("received inbox instruction");
   });
 
-  it("reuses the desktop bridge protocol for custom desktop agents", async () => {
+  it("uses Agent Inbox for custom desktop agents", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-agents-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-custom-desktop-"));
     configureAgentRegistry(configRoot);
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
     const agent = await saveCustomAgent({
       name: "Local Desktop Agent",
-      protocol: "desktop-bridge",
+      protocol: "agent-inbox",
       appPath: "/definitely/not/LocalAgent.app",
       bridgeInstructions: "Return a concise response.",
       capabilities: ["artifact-analysis", "implementation-plan"],
-      description: "Test desktop bridge adapter."
+      description: "Test desktop inbox adapter."
     });
 
     const projectId = await registerProject(projectPath);
@@ -166,7 +187,7 @@ describe("agent-registry.service", () => {
 
     expect(result.status).toBe("pending");
     expect(result.agentReadiness?.severity).toBe("warning");
-    const bridgeRequestPath = join(projectPath, FLOWWEAVE_DIR, "agent-bridge", result.id, "request.json");
-    await expect(readFile(bridgeRequestPath, "utf8")).resolves.toContain('"agentId": "custom:local-desktop-agent"');
+    const inboxRequestPath = join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current", "request.json");
+    await expect(readFile(inboxRequestPath, "utf8")).resolves.toContain('"agentId": "custom:local-desktop-agent"');
   });
 });

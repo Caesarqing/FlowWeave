@@ -89,18 +89,14 @@ function parseManifest(content: string, path: string): AgentDefinition {
     throw new Error(`Agent connector manifest ${path} has an invalid id; expected a custom:* id.`);
   }
   const protocol = requiredProtocol(value, path);
-  const kind = protocol === "desktop-bridge" ? "desktop" : "cli";
   const command = requiredString(value, "command", path);
   const appPath = optionalString(value, "appPath", path);
-  if (protocol === "desktop-bridge" && !appPath && !command) {
-    throw new Error(`Agent connector manifest ${path} requires appPath or command for desktop-bridge.`);
-  }
   return {
     id: id as AgentDefinition["id"],
     name: requiredString(value, "name", path),
-    kind,
+    kind: appPath ? "desktop" : "cli",
     protocol,
-    protocolVersion: 1,
+    protocolVersion: 2,
     command,
     args: stringArray(value, "args", path),
     planArgs: optionalStringArray(value, "planArgs", path),
@@ -117,8 +113,8 @@ function parseManifest(content: string, path: string): AgentDefinition {
 
 function requiredProtocol(value: Record<string, unknown>, path: string): AgentProtocol {
   const protocol = requiredString(value, "protocol", path);
-  if (protocol !== "cli-stdin" && protocol !== "desktop-bridge") {
-    throw new Error(`Unsupported Agent protocol in ${path}: ${protocol}. Supported protocols are cli-stdin and desktop-bridge.`);
+  if (protocol !== "agent-inbox") {
+    throw new Error(`Unsupported Agent protocol in ${path}: ${protocol}. Supported protocol is agent-inbox.`);
   }
   return protocol;
 }

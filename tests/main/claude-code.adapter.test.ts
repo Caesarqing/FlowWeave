@@ -37,16 +37,31 @@ describe("claude-code.adapter", () => {
     ]));
   });
 
-  it("sends large prompts through stdin instead of command arguments", async () => {
+  it("sends large prompts through the Agent Inbox instead of command arguments", async () => {
     const originalPath = process.env.PATH;
     const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-stdin-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-claude-project-"));
     const commandPath = await createNodeCliFixture(binRoot, "claude", [
       "if (process.argv.includes('--version')) { console.log('claude-test 1.0'); process.exit(0); }",
+      "const { mkdir, readFile, writeFile } = require('node:fs/promises');",
+      "const { dirname } = require('node:path');",
       "let input = '';",
       "process.stdin.setEncoding('utf8');",
       "process.stdin.on('data', (chunk) => { input += chunk; });",
-      "process.stdin.on('end', () => { process.stdout.write(String(input.length)); });"
+      "process.stdin.on('end', async () => {",
+      "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+      "  process.stdout.write(String(request.prompt.length));",
+      "  await mkdir(dirname(request.responsePath), { recursive: true });",
+      "  await writeFile(request.responsePath, JSON.stringify({",
+      "    protocolVersion: 2,",
+      "    runId: request.runId,",
+      "    projectId: request.projectId,",
+      "    status: 'completed',",
+      "    summary: 'Large prompt received.',",
+      "    content: '# Plan',",
+      "    completedAt: new Date().toISOString()",
+      "  }, null, 2), 'utf8');",
+      "});"
     ].join("\n"), process.platform);
     process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
     try {

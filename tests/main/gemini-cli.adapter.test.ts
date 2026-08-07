@@ -30,17 +30,29 @@ describe("gemini-cli.adapter", () => {
     expect(buildGeminiPrompt("Inspect auth.", "execute")).toBe("Inspect auth.");
   });
 
-  it("runs Gemini CLI through stdin", async () => {
+  it("runs Gemini CLI through the Agent Inbox", async () => {
     const binDir = await mkdtemp(join(tmpdir(), "flowweave-gemini-bin-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-gemini-project-"));
     const scriptPath = await createNodeCliFixture(binDir, "gemini", [
       "if (process.argv.includes('--version')) { console.log('gemini-test 1.0'); process.exit(0); }",
+      "const { mkdir, readFile, writeFile } = require('node:fs/promises');",
+      "const { dirname } = require('node:path');",
       "let input = '';",
       "process.stdin.setEncoding('utf8');",
       "process.stdin.on('data', (chunk) => { input += chunk; });",
-      "process.stdin.on('end', () => {",
-      "  console.log('# Gemini Plan');",
-      "  if (input.includes('Analyze billing')) console.log('received prompt');",
+      "process.stdin.on('end', async () => {",
+      "  if (input.includes('Agent Inbox')) console.log('received inbox instruction');",
+      "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+      "  await mkdir(dirname(request.responsePath), { recursive: true });",
+      "  await writeFile(request.responsePath, JSON.stringify({",
+      "    protocolVersion: 2,",
+      "    runId: request.runId,",
+      "    projectId: request.projectId,",
+      "    status: 'completed',",
+      "    summary: 'Gemini plan complete.',",
+      "    content: '# Gemini Plan',",
+      "    completedAt: new Date().toISOString()",
+      "  }, null, 2), 'utf8');",
       "});"
     ].join("\n"), process.platform);
     process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
@@ -64,7 +76,8 @@ describe("gemini-cli.adapter", () => {
     });
 
     expect(result.status).toBe("completed");
-    expect(result.events.map((event) => ("content" in event ? event.content : "")).join("\n")).toContain("received prompt");
+    expect(result.outputText).toContain("# Gemini Plan");
+    expect(result.events.map((event) => ("content" in event ? event.content : "")).join("\n")).toContain("received inbox instruction");
   });
 
   it("reports Gemini model probe failures without running project writes", async () => {

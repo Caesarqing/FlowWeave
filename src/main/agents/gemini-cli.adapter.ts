@@ -2,8 +2,8 @@ import { access } from "node:fs/promises";
 import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { resolveToolCommand } from "./agent-command";
 import { nowIso } from "./time";
-import { runSpawnedAgent } from "./spawn-agent-process";
 import { runAgentModelProbe } from "./agent-probe";
+import { runCliAgentInbox } from "./agent-inbox-runner";
 
 export class GeminiCliAdapter implements ToolAdapter {
   id = "gemini-cli" as const;
@@ -89,13 +89,11 @@ export class GeminiCliAdapter implements ToolAdapter {
     }
 
     const commandPath = resolvedCommand.commandPath;
-    const prompt = request.prompt;
-    return runSpawnedAgent({
+    return runCliAgentInbox({
       toolId: this.id,
       commandPath,
       args: buildGeminiArgs(request.executionMode, request.model),
-      request,
-      stdin: prompt
+      request
     }, onEvent);
   }
 }

@@ -1,5 +1,5 @@
 # FlowWeave for Codex
 
-Use the `flowweave` skill when a project contains `.flowweave/agent-bridge`.
+Use the `flowweave` skill when a project contains `.flowweave/agent-inbox/current/request.json`.
 
-Codex Desktop and Codex CLI should read `.flowweave/agent-context.md`, process pending bridge requests, and write Agent Protocol v1 `response.json` files to each request's `responsePath`.
+Codex Desktop and Codex CLI should read `.flowweave/agent-context.md`, read the active Agent Inbox request, and write Agent Inbox v2 `response.json` to the request's `responsePath`.

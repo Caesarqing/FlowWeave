@@ -61,7 +61,18 @@ describe("agent-run.service", () => {
       "process.stdin.on('data', (chunk) => { input += chunk; });",
       "process.stdin.on('end', () => {",
       "  if (input.includes('FlowWeave health check')) { console.error('unexpected model probe'); process.exit(7); }",
-      "  console.log('# Codex Plan');",
+      "  const fs = require('fs');",
+      "  const request = JSON.parse(fs.readFileSync('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+      "  fs.writeFileSync(request.responsePath, JSON.stringify({",
+      "    protocolVersion: 2,",
+      "    runId: request.runId,",
+      "    projectId: request.projectId,",
+      "    status: 'completed',",
+      "    summary: 'codex inbox response',",
+      "    content: '# Codex Plan',",
+      "    completedAt: '2026-06-09T12:00:00.000Z'",
+      "  }));",
+      "  console.log('stdout log only');",
       "});"
     ].join("\n"), process.platform);
     process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
@@ -118,7 +129,7 @@ describe("agent-run.service", () => {
     await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("preflight failed");
   });
 
-  it("writes desktop bridge responses into run artifacts", async () => {
+  it("writes Agent Inbox responses into run artifacts", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-run-"));
     const runId = "run-1700000000000";
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
@@ -126,11 +137,12 @@ describe("agent-run.service", () => {
     vi.spyOn(Date, "now").mockReturnValue(1700000000000);
 
     setTimeout(() => {
-      const bridgeDir = join(projectPath, FLOWWEAVE_DIR, "agent-bridge", runId);
-      void mkdir(bridgeDir, { recursive: true }).then(() =>
+      const inboxDir = join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current");
+      void mkdir(inboxDir, { recursive: true }).then(() =>
         writeFile(
-          join(bridgeDir, "response.json"),
+          join(inboxDir, "response.json"),
           JSON.stringify({
+            protocolVersion: 2,
             runId,
             projectId,
             status: "completed",
@@ -146,7 +158,7 @@ describe("agent-run.service", () => {
     const result = await startToolPlan({
       projectId,
       toolId: "codex-desktop",
-      prompt: "Review desktop bridge.",
+      prompt: "Review Agent Inbox.",
       executionMode: "plan",
       purpose: "implementation-plan"
     });
@@ -160,7 +172,7 @@ describe("agent-run.service", () => {
     expect(artifact.result).toContain('"toolId": "codex-desktop"');
   });
 
-  it("imports desktop bridge response.md for implementation-plan runs", async () => {
+  it("imports Agent Inbox response.json for implementation-plan runs", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-md-run-"));
     const runId = "run-1700000000001";
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
@@ -168,16 +180,24 @@ describe("agent-run.service", () => {
     vi.spyOn(Date, "now").mockReturnValue(1700000000001);
 
     setTimeout(() => {
-      const bridgeDir = join(projectPath, FLOWWEAVE_DIR, "agent-bridge", runId);
-      void mkdir(bridgeDir, { recursive: true }).then(() =>
-        writeFile(join(bridgeDir, "response.md"), "# Desktop Markdown Plan", "utf8")
+      const inboxDir = join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current");
+      void mkdir(inboxDir, { recursive: true }).then(() =>
+        writeFile(join(inboxDir, "response.json"), JSON.stringify({
+          protocolVersion: 2,
+          runId,
+          projectId,
+          status: "completed",
+          summary: "desktop markdown response",
+          content: "# Desktop Markdown Plan",
+          completedAt: "2026-06-09T12:00:00.000Z"
+        }), "utf8")
       );
     }, 20);
 
     const result = await startToolPlan({
       projectId,
       toolId: "codex-desktop",
-      prompt: "Review desktop bridge markdown.",
+      prompt: "Review Agent Inbox markdown.",
       executionMode: "plan",
       purpose: "implementation-plan"
     });

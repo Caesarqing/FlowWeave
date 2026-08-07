@@ -13,7 +13,7 @@ const DEFAULT_EXECUTE_POLICY: AgentRunPolicy = {
   retryCount: 0,
   retryDelayMs: 0
 };
-const MAX_CONCURRENT_READS_PER_PROJECT = 2;
+const MAX_CONCURRENT_READS_PER_PROJECT = 1;
 const MAX_QUEUED_READS_PER_PROJECT = 8;
 const activeWrites = new Set<string>();
 const activeReads = new Map<string, number>();
@@ -182,7 +182,9 @@ export function normalizeAgentResult(result: ToolRunResult): ToolRunResult {
   const outputs = collectOutputs(result);
   const preferred = outputs.find((output) => output.source === "stdout" && output.text.trim()) ??
     outputs.find((output) => output.text.trim());
-  const outputText = preferred ? extractProviderOutputText(preferred.text) : "";
+  const outputText = result.outputText?.trim()
+    ? result.outputText
+    : preferred ? extractProviderOutputText(preferred.text) : "";
   const failure = result.status === "failed"
     ? classifyFailure(result, outputs)
     : undefined;

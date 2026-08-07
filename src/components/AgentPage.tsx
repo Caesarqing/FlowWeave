@@ -1,6 +1,6 @@
 import { Activity, CheckCircle2, CircleAlert, Clipboard, FileText, Folder, GitPullRequestArrow, Play, Plus, RefreshCw, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { AgentCapability, AgentDefinition, AgentId, AgentPluginHostId, AgentPluginStatus, AgentProtocol, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, ProjectAgentConnectionStatus, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentPluginHostId, AgentPluginStatus, ArchitectureReviewStatus, CustomAgentInput, ExecutionMode, ProjectAgentConnectionStatus, RuntimeAgentId, ToolRunArtifact, ToolRunSummary, ToolUiStatus } from "../types";
 import type { RunArtifactTab } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { buildAgentConnectorPrompt } from "../utils/agent-connector-prompts";
@@ -15,8 +15,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "cli",
     command: "claude",
     args: ["--print", "--permission-mode", "plan"],
-    protocol: "cli-stdin",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
     capabilities: ["artifact-analysis", "implementation-plan"],
@@ -30,9 +30,9 @@ const fallbackAgents: AgentDefinition[] = [
     name: "Claude Desktop",
     kind: "desktop",
     command: "/Applications/Claude.app",
-    args: [".flowweave/agent-bridge"],
-    protocol: "desktop-bridge",
-    protocolVersion: 1,
+    args: [".flowweave/agent-inbox/current"],
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
     appPath: "/Applications/Claude.app",
@@ -48,8 +48,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "cli",
     command: "codex",
     args: ["exec", "--sandbox", "read-only"],
-    protocol: "cli-stdin",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
     capabilities: ["artifact-analysis", "implementation-plan"],
@@ -63,9 +63,9 @@ const fallbackAgents: AgentDefinition[] = [
     name: "Codex Desktop",
     kind: "desktop",
     command: "/Applications/ChatGPT.app",
-    args: [".flowweave/agent-bridge"],
-    protocol: "desktop-bridge",
-    protocolVersion: 1,
+    args: [".flowweave/agent-inbox/current"],
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
     appPath: "/Applications/ChatGPT.app",
@@ -81,8 +81,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "cli",
     command: "gemini",
     args: [],
-    protocol: "cli-stdin",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
     capabilities: ["artifact-analysis", "implementation-plan"],
@@ -97,8 +97,8 @@ const fallbackAgents: AgentDefinition[] = [
     kind: "desktop",
     command: "cursor",
     args: [],
-    protocol: "desktop-bridge",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Project .flowweave/agent-plugins/flowweave",
     appPath: "cursor",
@@ -136,7 +136,7 @@ export function AgentPage({
   onInstallAgentPlugins = noop,
   onOpenAgentPluginFolder = noop,
   onOpenAgentPluginInstructions = noop,
-  onOpenRunBridge,
+  onOpenAgentInbox,
   onOpenToolProject,
   onRefreshAgentPlugins = noop,
   onRefreshRuns,
@@ -172,7 +172,7 @@ export function AgentPage({
   onInstallAgentPlugins: () => void;
   onOpenAgentPluginFolder: () => void;
   onOpenAgentPluginInstructions: (hostId: AgentPluginHostId) => void;
-  onOpenRunBridge: () => void;
+  onOpenAgentInbox: () => void;
   onOpenToolProject: (agentId: RuntimeAgentId) => void;
   onRefreshAgentPlugins: () => void;
   onRefreshRuns: () => void;
@@ -349,7 +349,7 @@ export function AgentPage({
                 <summary>{t("agent.advancedInfo")}</summary>
                 <div className="agent-detail-list">
                   <span>{t("agent.kind")}: {agent.kind}</span>
-                  <span>{t("agent.protocol")}: {agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin")}</span>
+                  <span>{t("agent.protocol")}: {agent.protocol ?? "agent-inbox"}</span>
                   <span>{t("agent.protocolVersion")}: {agent.protocolVersion ?? t("agent.notDetected")}</span>
                   <span>{t("agent.plugin")}: {agent.pluginId ?? t("agent.none")}</span>
                   <span>{t("agent.pluginInstallTarget")}: {agent.installTarget ?? t("agent.none")}</span>
@@ -496,8 +496,8 @@ export function AgentPage({
                     </button>
                   ) : null}
                   {canOpenRunBridge(selectedRunArtifact.summary) ? (
-                    <button className="ghost-button" type="button" onClick={onOpenRunBridge}>
-                      {t("agent.openRunBridge")}
+                    <button className="ghost-button" type="button" onClick={onOpenAgentInbox}>
+                      {t("agent.openAgentInbox")}
                     </button>
                   ) : null}
                   {canRetryArtifactRun(selectedRunArtifact.summary) ? (
@@ -582,7 +582,7 @@ function AddAgentCard({
 }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
-  const [protocol, setProtocol] = useState<AgentProtocol>("cli-stdin");
+  const [isCli, setIsCli] = useState(true);
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
   const [planArgs, setPlanArgs] = useState("");
@@ -593,7 +593,6 @@ function AddAgentCard({
   const [implementationPlan, setImplementationPlan] = useState(true);
   const [execute, setExecute] = useState(false);
   const [description, setDescription] = useState("");
-  const isCli = protocol === "cli-stdin";
   const canSave = name.trim().length > 0 && (isCli ? command.trim().length > 0 : appPath.trim().length > 0);
 
   if (!isAdding) {
@@ -625,10 +624,10 @@ function AddAgentCard({
       <fieldset className="agent-form-section">
         <legend>{t("agent.protocol")}</legend>
         <div className="segmented-control">
-          <button className={cn(isCli && "active")} type="button" onClick={() => setProtocol("cli-stdin")}>
+          <button className={cn(isCli && "active")} type="button" onClick={() => setIsCli(true)}>
             {t("agent.protocolCli")}
           </button>
-          <button className={cn(!isCli && "active")} type="button" onClick={() => setProtocol("desktop-bridge")}>
+          <button className={cn(!isCli && "active")} type="button" onClick={() => setIsCli(false)}>
             {t("agent.protocolDesktop")}
           </button>
         </div>
@@ -692,7 +691,7 @@ function AddAgentCard({
           onSave(isCli
             ? {
               name: name.trim(),
-              protocol,
+              protocol: "agent-inbox",
               command: command.trim(),
               args: parseArgs(args),
               planArgs: parseArgs(planArgs),
@@ -702,14 +701,14 @@ function AddAgentCard({
             }
             : {
               name: name.trim(),
-              protocol,
+              protocol: "agent-inbox",
               appPath: appPath.trim(),
               bridgeInstructions: bridgeInstructions.trim(),
               capabilities,
               description: description.trim()
             });
           setName("");
-          setProtocol("cli-stdin");
+          setIsCli(true);
           setCommand("");
           setArgs("");
           setPlanArgs("");

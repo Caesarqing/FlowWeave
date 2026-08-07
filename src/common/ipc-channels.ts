@@ -43,6 +43,7 @@ export const TOOL_CHANNELS = {
   listRuns: "tool:list-runs",
   readRun: "tool:read-run",
   applyRunArtifact: "tool:apply-run-artifact",
+  openAgentInbox: "tool:open-agent-inbox",
   openRunBridge: "tool:open-run-bridge",
   openProject: "tool:open-project",
   getAgentPluginStatuses: "tool:get-agent-plugin-statuses",

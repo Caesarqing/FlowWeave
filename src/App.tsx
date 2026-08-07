@@ -237,7 +237,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
             onInstallAgentPlugins={app.tools.onInstallAgentPlugins}
             onOpenAgentPluginFolder={app.tools.onOpenAgentPluginFolder}
             onOpenAgentPluginInstructions={app.tools.onOpenAgentPluginInstructions}
-            onOpenRunBridge={app.tools.onOpenRunBridge}
+            onOpenAgentInbox={app.tools.onOpenAgentInbox}
             onOpenToolProject={app.tools.onOpenToolProject}
             onRefreshAgentPlugins={app.tools.onRefreshAgentPlugins}
             onRefreshRuns={app.tools.onRefreshRuns}

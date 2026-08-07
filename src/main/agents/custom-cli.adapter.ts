@@ -3,7 +3,7 @@ import type { AgentDefinition, AgentHealthCheck, AgentHealthCheckResult, ToolAda
 import { resolveCandidate } from "./agent-command";
 import { prepareCommandInvocation } from "./command-invocation";
 import { nowIso } from "./time";
-import { runSpawnedAgent } from "./spawn-agent-process";
+import { runCliAgentInbox } from "./agent-inbox-runner";
 
 export class CustomCliAdapter implements ToolAdapter {
   id: AgentDefinition["id"];
@@ -88,12 +88,11 @@ export class CustomCliAdapter implements ToolAdapter {
     }
 
     const commandPath = detection.commandPath;
-    return runSpawnedAgent({
+    return runCliAgentInbox({
       toolId: this.definition.id,
       commandPath,
       args: argsForRequest(this.definition, request),
-      request,
-      stdin: request.prompt
+      request
     }, onEvent);
   }
 }

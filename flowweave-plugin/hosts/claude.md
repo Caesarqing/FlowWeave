@@ -1,5 +1,5 @@
 # FlowWeave for Claude
 
-Use the FlowWeave Agent Protocol v1 bridge instructions when working in Claude Desktop, Claude Code, or Claude Code CLI.
+Use the FlowWeave Agent Inbox v2 instructions when working in Claude Desktop, Claude Code, or Claude Code CLI.
 
-Desktop/manual sessions should answer pending bridge requests with `response.json`. CLI runs should return stdout to FlowWeave and must not write bridge responses for failed CLI runs.
+Read `.flowweave/agent-inbox/current/request.json` and write exactly one `response.json` to the request's `responsePath`. Do not return the final artifact only in chat or stdout.

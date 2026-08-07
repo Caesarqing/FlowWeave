@@ -229,7 +229,7 @@ function marketplaceIncludesPlugin(value: Record<string, unknown> | undefined): 
 function isAgentPluginManifest(value: unknown): value is AgentPluginManifest {
   if (!isRecord(value)) return false;
   if (value.id !== "flowweave" || typeof value.name !== "string" || typeof value.version !== "string") return false;
-  if (value.protocolVersion !== 1 || typeof value.description !== "string") return false;
+  if (value.protocolVersion !== 2 || typeof value.description !== "string") return false;
   if (!Array.isArray(value.hosts)) return false;
   return value.hosts.every((host) => (
     isRecord(host) &&
@@ -237,7 +237,8 @@ function isAgentPluginManifest(value: unknown): value is AgentPluginManifest {
     typeof host.displayName === "string" &&
     typeof host.installTarget === "string" &&
     Array.isArray(host.capabilities) &&
-    Array.isArray(host.protocols)
+    Array.isArray(host.protocols) &&
+    host.protocols.every((protocol) => protocol === "agent-inbox")
   ));
 }
 
@@ -284,14 +285,14 @@ function buildClaudeMarketplace() {
   return {
     name: "flowweave-local",
     metadata: {
-      description: "Local FlowWeave Agent Bridge plugin marketplace."
+      description: "Local FlowWeave Agent Inbox plugin marketplace."
     },
     owner: {
       name: "FlowWeave"
     },
     plugins: [{
       name: "flowweave",
-      description: "FlowWeave Agent Bridge",
+      description: "FlowWeave Agent Inbox",
       source: FLOWWEAVE_PLUGIN_PATH,
       category: "development"
     }]

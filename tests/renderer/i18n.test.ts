@@ -26,7 +26,7 @@ describe("i18n translations", () => {
     expect(translate("en", "desktopOnly.title")).toBe("Open FlowWeave from the desktop app");
     expect(translate("en", "agent.bridgeWarning")).not.toContain("Browser preview");
     expect(translate("en", "agent.codexDescription")).toContain("local Codex CLI");
-    expect(translate("en", "agent.claudeDesktopDescription")).toContain("agent-bridge");
+    expect(translate("en", "agent.claudeDesktopDescription")).toContain("agent-inbox");
     expect(translate("en", "agent.codexDesktopDescription")).toContain("response.json");
     expect(translate("en", "agent.geminiDescription")).toContain("Gemini CLI");
     expect(translate("en", "agent.healthCheck")).toBe("Health check");
@@ -34,9 +34,11 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.contextDisabled")).toBe("context disabled");
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
     expect(translate("en", "agent.applyRunArtifact")).toBe("Apply result");
+    expect(translate("en", "agent.openAgentInbox")).toBe("Open Agent Inbox folder");
+    expect(translate("en", "agent.openRunBridge")).toBe("Open Agent Inbox folder");
     expect(translate("en", "agent.artifactAdoption.applied")).toBe("Applied");
-    expect(translate("en", "agent.protocolCli")).toBe("CLI stdin");
-    expect(translate("en", "agent.protocolDesktop")).toBe("Desktop bridge");
+    expect(translate("en", "agent.protocolCli")).toBe("CLI");
+    expect(translate("en", "agent.protocolDesktop")).toBe("Desktop");
     expect(translate("en", "agent.capabilityArtifactAnalysis")).toBe("Artifact analysis");
     expect(translate("en", "module.manualSubtitle")).toBe("Manual module");
     expect(translate("en", "assessment.high")).toBe("high");
@@ -61,7 +63,7 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "desktopOnly.title")).toBe("请从桌面端打开 FlowWeave");
     expect(translate("zh-CN", "agent.bridgeWarning")).not.toContain("浏览器预览");
     expect(translate("zh-CN", "agent.codexDescription")).toContain("本地 Codex CLI");
-    expect(translate("zh-CN", "agent.claudeDesktopDescription")).toContain("agent-bridge");
+    expect(translate("zh-CN", "agent.claudeDesktopDescription")).toContain("agent-inbox");
     expect(translate("zh-CN", "agent.codexDesktopDescription")).toContain("response.json");
     expect(translate("zh-CN", "agent.geminiDescription")).toContain("Gemini CLI");
     expect(translate("zh-CN", "agent.healthCheck")).toBe("健康检查");
@@ -69,9 +71,11 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.contextDisabled")).toBe("连接未启用");
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
     expect(translate("zh-CN", "agent.applyRunArtifact")).toBe("应用结果");
+    expect(translate("zh-CN", "agent.openAgentInbox")).toBe("打开 Agent Inbox 文件夹");
+    expect(translate("zh-CN", "agent.openRunBridge")).toBe("打开 Agent Inbox 文件夹");
     expect(translate("zh-CN", "agent.artifactAdoption.applied")).toBe("已应用");
-    expect(translate("zh-CN", "agent.protocolCli")).toBe("CLI stdin");
-    expect(translate("zh-CN", "agent.protocolDesktop")).toBe("Desktop bridge");
+    expect(translate("zh-CN", "agent.protocolCli")).toBe("CLI");
+    expect(translate("zh-CN", "agent.protocolDesktop")).toBe("桌面端");
     expect(translate("zh-CN", "agent.capabilityArtifactAnalysis")).toBe("产物分析");
     expect(translate("zh-CN", "module.manualSubtitle")).toBe("手动补充模块");
     expect(translate("zh-CN", "assessment.high")).toBe("高");

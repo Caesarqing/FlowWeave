@@ -24,7 +24,7 @@ FlowWeave is a local-first desktop workbench for reading software projects, visu
 | Area | What FlowWeave provides |
 | --- | --- |
 | Project understanding | File tree scanning, semantic indexing, architecture maps, module evidence, sequence diagrams. |
-| Agent orchestration | Built-in adapters for Codex, Claude, Gemini, Cursor, desktop bridge agents, and custom agents. |
+| Agent orchestration | Built-in adapters for Codex, Claude, Gemini, Cursor, desktop agents, and custom agents using one Agent Inbox protocol. |
 | Review workflow | Prompt/plan/log/result artifacts, artifact adoption state, Git diff inspection, checkpoints, rollback. |
 | Local-first storage | Project state and run artifacts stay under the opened repository's `.flowweave/` directory. |
 
@@ -57,7 +57,7 @@ Generated project state is intentionally stored in `.flowweave/`, which is ignor
 - **Generate sequence diagrams** for high-level architecture and detailed design flows.
 - **Compose guidance** for selected modules or connections and send it to a local agent.
 - **Run agent plans** while preserving prompt, log, plan, result, readiness, and artifact adoption metadata.
-- **Install project-local agent bridge instructions** for Codex, Claude, Gemini, and Cursor.
+- **Install project-local Agent Inbox instructions** for Codex, Claude, Gemini, and Cursor.
 - **Review Git changes** against current state or FlowWeave checkpoints before accepting work.
 - **Create project-local documentation drafts** under `.flowweave/docs/`.
 
@@ -67,13 +67,13 @@ FlowWeave includes built-in adapters for:
 
 | Agent | Protocol | Notes |
 | --- | --- | --- |
-| Claude Code CLI | CLI stdin | Runs Claude Code in plan mode by default. |
-| Claude Desktop | Desktop bridge | Uses `.flowweave/agent-bridge` request/response files. |
-| Codex CLI | CLI stdin | Runs `codex exec --sandbox read-only` for reviewable plans. |
-| Codex Desktop | Desktop bridge | Uses project-local bridge requests. |
-| Gemini CLI | CLI stdin | Sends FlowWeave prompts through stdin and records stdout/stderr. |
-| Cursor | Desktop bridge | Opens the project and uses FlowWeave connector instructions. |
-| Custom agents | CLI stdin or desktop bridge | User-configured command/app, args, protocol, and capabilities. |
+| Claude Code CLI | Agent Inbox | Runs Claude Code in plan mode and imports `.flowweave/agent-inbox/current/response.json`. |
+| Claude Desktop | Agent Inbox | Opens Claude Desktop and waits for the same inbox response file. |
+| Codex CLI | Agent Inbox | Runs `codex exec --sandbox read-only` and imports the inbox response. |
+| Codex Desktop | Agent Inbox | Opens Codex Desktop and waits for the inbox response. |
+| Gemini CLI | Agent Inbox | Runs Gemini CLI and imports the inbox response. |
+| Cursor | Agent Inbox | Opens the project and waits for the inbox response. |
+| Custom agents | Agent Inbox | User-configured command/app, args, launch kind, and capabilities. |
 
 Plan mode is the default. Execute mode requires explicit user confirmation, and FlowWeave creates a Git checkpoint before forwarding execute-mode work to an external agent.
 
@@ -114,7 +114,7 @@ FlowWeave persists project-specific state in a `.flowweave/` directory inside th
 ├── context/file-tree.md
 ├── docs/
 ├── tasks/
-├── agent-bridge/
+├── agent-inbox/
 ├── agent-plugins/
 ├── checkpoints/
 └── runs/<run-id>/
@@ -222,7 +222,7 @@ If a workflow run shows `Artifacts -`, inspect the failed job before looking for
 
 There are also internal CLI entry points under `src/main/cli/` for project scanning and agent runs. They are primarily implementation utilities used by the app and tests.
 
-## Agent Plugin Bridge
+## Agent Plugin Inbox
 
 The bundled plugin package lives in `flowweave-plugin/` and defines FlowWeave Agent Protocol v1. From the Agent workspace, FlowWeave can install or refresh the project-local protocol copy and external Agent discovery files at:
 
@@ -242,7 +242,7 @@ claude plugin marketplace add .
 claude plugin install flowweave@flowweave-local --scope user
 ```
 
-Desktop bridge agents read pending requests from `.flowweave/agent-bridge/`, process the request in plan or execute mode, and atomically write `response.json` or `response.md`. FlowWeave imports and validates those responses before updating review state.
+Agents read the active request from `.flowweave/agent-inbox/current/request.json`, process it in plan or execute mode, and atomically write `response.json` to the request's `responsePath`. FlowWeave imports and validates that response before updating review state.
 
 ## Generated Artifacts
 

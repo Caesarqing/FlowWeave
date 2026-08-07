@@ -695,7 +695,7 @@ export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
 export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
 export type ArtifactRunTarget = "architecture-map" | "sequence-diagrams" | "sequence-revision";
-export type AgentProtocolVersion = 1;
+export type AgentProtocolVersion = 1 | 2;
 export type AgentExpectedContentKind = "artifact-json" | "markdown-plan";
 export type ArtifactAdoptionStatus = "not-applicable" | "pending" | "late" | "applied" | "rejected" | "stale";
 export type ArtifactAdoption = {
@@ -936,7 +936,7 @@ export type AgentDiscoveryResult = {
   source: AgentDiscoverySource;
 };
 
-export type AgentProtocol = "cli-stdin" | "desktop-bridge";
+export type AgentProtocol = "agent-inbox";
 export type AgentCapability = "artifact-analysis" | "implementation-plan" | "execute";
 export type AgentPluginHostId = "codex" | "claude" | "gemini" | "cursor";
 export type AgentPluginInstallState = "missing" | "installed" | "outdated" | "unavailable" | "error";
@@ -1237,6 +1237,7 @@ export type FlowWeaveApi = {
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
   applyRunArtifact(projectId: string, runId: string): Promise<ToolRunSummary>;
+  openAgentInbox(projectId: string, runId: string): Promise<void>;
   openRunBridge(projectId: string, runId: string): Promise<void>;
   openToolProject(agentId: RuntimeAgentId, projectId: string): Promise<ToolOpenResult>;
   getAgentPluginStatuses(projectId: string): Promise<AgentPluginStatus[]>;

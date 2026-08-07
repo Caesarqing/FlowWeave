@@ -6,9 +6,9 @@ import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEven
 import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { runSpawnedAgent } from "./spawn-agent-process";
 import { prepareCommandInvocation } from "./command-invocation";
 import { runAgentModelProbe } from "./agent-probe";
+import { runCliAgentInbox } from "./agent-inbox-runner";
 
 const execFileAsync = promisify(execFile);
 const CODEX_HEALTH_TIMEOUT_MS = 3_000;
@@ -101,8 +101,6 @@ export class CodexLocalAdapter implements ToolAdapter {
     }
 
     const lastMessagePath = join(request.projectPath, FLOWWEAVE_DIR, "runs", request.id, "last-message.md");
-    const prompt = request.prompt;
-
     const args = buildCodexPlanArgs({
       executionMode: request.executionMode,
       lastMessagePath,
@@ -111,12 +109,11 @@ export class CodexLocalAdapter implements ToolAdapter {
       isolated: process.env.FLOWWEAVE_AGENT_SMOKE_ISOLATED === "1"
     });
 
-    return runSpawnedAgent({
+    return runCliAgentInbox({
       toolId: this.id,
       commandPath,
       args,
       request,
-      stdin: prompt,
       lastMessagePath
     }, onEvent);
   }

@@ -2,8 +2,8 @@ import { access } from "node:fs/promises";
 import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
-import { runSpawnedAgent } from "./spawn-agent-process";
 import { runAgentModelProbe } from "./agent-probe";
+import { runCliAgentInbox } from "./agent-inbox-runner";
 
 export class ClaudeCodeAdapter implements ToolAdapter {
   id = "claude-code" as const;
@@ -87,14 +87,12 @@ export class ClaudeCodeAdapter implements ToolAdapter {
       await access(request.guidancePath);
     }
 
-    const prompt = request.prompt;
     const args = buildClaudeArgs(request.executionMode, request.model, request.purpose);
-    return runSpawnedAgent({
+    return runCliAgentInbox({
       toolId: this.id,
       commandPath,
       args,
-      request,
-      stdin: prompt
+      request
     }, onEvent);
   }
 }

@@ -244,7 +244,7 @@ function isOpenableAgent(agentId: RuntimeAgentId, agents: AgentDefinition[]): bo
     agentId === "gemini-cli" ||
     agentId === "cursor" ||
     agentId === "mock" ||
-    (agent?.kind === "desktop" && agent?.protocol === "desktop-bridge")
+    agent?.kind === "desktop"
   );
 }
 

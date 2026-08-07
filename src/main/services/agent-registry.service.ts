@@ -17,8 +17,8 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "claude-code",
     name: "Claude Code CLI",
     kind: "cli",
-    protocol: "cli-stdin",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Claude skills/plugins directory",
     command: "claude",
@@ -33,12 +33,12 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "claude-desktop",
     name: "Claude Desktop",
     kind: "desktop",
-    protocol: "desktop-bridge",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Claude skills/plugins directory",
     command: "/Applications/Claude.app",
-    args: [".flowweave/agent-bridge"],
+    args: [".flowweave/agent-inbox/current"],
     appPath: "/Applications/Claude.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Claude 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
@@ -50,8 +50,8 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "codex-local",
     name: "Codex CLI",
     kind: "cli",
-    protocol: "cli-stdin",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Codex skills/plugins directory",
     command: "codex",
@@ -66,12 +66,12 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "codex-desktop",
     name: "Codex Desktop",
     kind: "desktop",
-    protocol: "desktop-bridge",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Codex skills/plugins directory",
     command: "/Applications/ChatGPT.app",
-    args: [".flowweave/agent-bridge"],
+    args: [".flowweave/agent-inbox/current"],
     appPath: "/Applications/ChatGPT.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Codex 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
@@ -83,8 +83,8 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "gemini-cli",
     name: "Gemini CLI",
     kind: "cli",
-    protocol: "cli-stdin",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Gemini agent instructions or skills directory",
     command: "gemini",
@@ -99,8 +99,8 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     id: "cursor",
     name: "Cursor",
     kind: "desktop",
-    protocol: "desktop-bridge",
-    protocolVersion: 1,
+    protocol: "agent-inbox",
+    protocolVersion: 2,
     pluginId: "flowweave",
     installTarget: "Cursor rules or project instructions directory",
     command: "cursor/code <project> / Cursor.app",
@@ -132,15 +132,16 @@ export async function listAgentDefinitions(): Promise<AgentDefinition[]> {
 
 export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDefinition> {
   const name = input.name.trim();
-  const protocol = input.protocol ?? "cli-stdin";
+  const protocol = input.protocol ?? "agent-inbox";
   const command = input.command?.trim() ?? "";
   const appPath = input.appPath?.trim() ?? "";
   if (!name) throw new Error("Agent name is required.");
   if (!isAgentProtocol(protocol)) throw new Error(`Unsupported Agent protocol: ${protocol}`);
-  const capabilities = normalizeCapabilities(input.capabilities, protocol, input.planArgs);
-  const commandPath = protocol === "cli-stdin"
-    ? await validateCustomAgentCommand(command, input.args ?? [], input.planArgs ?? [], input.executeArgs ?? [])
-    : validateCustomDesktopAppPath(appPath || command);
+  const isDesktop = Boolean(appPath);
+  const capabilities = normalizeCapabilities(input.capabilities, protocol, input.planArgs, isDesktop);
+  const commandPath = isDesktop
+    ? validateCustomDesktopAppPath(appPath)
+    : await validateCustomAgentCommand(command, input.args ?? [], input.planArgs ?? [], input.executeArgs ?? []);
 
   const agents = await readCustomAgents();
   const now = new Date().toISOString();
@@ -148,16 +149,16 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
   const agent: AgentDefinition = {
     id,
     name,
-    kind: protocol === "desktop-bridge" ? "desktop" : "cli",
+    kind: isDesktop ? "desktop" : "cli",
     protocol,
     command: commandPath,
     args: input.args ?? [],
     planArgs: input.planArgs ?? [],
     executeArgs: input.executeArgs ?? [],
-    appPath: protocol === "desktop-bridge" ? commandPath : undefined,
+    appPath: isDesktop ? commandPath : undefined,
     bridgeInstructions: input.bridgeInstructions?.trim() || undefined,
     capabilities,
-    description: input.description?.trim() || (protocol === "desktop-bridge" ? "Custom Desktop Agent" : "Custom CLI Agent"),
+    description: input.description?.trim() || (isDesktop ? "Custom Desktop Agent" : "Custom CLI Agent"),
     builtIn: false,
     createdAt: now,
     updatedAt: now
@@ -209,7 +210,8 @@ export async function getAgentDefinition(agentId: RuntimeAgentId, projectId?: st
       id: "custom:mock",
       name: "Mock Agent",
       kind: "cli",
-      protocol: "cli-stdin",
+      protocol: "agent-inbox",
+      protocolVersion: 2,
       command: "built-in",
       args: [],
       capabilities: ["artifact-analysis", "implementation-plan"],
@@ -251,7 +253,7 @@ export async function getAgentAdapter(agentId: RuntimeAgentId, projectId?: strin
 }
 
 export function createAdapterFromDefinition(definition: AgentDefinition): ToolAdapter {
-  if (definition.protocol === "desktop-bridge") {
+  if (definition.kind === "desktop") {
     return new DesktopBridgeAdapter({
       id: definition.id,
       name: definition.name,
@@ -314,28 +316,30 @@ function createCustomAgentId(name: string, existing: AgentDefinition[]): CustomA
 }
 
 function migrateCustomAgent(agent: AgentDefinition): AgentDefinition {
-  const protocol = agent.protocol ?? (agent.kind === "desktop" ? "desktop-bridge" : "cli-stdin");
+  const protocol = "agent-inbox" as const;
   return {
     ...agent,
     protocol,
-    appPath: protocol === "desktop-bridge" ? agent.appPath ?? agent.command : agent.appPath,
-    capabilities: agent.capabilities ?? (protocol === "desktop-bridge" ? ["implementation-plan"] : ["execute"])
+    protocolVersion: 2,
+    appPath: agent.kind === "desktop" ? agent.appPath ?? agent.command : agent.appPath,
+    capabilities: agent.capabilities ?? (agent.kind === "desktop" ? ["implementation-plan"] : ["execute"])
   };
 }
 
 function isAgentProtocol(value: string): value is AgentProtocol {
-  return value === "cli-stdin" || value === "desktop-bridge";
+  return value === "agent-inbox";
 }
 
 function normalizeCapabilities(
   capabilities: AgentCapability[] | undefined,
   protocol: AgentProtocol,
-  planArgs: string[] | undefined
+  planArgs: string[] | undefined,
+  isDesktop: boolean
 ): AgentCapability[] {
   const allowed = new Set<AgentCapability>(["artifact-analysis", "implementation-plan", "execute"]);
   if (capabilities) {
     return [...new Set(capabilities.filter((capability) => allowed.has(capability)))];
   }
-  if (protocol === "desktop-bridge") return ["artifact-analysis", "implementation-plan"];
+  if (protocol === "agent-inbox" && isDesktop) return ["artifact-analysis", "implementation-plan"];
   return planArgs && planArgs.length > 0 ? ["artifact-analysis", "implementation-plan"] : ["execute"];
 }

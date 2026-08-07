@@ -26,7 +26,7 @@ export async function waitForArtifactRunResponse(
       return {
         ...initial,
         status: "failed",
-        summary: `Agent review was canceled while waiting for desktop bridge response.json: ${initial.id}`
+        summary: `Agent review was canceled while waiting for Agent Inbox response.json: ${initial.id}`
       };
     }
 
@@ -58,7 +58,7 @@ export async function waitForArtifactRunResponse(
 function lateAdoption(result: ToolRunResult): ArtifactAdoption {
   return {
     status: "late",
-    message: `Desktop Agent response is taking longer than expected; still waiting for ${result.id}.`
+    message: `Agent Inbox response is taking longer than expected; still waiting for ${result.id}.`
   };
 }
 
