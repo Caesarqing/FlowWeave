@@ -21,7 +21,7 @@ describe("semantic-index.service", () => {
 
     expect(first.delta.added).toEqual(["src/api.ts", "src/service.ts"]);
     expect(second.delta.unchanged).toEqual(["src/api.ts", "src/service.ts"]);
-    expect(stored?.version).toBe(1);
+    expect(stored?.version).toBe(4);
     expect(stored?.relations).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: "import",
@@ -31,7 +31,7 @@ describe("semantic-index.service", () => {
       })
     ]));
     expect((await stat(cachePath)).mtimeMs).toBe(cacheModifiedAt);
-    expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe("1.0.0");
+    expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe("4.0.0");
   });
 
   it("reports modified and deleted files and removes deleted cache entries", async () => {

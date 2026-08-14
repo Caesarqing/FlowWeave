@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type {
   ArchitectureLayer,
   ArchitectureAnalysisResult,
+  ArchitectureEvidence,
   AnalysisGenerationOptions,
   ArchitectureMap,
   ArchitectureModule,
@@ -97,13 +98,13 @@ async function analyzeArchitectureOnce(
   });
 
   if (toolId === "mock") {
-    const agentOutput = mockArchitectureJson(createLocalArchitectureMap(project, representativeFacts, "agent"));
+    const agentOutput = mockArchitectureJson(localArchitecture);
     const parsed = parseArchitectureJson(agentOutput, project, facts);
     if (!parsed) return failedArchitectureResult(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", []);
-    const quality = validateArchitectureMap(parsed, representativeFacts);
+    const quality = validateArchitectureMap(parsed, facts);
     if (!quality.valid) return failedArchitectureResult(toolId, "quality-rejected", quality.reasons.join("; "), []);
     const architectureMap = assessArchitectureMap(
-      withArchitectureMetadata(parsed, toolId, "mock", inputFingerprint, quality),
+      withArchitectureMetadata(enhanceLocalArchitecture(localArchitecture, parsed), toolId, "mock", inputFingerprint, quality),
       index,
       inputFingerprint
     );
@@ -141,6 +142,7 @@ async function analyzeArchitectureOnce(
       prompt,
       facts,
       representativeFacts,
+      localArchitecture,
       index,
       inputFingerprint,
       reviewId,
@@ -274,6 +276,7 @@ async function runArchitectureReview(
   prompt: string,
   facts: ProjectStructureFacts,
   representativeFacts: ProjectStructureFacts,
+  localArchitecture: ArchitectureMap,
   index: import("../../types").SemanticIndex,
   inputFingerprint: string,
   reviewId: string,
@@ -307,7 +310,7 @@ async function runArchitectureReview(
     const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
     if (firstParsed && firstQuality?.valid) {
       const architectureMap = assessArchitectureMap(
-        withArchitectureMetadata(firstParsed, toolId, firstRun.id, inputFingerprint, firstQuality),
+        withArchitectureMetadata(enhanceLocalArchitecture(localArchitecture, firstParsed), toolId, firstRun.id, inputFingerprint, firstQuality),
         index,
         inputFingerprint
       );
@@ -352,7 +355,7 @@ async function runArchitectureReview(
       return reviewFailure(toolId, "quality-rejected", retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed.", retry.id);
     }
     const architectureMap = assessArchitectureMap(
-      withArchitectureMetadata(retryParsed, toolId, retry.id, inputFingerprint, retryQuality),
+      withArchitectureMetadata(enhanceLocalArchitecture(localArchitecture, retryParsed), toolId, retry.id, inputFingerprint, retryQuality),
       index,
       inputFingerprint
     );
@@ -744,32 +747,6 @@ function inferFallbackRelationships(modules: ArchitectureModule[], facts: Projec
   const relationships: ArchitectureRelationship[] = [];
   const seen = new Set<string>();
 
-  for (const semanticRelation of facts.relations ?? []) {
-    if (!semanticRelation.sourceFile || !semanticRelation.targetFile) continue;
-    const source = moduleByFile.get(semanticRelation.sourceFile);
-    const target = moduleByFile.get(semanticRelation.targetFile);
-    if (!source || !target || source === target) continue;
-    const relation = architectureRelationFromSemantic(semanticRelation.kind);
-    const key = `${source}:${target}:${relation}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    relationships.push({
-      id: `${source}-${target}-${relation}`,
-      source,
-      target,
-      relation,
-      description: semanticRelation.detail,
-      evidence: [{
-        filePath: semanticRelation.sourceFile,
-        symbol: semanticRelation.symbol,
-        line: facts.files
-          .find((file) => file.path === semanticRelation.sourceFile)
-          ?.symbols.find((symbol) => symbol.name === semanticRelation.symbol)?.line,
-        detail: semanticRelation.detail
-      }]
-    });
-  }
-
   for (const file of facts.files) {
     const source = moduleByFile.get(file.path);
     if (!source) continue;
@@ -810,7 +787,109 @@ function inferFallbackRelationships(modules: ArchitectureModule[], facts: Projec
     }
   }
 
-  return relationships.slice(0, 180);
+  return aggregateArchitectureRelationships(modules, facts, relationships);
+}
+
+export function aggregateArchitectureRelationships(
+  modules: ArchitectureModule[],
+  facts: ProjectStructureFacts,
+  candidates: ArchitectureRelationship[] = []
+): ArchitectureRelationship[] {
+  const moduleByFile = new Map<string, string>();
+  modules.forEach((module) => module.files.forEach((file) => moduleByFile.set(file, module.id)));
+  const lineByFileAndSymbol = new Map<string, number | undefined>();
+  facts.files.forEach((file) => file.symbols.forEach((symbol) => {
+    lineByFileAndSymbol.set(`${file.path}\u0000${symbol.name}`, symbol.line);
+  }));
+  const allCandidates = [...candidates];
+
+  for (const semanticRelation of facts.relations ?? []) {
+    if (!semanticRelation.sourceFile || !semanticRelation.targetFile) continue;
+    const source = moduleByFile.get(semanticRelation.sourceFile);
+    const target = moduleByFile.get(semanticRelation.targetFile);
+    if (!source || !target || source === target) continue;
+    const relation = architectureRelationFromSemantic(semanticRelation.kind);
+    allCandidates.push({
+      id: `${source}-${target}-${relation}-${semanticRelation.id}`,
+      source,
+      target,
+      relation,
+      description: semanticRelation.detail,
+      evidence: [{
+        filePath: semanticRelation.sourceFile,
+        symbol: semanticRelation.symbol,
+        line: semanticRelation.symbol
+          ? lineByFileAndSymbol.get(`${semanticRelation.sourceFile}\u0000${semanticRelation.symbol}`)
+          : undefined,
+        detail: semanticRelation.detail
+      }]
+    });
+  }
+
+  const grouped = new Map<string, ArchitectureRelationship>();
+  for (const candidate of allCandidates.sort(compareRelationshipCandidate)) {
+    const key = `${candidate.source}:${candidate.target}:${candidate.relation}`;
+    const current = grouped.get(key);
+    if (current) {
+      current.evidence.push(...candidate.evidence);
+      continue;
+    }
+    grouped.set(key, {
+      ...candidate,
+      id: `${candidate.source}-${candidate.target}-${candidate.relation}`,
+      evidence: [...candidate.evidence]
+    });
+  }
+
+  return [...grouped.values()]
+    .map((relationship) => ({ ...relationship, evidence: dedupeEvidence(relationship.evidence) }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function compareRelationshipCandidate(left: ArchitectureRelationship, right: ArchitectureRelationship): number {
+  const leftKey = `${left.source}\u0000${left.target}\u0000${left.relation}\u0000${left.description}`;
+  const rightKey = `${right.source}\u0000${right.target}\u0000${right.relation}\u0000${right.description}`;
+  return leftKey.localeCompare(rightKey);
+}
+
+export function enhanceLocalArchitecture(local: ArchitectureMap, agent: ArchitectureMap): ArchitectureMap {
+  const agentByFiles = new Map(agent.modules.map((module) => [moduleFilesKey(module), module]));
+  return {
+    ...local,
+    source: "agent",
+    architectureStyle: agent.architectureStyle ?? local.architectureStyle,
+    modules: local.modules.map((module) => {
+      const review = agentByFiles.get(moduleFilesKey(module));
+      return review ? {
+        ...module,
+        title: review.title,
+        role: review.role,
+        description: review.description,
+        fileRoles: review.fileRoles,
+        symbols: review.symbols,
+        evidence: review.evidence
+      } : module;
+    }),
+    relationships: local.relationships
+  };
+}
+
+function moduleFilesKey(module: ArchitectureModule): string {
+  return [...module.files].sort().join("\u0000");
+}
+
+function dedupeEvidence(evidence: ArchitectureEvidence[]): ArchitectureEvidence[] {
+  const seen = new Set<string>();
+  return [...evidence].sort((left, right) => evidenceKey(left).localeCompare(evidenceKey(right))).filter((item) => {
+    const key = evidenceKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function evidenceKey(item: ArchitectureEvidence): string {
+  return `${item.filePath ?? ""}:${item.symbol ?? ""}:${item.line ?? ""}:${item.detail}`;
 }
 
 function normalizeModule(module: Partial<ArchitectureModule>, facts: ProjectStructureFacts, fileSet: Set<string>, index: number): ArchitectureModule | undefined {

@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  aggregateArchitectureRelationships,
   analyzeArchitecture,
   architectureMapToGraph,
   buildArchitecturePrompt,
+  enhanceLocalArchitecture,
   parseArchitectureJson,
   readArchitectureMap
 } from "../../src/main/services/architecture-analysis.service";
@@ -14,11 +16,94 @@ import { adoptArtifactRun } from "../../src/main/services/artifact-run-adoption.
 import { listRunSummaries } from "../../src/main/services/run-log.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
+import { scanProject } from "../../src/main/services/project-scanner.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject } from "../../src/types";
 import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("architecture-analysis.service", () => {
+  it("keeps local modules and relationships when applying Agent wording", () => {
+    const local = architectureFixtureMap("local");
+    const agent = {
+      ...architectureFixtureMap("agent"),
+      modules: [{
+        ...architectureFixtureMap("agent").modules[0],
+        title: "Reviewed User API",
+        description: "Agent-enhanced wording."
+      }],
+      relationships: []
+    };
+
+    const enhanced = enhanceLocalArchitecture(local, agent);
+
+    expect(enhanced.modules).toHaveLength(2);
+    expect(enhanced.modules[0]).toMatchObject({
+      title: "Reviewed User API",
+      files: ["src/api/user.controller.ts"]
+    });
+    expect(enhanced.relationships).toEqual(local.relationships);
+  });
+
+  it("keeps every semantic relationship as evidence on stable module edges", () => {
+    const files = Array.from({ length: 362 }, (_, index) => ({
+      path: `src/${index}.ts`,
+      imports: [],
+      exports: [],
+      symbols: [],
+      calls: [],
+      externalCalls: []
+    }));
+    const modules = files.map((file, index) => ({
+      id: `module-${index}`,
+      title: `Module ${index}`,
+      category: "domain-service" as const,
+      nodeType: "service" as const,
+      role: "Owns application behavior.",
+      description: "Application behavior.",
+      files: [file.path],
+      fileRoles: [],
+      symbols: [],
+      evidence: [],
+      risk: "unknown" as const
+    }));
+    const relations = Array.from({ length: 181 }, (_, index) => ({
+      id: `relation-${index}`,
+      kind: "call" as const,
+      source: files[index * 2].path,
+      target: files[index * 2 + 1].path,
+      sourceFile: files[index * 2].path,
+      targetFile: files[index * 2 + 1].path,
+      symbol: "invoke",
+      detail: `Call ${index}`,
+      confidence: "confirmed" as const
+    }));
+
+    const relationships = aggregateArchitectureRelationships(modules, { files, relations });
+
+    expect(relationships).toHaveLength(181);
+    expect(relationships.every((relationship) => relationship.evidence.length === 1)).toBe(true);
+  });
+
+  it("keeps every static module when the Mock Agent produces architecture output", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-mock-full-static-"));
+    const moduleCount = 48;
+    await Promise.all(Array.from({ length: moduleCount }, async (_, index) => {
+      const modulePath = join(root, "src", `feature-${index}`);
+      await mkdir(modulePath, { recursive: true });
+      await writeFile(join(modulePath, "index.ts"), `export const feature${index} = () => true;\n`, "utf8");
+    }));
+
+    const project = await scanProject(root);
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: project.scanFingerprint }), "utf8");
+    const result = await analyzeArchitecture(project, "mock");
+
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error(result.error.message);
+    expect(result.architectureMap.modules).toHaveLength(moduleCount);
+    expect(result.architectureMap.modules.flatMap((module) => module.files)).toHaveLength(moduleCount);
+  });
+
   it("builds an architecture prompt from structure facts", async () => {
     const root = await createFixtureFiles();
     const facts = await buildProjectStructureFacts(projectFixture(root));
@@ -535,6 +620,55 @@ function projectFixture(rootPath: string): CodeflowProject {
         ]
       }
     ]
+  };
+}
+
+function architectureFixtureMap(source: "agent" | "local"): import("../../src/types").ArchitectureMap {
+  const modules = [
+    {
+      id: "user-api",
+      title: "User API",
+      category: "api-boundary" as const,
+      nodeType: "api" as const,
+      role: "Receives user requests.",
+      description: "HTTP boundary.",
+      files: ["src/api/user.controller.ts"],
+      fileRoles: [],
+      symbols: [],
+      evidence: [{ filePath: "src/api/user.controller.ts", detail: "handler" }],
+      risk: "unknown" as const
+    },
+    {
+      id: "user-service",
+      title: "User Service",
+      category: "domain-service" as const,
+      nodeType: "service" as const,
+      role: "Coordinates user logic.",
+      description: "Domain service.",
+      files: ["src/service/user.service.ts"],
+      fileRoles: [],
+      symbols: [],
+      evidence: [{ filePath: "src/service/user.service.ts", detail: "service" }],
+      risk: "unknown" as const
+    }
+  ];
+  return {
+    version: 1,
+    projectName: "architecture-fixture",
+    rootPath: "/tmp/architecture-fixture",
+    generatedAt: "2026-08-14T00:00:00.000Z",
+    source,
+    modules,
+    relationships: [{
+      id: "user-api-user-service-calls",
+      source: "user-api",
+      target: "user-service",
+      relation: "calls",
+      description: "API calls service.",
+      evidence: [{ filePath: "src/api/user.controller.ts", detail: "call" }]
+    }],
+    files: [],
+    symbols: []
   };
 }
 

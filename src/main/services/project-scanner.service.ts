@@ -11,19 +11,19 @@ import { createStructureFingerprint } from "./project-registry.service";
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_IGNORE = [
-  "**/.git/**", "**/node_modules/**", "**/dist/**", "**/out/**", "**/build/**",
-  "**/release/**", "**/.cache/**", "**/.parcel-cache/**", "**/.pytest_cache/**",
-  "**/.ruff_cache/**", "**/.mypy_cache/**", "**/__pycache__/**", "**/.venv/**",
-  "**/venv/**", "**/env/**", "**/target/**", "**/vendor/**", "**/Pods/**",
-  "**/DerivedData/**", "**/*.app/**", "**/.next/**", `**/${FLOWWEAVE_DIR}/**`,
-  "**/coverage/**", "**/.turbo/**", "**/.vercel/**", "**/.runtime/**",
-  "**/logs/**", "**/*.log", "**/.DS_Store", "**/.env", "**/.env.*",
-  "**/*.{key,pem,p12,pfx,crt,cer}", "**/credentials.{json,yml,yaml}",
-  "**/*credentials*.{json,yml,yaml}", "**/*secret*.{json,yml,yaml}"
+  "**/.git/**", "**/.svn/**", "**/.hg/**", "**/.idea/**", "**/.vscode/**", "**/.vs/**",
+  "**/.codex/**", "**/.cursor/**", "**/.claude/**", "**/.gemini/**", "**/.copilot/**", "**/.continue/**",
+  "**/node_modules/**", "**/vendor/**", "**/dist/**", "**/out/**", "**/build/**", "**/release/**",
+  "**/coverage/**", "**/.next/**", "**/.turbo/**", "**/.vercel/**", "**/.runtime/**",
+  "**/.cache/**", "**/.parcel-cache/**", "**/.pytest_cache/**", "**/.ruff_cache/**", "**/.mypy_cache/**",
+  "**/__pycache__/**", "**/.venv/**", "**/venv/**", "**/env/**", "**/target/**", "**/Pods/**",
+  "**/DerivedData/**", "**/.pnpm-store/**", "**/.yarn/cache/**", "**/.npm/**", "**/.gradle/**",
+  "**/.m2/**", "**/.cargo/**", "**/logs/**", "**/tmp/**", "**/temp/**", "**/test-results/**",
+  "**/generated/**", "**/__generated__/**", "**/*.app/**", `**/${FLOWWEAVE_DIR}/**`,
+  "**/*.log", "**/.DS_Store", "**/.env", "**/.env.*", "**/*.{key,pem,p12,pfx,crt,cer}",
+  "**/credentials.{json,yml,yaml}", "**/*credentials*.{json,yml,yaml}", "**/*secret*.{json,yml,yaml}"
 ];
 
-const DEFAULT_MAX_DEPTH = 8;
-const DEFAULT_MAX_ENTRIES = 10_000;
 const DEFAULT_SCAN_CONCURRENCY = 32;
 const LANGUAGE_BY_EXT: Record<string, string> = {
   ".js": "JavaScript",
@@ -51,18 +51,13 @@ const LANGUAGE_BY_EXT: Record<string, string> = {
 export type ScanProjectOptions = {
   concurrency?: number;
   ignore?: string[];
-  maxDepth?: number;
-  maxEntries?: number;
 };
 
 export async function scanProject(rootPath: string, options?: ScanProjectOptions): Promise<CodeflowProject> {
   const ignore = [...DEFAULT_IGNORE, ...(options?.ignore ?? [])];
-  const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const maxEntries = options?.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const concurrency = normalizeConcurrency(options?.concurrency);
   const entries = await fg("**/*", {
     cwd: rootPath,
-    deep: maxDepth,
     dot: true,
     ignore,
     markDirectories: true,
@@ -73,17 +68,13 @@ export async function scanProject(rootPath: string, options?: ScanProjectOptions
   });
 
   const nonSymlinkEntries = await filterSafeEntries(rootPath, entries, concurrency);
-  const filteredEntries = nonSymlinkEntries.filter((entry) => {
-    const depth = entry.split("/").filter(Boolean).length - 1;
-    return depth <= maxDepth;
-  });
-  const visibleEntries = filteredEntries.slice(0, maxEntries);
+  const visibleEntries = nonSymlinkEntries;
 
   const metadata = await readEntryMetadata(rootPath, visibleEntries, concurrency);
   const files = buildTree(visibleEntries, metadata);
   const summary = buildSummary(visibleEntries);
   summary.displayedEntries = visibleEntries.length;
-  summary.truncated = filteredEntries.length > visibleEntries.length;
+  summary.truncated = false;
   const git = await readGitSummary(rootPath);
 
   const project: CodeflowProject = {

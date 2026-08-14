@@ -15,7 +15,6 @@ const THEME_KEY = "flowweave.uiTheme";
 const LOCALE_KEY = "flowweave.locale";
 const DEFAULT_RELATION_KEY = "flowweave.defaultRelation";
 const REDUCED_MOTION_KEY = "flowweave.reducedMotion";
-const SCAN_MAX_ENTRIES_KEY = "flowweave.scanMaxEntries";
 const SCAN_CONCURRENCY_KEY = "flowweave.scanConcurrency";
 const PLAN_TIMEOUT_MINUTES_KEY = "flowweave.planTimeoutMinutes";
 const EXECUTE_TIMEOUT_MINUTES_KEY = "flowweave.executeTimeoutMinutes";
@@ -37,7 +36,6 @@ type PreferencesState = {
   defaultRelation: GraphEdgeRelation;
   locale: LocaleId;
   reducedMotion: boolean;
-  scanMaxEntries: number;
   scanConcurrency: number;
   planTimeoutMinutes: number;
   executeTimeoutMinutes: number;
@@ -48,7 +46,6 @@ type PreferencesState = {
   setDefaultRelation: (relation: GraphEdgeRelation) => void;
   setLocale: (locale: LocaleId) => void;
   setReducedMotion: (value: boolean) => void;
-  setScanMaxEntries: (value: number) => void;
   setScanConcurrency: (value: number) => void;
   setPlanTimeoutMinutes: (value: number) => void;
   setExecuteTimeoutMinutes: (value: number) => void;
@@ -62,7 +59,6 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   defaultRelation: readEnumValue(DEFAULT_RELATION_KEY, relationOptions, "depends_on"),
   locale: readEnumValue(LOCALE_KEY, localeOptions, DEFAULT_LOCALE),
   reducedMotion: readStoredValue<"true" | "false">(REDUCED_MOTION_KEY, "false") === "true",
-  scanMaxEntries: readStoredInteger(SCAN_MAX_ENTRIES_KEY, 10_000, 1_000, 100_000),
   scanConcurrency: readStoredInteger(SCAN_CONCURRENCY_KEY, 32, 1, 128),
   planTimeoutMinutes: readStoredInteger(PLAN_TIMEOUT_MINUTES_KEY, 5, 1, 30),
   executeTimeoutMinutes: readStoredInteger(EXECUTE_TIMEOUT_MINUTES_KEY, 10, 1, 120),
@@ -80,10 +76,6 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setReducedMotion: (reducedMotion) => {
     if (!writeStoredValue(REDUCED_MOTION_KEY, String(reducedMotion))) return;
     set({ reducedMotion });
-  },
-  setScanMaxEntries: (scanMaxEntries) => {
-    if (!writeStoredValue(SCAN_MAX_ENTRIES_KEY, String(scanMaxEntries))) return;
-    set({ scanMaxEntries });
   },
   setScanConcurrency: (scanConcurrency) => {
     if (!writeStoredValue(SCAN_CONCURRENCY_KEY, String(scanConcurrency))) return;

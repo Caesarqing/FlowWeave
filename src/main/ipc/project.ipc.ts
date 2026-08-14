@@ -492,7 +492,6 @@ function sendSequenceReview(sender: WebContents, event: SequenceReviewEvent): vo
 function requireScanOptions(channel: string, value: unknown): ProjectScanOptions {
   const options = requireObject(channel, value, "options");
   return {
-    maxEntries: requireInteger(channel, options.maxEntries, "maxEntries", 1_000, 100_000),
     concurrency: requireInteger(channel, options.concurrency, "concurrency", 1, 128)
   };
 }

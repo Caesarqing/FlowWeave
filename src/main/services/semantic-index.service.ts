@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { dirname, extname, join, sep } from "node:path";
 import type {
   CodeflowProject,
   FileInsight,
@@ -21,8 +21,8 @@ import { analyzeSourceFile } from "./language-analyzer.service";
 import { buildCrossStackHttpRelations } from "./cross-stack-relation.service";
 import { throwIfAborted } from "./flowweave-error.service";
 
-const GENERATOR_VERSION = "1.0.0";
-const INDEX_VERSION = 1;
+const GENERATOR_VERSION = "4.0.0";
+const INDEX_VERSION = 4;
 const DEFAULT_PARSE_CONCURRENCY = 8;
 const MAX_FILE_BYTES = 220_000;
 const CODE_EXTENSIONS = new Set([
@@ -39,12 +39,13 @@ export async function buildSemanticIndex(
   project: CodeflowProject,
   options?: BuildSemanticIndexOptions
 ): Promise<{ index: SemanticIndex; delta: ScanDelta }> {
-  const paths = flattenProjectFilePaths(project.files)
+  const projectPaths = flattenProjectFilePaths(project.files).sort();
+  const paths = projectPaths
     .filter((path) => CODE_EXTENSIONS.has(extname(path).toLowerCase()))
     .sort();
   const previousManifest = await readManifest(project.rootPath);
   const previousIndex = await readSemanticIndex(project.rootPath);
-  const configurationFingerprint = await createConfigurationFingerprint(project.rootPath);
+  const configurationFingerprint = await createConfigurationFingerprint(project.rootPath, projectPaths);
   const previousByPath = new Map(previousManifest?.files.map((file) => [file.path, file]) ?? []);
   const projectFileSet = new Set(paths);
   const concurrency = normalizeConcurrency(options?.concurrency);
@@ -79,13 +80,15 @@ export async function buildSemanticIndex(
   const delta = createScanDelta(previousManifest?.files ?? [], manifestEntries);
   const configurationChanged = previousManifest?.configurationFingerprint !== configurationFingerprint;
   const canReuseLinkedIndex = previousIndex !== undefined &&
+    previousIndex.generatorVersion === GENERATOR_VERSION &&
     !configurationChanged &&
     delta.added.length === 0 &&
     delta.modified.length === 0 &&
     delta.deleted.length === 0;
+  const analysisScopes = semanticAnalysisScopes(projectPaths, paths);
   const typeScriptResult = canReuseLinkedIndex
     ? { relations: [], symbolsByFile: new Map<string, import("../../types").StructureSymbol[]>() }
-    : analyzeTypeScriptProject(project.rootPath, files);
+    : analyzeProjectTypeScript(project, files, analysisScopes);
   const enrichedFiles = canReuseLinkedIndex
     ? files
     : files.map((file) => enrichTypeScriptSymbols(file, typeScriptResult.symbolsByFile.get(file.path)));
@@ -151,6 +154,67 @@ export async function buildSemanticIndex(
   );
   project.scanDelta = delta;
   return { index, delta };
+}
+
+export type SemanticAnalysisScope = {
+  configurationRoot: string;
+  paths: string[];
+};
+
+export function semanticAnalysisScopes(projectPaths: string[], codePaths: string[]): SemanticAnalysisScope[] {
+  const configRoots = projectPaths
+    .filter((path) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(path))
+    .map((path) => dirname(path));
+  const packageRoots = projectPaths
+    .filter((path) => /(^|\/)package\.json$/.test(path))
+    .map((path) => dirname(path));
+  const scopes = new Map<string, string[]>();
+  for (const path of codePaths) {
+    const configurationRoot = nearestRoot(path, configRoots) ?? nearestRoot(path, packageRoots) ?? "";
+    scopes.set(configurationRoot, [...(scopes.get(configurationRoot) ?? []), path]);
+  }
+  return [...scopes.entries()]
+    .map(([configurationRoot, paths]) => ({ configurationRoot, paths: paths.sort() }))
+    .sort((left, right) => left.configurationRoot.localeCompare(right.configurationRoot));
+}
+
+function analyzeProjectTypeScript(
+  project: CodeflowProject,
+  files: SemanticFile[],
+  scopes: SemanticAnalysisScope[]
+): import("./typescript-semantic.service").TypeScriptSemanticResult {
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
+  const relations: SemanticRelation[] = [];
+  const symbolsByFile = new Map<string, import("../../types").StructureSymbol[]>();
+  for (const scope of scopes) {
+    const scopeFiles = scope.paths.flatMap((path) => filesByPath.get(path) ?? []);
+    const result = analyzeTypeScriptProject(
+      project.rootPath,
+      join(project.rootPath, scope.configurationRoot),
+      scopeFiles.map((file) => ({ ...file, path: relativeScopePath(file.path, scope.configurationRoot) }))
+    );
+    relations.push(...result.relations);
+    result.symbolsByFile.forEach((symbols, path) => symbolsByFile.set(path, symbols));
+  }
+  return { relations: dedupeRelations(relations), symbolsByFile };
+}
+
+function nearestRoot(path: string, roots: string[]): string | undefined {
+  return roots
+    .filter((root) => isWithinRoot(path, root))
+    .sort((left, right) => rootDepth(right) - rootDepth(left) || left.localeCompare(right))[0];
+}
+
+function isWithinRoot(path: string, root: string): boolean {
+  return root === "." || root === "" || path === root || path.startsWith(`${root}/`);
+}
+
+function rootDepth(path: string): number {
+  return path === "." || path === "" ? 0 : path.split(sep).length;
+}
+
+function relativeScopePath(path: string, root: string): string {
+  return root === "." || root === "" ? path : path.slice(`${root}/`.length);
 }
 
 function enrichTypeScriptSymbols(file: SemanticFile, symbols: import("../../types").StructureSymbol[] | undefined): SemanticFile {
@@ -373,12 +437,13 @@ function indexRoot(projectPath: string): string {
   return join(projectPath, FLOWWEAVE_DIR, "index");
 }
 
-async function createConfigurationFingerprint(projectPath: string): Promise<string> {
+async function createConfigurationFingerprint(projectPath: string, projectPaths: string[]): Promise<string> {
   const hash = createHash("sha256");
-  for (const path of ["tsconfig.json", "jsconfig.json", "package.json"]) {
+  const configurationPaths = projectPaths.filter((path) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(path) || /(^|\/)package\.json$/.test(path));
+  for (const path of configurationPaths) {
     try {
       hash.update(path);
-      hash.update(await readFile(join(projectPath, path)));
+      hash.update(await readFile(join(projectPath, ...path.split("/"))));
     } catch (error) {
       if (!isMissingFile(error)) throw error;
     }
@@ -396,7 +461,7 @@ function relationId(kind: string, source: string, target: string): string {
 
 function dedupeRelations(relations: SemanticRelation[]): SemanticRelation[] {
   const seen = new Set<string>();
-  return relations.filter((relation) => {
+  return [...relations].sort((left, right) => left.id.localeCompare(right.id)).filter((relation) => {
     if (seen.has(relation.id)) return false;
     seen.add(relation.id);
     return true;
@@ -471,6 +536,7 @@ function isManifestEntry(value: unknown): value is SemanticIndexManifestEntry {
 function isSemanticIndex(value: unknown): value is SemanticIndex {
   return isRecord(value) &&
     value.version === INDEX_VERSION &&
+    value.generatorVersion === GENERATOR_VERSION &&
     typeof value.projectName === "string" &&
     typeof value.rootPath === "string" &&
     Array.isArray(value.files) &&

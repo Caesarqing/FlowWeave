@@ -303,7 +303,6 @@ export type ProjectScanSummary = {
 };
 
 export type ProjectScanOptions = {
-  maxEntries: number;
   concurrency: number;
 };
 
@@ -387,7 +386,7 @@ export type SemanticRelation = {
 };
 
 export type SemanticIndex = {
-  version: 1;
+  version: 1 | 2 | 3 | 4;
   generatorVersion: string;
   projectName: string;
   rootPath: string;
@@ -409,7 +408,7 @@ export type SemanticIndexManifestEntry = {
 };
 
 export type SemanticIndexManifest = {
-  version: 1;
+  version: 1 | 2 | 3 | 4;
   generatorVersion: string;
   projectName: string;
   rootPath: string;

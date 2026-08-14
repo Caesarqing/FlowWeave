@@ -72,14 +72,12 @@ function SettingsPanel({ onClose, projectId }: { onClose: () => void; projectId?
   const defaultRelation = usePreferencesStore((state) => state.defaultRelation);
   const locale = usePreferencesStore((state) => state.locale);
   const reducedMotion = usePreferencesStore((state) => state.reducedMotion);
-  const scanMaxEntries = usePreferencesStore((state) => state.scanMaxEntries);
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
   const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
   const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const setDefaultRelation = usePreferencesStore((state) => state.setDefaultRelation);
   const setLocale = usePreferencesStore((state) => state.setLocale);
   const setReducedMotion = usePreferencesStore((state) => state.setReducedMotion);
-  const setScanMaxEntries = usePreferencesStore((state) => state.setScanMaxEntries);
   const setScanConcurrency = usePreferencesStore((state) => state.setScanConcurrency);
   const setPlanTimeoutMinutes = usePreferencesStore((state) => state.setPlanTimeoutMinutes);
   const setExecuteTimeoutMinutes = usePreferencesStore((state) => state.setExecuteTimeoutMinutes);
@@ -195,20 +193,6 @@ function SettingsPanel({ onClose, projectId }: { onClose: () => void; projectId?
         </label>
       </SettingsSection>
       <SettingsSection icon={<ScanSearch size={14} />} isOpen={openSections.scanning} title={t("settings.scanning")} onToggle={() => toggleSection("scanning")}>
-        <label className="settings-row">
-          <span>
-            <strong>{t("settings.scanBudget")}</strong>
-            <small>{t("settings.scanBudgetHelp")}</small>
-          </span>
-          <input
-            max={100000}
-            min={1000}
-            step={1000}
-            type="number"
-            value={scanMaxEntries}
-            onChange={(event) => setScanMaxEntries(clampInteger(event.target.value, 1000, 100000, scanMaxEntries))}
-          />
-        </label>
         <label className="settings-row">
           <span>
             <strong>{t("settings.scanConcurrency")}</strong>

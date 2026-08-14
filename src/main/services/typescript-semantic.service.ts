@@ -13,19 +13,23 @@ export type TypeScriptSemanticResult = {
   symbolsByFile: Map<string, StructureSymbol[]>;
 };
 
-export function analyzeTypeScriptProject(rootPath: string, files: SemanticFile[]): TypeScriptSemanticResult {
+export function analyzeTypeScriptProject(
+  workspaceRoot: string,
+  configurationRoot: string,
+  files: SemanticFile[]
+): TypeScriptSemanticResult {
   const loadedTypeScript = loadTypeScript();
-  const sourcePaths = files.filter((file) => isTypeScriptFile(file.path)).map((file) => `${rootPath}/${file.path}`);
+  const sourcePaths = files.filter((file) => isTypeScriptFile(file.path)).map((file) => join(configurationRoot, file.path));
   if (!loadedTypeScript || sourcePaths.length === 0) return { relations: [], symbolsByFile: new Map() };
   const ts = loadedTypeScript;
-  const options = compilerOptions(ts, rootPath, sourcePaths);
+  const options = compilerOptions(ts, workspaceRoot, configurationRoot, sourcePaths);
   const program = ts.createProgram({ rootNames: sourcePaths, options });
   const checker = program.getTypeChecker();
   const relations: SemanticRelation[] = [];
   const symbolsByFile = new Map<string, StructureSymbol[]>();
 
   for (const sourceFile of program.getSourceFiles()) {
-    const sourcePath = projectPath(rootPath, sourceFile.fileName);
+    const sourcePath = projectPath(workspaceRoot, sourceFile.fileName);
     if (!sourcePath) continue;
     const currentPath = sourcePath;
     const symbols: StructureSymbol[] = [];
@@ -33,10 +37,10 @@ export function analyzeTypeScriptProject(rootPath: string, files: SemanticFile[]
       const symbol = typedSymbol(ts, checker, sourceFile, currentPath, node);
       if (symbol) symbols.push(symbol);
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-        addModuleRelation(ts, relations, options, rootPath, sourceFile.fileName, currentPath, node.moduleSpecifier.text);
+        addModuleRelation(ts, relations, options, workspaceRoot, sourceFile.fileName, currentPath, node.moduleSpecifier.text);
       }
       if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-        addModuleRelation(ts, relations, options, rootPath, sourceFile.fileName, currentPath, node.moduleSpecifier.text);
+        addModuleRelation(ts, relations, options, workspaceRoot, sourceFile.fileName, currentPath, node.moduleSpecifier.text);
       }
       if (ts.isCallExpression(node)) {
         if (
@@ -44,25 +48,25 @@ export function analyzeTypeScriptProject(rootPath: string, files: SemanticFile[]
           node.arguments[0] &&
           ts.isStringLiteral(node.arguments[0])
         ) {
-          addModuleRelation(ts, relations, options, rootPath, sourceFile.fileName, currentPath, node.arguments[0].text);
+          addModuleRelation(ts, relations, options, workspaceRoot, sourceFile.fileName, currentPath, node.arguments[0].text);
           ts.forEachChild(node, visit);
           return;
         }
-        const targetPath = declarationProjectPath(rootPath, checker, checker.getSymbolAtLocation(node.expression));
+        const targetPath = declarationProjectPath(workspaceRoot, checker, checker.getSymbolAtLocation(node.expression));
         if (targetPath && targetPath !== currentPath) {
           relations.push(relation("call", currentPath, targetPath, currentPath, targetPath, node.expression.getText(sourceFile)));
         }
       }
       if (ts.isHeritageClause(node)) {
         for (const type of node.types) {
-          const targetPath = declarationProjectPath(rootPath, checker, checker.getSymbolAtLocation(type.expression));
+          const targetPath = declarationProjectPath(workspaceRoot, checker, checker.getSymbolAtLocation(type.expression));
           if (targetPath) {
             relations.push(relation("inherit", currentPath, targetPath, currentPath, targetPath, type.expression.getText(sourceFile)));
           }
         }
       }
       if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-        const targetPath = declarationProjectPath(rootPath, checker, checker.getSymbolAtLocation(node.tagName));
+        const targetPath = declarationProjectPath(workspaceRoot, checker, checker.getSymbolAtLocation(node.tagName));
         if (targetPath && targetPath !== currentPath) {
           relations.push(relation("render", currentPath, targetPath, currentPath, targetPath, node.tagName.getText(sourceFile)));
         }
@@ -75,13 +79,20 @@ export function analyzeTypeScriptProject(rootPath: string, files: SemanticFile[]
   return { relations: dedupeRelations(relations), symbolsByFile };
 }
 
-function compilerOptions(ts: TypeScriptApi, rootPath: string, sourcePaths: string[]): TypeScript.CompilerOptions {
-  const workspacePaths = workspaceCompilerPaths(rootPath);
-  const configPath = ts.findConfigFile(rootPath, ts.sys.fileExists, "tsconfig.json");
+function compilerOptions(
+  ts: TypeScriptApi,
+  workspaceRoot: string,
+  configurationRoot: string,
+  sourcePaths: string[]
+): TypeScript.CompilerOptions {
+  const workspacePaths = workspaceCompilerPaths(workspaceRoot, configurationRoot);
+  const configPath = ["tsconfig.json", "jsconfig.json"]
+    .map((fileName) => join(configurationRoot, fileName))
+    .find((path) => ts.sys.fileExists(path));
   if (!configPath) {
     return {
       allowJs: true,
-      baseUrl: rootPath,
+      baseUrl: configurationRoot,
       checkJs: false,
       jsx: ts.JsxEmit.ReactJSX,
       module: ts.ModuleKind.ESNext,
@@ -91,24 +102,30 @@ function compilerOptions(ts: TypeScriptApi, rootPath: string, sourcePaths: strin
     };
   }
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (config.error) return compilerOptionsWithoutConfig(ts);
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, rootPath, undefined, configPath);
+  if (config.error) return compilerOptionsWithoutConfig(ts, configurationRoot, workspacePaths);
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, configurationRoot, undefined, configPath);
   return {
     ...parsed.options,
     allowJs: true,
-    baseUrl: parsed.options.baseUrl ?? rootPath,
+    baseUrl: parsed.options.baseUrl ?? configurationRoot,
     noEmit: true,
     paths: { ...workspacePaths, ...parsed.options.paths },
-    rootDir: parsed.options.rootDir ?? rootPath
+    rootDir: parsed.options.rootDir ?? configurationRoot
   };
 }
 
-function compilerOptionsWithoutConfig(ts: TypeScriptApi): TypeScript.CompilerOptions {
+function compilerOptionsWithoutConfig(
+  ts: TypeScriptApi,
+  configurationRoot: string,
+  workspacePaths: Record<string, string[]>
+): TypeScript.CompilerOptions {
   return {
     allowJs: true,
+    baseUrl: configurationRoot,
     jsx: ts.JsxEmit.ReactJSX,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    paths: workspacePaths,
     target: ts.ScriptTarget.ES2022
   };
 }
@@ -127,15 +144,15 @@ function addModuleRelation(
   if (targetPath) relations.push(relation("import", sourcePath, targetPath, sourcePath, targetPath, specifier));
 }
 
-function workspaceCompilerPaths(rootPath: string): Record<string, string[]> {
+function workspaceCompilerPaths(workspaceRoot: string, configurationRoot: string): Record<string, string[]> {
   const paths: Record<string, string[]> = {};
   for (const parent of ["packages", "apps"]) {
-    const parentPath = join(rootPath, parent);
+    const parentPath = join(workspaceRoot, parent);
     for (const entry of safeDirectories(parentPath)) {
       const packageRoot = join(parentPath, entry);
       const manifest = readPackageManifest(join(packageRoot, "package.json"));
       if (!manifest?.name) continue;
-      const relativeRoot = relative(rootPath, packageRoot).split(sep).join("/");
+      const relativeRoot = relative(configurationRoot, packageRoot).split(sep).join("/");
       paths[manifest.name] = [workspaceEntry(relativeRoot, manifest)];
       paths[`${manifest.name}/*`] = [`${relativeRoot}/src/*`];
     }

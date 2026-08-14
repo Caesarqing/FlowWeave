@@ -4,8 +4,6 @@ import type { GraphEdge, GraphNode, GraphNodeType } from "../../types";
 import type { CodeflowCanvas, CodeflowProject, CodeflowTask, ProjectFileNode } from "../storage/schemas";
 import { collectImportReferences, flattenProjectFilePaths } from "./import-parser.service";
 
-const MAX_INFERRED_CODE_FILES = 600;
-const MAX_INFERRED_EDGES = 140;
 const GENERATOR_VERSION = "1.0.0";
 
 export function createCanvasArtifact(
@@ -159,7 +157,7 @@ function flattenFiles(nodes: ProjectFileNode[]) {
 
 function groupBackendFiles(files: ProjectFileNode[]) {
   const groups = new Map<string, string[]>();
-  const codeFiles = files.filter((file) => file.type === "file" && isBackendFile(file.path)).slice(0, MAX_INFERRED_CODE_FILES);
+  const codeFiles = files.filter((file) => file.type === "file" && isBackendFile(file.path));
 
   for (const file of codeFiles) {
     const group = detectModuleGroup(file.path);
@@ -202,7 +200,7 @@ function scoreGroup(group: string) {
 }
 
 async function inferImportEdges(project: CodeflowProject, nodes: GraphNode[]) {
-  const codeFilePaths = flattenProjectFilePaths(project.files).filter(isBackendFile).slice(0, MAX_INFERRED_CODE_FILES);
+  const codeFilePaths = flattenProjectFilePaths(project.files).filter(isBackendFile);
   const fileContents = await Promise.all(
     codeFilePaths.map(async (path) => ({
       path,
@@ -233,7 +231,7 @@ async function inferImportEdges(project: CodeflowProject, nodes: GraphNode[]) {
       });
   }
 
-  return dedupeEdges(importEdges).slice(0, MAX_INFERRED_EDGES);
+  return dedupeEdges(importEdges);
 }
 
 function inferFallbackEdges(nodes: GraphNode[]): GraphEdge[] {

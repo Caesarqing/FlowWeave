@@ -48,7 +48,6 @@ describe("i18n translations", () => {
     expect(translate("en", "artifact.sequences")).toBe("Architectural sequence diagram");
     expect(translate("en", "onboarding.title")).toContain("Understand the project");
     expect(translate("en", "settings.executeTimeout")).toContain("minutes");
-    expect(translate("en", "settings.scanBudget")).toBe("Scan entry budget");
   });
 
   it("uses Simplified Chinese UI copy in the Chinese locale", () => {
@@ -85,7 +84,6 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "artifact.sequences")).toBe("架构时序图");
     expect(translate("zh-CN", "onboarding.title")).toContain("先理解项目");
     expect(translate("zh-CN", "settings.executeTimeout")).toContain("分钟");
-    expect(translate("zh-CN", "settings.scanBudget")).toBe("扫描条目预算");
   });
 
   it("keeps both locale dictionaries aligned", () => {

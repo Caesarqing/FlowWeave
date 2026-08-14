@@ -9,6 +9,7 @@ import {
   createTaskMarkdown,
   inferGraphFromProject
 } from "../../src/main/services/task-generator.service";
+import { scanProject } from "../../src/main/services/project-scanner.service";
 import type { CodeflowProject } from "../../src/main/storage/schemas";
 
 describe("task-generator.service", () => {
@@ -72,6 +73,21 @@ describe("task-generator.service", () => {
         relation: "depends_on"
       })
     );
+  });
+
+  it("keeps inferred edges beyond the previous display limit", async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), "flowweave-import-limit-"));
+    const modules = Array.from({ length: 142 }, (_, index) => `module-${index}`);
+    await Promise.all(modules.map(async (module, index) => {
+      await mkdir(join(rootPath, "src", module), { recursive: true });
+      const imported = index === modules.length - 1 ? "" : `import '../${modules[index + 1]}';\n`;
+      await writeFile(join(rootPath, "src", module, "index.ts"), imported);
+    }));
+
+    const project = await scanProject(rootPath);
+    const graph = await inferGraphFromProject(project);
+
+    expect(graph.edges).toHaveLength(141);
   });
 });
 

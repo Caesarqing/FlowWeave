@@ -69,7 +69,6 @@ export function useProjectActions({
 }) {
   const { t } = useI18n();
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
-  const scanMaxEntries = usePreferencesStore((state) => state.scanMaxEntries);
   const [operation, setOperation] = useState<AnalysisOperation | null>(null);
   const activeOperationId = useRef<string | null>(null);
   const acceptsNewProjectScan = useRef(false);
@@ -182,8 +181,7 @@ export function useProjectActions({
     setProjectStatus(t("status.openingPicker"));
     try {
       const result = await window.flowweave.openProject({
-        concurrency: scanConcurrency,
-        maxEntries: scanMaxEntries
+        concurrency: scanConcurrency
       });
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
@@ -214,8 +212,7 @@ export function useProjectActions({
     setProjectStatus(t("status.rescanning"));
     try {
       const result = await window.flowweave.restoreRegisteredProject(projectToRestoreId, {
-        concurrency: scanConcurrency,
-        maxEntries: scanMaxEntries
+        concurrency: scanConcurrency
       });
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
@@ -250,8 +247,7 @@ export function useProjectActions({
     setProjectStatus(t("status.rescanning"));
     try {
       const result = await window.flowweave.scanProject(projectId, {
-        concurrency: scanConcurrency,
-        maxEntries: scanMaxEntries
+        concurrency: scanConcurrency
       });
       await applyProjectOpenResult(result, requestId);
     } catch (error) {

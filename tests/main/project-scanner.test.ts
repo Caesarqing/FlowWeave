@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import { scanProject } from "../../src/main/services/project-scanner.service";
+import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 
 describe("project-scanner.service", () => {
   it("builds a nested file tree and language summary", async () => {
@@ -20,6 +21,20 @@ describe("project-scanner.service", () => {
     expect(project.summary.languages.TypeScript).toBe(1);
     expect(project.files.map((node) => node.path)).toContain("src");
     expect(project.files.find((node) => node.path === "src")?.children?.[0].path).toBe("src/auth");
+  });
+
+  it("scans and indexes source files beyond eight nested directories", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-deep-"));
+    const nestedPath = join(root, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j");
+    await mkdir(nestedPath, { recursive: true });
+    await writeFile(join(nestedPath, "deep.ts"), "export const deep = true;\n");
+
+    const project = await scanProject(root);
+
+    expect(JSON.stringify(project.files)).toContain("a/b/c/d/e/f/g/h/i/j/deep.ts");
+    expect(project.summary.totalFiles).toBe(1);
+    expect(project.summary.truncated).toBe(false);
+    expect((await buildSemanticIndex(project)).index.files.map((file) => file.path)).toContain("a/b/c/d/e/f/g/h/i/j/deep.ts");
   });
 
   it("orders dot entries first, then large folders, then ordinary files", async () => {
@@ -59,6 +74,37 @@ describe("project-scanner.service", () => {
 
     expect(JSON.stringify(project.files)).not.toContain(FLOWWEAVE_DIR);
     expect(project.summary.totalFiles).toBe(1);
+  });
+
+  it("ignores analysis noise while keeping binary assets and architecture configuration visible", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-ignore-"));
+    await mkdir(join(root, ".codex"), { recursive: true });
+    await mkdir(join(root, ".cursor"), { recursive: true });
+    await mkdir(join(root, "src", "generated"), { recursive: true });
+    await mkdir(join(root, "assets"), { recursive: true });
+    await writeFile(join(root, ".codex", "instructions.md"), "ignored\n");
+    await writeFile(join(root, ".cursor", "rules"), "ignored\n");
+    await writeFile(join(root, "src", "generated", "client.ts"), "export const generated = true;\n");
+    await writeFile(join(root, "assets", "logo.png"), "binary\n");
+    await writeFile(join(root, ".env.local"), "TOKEN=secret\n");
+    await writeFile(join(root, "package.json"), "{}\n");
+    await writeFile(join(root, "tsconfig.json"), "{}\n");
+    await writeFile(join(root, "Dockerfile"), "FROM node:22\n");
+    await writeFile(join(root, "src", "app.ts"), "export const app = true;\n");
+
+    const project = await scanProject(root);
+    const serialized = JSON.stringify(project.files);
+
+    expect(serialized).not.toContain(".codex");
+    expect(serialized).not.toContain(".cursor");
+    expect(serialized).not.toContain("generated/client.ts");
+    expect(serialized).toContain("logo.png");
+    expect(serialized).not.toContain(".env.local");
+    expect(serialized).toContain("package.json");
+    expect(serialized).toContain("tsconfig.json");
+    expect(serialized).toContain("Dockerfile");
+    expect(serialized).toContain("src/app.ts");
+    expect((await buildSemanticIndex(project)).index.files.map((file) => file.path)).not.toContain("assets/logo.png");
   });
 
   it("ignores nested dependencies and symbolic links outside the project", async () => {
