@@ -20,6 +20,7 @@ export type StartToolPlanOptions = {
   purpose: ToolRunPurpose;
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
+  inputFingerprint?: string;
   reviewId?: string;
   model?: string;
   confirmedExecute?: boolean;
@@ -72,6 +73,7 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     purpose: options.purpose,
     artifactTarget: options.artifactTarget,
     scanFingerprint: options.scanFingerprint,
+    inputFingerprint: options.inputFingerprint,
     reviewId: options.reviewId,
     model: options.model
   });
@@ -94,6 +96,7 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     purpose: options.purpose,
     artifactTarget: options.artifactTarget,
     scanFingerprint: options.scanFingerprint,
+    inputFingerprint: options.inputFingerprint,
     reviewId: options.reviewId,
     artifactAdoption: options.purpose === "artifact-analysis"
       ? result.status === "failed"

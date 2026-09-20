@@ -20,7 +20,7 @@ describe("task-generator.service", () => {
     expect(canvas.artifactState).toBe("current");
     expect(canvas.generatorVersion).toBe("1.0.0");
     expect(canvas.inputFingerprint).toBe("scan-1");
-    expect(canvas.layout?.activeMode).toBe("manual");
+    expect(canvas.layout?.activeMode).toBe("execution");
     expect(canvas.nodes).toHaveLength(graphNodes.length);
     expect(canvas.edges.some((edge) => edge.source === "user-api" && edge.target === "tests")).toBe(true);
   });

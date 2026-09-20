@@ -18,7 +18,11 @@ import type {
   ModificationSnapshot,
   ProjectWorkspaceSession
 } from "../../types";
-import { analyzeArchitecture, readArchitectureMap } from "../services/architecture-analysis.service";
+import {
+  analyzeArchitecture,
+  buildArchitectureInputFingerprint,
+  readArchitectureMap
+} from "../services/architecture-analysis.service";
 import {
   isArchitectureReviewActive,
   readArchitectureReviewStatus
@@ -335,6 +339,7 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       nodes: assessModules(inferredGraph.nodes, inferredGraph.edges, index, scanFingerprint, new Date().toISOString()),
       edges: inferredGraph.edges
     };
+    const architectureInputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
     const written = await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint);
     await readModificationDelta(projectPath, "");
     await refreshConnectionWithoutFailing(projectId, projectPath);
@@ -343,13 +348,14 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       canvas: "current",
       task: "current",
       context: "current",
-      architecture: await artifactStateForFingerprint(projectPath, "architecture-map.json", scanFingerprint),
+      architecture: await artifactStateForFingerprint(projectPath, "architecture-map.json", architectureInputFingerprint),
       sequences: await artifactStateForFingerprint(projectPath, "sequence-diagrams.json", scanFingerprint)
     };
-    let architectureReview = await readArchitectureReviewStatus(projectPath, scanFingerprint);
+    const architectureFingerprints = { scanFingerprint, inputFingerprint: architectureInputFingerprint };
+    let architectureReview = await readArchitectureReviewStatus(projectPath, architectureFingerprints);
     if (architectureReview.state === "reviewing" && architectureReview.runId) {
       await readRunArtifact(projectPath, architectureReview.runId).catch(() => undefined);
-      architectureReview = await readArchitectureReviewStatus(projectPath, scanFingerprint);
+      architectureReview = await readArchitectureReviewStatus(projectPath, architectureFingerprints);
     }
     if (
       architectureReview.state === "reviewing" &&

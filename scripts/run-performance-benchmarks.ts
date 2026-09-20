@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -18,16 +18,19 @@ type BenchmarkResult = {
 
 const root = await mkdtemp(join(tmpdir(), "flowweave-benchmark-"));
 const results: BenchmarkResult[] = [];
+const scanScenarios = FILE_COUNTS.map((count) => ({
+  count,
+  rootPath: join(root, `files-${count}`)
+}));
 
 try {
-  await createFiles(root, FILE_COUNTS.at(-1) ?? 10_000);
-  for (const count of FILE_COUNTS) {
+  for (const { count, rootPath } of scanScenarios) {
+    await createFiles(rootPath, count);
+  }
+
+  for (const { count, rootPath } of scanScenarios) {
     const startedAt = performance.now();
-    const project = await scanProject(root, {
-      concurrency: 64,
-      maxDepth: 2,
-      maxEntries: count
-    });
+    const project = await scanProject(rootPath, { concurrency: 64 });
     results.push({
       scenario: "project-scan",
       size: count,
@@ -38,20 +41,14 @@ try {
     }
   }
 
-  const project = await scanProject(root, {
-    concurrency: 64,
-    maxDepth: 2,
-    maxEntries: 10_000
-  });
+  const semanticScenario = scanScenarios.find(({ count }) => count === 10_000);
+  if (!semanticScenario) throw new Error("Missing 10,000-file benchmark scenario.");
+  const project = await scanProject(semanticScenario.rootPath, { concurrency: 64 });
   const firstStartedAt = performance.now();
   await buildSemanticIndex(project, { concurrency: 16 });
   const firstDuration = performance.now() - firstStartedAt;
   const secondStartedAt = performance.now();
-  await buildSemanticIndex(await scanProject(root, {
-    concurrency: 64,
-    maxDepth: 2,
-    maxEntries: 10_000
-  }), { concurrency: 16 });
+  await buildSemanticIndex(project, { concurrency: 16 });
   const secondDuration = performance.now() - secondStartedAt;
   const improvement = 1 - secondDuration / firstDuration;
   results.push({ scenario: "semantic-index-cold", size: 10_000, milliseconds: firstDuration });
@@ -94,6 +91,7 @@ try {
 }
 
 async function createFiles(projectPath: string, count: number): Promise<void> {
+  await mkdir(projectPath, { recursive: true });
   const indexes = Array.from({ length: count }, (_, index) => index);
   await mapWithConcurrency(indexes, WRITE_CONCURRENCY, async (index) => {
     await writeFile(

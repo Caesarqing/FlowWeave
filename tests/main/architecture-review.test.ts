@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   compareArchitectureMaps,
+  createArchitectureInputFingerprint,
+  adoptArchitectureReview,
+  isArchitectureReviewActive,
   readArchitectureReviewStatus,
   startArchitectureReview,
   writeArchitectureReviewStatus
@@ -39,7 +42,10 @@ describe("architecture-review.service", () => {
 
   it("persists reviewing state and publishes the reviewed architecture after completion", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-review-"));
-    const local = architectureMap([architectureModule("local", "Local", "Local")], []);
+    const local: ArchitectureMap = {
+      ...architectureMap([architectureModule("local", "Local", "Local")], []),
+      metadata: { source: "local", scanFingerprint: "scan-1", inputFingerprint: "input-1" }
+    };
     const reviewed: ArchitectureMap = {
       ...architectureMap([architectureModule("reviewed", "Reviewed", "Reviewed")], []),
       source: "agent",
@@ -48,7 +54,9 @@ describe("architecture-review.service", () => {
         agentId: "mock",
         runId: "run-1",
         generatedAt: "2026-06-25T00:00:00.000Z",
-        inputFingerprint: "scan-1",
+        scanFingerprint: "scan-1",
+        inputFingerprint: "input-1",
+        reviewId: "review-1",
         fileCoverage: 1,
         evidenceCoverage: 1
       }
@@ -57,12 +65,19 @@ describe("architecture-review.service", () => {
 
     const initial = await startArchitectureReview({
       projectId: "project-00000000-0000-0000-0000-000000000000",
+      artifactTarget: "architecture-map",
       projectPath: root,
       reviewId: "review-1",
       scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
       agentId: "mock",
       localArchitecture: local,
       startedAt: "2026-06-25T00:00:00.000Z",
+      persistLocal: async () => {
+        await mkdir(join(root, ".flowweave"), { recursive: true });
+        await writeFile(join(root, ".flowweave", "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
+        await writeFile(join(root, ".flowweave", "architecture-local.json"), JSON.stringify(local), "utf8");
+      },
       persist: async (architectureMap) => {
         await mkdir(join(root, ".flowweave"), { recursive: true });
         await writeFile(
@@ -81,14 +96,14 @@ describe("architecture-review.service", () => {
 
     expect(initial.state).toBe("reviewing");
     await waitFor(() => events.some((event) => event.status.state === "reviewed"));
-    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "input-1" })).toMatchObject({
       state: "reviewed",
       reviewId: "review-1",
       runId: "run-1"
     });
     expect(events.at(-1)).toMatchObject({
       status: { state: "reviewed" },
-      architectureMap: { modules: [{ id: "reviewed" }] }
+      architectureMap: { modules: [{ id: "local" }] }
     });
   });
 
@@ -98,12 +113,15 @@ describe("architecture-review.service", () => {
 
     await startArchitectureReview({
       projectId: "project-00000000-0000-0000-0000-000000000000",
+      artifactTarget: "architecture-map",
       projectPath: root,
       reviewId: "review-stale",
       scanFingerprint: "scan-old",
+      inputFingerprint: "input-old",
       agentId: "mock",
       localArchitecture: local,
       startedAt: "2026-06-25T00:00:00.000Z",
+      persistLocal: async () => undefined,
       persist: async () => undefined,
       toGraph: () => ({ nodes: [], edges: [] }),
       run: async () => ({
@@ -113,10 +131,329 @@ describe("architecture-review.service", () => {
       onEvent: () => undefined
     });
 
-    expect(await readArchitectureReviewStatus(root, "scan-new")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-new", inputFingerprint: "input-new" })).toMatchObject({
       state: "stale",
       reviewId: "review-stale",
       scanFingerprint: "scan-old"
+    });
+  });
+
+  it("reuses the active review for the same key without creating another run", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-reuse-"));
+    const local = architectureMap([], []);
+    const events: import("../../src/types").ArchitectureReviewEvent[] = [];
+    const result = deferred<import("../../src/main/services/architecture-review.service").ArchitectureReviewRunResult>();
+    let runCount = 0;
+    let localWriteCount = 0;
+
+    const first = await startArchitectureReview({
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      projectPath: root,
+      reviewId: "review-first",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "mock",
+      localArchitecture: local,
+      startedAt: "2026-06-25T00:00:00.000Z",
+      persistLocal: async () => { localWriteCount += 1; },
+      persist: async () => undefined,
+      toGraph: () => ({ nodes: [], edges: [] }),
+      run: async (onRunId) => {
+        runCount += 1;
+        await onRunId("run-first");
+        return result.promise;
+      },
+      onEvent: (event) => events.push(event)
+    });
+
+    await waitFor(() => events.some((event) => event.reviewId === "review-first" && event.status.runId === "run-first"));
+    const duplicate = await startArchitectureReview({
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      projectPath: root,
+      reviewId: "review-duplicate",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "mock",
+      localArchitecture: local,
+      startedAt: "2026-06-25T00:00:01.000Z",
+      persistLocal: async () => { localWriteCount += 1; },
+      persist: async () => undefined,
+      toGraph: () => ({ nodes: [], edges: [] }),
+      run: async () => {
+        runCount += 1;
+        return { outcome: "failed", error: { code: "agent-failed", message: "duplicate run" } };
+      },
+      onEvent: (event) => events.push(event)
+    });
+
+    expect(first).toMatchObject({ state: "reviewing", reviewId: "review-first" });
+    expect(duplicate).toMatchObject({ state: "reviewing", reviewId: "review-first", runId: "run-first" });
+    expect(runCount).toBe(1);
+    expect(localWriteCount).toBe(1);
+
+    result.resolve({ outcome: "failed", error: { code: "agent-failed", message: "finished" }, runId: "run-first" });
+    await waitFor(() => events.some((event) => event.reviewId === "review-first" && event.status.state === "review-failed"));
+  });
+
+  it("preserves local topology through the shared adoption gate", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-topology-"));
+    const flowweaveRoot = join(root, ".flowweave");
+    await mkdir(flowweaveRoot, { recursive: true });
+    await writeFile(join(flowweaveRoot, "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
+
+    const local = {
+      ...architectureMap([
+        { ...architectureModule("core", "Core", "Local core"), files: ["src/core.ts"] },
+        { ...architectureModule("data", "Data", "Local data"), files: ["src/data.ts"] }
+      ], [architectureRelationship("core-data", "core", "data", "Local dependency")]),
+      metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
+    };
+    await writeFile(join(flowweaveRoot, "architecture-local.json"), JSON.stringify(local), "utf8");
+    const identity = {
+      projectId: "project-1",
+      artifactTarget: "architecture-map" as const,
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "mock" as const,
+      reviewId: "review-1"
+    };
+    await writeArchitectureReviewStatus(root, {
+      ...identity,
+      state: "reviewing",
+      startedAt: "2026-06-25T00:00:00.000Z"
+    });
+
+    const agentMap: ArchitectureMap = {
+      ...architectureMap([
+        { ...architectureModule("core", "Reviewed Core", "Agent core"), files: ["src/core.ts"] },
+        { ...architectureModule("extra", "Extra", "Agent invented module"), files: ["src/extra.ts"] }
+      ], []),
+      source: "agent",
+      metadata: {
+        source: "agent",
+        agentId: "mock",
+        runId: "run-1",
+        reviewId: "review-1",
+        generatedAt: "2026-06-25T00:00:01.000Z",
+        scanFingerprint: "scan-1",
+        inputFingerprint: "input-1",
+        fileCoverage: 1,
+        evidenceCoverage: 1
+      }
+    };
+    let persisted: ArchitectureMap | undefined;
+
+    const adoption = await adoptArchitectureReview({
+      ...identity,
+      projectPath: root,
+      runId: "run-1",
+      architectureMap: agentMap,
+      localArchitecture: local,
+      persist: async (architectureMap) => { persisted = architectureMap; }
+    });
+
+    expect(adoption.status).toBe("applied");
+    expect(persisted?.modules.map((module) => module.id)).toEqual(["core", "data"]);
+    expect(persisted?.modules[0]).toMatchObject({ title: "Reviewed Core", files: ["src/core.ts"] });
+    expect(persisted?.relationships).toEqual(local.relationships);
+  });
+
+  it.each(["project.json", "architecture-local.json"])(
+    "rejects adoption when persisted %s evidence is missing",
+    async (missingFile) => {
+      const root = await mkdtemp(join(tmpdir(), "flowweave-review-missing-evidence-"));
+      const flowweaveRoot = join(root, ".flowweave");
+      await mkdir(flowweaveRoot, { recursive: true });
+      const local = {
+        ...architectureMap([], []),
+        metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
+      };
+      if (missingFile !== "project.json") {
+        await writeFile(join(flowweaveRoot, "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
+      }
+      if (missingFile !== "architecture-local.json") {
+        await writeFile(join(flowweaveRoot, "architecture-local.json"), JSON.stringify(local), "utf8");
+      }
+
+      const identity = {
+        projectId: "project-1",
+        artifactTarget: "architecture-map" as const,
+        scanFingerprint: "scan-1",
+        inputFingerprint: "input-1",
+        agentId: "mock" as const,
+        reviewId: "review-1"
+      };
+      await writeArchitectureReviewStatus(root, {
+        ...identity,
+        state: "reviewing",
+        startedAt: "2026-06-25T00:00:00.000Z"
+      });
+      const reviewedMap: ArchitectureMap = {
+        ...architectureMap([], []),
+        source: "agent",
+        metadata: {
+          source: "agent",
+          agentId: "mock",
+          runId: "run-1",
+          reviewId: "review-1",
+          generatedAt: "2026-06-25T00:00:01.000Z",
+          scanFingerprint: "scan-1",
+          inputFingerprint: "input-1",
+          fileCoverage: 1,
+          evidenceCoverage: 1
+        }
+      };
+      let wasPersisted = false;
+
+      const adoption = await adoptArchitectureReview({
+        ...identity,
+        projectPath: root,
+        runId: "run-1",
+        architectureMap: reviewedMap,
+        localArchitecture: local,
+        persist: async () => { wasPersisted = true; }
+      });
+
+      expect(adoption.status).toBe("rejected");
+      expect(wasPersisted).toBe(false);
+    }
+  );
+
+  it.each([
+    { name: "a newer scan", scanFingerprint: "scan-2", inputFingerprint: "input-2", agentId: "mock" as const },
+    { name: "a new analysis configuration", scanFingerprint: "scan-1", inputFingerprint: "input-2", agentId: "mock" as const },
+    { name: "a switched Agent", scanFingerprint: "scan-1", inputFingerprint: "input-1", agentId: "codex-local" as const }
+  ])("does not adopt an older run after $name becomes active", async ({ scanFingerprint, inputFingerprint, agentId }) => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-latest-"));
+    const oldResult = deferred<import("../../src/main/services/architecture-review.service").ArchitectureReviewRunResult>();
+    const currentResult = deferred<import("../../src/main/services/architecture-review.service").ArchitectureReviewRunResult>();
+    const oldSettled = deferred<boolean>();
+    const oldLocal = architectureMap([], []);
+    const currentLocal = { ...architectureMap([], []), projectName: "Current local graph" };
+    let activeMap: ArchitectureMap | undefined;
+    const events: import("../../src/types").ArchitectureReviewEvent[] = [];
+
+    await startArchitectureReview({
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      projectPath: root,
+      reviewId: "review-old",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "mock",
+      localArchitecture: oldLocal,
+      startedAt: "2026-06-25T00:00:00.000Z",
+      persistLocal: async () => { activeMap = oldLocal; },
+      persist: async (map) => { activeMap = map; },
+      toGraph: () => ({ nodes: [], edges: [] }),
+      run: async (onRunId) => {
+        await onRunId("run-old");
+        try {
+          return await oldResult.promise;
+        } finally {
+          oldSettled.resolve(true);
+        }
+      },
+      onEvent: (event) => events.push(event)
+    });
+
+    await waitFor(() => events.some((event) => event.reviewId === "review-old" && event.status.runId === "run-old"));
+    await startArchitectureReview({
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      projectPath: root,
+      reviewId: "review-current",
+      scanFingerprint,
+      inputFingerprint,
+      agentId,
+      localArchitecture: currentLocal,
+      startedAt: "2026-06-25T00:00:01.000Z",
+      persistLocal: async () => { activeMap = currentLocal; },
+      persist: async (map) => { activeMap = map; },
+      toGraph: () => ({ nodes: [], edges: [] }),
+      run: async (onRunId) => {
+        await onRunId("run-current");
+        return currentResult.promise;
+      },
+      onEvent: (event) => events.push(event)
+    });
+
+    oldResult.resolve({ outcome: "reviewed", architectureMap: architectureMap([], []), runId: "run-old" });
+    await oldSettled.promise;
+    await waitFor(() => !isArchitectureReviewActive("review-old"));
+
+    expect(activeMap?.projectName).toBe("Current local graph");
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint, inputFingerprint })).toMatchObject({
+      state: "reviewing",
+      reviewId: "review-current",
+      agentId
+    });
+
+    currentResult.resolve({ outcome: "failed", error: { code: "agent-failed", message: "test cleanup" }, runId: "run-current" });
+    await waitFor(() => events.some((event) => event.reviewId === "review-current" && event.status.state === "review-failed"));
+  });
+
+  it("changes the architecture input fingerprint when a generator contract version changes", () => {
+    const common = {
+      scanFingerprint: "scan-1",
+      semanticIndexSchemaVersion: 4,
+      semanticIndexGeneratorVersion: "4.0.0",
+      moduleClusteringConfigVersion: "cluster-1",
+      architectureGeneratorVersion: "architecture-1",
+      reviewContractVersion: "review-1"
+    };
+
+    expect(createArchitectureInputFingerprint(common)).not.toBe(createArchitectureInputFingerprint({
+      ...common,
+      moduleClusteringConfigVersion: "cluster-2"
+    }));
+  });
+
+  it("resumes an existing review with its original review id", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-resume-"));
+    const events: import("../../src/types").ArchitectureReviewEvent[] = [];
+    await writeArchitectureReviewStatus(root, {
+      state: "reviewing",
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      reviewId: "review-original",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "mock",
+      runId: "run-original",
+      startedAt: "2026-06-25T00:00:00.000Z"
+    });
+    let runCount = 0;
+
+    const resumed = await startArchitectureReview({
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      projectPath: root,
+      reviewId: "review-original",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "mock",
+      localArchitecture: architectureMap([], []),
+      startedAt: "2026-06-25T00:00:00.000Z",
+      resume: true,
+      persistLocal: async () => undefined,
+      persist: async () => undefined,
+      toGraph: () => ({ nodes: [], edges: [] }),
+      run: async (onRunId) => {
+        runCount += 1;
+        await onRunId("run-original");
+        return { outcome: "failed", error: { code: "agent-failed", message: "test cleanup" }, runId: "run-original" };
+      },
+      onEvent: (event) => events.push(event)
+    });
+
+    expect(resumed).toMatchObject({ state: "reviewing", reviewId: "review-original", runId: "run-original" });
+    expect(runCount).toBe(1);
+    await waitFor(() => events.some((event) => event.reviewId === "review-original" && event.status.state === "review-failed"));
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "input-1" })).toMatchObject({
+      reviewId: "review-original"
     });
   });
 
@@ -142,7 +479,7 @@ describe("architecture-review.service", () => {
       "utf8"
     );
 
-    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "scan-1" })).toMatchObject({
       state: "reviewed",
       scanFingerprint: "scan-1",
       agentId: "codex-local",
@@ -159,7 +496,7 @@ describe("architecture-review.service", () => {
       "utf8"
     );
 
-    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "scan-1" })).toMatchObject({
       state: "stale"
     });
   });
@@ -183,7 +520,7 @@ describe("architecture-review.service", () => {
       "utf8"
     );
 
-    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "scan-1" })).toMatchObject({
       state: "local",
       scanFingerprint: "scan-1"
     });
@@ -197,9 +534,9 @@ describe("architecture-review.service", () => {
       `${JSON.stringify(architectureMap([], []))}\n`,
       "utf8"
     );
-    await writeArchitectureReviewStatus(root, { state: "local" });
+    await writeArchitectureReviewStatus(root, { state: "local", scanFingerprint: "scan-1", inputFingerprint: "scan-1" });
 
-    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "scan-1" })).toMatchObject({
       state: "stale"
     });
   });
@@ -225,9 +562,9 @@ describe("architecture-review.service", () => {
       `${JSON.stringify(reviewed)}\n`,
       "utf8"
     );
-    await writeArchitectureReviewStatus(root, { state: "local", scanFingerprint: "scan-1" });
+    await writeArchitectureReviewStatus(root, { state: "local", scanFingerprint: "scan-1", inputFingerprint: "scan-1" });
 
-    expect(await readArchitectureReviewStatus(root, "scan-1")).toMatchObject({
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "scan-1" })).toMatchObject({
       state: "reviewed",
       agentId: "codex-local",
       runId: "run-1"
@@ -241,6 +578,12 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     if (Date.now() >= deadline) throw new Error("Timed out waiting for architecture review event.");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
 }
 
 function architectureMap(

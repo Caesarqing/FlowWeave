@@ -73,7 +73,7 @@ export type ModuleAssessment = {
 };
 export type TechnologyStack = "frontend" | "backend" | "mobile" | "data" | "infrastructure" | "shared" | "unknown";
 export type ArchitectureLayer = "presentation" | "api" | "domain" | "data" | "integration" | "infrastructure" | "test" | "unknown";
-export type CanvasLayoutMode = "dependency" | "role" | "runtime" | "domain" | "technology" | "architecture" | "functional";
+export type CanvasLayoutMode = "execution" | "dependency" | "role" | "runtime" | "domain" | "technology" | "architecture" | "functional";
 export type CanvasClassification = {
   role: ArchitectureLayer;
   runtimeTags: TechnologyStack[];
@@ -87,6 +87,8 @@ export type CanvasLayoutState = {
   collapsedGroups: string[];
 };
 export type GraphEdgeRelation = "depends_on" | "calls" | "reads_writes" | "external_api" | "publishes_event" | "subscribes_event" | "tests";
+export type GraphViewMode = "execution" | "dependency" | "architecture" | "technology" | "domain";
+export type GraphEdgeClass = "runtime" | "data" | "external" | "event" | "dependency" | "test";
 export type CanvasNodeKind = "module" | "requirement" | "task" | "file" | "doc" | "agent" | "diff";
 
 export type ConnectionHandleSlot = {
@@ -153,6 +155,7 @@ export type ArchitectureEvidence = {
   filePath?: string;
   symbol?: string;
   line?: number;
+  eventId?: string;
   detail: string;
 };
 
@@ -479,8 +482,11 @@ export type ArchitectureReviewError = {
 
 export type ArchitectureReviewStatus = {
   state: ArchitectureReviewState;
+  projectId?: string;
+  artifactTarget?: "architecture-map";
   reviewId?: string;
   scanFingerprint?: string;
+  inputFingerprint?: string;
   agentId?: RuntimeAgentId;
   runId?: string;
   startedAt?: string;
@@ -662,7 +668,9 @@ export type ArtifactGenerationMetadata = {
   source?: "agent" | "local";
   agentId?: RuntimeAgentId;
   runId?: string;
+  reviewId?: string;
   generatedAt: string;
+  scanFingerprint?: string;
   inputFingerprint: string;
   fileCoverage: number;
   evidenceCoverage: number;
@@ -680,6 +688,8 @@ export type AnalysisFailure = {
   firstFailure?: string;
   retryFailure?: string;
 };
+
+export type LocalGenerationStatus = "idle" | "generating" | "local-ready" | "failed";
 
 export type SequenceDiagramGenerationResult =
   | { outcome: "generated"; bundle: SequenceDiagramBundle; review: SequenceReviewStatus; warning?: AnalysisFailure }
@@ -961,6 +971,37 @@ export type AgentPluginStatus = {
   hostInstructionPath?: string;
   message: string;
 };
+export type AgentPluginHostCheck = {
+  hostId: AgentPluginHostId;
+  status: "installed" | "error";
+  requiredFiles: string[];
+  missingFiles: string[];
+  version: string;
+  protocolVersion: AgentProtocolVersion;
+  contentHash: string;
+  message: string;
+};
+export type AgentPluginMigrationResult = {
+  status: "not-run" | "completed" | "blocked" | "failed";
+  completedAt?: string;
+  migratedFiles?: Array<{
+    sourcePath: string;
+    targetPath: string;
+    contentHash: string;
+  }>;
+  message?: string;
+};
+export type AgentPluginState = {
+  schemaVersion: 1;
+  pluginId: string;
+  installedVersion: string;
+  protocolVersion: AgentProtocolVersion;
+  contentHash: string;
+  installedAt: string;
+  sourceHash: string;
+  hostChecks: AgentPluginHostCheck[];
+  recentMigrationResult: AgentPluginMigrationResult;
+};
 
 export type CustomAgentInput = {
   name: string;
@@ -993,6 +1034,7 @@ export type ToolRunRequest = {
   purpose: ToolRunPurpose;
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
+  inputFingerprint?: string;
   reviewId?: string;
   protocolVersion?: AgentProtocolVersion;
   expectedContentKind?: AgentExpectedContentKind;
@@ -1048,6 +1090,7 @@ export type ToolRunResult = {
   purpose: ToolRunPurpose;
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
+  inputFingerprint?: string;
   reviewId?: string;
   artifactAdoption?: ArtifactAdoption;
   agentReadiness?: AgentReadinessResult;
@@ -1066,6 +1109,7 @@ export type ToolRunSummary = {
   purpose: ToolRunPurpose;
   artifactTarget?: ArtifactRunTarget;
   scanFingerprint?: string;
+  inputFingerprint?: string;
   reviewId?: string;
   artifactAdoption?: ArtifactAdoption;
   agentReadiness?: AgentReadinessResult;
@@ -1137,6 +1181,7 @@ export type ApiMap = {
 export type ArchitectureAnalysisResult =
   | {
       outcome: "generated";
+      localGenerationStatus: "local-ready";
       architectureMap: ArchitectureMap;
       graph: { nodes: GraphNode[]; edges: GraphEdge[] };
       review: ArchitectureReviewStatus;
@@ -1145,6 +1190,7 @@ export type ArchitectureAnalysisResult =
     }
   | {
       outcome: "failed";
+      localGenerationStatus: "failed";
       error: AnalysisFailure;
       previous?: ArtifactGenerationMetadata;
     };

@@ -10,7 +10,7 @@ import {
   type NodeChange
 } from "@xyflow/react";
 import { BrainCircuit, ChevronsDownUp, GitBranch, LayoutGrid, RotateCcw, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
 import { DocNode } from "./nodes/DocNode";
@@ -19,9 +19,9 @@ import { HologridScene } from "./HologridScene";
 import { ModuleNode } from "./nodes/ModuleNode";
 import { RequirementNode } from "./nodes/RequirementNode";
 import { TaskNode } from "./nodes/TaskNode";
-import type { FlowWeaveNode } from "../utils/graph-converters";
+import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
-import type { ArchitectureLayer, CanvasLayoutMode, CanvasLayoutState, GraphEdgeRelation, TechnologyStack } from "../types";
+import type { ArchitectureLayer, CanvasLayoutMode, CanvasLayoutState, GraphEdgeRelation, GraphViewMode, TechnologyStack } from "../types";
 import {
   layoutCanvasNodes,
   nodeGroupKey,
@@ -29,6 +29,7 @@ import {
   type TraceDirection
 } from "../utils/canvas-layout";
 import { filterCanvasNodes, getCanvasFilterResult } from "../utils/canvas-filters";
+import { projectGraphForView } from "../utils/graph-view-projection";
 import { Button } from "./Button";
 
 const nodeTypes = {
@@ -142,57 +143,107 @@ function ControlledFlowCanvas({
   const [relationFilter, setRelationFilter] = useState<GraphEdgeRelation | "all">("all");
   const [runtimeFilter, setRuntimeFilter] = useState<TechnologyStack | "all">("all");
   const [roleFilter, setRoleFilter] = useState<ArchitectureLayer | "all">("all");
-  const [layoutMode, setLayoutMode] = useState<CanvasLayoutMode>("dependency");
+  const [layoutMode, setLayoutMode] = useState<CanvasLayoutMode>("execution");
+  const [includeInferredDependencyOverlay, setIncludeInferredDependencyOverlay] = useState(false);
   const [traceDirection, setTraceDirection] = useState<TraceDirection | "off">("off");
   const [focusedNodeId, setFocusedNodeId] = useState("");
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [layoutError, setLayoutError] = useState("");
   const runtimeTags = runtimeFilter === "all" ? [] : [runtimeFilter];
+  const projection = useMemo(
+    () => projectGraphForView(
+      nodes.map((node) => node.data),
+      edges.map(graphEdgeFromFlow),
+      graphViewMode(layoutMode),
+      { includeInferredDependencyOverlay }
+    ),
+    [edges, includeInferredDependencyOverlay, layoutMode, nodes]
+  );
+  const projectedFlowGraph = useMemo(() => {
+    const originalNodesById = new Map(nodes.map((node) => [node.id, node]));
+    const projectedNodes = projection.nodes.map((node) => {
+      const original = originalNodesById.get(node.id);
+      const savedPosition = canvasLayout.autoLayouts[layoutMode]?.[node.id];
+      const flowNode = original
+        ? { ...original, data: { ...original.data, ...node } }
+        : createFlowNode(node);
+      return {
+        ...flowNode,
+        ...(savedPosition ? { position: savedPosition } : {}),
+        ...(node.syntheticKind ? { draggable: false, selectable: false, connectable: false } : {})
+      };
+    });
+    const originalEdgesById = new Map(edges.map((edge) => [edge.id, edge]));
+    const projectedEdges = projection.edges.map((edge) => {
+      const sourceEdge = originalEdgesById.get(edge.sourceEdgeIds[0]);
+      const flowEdge = createFlowEdge(edge);
+      return {
+        ...flowEdge,
+        selected: sourceEdge?.selected,
+        style: {
+          ...flowEdge.style,
+          ...(edge.confidence === "inferred" ? { strokeDasharray: "6 5" } : {})
+        },
+        data: {
+          ...flowEdge.data,
+          edgeClass: edge.edgeClass,
+          confidence: edge.confidence,
+          participatesInLayering: edge.participatesInLayering,
+          sourceEdgeIds: edge.sourceEdgeIds,
+          evidenceIds: edge.evidenceIds,
+          aggregatedEdgeIds: edge.aggregatedEdgeIds
+        }
+      };
+    });
+    return decorateFlowGraph(projectedNodes, projectedEdges);
+  }, [canvasLayout.autoLayouts, edges, layoutMode, nodes, projection]);
+  const projectedNodes = projectedFlowGraph.nodes;
+  const projectedEdges = projectedFlowGraph.edges;
   const tracedNodeIds = useMemo(
-    () => focusedNodeId && traceDirection !== "off" ? traceNodeIds(focusedNodeId, edges, traceDirection) : undefined,
-    [edges, focusedNodeId, traceDirection]
+    () => focusedNodeId && traceDirection !== "off" ? traceNodeIds(focusedNodeId, projectedEdges, traceDirection) : undefined,
+    [projectedEdges, focusedNodeId, traceDirection]
   );
   const filterResult = useMemo(
-    () => getCanvasFilterResult(nodes, { role: roleFilter, runtimeTags, domain: "all" }),
-    [nodes, roleFilter, runtimeTags]
+    () => getCanvasFilterResult(projectedNodes, { role: roleFilter, runtimeTags, domain: "all" }),
+    [projectedNodes, roleFilter, runtimeTags]
   );
   const filterVisibleNodeIds = useMemo(
-    () => new Set(filterCanvasNodes(nodes, { role: roleFilter, runtimeTags, domain: "all" }).map((node) => node.id)),
-    [nodes, roleFilter, runtimeTags]
+    () => new Set(filterCanvasNodes(projectedNodes, { role: roleFilter, runtimeTags, domain: "all" }).map((node) => node.id)),
+    [projectedNodes, roleFilter, runtimeTags]
   );
   const collapsedVisibleNodeIds = useMemo(() => {
     if (layoutMode === "dependency" || canvasLayout.collapsedGroups.length === 0) {
       return filterVisibleNodeIds;
     }
     const representatives = new Map<string, string>();
-    for (const node of nodes.filter((item) => filterVisibleNodeIds.has(item.id)).sort((left, right) => left.id.localeCompare(right.id))) {
+    for (const node of projectedNodes.filter((item) => filterVisibleNodeIds.has(item.id)).sort((left, right) => left.id.localeCompare(right.id))) {
       const group = nodeGroupKey(node.data, layoutMode);
       if (!representatives.has(group)) representatives.set(group, node.id);
     }
-    return new Set(nodes
+    return new Set(projectedNodes
       .filter((node) => {
         if (!filterVisibleNodeIds.has(node.id)) return false;
         const group = nodeGroupKey(node.data, layoutMode);
         return !canvasLayout.collapsedGroups.includes(group) || representatives.get(group) === node.id;
       })
       .map((node) => node.id));
-  }, [canvasLayout.collapsedGroups, filterVisibleNodeIds, layoutMode, nodes]);
+  }, [canvasLayout.collapsedGroups, filterVisibleNodeIds, layoutMode, projectedNodes]);
   const filteredEdges = useMemo(
-    () => edges.filter((edge) => {
+    () => projectedEdges.filter((edge) => {
       const relation = (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on";
       return (relationFilter === "all" || relation === relationFilter) &&
         collapsedVisibleNodeIds.has(edge.source) &&
         collapsedVisibleNodeIds.has(edge.target) &&
         (!tracedNodeIds || (tracedNodeIds.has(edge.source) && tracedNodeIds.has(edge.target)));
     }),
-    [edges, relationFilter, collapsedVisibleNodeIds, tracedNodeIds]
+    [projectedEdges, relationFilter, collapsedVisibleNodeIds, tracedNodeIds]
   );
   const visibleNodes = useMemo(
-    () => nodes.map((node) => ({
+    () => projectedNodes.map((node) => ({
       ...node,
       hidden: !collapsedVisibleNodeIds.has(node.id) || Boolean(tracedNodeIds && !tracedNodeIds.has(node.id))
     })),
-    [nodes, collapsedVisibleNodeIds, tracedNodeIds]
+    [projectedNodes, collapsedVisibleNodeIds, tracedNodeIds]
   );
   const localizedEdges = useMemo(
     () => localizeCanvasEdgeLabels(filteredEdges, t),
@@ -214,6 +265,26 @@ function ControlledFlowCanvas({
       setIsLayoutRunning(false);
     }
   }
+  useEffect(() => {
+    if (layoutMode !== "execution" || canvasLayout.activeMode !== "execution" || canvasLayout.autoLayouts.execution) return;
+    let active = true;
+    const nodesToLayout = visibleNodes.filter((node) => !node.hidden);
+    setIsLayoutRunning(true);
+    setLayoutError("");
+    void layoutCanvasNodes(nodesToLayout, filteredEdges, "execution")
+      .then((layout) => {
+        if (active) {
+          onApplyAutoLayout("execution", Object.fromEntries(layout.map((node) => [node.id, node.position])));
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) setLayoutError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setIsLayoutRunning(false);
+      });
+    return () => { active = false; };
+  }, [canvasLayout.activeMode, canvasLayout.autoLayouts.execution, filteredEdges, layoutMode, onApplyAutoLayout, visibleNodes]);
   function toggleGroupCollapse() {
     if (layoutMode === "dependency") return;
     const groups = [...new Set(nodes
@@ -241,12 +312,23 @@ function ControlledFlowCanvas({
           <label>
             <span>{t("canvas.layoutMode")}</span>
             <select value={layoutMode} onChange={(event) => setLayoutMode(event.target.value as CanvasLayoutMode)}>
+              <option value="execution">{t("canvas.layoutExecution")}</option>
               <option value="dependency">{t("canvas.layoutDependency")}</option>
-              <option value="role">{t("canvas.layoutArchitecture")}</option>
-              <option value="runtime">{t("canvas.layoutTechnology")}</option>
+              <option value="architecture">{t("canvas.layoutArchitecture")}</option>
+              <option value="technology">{t("canvas.layoutTechnology")}</option>
               <option value="domain">{t("canvas.layoutFunctional")}</option>
             </select>
           </label>
+          {layoutMode === "execution" ? (
+            <label className="canvas-inferred-overlay-toggle">
+              <input
+                checked={includeInferredDependencyOverlay}
+                onChange={(event) => setIncludeInferredDependencyOverlay(event.target.checked)}
+                type="checkbox"
+              />
+              <span>{t("canvas.inferredDependencyOverlay")}</span>
+            </label>
+          ) : null}
           <label>
             <span>{t("canvas.technologyFilter")}</span>
             <select value={runtimeFilter} onChange={(event) => setRuntimeFilter(event.target.value as TechnologyStack | "all")}>
@@ -357,6 +439,14 @@ function ControlledFlowCanvas({
 export function localizeCanvasEdgeLabels(edges: Edge[], t: (key: string) => string) {
   return edges.map((edge) => {
     const relation = (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on";
-    return { ...edge, label: t(`relation.${relation}Accent`) };
+    const label = t(`relation.${relation}Accent`);
+    return { ...edge, label: edge.data?.confidence === "inferred" ? `${label} · ${t("canvas.inferred")}` : label };
   });
+}
+
+function graphViewMode(mode: CanvasLayoutMode): GraphViewMode {
+  if (mode === "role") return "architecture";
+  if (mode === "runtime") return "technology";
+  if (mode === "functional") return "domain";
+  return mode;
 }

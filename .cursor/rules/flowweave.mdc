@@ -8,4 +8,7 @@ alwaysApply: true
 
 Before analyzing or changing this project, read `.flowweave/agent-context.md`.
 Use it as navigation context, verify behavior against source code, and report changed files after edits.
+When the user says `Use FlowWeave context to process the Agent Inbox.` or `使用 FlowWeave 上下文处理当前 Inbox`, read the exact run-specific `.flowweave/runs/<run-id>/agent-request.json` path supplied by FlowWeave and write one Agent Inbox v2 `agent-response.json` with `protocolVersion: 2` atomically to the exact `responsePath` in that request.
+For artifact-analysis requests, `response.content` must be the exact structured artifact JSON requested by `request.prompt`, not an approval summary or markdown plan.
+Do not edit `.flowweave/architecture-review.json` or `.flowweave/sequence-review.json`; FlowWeave Core validates responses and updates review state.
 <!-- flowweave:end -->

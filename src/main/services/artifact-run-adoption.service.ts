@@ -5,6 +5,7 @@ import type {
   CodeflowProject,
   ProjectStructureFacts,
   RuntimeAgentId,
+  SemanticIndex,
   SequenceDiagramBundle,
   SequenceReviewStatus,
   ToolRunResult
@@ -13,17 +14,14 @@ import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readJsonArtifact } from "../storage/artifact-store";
 import {
   assessArchitectureMap,
+  buildArchitectureInputFingerprint,
   parseArchitectureJson,
   readArchitectureMap,
   validateArchitectureMap,
   withArchitectureMetadata,
   writeArchitectureArtifacts
 } from "./architecture-analysis.service";
-import {
-  compareArchitectureMaps,
-  readArchitectureReviewStatus,
-  writeArchitectureReviewStatus
-} from "./architecture-review.service";
+import { adoptArchitectureReview } from "./architecture-review.service";
 import { createScanFingerprint } from "./project-registry.service";
 import { scanProject } from "./project-scanner.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
@@ -64,7 +62,7 @@ export async function adoptArtifactRun(
   }
 
   if (result.artifactTarget === "architecture-map") {
-    return adoptArchitectureRun(projectPath, result, output, mode);
+    return adoptArchitectureRun(projectPath, result, output);
   }
   if (result.artifactTarget === "sequence-diagrams" || result.artifactTarget === "sequence-revision") {
     return adoptSequenceRun(projectPath, result, output, mode);
@@ -75,16 +73,25 @@ export async function adoptArtifactRun(
 async function adoptArchitectureRun(
   projectPath: string,
   result: Partial<ToolRunResult>,
-  output: string,
-  mode: ArtifactRunAdoptionMode
+  output: string
 ): Promise<ArtifactAdoption> {
   const project = await scanProject(projectPath);
-  const { facts, representativeFacts, inputFingerprint } = await adoptionFacts(project, result.scanFingerprint);
-  const stale = await staleScanMessage(projectPath, inputFingerprint);
+  const { facts, representativeFacts, index, scanFingerprint } = await adoptionFacts(project);
+  const stale = await staleScanMessage(projectPath, scanFingerprint);
   if (stale) return stale;
-  const activeReview = await readArchitectureReviewStatus(projectPath, inputFingerprint);
-  const reviewMismatch = reviewMismatchMessage(activeReview, result, mode);
-  if (reviewMismatch) return reviewMismatch;
+  if (result.scanFingerprint !== scanFingerprint) {
+    return { status: "stale", message: "Run completed but not applied because the project scan changed." };
+  }
+  if (!result.inputFingerprint) {
+    return { status: "rejected", message: "Run is missing its architecture input fingerprint." };
+  }
+  const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
+  if (result.inputFingerprint !== inputFingerprint) {
+    return { status: "stale", message: "Run completed but not applied because the architecture analysis input changed." };
+  }
+  if (!result.projectId || !result.reviewId || !result.id || !result.toolId) {
+    return { status: "rejected", message: "Run is missing architecture review identity metadata." };
+  }
 
   const parsed = parseArchitectureJson(output, project, facts);
   const quality = parsed ? validateArchitectureMap(parsed, representativeFacts) : undefined;
@@ -95,29 +102,37 @@ async function adoptArchitectureRun(
     };
   }
 
-  const { index } = await buildSemanticIndex(project);
+  const localValue = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "architecture-local.json"));
+  if (!isArchitectureMap(localValue)) {
+    return { status: "rejected", message: "Current local architecture baseline is missing or invalid." };
+  }
   const architectureMap = assessArchitectureMap(
     withArchitectureMetadata(
       parsed,
       runAgentId(result),
-      result.id ?? "unknown-run",
+      result.id,
+      scanFingerprint,
       inputFingerprint,
+      result.reviewId,
       quality
     ),
     index,
     inputFingerprint
   );
-  const previous = await readArchitectureMap(projectPath).catch(() => undefined);
-  await writeArchitectureArtifacts(projectPath, architectureMap);
-  await writeArchitectureReviewStatus(projectPath, {
-    state: "reviewed",
-    reviewId: result.reviewId ?? activeReview.reviewId,
-    scanFingerprint: inputFingerprint,
+  const adoption = await adoptArchitectureReview({
+    projectPath,
+    projectId: result.projectId,
+    artifactTarget: "architecture-map",
+    scanFingerprint,
+    inputFingerprint,
     agentId: runAgentId(result),
+    reviewId: result.reviewId,
     runId: result.id,
-    completedAt: architectureMap.generatedAt,
-    diff: previous ? compareArchitectureMaps(previous, architectureMap) : undefined
+    architectureMap,
+    localArchitecture: localValue,
+    persist: (map) => writeArchitectureArtifacts(projectPath, map)
   });
+  if (adoption.status === "stale" || adoption.status === "rejected") return adoption;
   return {
     status: "applied",
     message: "Run completed and applied to module graph.",
@@ -132,9 +147,13 @@ async function adoptSequenceRun(
   mode: ArtifactRunAdoptionMode
 ): Promise<ArtifactAdoption> {
   const project = await scanProject(projectPath);
-  const { facts, representativeFacts, inputFingerprint } = await adoptionFacts(project, result.scanFingerprint);
-  const stale = await staleScanMessage(projectPath, inputFingerprint);
+  const { facts, representativeFacts, scanFingerprint } = await adoptionFacts(project);
+  const inputFingerprint = result.scanFingerprint ?? scanFingerprint;
+  const stale = await staleScanMessage(projectPath, scanFingerprint);
   if (stale) return stale;
+  if (result.scanFingerprint && result.scanFingerprint !== scanFingerprint) {
+    return { status: "stale", message: "Run completed but not applied because the project scan changed." };
+  }
   const activeReview = await readSequenceReviewStatus(projectPath, inputFingerprint);
   const reviewMismatch = reviewMismatchMessage(activeReview, result, mode);
   if (reviewMismatch) return reviewMismatch;
@@ -192,18 +211,18 @@ async function revisedSequenceBundle(projectPath: string, output: string): Promi
 }
 
 async function adoptionFacts(
-  project: CodeflowProject,
-  requestedFingerprint: string | undefined
+  project: CodeflowProject
 ): Promise<{
   facts: ProjectStructureFacts;
   representativeFacts: ProjectStructureFacts;
-  inputFingerprint: string;
+  index: SemanticIndex;
+  scanFingerprint: string;
 }> {
   const { index } = await buildSemanticIndex(project);
   const facts = semanticIndexToStructureFacts(project, index);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, 40) };
-  const inputFingerprint = requestedFingerprint ?? project.scanFingerprint ?? createScanFingerprint(representativeFacts);
-  return { facts, representativeFacts, inputFingerprint };
+  const scanFingerprint = project.scanFingerprint ?? createScanFingerprint(representativeFacts);
+  return { facts, representativeFacts, index, scanFingerprint };
 }
 
 async function staleScanMessage(projectPath: string, inputFingerprint: string): Promise<ArtifactAdoption | undefined> {
@@ -241,4 +260,9 @@ function reviewMismatchMessage(
 
 function runAgentId(result: Partial<ToolRunResult>): RuntimeAgentId {
   return result.toolId ?? "mock";
+}
+
+function isArchitectureMap(value: unknown): value is import("../../types").ArchitectureMap {
+  return typeof value === "object" && value !== null &&
+    "version" in value && "modules" in value && "relationships" in value;
 }

@@ -23,7 +23,7 @@ export function createCanvasArtifact(
     scanFingerprint,
     artifactState: "current",
     layout: {
-      activeMode: "manual",
+      activeMode: "execution",
       manualPositions: Object.fromEntries(modules.map((node) => [node.id, { x: node.x, y: node.y }])),
       autoLayouts: {},
       collapsedGroups: []

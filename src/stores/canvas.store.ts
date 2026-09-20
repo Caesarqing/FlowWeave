@@ -37,7 +37,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     nodes: modules.map(createFlowNode),
     projectFiles: files,
     canvasLayout: layout ?? {
-      activeMode: "manual",
+      activeMode: "execution",
       manualPositions: Object.fromEntries(modules.map((node) => [node.id, { x: node.x, y: node.y }])),
       autoLayouts: {},
       collapsedGroups: []

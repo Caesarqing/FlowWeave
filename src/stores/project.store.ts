@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ArchitectureReviewStatus,
+  LocalGenerationStatus,
   ProjectArtifactStatuses,
   SequenceReviewStatus
 } from "../types";
@@ -12,6 +13,7 @@ type ProjectState = {
   scanFingerprint: string;
   artifactStatuses?: ProjectArtifactStatuses;
   architectureReview: ArchitectureReviewStatus;
+  localGenerationStatus: LocalGenerationStatus;
   sequenceReview: SequenceReviewStatus;
   projectStatus: string;
   isProjectLoading: boolean;
@@ -25,6 +27,7 @@ type ProjectState = {
   setArchitectureReview: (
     value: ArchitectureReviewStatus | ((current: ArchitectureReviewStatus) => ArchitectureReviewStatus)
   ) => void;
+  setLocalGenerationStatus: (value: LocalGenerationStatus) => void;
   setSequenceReview: (
     value: SequenceReviewStatus | ((current: SequenceReviewStatus) => SequenceReviewStatus)
   ) => void;
@@ -38,6 +41,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   projectPath: "",
   scanFingerprint: "",
   architectureReview: { state: "missing" },
+  localGenerationStatus: "idle",
   sequenceReview: { state: "missing" },
   projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
@@ -51,6 +55,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setArchitectureReview: (value) => set((state) => ({
     architectureReview: typeof value === "function" ? value(state.architectureReview) : value
   })),
+  setLocalGenerationStatus: (localGenerationStatus) => set({ localGenerationStatus }),
   setSequenceReview: (value) => set((state) => ({
     sequenceReview: typeof value === "function" ? value(state.sequenceReview) : value
   })),

@@ -31,38 +31,35 @@ import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { assessModules } from "../../utils/module-assessment";
 import {
+  adoptArchitectureReview,
+  createArchitectureInputFingerprint,
+  enhanceLocalArchitecture,
   startArchitectureReview,
-  writeArchitectureReviewStatus,
   type ArchitectureReviewRunResult
 } from "./architecture-review.service";
+export { enhanceLocalArchitecture } from "./architecture-review.service";
 import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
 import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
 const MAX_PROMPT_FILES = 80;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 8;
 const REPRESENTATIVE_FILE_LIMIT = 40;
-const architectureFlights = new Map<string, Promise<ArchitectureAnalysisResult>>();
+const MODULE_CLUSTERING_CONFIG_VERSION = "1";
+const ARCHITECTURE_GENERATOR_VERSION = "1";
+const ARCHITECTURE_REVIEW_CONTRACT_VERSION = "1";
 
 export async function analyzeArchitecture(
   project: CodeflowProject,
   toolId: RuntimeAgentId,
   options?: AnalysisGenerationOptions
 ): Promise<ArchitectureAnalysisResult> {
-  const flightKey = `${project.rootPath}:${toolId}`;
-  const existing = architectureFlights.get(flightKey);
-  if (existing) return existing;
-  const flight = analyzeArchitectureOnce(project, toolId, options)
-    .then(async (result) => {
-      if (result.outcome === "generated") return result;
-      const previous = await readArchitectureMap(project.rootPath);
-      return {
-        ...result,
-        previous: previous?.source === "agent" ? previous.metadata : undefined
-      };
-    })
-    .finally(() => architectureFlights.delete(flightKey));
-  architectureFlights.set(flightKey, flight);
-  return flight;
+  const result = await analyzeArchitectureOnce(project, toolId, options);
+  if (result.outcome === "generated") return result;
+  const previous = await readArchitectureMap(project.rootPath);
+  return {
+    ...result,
+    previous: previous?.source === "agent" ? previous.metadata : undefined
+  };
 }
 
 async function analyzeArchitectureOnce(
@@ -73,12 +70,13 @@ async function analyzeArchitectureOnce(
   const { index } = await buildSemanticIndex(project, { onProgress: options?.onProgress });
   const facts = semanticIndexToStructureFacts(project, index);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
-  const inputFingerprint = await readCurrentProjectScanFingerprint(project.rootPath);
+  const scanFingerprint = project.scanFingerprint ?? await readCurrentProjectScanFingerprint(project.rootPath);
+  const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
   const prompt = buildArchitecturePrompt(representativeFacts);
   const localArchitectureBase = createLocalArchitectureMap(project, facts, "local");
   const localQuality = validateArchitectureMap(localArchitectureBase, facts);
   const localArchitecture = assessArchitectureMap(
-    withLocalArchitectureMetadata(localArchitectureBase, inputFingerprint, localQuality),
+    withLocalArchitectureMetadata(localArchitectureBase, scanFingerprint, inputFingerprint, localQuality),
     index,
     inputFingerprint
   );
@@ -87,59 +85,72 @@ async function analyzeArchitectureOnce(
     completed: 0,
     total: 1,
     failed: 0,
-    message: `Analyzing architecture with ${toolId}.`
+    message: "Generating the local module graph."
   });
-
-  if (toolId === "mock") {
-    const agentOutput = mockArchitectureJson(localArchitecture);
-    const parsed = parseArchitectureJson(agentOutput, project, facts);
-    if (!parsed) return failedArchitectureResult(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", []);
-    const quality = validateArchitectureMap(parsed, facts);
-    if (!quality.valid) return failedArchitectureResult(toolId, "quality-rejected", quality.reasons.join("; "), []);
-    const architectureMap = assessArchitectureMap(
-      withArchitectureMetadata(enhanceLocalArchitecture(localArchitecture, parsed), toolId, "mock", inputFingerprint, quality),
-      index,
-      inputFingerprint
-    );
-    await writeArchitectureArtifacts(project.rootPath, architectureMap);
-    const review = {
-      state: "reviewed",
-      reviewId: `review-${randomUUID()}`,
-      scanFingerprint: inputFingerprint,
-      agentId: toolId,
-      runId: "mock",
-      completedAt: architectureMap.generatedAt
-    } as const;
-    await writeArchitectureReviewStatus(project.rootPath, review);
-    return architectureMapToResult(architectureMap, review, "mock");
-  }
-
-  await writeLocalArchitectureArtifacts(project.rootPath, localArchitecture);
   const projectId = options?.projectId ?? await registerProject(project.rootPath);
   const reviewId = options?.resumeArchitectureReview?.reviewId ?? `review-${randomUUID()}`;
+  const run = toolId === "mock"
+    ? async (onRunId: (runId: string) => Promise<void>): Promise<ArchitectureReviewRunResult> => {
+        await onRunId("mock");
+        const parsed = parseArchitectureJson(mockArchitectureJson(localArchitecture), project, facts);
+        if (!parsed) return reviewFailure(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", "mock");
+        const quality = validateArchitectureMap(parsed, facts);
+        if (!quality.valid) return reviewFailure(toolId, "quality-rejected", quality.reasons.join("; "), "mock");
+        return {
+          outcome: "reviewed",
+          runId: "mock",
+          architectureMap: assessArchitectureMap(
+            withArchitectureMetadata(
+              enhanceLocalArchitecture(localArchitecture, parsed),
+              toolId,
+              "mock",
+              scanFingerprint,
+              inputFingerprint,
+              reviewId,
+              quality
+            ),
+            index,
+            inputFingerprint
+          )
+        };
+      }
+    : (onRunId: (runId: string) => Promise<void>) => runArchitectureReview(
+        project,
+        toolId,
+        prompt,
+        facts,
+        representativeFacts,
+        localArchitecture,
+        index,
+        scanFingerprint,
+        inputFingerprint,
+        reviewId,
+        onRunId,
+        options?.resumeArchitectureReview?.runId
+      );
   const review = await startArchitectureReview({
     projectId,
+    artifactTarget: "architecture-map",
     projectPath: project.rootPath,
     reviewId,
-    scanFingerprint: inputFingerprint,
+    scanFingerprint,
+    inputFingerprint,
     agentId: toolId,
     localArchitecture,
     startedAt: localArchitecture.generatedAt,
+    resume: Boolean(options?.resumeArchitectureReview),
+    persistLocal: () => writeLocalArchitectureArtifacts(project.rootPath, localArchitecture),
     persist: (architectureMap) => writeArchitectureArtifacts(project.rootPath, architectureMap),
     toGraph: architectureMapToGraph,
-    run: (onRunId) => runArchitectureReview(
-      project,
-      toolId,
-      prompt,
-      facts,
-      representativeFacts,
-      localArchitecture,
-      index,
-      inputFingerprint,
-      reviewId,
-      onRunId,
-      options?.resumeArchitectureReview?.runId
-    ),
+    run,
+    onAdoption: async (runId, outcome, message) => {
+      const { updateRunArtifactAdoption } = await import("./run-log.service");
+      await updateRunArtifactAdoption(project.rootPath, runId, {
+        status: outcome === "applied" ? "applied" : outcome,
+        message,
+        appliedAt: outcome === "applied" ? new Date().toISOString() : undefined
+      });
+    },
     onEvent: options?.onArchitectureReview ?? (() => undefined)
   });
   return architectureMapToResult(localArchitecture, review);
@@ -247,6 +258,7 @@ export function architectureMapToResult(
 ): ArchitectureAnalysisResult {
   return {
     outcome: "generated",
+    localGenerationStatus: "local-ready",
     architectureMap,
     graph: architectureMapToGraph(architectureMap),
     review,
@@ -255,8 +267,8 @@ export function architectureMapToResult(
 }
 
 async function writeLocalArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap): Promise<void> {
-  const previous = await readArchitectureMap(projectPath);
-  if (previous?.source === "agent") return;
+  const root = join(projectPath, FLOWWEAVE_DIR);
+  await writeJsonAtomic(join(root, "architecture-local.json"), architectureMap);
   await writeArchitectureArtifacts(projectPath, architectureMap);
 }
 
@@ -268,6 +280,7 @@ async function runArchitectureReview(
   representativeFacts: ProjectStructureFacts,
   localArchitecture: ArchitectureMap,
   index: import("../../types").SemanticIndex,
+  scanFingerprint: string,
   inputFingerprint: string,
   reviewId: string,
   onRunId: (runId: string) => Promise<void>,
@@ -284,7 +297,8 @@ async function runArchitectureReview(
           executionMode: "plan",
           purpose: "artifact-analysis",
           artifactTarget: "architecture-map",
-          scanFingerprint: inputFingerprint,
+          scanFingerprint,
+          inputFingerprint,
           reviewId
         });
     await onRunId(firstStarted.id);
@@ -297,19 +311,18 @@ async function runArchitectureReview(
     const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
     if (firstParsed && firstQuality?.valid) {
       const architectureMap = assessArchitectureMap(
-        withArchitectureMetadata(enhanceLocalArchitecture(localArchitecture, firstParsed), toolId, firstRun.id, inputFingerprint, firstQuality),
+        withArchitectureMetadata(
+          enhanceLocalArchitecture(localArchitecture, firstParsed),
+          toolId,
+          firstRun.id,
+          scanFingerprint,
+          inputFingerprint,
+          reviewId,
+          firstQuality
+        ),
         index,
         inputFingerprint
       );
-      if (!await architectureInputIsCurrent(project.rootPath, inputFingerprint)) {
-        return reviewFailure(toolId, "agent-failed", "Project scan changed before the Agent review completed.", firstRun.id);
-      }
-      const { updateRunArtifactAdoption } = await import("./run-log.service");
-      await updateRunArtifactAdoption(project.rootPath, firstRun.id, {
-        status: "applied",
-        message: "Run completed and applied to module graph.",
-        appliedAt: architectureMap.generatedAt
-      });
       return { outcome: "reviewed", architectureMap, runId: firstRun.id };
     }
 
@@ -323,7 +336,8 @@ async function runArchitectureReview(
       executionMode: "plan",
       purpose: "artifact-analysis",
       artifactTarget: "architecture-map",
-      scanFingerprint: inputFingerprint,
+      scanFingerprint,
+      inputFingerprint,
       reviewId
     });
     await onRunId(retryStarted.id);
@@ -341,19 +355,18 @@ async function runArchitectureReview(
       return reviewFailure(toolId, "quality-rejected", retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed.", retry.id);
     }
     const architectureMap = assessArchitectureMap(
-      withArchitectureMetadata(enhanceLocalArchitecture(localArchitecture, retryParsed), toolId, retry.id, inputFingerprint, retryQuality),
+      withArchitectureMetadata(
+        enhanceLocalArchitecture(localArchitecture, retryParsed),
+        toolId,
+        retry.id,
+        scanFingerprint,
+        inputFingerprint,
+        reviewId,
+        retryQuality
+      ),
       index,
       inputFingerprint
     );
-    if (!await architectureInputIsCurrent(project.rootPath, inputFingerprint)) {
-      return reviewFailure(toolId, "agent-failed", "Project scan changed before the Agent review completed.", retry.id);
-    }
-    const { updateRunArtifactAdoption } = await import("./run-log.service");
-    await updateRunArtifactAdoption(project.rootPath, retry.id, {
-      status: "applied",
-      message: "Run completed and applied to module graph.",
-      appliedAt: architectureMap.generatedAt
-    });
     return { outcome: "reviewed", architectureMap, runId: retry.id };
   } catch (error) {
     return reviewFailure(toolId, "agent-failed", formatError(error), undefined);
@@ -472,6 +485,20 @@ export async function writeArchitectureArtifacts(projectPath: string, architectu
   ]);
 }
 
+export function buildArchitectureInputFingerprint(
+  scanFingerprint: string,
+  index: import("../../types").SemanticIndex
+): string {
+  return createArchitectureInputFingerprint({
+    scanFingerprint,
+    semanticIndexSchemaVersion: index.version,
+    semanticIndexGeneratorVersion: index.generatorVersion,
+    moduleClusteringConfigVersion: MODULE_CLUSTERING_CONFIG_VERSION,
+    architectureGeneratorVersion: ARCHITECTURE_GENERATOR_VERSION,
+    reviewContractVersion: ARCHITECTURE_REVIEW_CONTRACT_VERSION
+  });
+}
+
 async function waitForArchitectureRun(
   projectPath: string,
   initial: ToolRunResult
@@ -492,18 +519,6 @@ function reviewFailure(
     runId,
     error: { code, message }
   };
-}
-
-async function architectureInputIsCurrent(
-  projectPath: string,
-  inputFingerprint: string
-): Promise<boolean> {
-  const projectArtifact = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "project.json"));
-  if (projectArtifact === undefined) return true;
-  if (typeof projectArtifact !== "object" || projectArtifact === null || !("scanFingerprint" in projectArtifact)) {
-    return false;
-  }
-  return projectArtifact.scanFingerprint === inputFingerprint;
 }
 
 export function validateArchitectureMap(
@@ -550,7 +565,9 @@ export function withArchitectureMetadata(
   architectureMap: ArchitectureMap,
   agentId: RuntimeAgentId,
   runId: string,
+  scanFingerprint: string,
   inputFingerprint: string,
+  reviewId: string,
   quality: { fileCoverage: number; evidenceCoverage: number }
 ): ArchitectureMap {
   const generatedAt = new Date().toISOString();
@@ -563,7 +580,9 @@ export function withArchitectureMetadata(
       source: "agent",
       agentId,
       runId,
+      reviewId,
       generatedAt,
+      scanFingerprint,
       inputFingerprint,
       fileCoverage: quality.fileCoverage,
       evidenceCoverage: quality.evidenceCoverage
@@ -573,6 +592,7 @@ export function withArchitectureMetadata(
 
 function withLocalArchitectureMetadata(
   architectureMap: ArchitectureMap,
+  scanFingerprint: string,
   inputFingerprint: string,
   quality: { fileCoverage: number; evidenceCoverage: number }
 ): ArchitectureMap {
@@ -585,6 +605,7 @@ function withLocalArchitectureMetadata(
     metadata: {
       source: "local",
       generatedAt,
+      scanFingerprint,
       inputFingerprint,
       fileCoverage: quality.fileCoverage,
       evidenceCoverage: quality.evidenceCoverage
@@ -602,6 +623,7 @@ function failedArchitectureResult(
 ): Extract<ArchitectureAnalysisResult, { outcome: "failed" }> {
   return {
     outcome: "failed",
+    localGenerationStatus: "failed",
     error: {
       code,
       message,
@@ -787,32 +809,6 @@ function compareRelationshipCandidate(left: ArchitectureRelationship, right: Arc
   const leftKey = `${left.source}\u0000${left.target}\u0000${left.relation}\u0000${left.description}`;
   const rightKey = `${right.source}\u0000${right.target}\u0000${right.relation}\u0000${right.description}`;
   return leftKey.localeCompare(rightKey);
-}
-
-export function enhanceLocalArchitecture(local: ArchitectureMap, agent: ArchitectureMap): ArchitectureMap {
-  const agentByFiles = new Map(agent.modules.map((module) => [moduleFilesKey(module), module]));
-  return {
-    ...local,
-    source: "agent",
-    architectureStyle: agent.architectureStyle ?? local.architectureStyle,
-    modules: local.modules.map((module) => {
-      const review = agentByFiles.get(moduleFilesKey(module));
-      return review ? {
-        ...module,
-        title: review.title,
-        role: review.role,
-        description: review.description,
-        fileRoles: review.fileRoles,
-        symbols: review.symbols,
-        evidence: review.evidence
-      } : module;
-    }),
-    relationships: local.relationships
-  };
-}
-
-function moduleFilesKey(module: ArchitectureModule): string {
-  return [...module.files].sort().join("\u0000");
 }
 
 function dedupeEvidence(evidence: ArchitectureEvidence[]): ArchitectureEvidence[] {

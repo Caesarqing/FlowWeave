@@ -6,7 +6,7 @@ import { startToolPlan } from "../../src/main/services/agent-run.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
-import { readArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
+import { readArchitectureReviewStatus, writeArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
 import {
   getAgentInboxRequestPath,
   getAgentInboxResponsePath,
@@ -79,7 +79,17 @@ describe("run-log.service", () => {
       purpose: "artifact-analysis",
       artifactTarget: "architecture-map",
       scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
       reviewId: "review-1"
+    });
+    await writeArchitectureReviewStatus(projectPath, {
+      state: "reviewing",
+      projectId,
+      artifactTarget: "architecture-map",
+      reviewId: "review-1",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      agentId: "codex-desktop"
     });
     await writeAgentInboxRequest({
       id: runId,
@@ -90,6 +100,7 @@ describe("run-log.service", () => {
       purpose: "artifact-analysis",
       artifactTarget: "architecture-map",
       scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
       reviewId: "review-1"
     }, "codex-desktop");
     await writeFile(getAgentInboxResponsePath(projectPath, runId), JSON.stringify({
@@ -104,7 +115,7 @@ describe("run-log.service", () => {
     }), "utf8");
 
     const summaries = await listRunSummaries(projectPath);
-    const review = await readArchitectureReviewStatus(projectPath, "scan-1");
+    const review = await readArchitectureReviewStatus(projectPath, { scanFingerprint: "scan-1", inputFingerprint: "input-1" });
 
     expect(summaries[0]).toMatchObject({
       id: runId,
@@ -200,6 +211,7 @@ async function writePendingRunResult(
     purpose: "implementation-plan" | "artifact-analysis";
     artifactTarget?: "architecture-map" | "sequence-diagrams" | "sequence-revision";
     scanFingerprint?: string;
+    inputFingerprint?: string;
     reviewId?: string;
   }
 ) {

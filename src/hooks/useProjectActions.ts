@@ -6,6 +6,7 @@ import type {
   FlowWeaveProjectOpenResult,
   GraphEdge,
   GraphNode,
+  LocalGenerationStatus,
   ProjectArtifactStatuses,
   ProjectFileNode,
   RuntimeAgentId
@@ -20,6 +21,7 @@ export function useProjectActions({
   projectFiles,
   scanFingerprint,
   architectureReview,
+  localGenerationStatus,
   replaceProjectGraph,
   setIsProjectLoading,
   setLastRunStatus,
@@ -29,6 +31,7 @@ export function useProjectActions({
   setScanFingerprint,
   setArtifactStatuses,
   setArchitectureReview,
+  setLocalGenerationStatus,
   setSequenceReview,
   setProjectStatus,
   onProjectOpenStarted,
@@ -39,6 +42,7 @@ export function useProjectActions({
   projectFiles: ProjectFileNode[];
   scanFingerprint: string;
   architectureReview: ArchitectureReviewStatus;
+  localGenerationStatus: LocalGenerationStatus;
   replaceProjectGraph: (
     nodes: GraphNode[],
     edges: GraphEdge[],
@@ -57,6 +61,7 @@ export function useProjectActions({
   setArchitectureReview: (
     value: ArchitectureReviewStatus | ((current: ArchitectureReviewStatus) => ArchitectureReviewStatus)
   ) => void;
+  setLocalGenerationStatus: (value: LocalGenerationStatus) => void;
   setSequenceReview: (
     value: import("../types").SequenceReviewStatus |
       ((current: import("../types").SequenceReviewStatus) => import("../types").SequenceReviewStatus)
@@ -107,13 +112,6 @@ export function useProjectActions({
       if (event.status.state === "reviewed" && event.graph) {
         replaceProjectGraph(event.graph.nodes, event.graph.edges, projectFiles);
         setArtifactStatuses((current) => current ? { ...current, architecture: "current" } : current);
-        setProjectStatus(t("status.analysisReviewed", { agent: event.status.agentId ?? "" }));
-      } else if (event.status.state === "review-failed") {
-        setProjectStatus(t("status.analysisReviewFailed", {
-          error: event.status.error?.message ?? t("artifact.unavailable")
-        }));
-      } else if (event.status.state === "reviewing" && event.status.message) {
-        setProjectStatus(event.status.message);
       }
     });
   }, [
@@ -146,6 +144,11 @@ export function useProjectActions({
     setArtifactStatuses(result.artifacts);
     architectureReviewRef.current = result.architectureReview;
     setArchitectureReview(result.architectureReview);
+    setLocalGenerationStatus(
+      result.architectureReview.state === "missing" || result.architectureReview.state === "stale"
+        ? "idle"
+        : "local-ready"
+    );
     setSequenceReview(result.sequenceReview);
     replaceProjectGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout);
 
@@ -169,6 +172,7 @@ export function useProjectActions({
     onProjectOpenStarted?.();
     const requestId = requestGuard.begin();
     acceptsNewProjectScan.current = true;
+    setLocalGenerationStatus("idle");
     setIsProjectLoading(true);
     setProjectStatus(t("status.openingPicker"));
     try {
@@ -200,6 +204,7 @@ export function useProjectActions({
     onProjectOpenStarted?.();
     const requestId = requestGuard.begin();
     acceptsNewProjectScan.current = true;
+    setLocalGenerationStatus("idle");
     setIsProjectLoading(true);
     setProjectStatus(t("status.rescanning"));
     try {
@@ -234,6 +239,7 @@ export function useProjectActions({
     }
 
     const requestId = requestGuard.begin();
+    setLocalGenerationStatus("idle");
     setIsProjectLoading(true);
     acceptsNewProjectScan.current = true;
     setProjectStatus(t("status.rescanning"));
@@ -261,7 +267,10 @@ export function useProjectActions({
       return;
     }
 
+    if (isArchitectureUpdateDisabled(localGenerationStatus, architectureReviewRef.current, agentId)) return;
+
     const requestId = requestGuard.begin();
+    setLocalGenerationStatus("generating");
     setIsProjectLoading(true);
     setProjectStatus(t("status.generatingGraph"));
     try {
@@ -270,11 +279,12 @@ export function useProjectActions({
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
-      replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
+      setLocalGenerationStatus(result.localGenerationStatus);
+      if (shouldApplyLocalArchitectureResult(result.review, architectureReviewRef.current)) {
+        replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
+      }
       setArchitectureReview((current) => {
-        const next = current.reviewId === result.review.reviewId && current.state === "reviewed"
-          ? current
-          : result.review;
+        const next = mergeArchitectureReviewResult(current, result.review);
         architectureReviewRef.current = next;
         return next;
       });
@@ -293,6 +303,8 @@ export function useProjectActions({
       setLastRunStatus(message);
     } catch (error) {
       if (!requestGuard.isCurrent(requestId)) return;
+      setLocalGenerationStatus("failed");
+      setArtifactStatuses((current) => current ? { ...current, architecture: "stale" } : current);
       const message = t("status.analysisFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
@@ -304,6 +316,36 @@ export function useProjectActions({
   return { openProject, restoreProject, refreshProject, analyzeProject, operation };
 }
 
+export function isArchitectureUpdateDisabled(
+  localGenerationStatus: LocalGenerationStatus,
+  review: ArchitectureReviewStatus,
+  selectedAgentId: RuntimeAgentId
+): boolean {
+  return localGenerationStatus === "generating" ||
+    (review.state === "reviewing" && review.agentId === selectedAgentId);
+}
+
+export function mergeArchitectureReviewResult(
+  current: ArchitectureReviewStatus,
+  result: ArchitectureReviewStatus
+): ArchitectureReviewStatus {
+  if (current.reviewId !== result.reviewId) return result;
+  if ((current.state === "reviewed" || current.state === "review-failed") && result.state === "reviewing") {
+    return current;
+  }
+  if (current.state === "reviewing" && current.runId && !result.runId) {
+    return { ...result, runId: current.runId };
+  }
+  return result;
+}
+
+export function shouldApplyLocalArchitectureResult(
+  result: ArchitectureReviewStatus,
+  current: ArchitectureReviewStatus
+): boolean {
+  return !(current.reviewId === result.reviewId && current.state === "reviewed");
+}
+
 export function shouldApplyArchitectureReviewEvent(
   event: ArchitectureReviewEvent,
   projectId: string,
@@ -311,8 +353,10 @@ export function shouldApplyArchitectureReviewEvent(
   current: ArchitectureReviewStatus
 ): boolean {
   if (event.projectId !== projectId || event.scanFingerprint !== scanFingerprint) return false;
-  if (event.status.state === "reviewing") return true;
-  return !current.reviewId || current.reviewId === event.reviewId;
+  if (!current.reviewId || current.reviewId === event.reviewId) return true;
+  if (event.status.state !== "reviewing") return false;
+  if (!current.startedAt || !event.status.startedAt) return false;
+  return Date.parse(event.status.startedAt) > Date.parse(current.startedAt);
 }
 
 function formatErrorMessage(error: unknown) {

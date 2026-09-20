@@ -26,6 +26,28 @@ describe("ProjectStatusIndicator", () => {
     });
   });
 
+  it("shows the local graph as usable while Agent enhancement runs in the background", () => {
+    const model = buildProjectStatusViewModel(statusInput({
+      architectureReview: {
+        state: "reviewing",
+        reviewId: "review-1",
+        scanFingerprint: "scan-1",
+        inputFingerprint: "input-1",
+        agentId: "mock"
+      }
+    }));
+
+    expect(model).toEqual({
+      kind: "checking",
+      items: [{
+        key: "architecture",
+        kind: "checking",
+        source: "local",
+        activity: "agent-enhancing"
+      }]
+    });
+  });
+
   it("treats missing optional diagrams as neutral pending work", () => {
     const model = buildProjectStatusViewModel(statusInput({
       statuses: artifactStatuses({ architecture: "missing", sequences: "missing" }),
@@ -78,6 +100,25 @@ describe("ProjectStatusIndicator", () => {
     expect(markup).toContain("Update");
     expect(markup).not.toContain("Module graph");
     expect(markup).not.toContain("scan-1");
+  });
+
+  it("labels reviewing as Agent enhancement rather than generic checking", () => {
+    const markup = renderToStaticMarkup(createElement(ProjectStatusIndicator, {
+      ...statusInput({
+        architectureReview: {
+          state: "reviewing",
+          reviewId: "review-1",
+          scanFingerprint: "scan-1",
+          inputFingerprint: "input-1",
+          agentId: "mock"
+        }
+      }),
+      onRefreshProject: () => undefined,
+      onUpdateArchitecture: () => undefined,
+      onUpdateSequences: () => undefined
+    }));
+
+    expect(markup).toContain("Agent enhancing");
   });
 });
 

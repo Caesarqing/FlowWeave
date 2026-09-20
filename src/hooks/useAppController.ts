@@ -46,6 +46,7 @@ export function useAppController({
   const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
   const artifactStatuses = useProjectStore((state) => state.artifactStatuses);
   const architectureReview = useProjectStore((state) => state.architectureReview);
+  const localGenerationStatus = useProjectStore((state) => state.localGenerationStatus);
   const projectStatus = useProjectStore((state) => state.projectStatus);
   const isProjectLoading = useProjectStore((state) => state.isProjectLoading);
   const agents = useAgentStore((state) => state.agents);
@@ -66,6 +67,7 @@ export function useAppController({
   const setScanFingerprint = useProjectStore((state) => state.setScanFingerprint);
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
   const setArchitectureReview = useProjectStore((state) => state.setArchitectureReview);
+  const setLocalGenerationStatus = useProjectStore((state) => state.setLocalGenerationStatus);
   const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
   const setProjectStatus = useProjectStore((state) => state.setProjectStatus);
   const setIsProjectLoading = useProjectStore((state) => state.setIsProjectLoading);
@@ -115,6 +117,7 @@ export function useAppController({
     projectFiles: flow.projectFiles,
     scanFingerprint,
     architectureReview,
+    localGenerationStatus,
     replaceProjectGraph: flow.replaceProjectGraph,
     setIsProjectLoading,
     setLastRunStatus,
@@ -124,6 +127,7 @@ export function useAppController({
     setScanFingerprint,
     setArtifactStatuses,
     setArchitectureReview,
+    setLocalGenerationStatus,
     setSequenceReview,
     setProjectStatus,
     onProjectOpenStarted,
@@ -476,6 +480,7 @@ export function useAppController({
     agentConnection,
     artifactStatuses,
     architectureReview,
+    localGenerationStatus,
     canvas: {
       connectionPanelMode: flow.connectionPanelMode,
       canvasLayout: flow.canvasLayout,

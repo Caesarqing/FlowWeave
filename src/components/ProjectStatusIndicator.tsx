@@ -22,6 +22,7 @@ export type ProjectStatusItem = {
   key: "project" | "architecture" | "sequences";
   kind: ProjectStatusKind;
   source?: "local" | "reviewed";
+  activity?: "agent-enhancing";
   action?: ProjectStatusAction;
   error?: string;
 };
@@ -142,7 +143,7 @@ export function ProjectStatusIndicator({
             <div>
               <strong>{t(`artifact.${item.key}`)}</strong>
               <span>
-                {t(`projectStatus.${item.kind}`)}
+                {item.activity ? t(`projectStatus.${item.activity}`) : t(`projectStatus.${item.kind}`)}
                 {item.source ? ` · ${t(`projectStatus.source.${item.source}`)}` : ""}
               </span>
               {item.error ? <small>{item.error}</small> : null}
@@ -178,7 +179,8 @@ function reviewedArtifactItem(
   return {
     key,
     kind,
-    source: kind === "stale" ? reviewSource(review) : undefined,
+    source: kind === "stale" || review.state === "reviewing" ? reviewSource(review) : undefined,
+    activity: review.state === "reviewing" ? "agent-enhancing" : undefined,
     action: actionable(kind) ? action : undefined,
     error: review.state === "review-failed" ? review.error?.message : undefined
   };
@@ -198,7 +200,7 @@ function reviewedArtifactKind(
 function reviewSource(
   review: ArchitectureReviewStatus | SequenceReviewStatus
 ): ProjectStatusItem["source"] {
-  if (review.state === "local") return "local";
+  if (review.state === "local" || review.state === "reviewing") return "local";
   if (review.state === "reviewed") return "reviewed";
   return undefined;
 }

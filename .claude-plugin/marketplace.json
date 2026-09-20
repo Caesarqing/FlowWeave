@@ -1,0 +1,17 @@
+{
+  "name": "flowweave-local",
+  "metadata": {
+    "description": "Local FlowWeave Agent Inbox plugin marketplace."
+  },
+  "owner": {
+    "name": "FlowWeave"
+  },
+  "plugins": [
+    {
+      "name": "flowweave",
+      "description": "FlowWeave Agent Inbox",
+      "source": "./plugins/flowweave",
+      "category": "development"
+    }
+  ]
+}

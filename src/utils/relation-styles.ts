@@ -1,4 +1,4 @@
-import type { GraphEdgeRelation } from "../types";
+import type { GraphEdgeClass, GraphEdgeRelation } from "../types";
 
 export const relationOptions: GraphEdgeRelation[] = [
   "depends_on",
@@ -32,4 +32,14 @@ export const relationStyle: Record<GraphEdgeRelation, { color: string }> = {
   tests: {
     color: "#fb7185"
   }
+};
+
+export const relationEdgeClass: Record<GraphEdgeRelation, GraphEdgeClass> = {
+  depends_on: "dependency",
+  calls: "runtime",
+  reads_writes: "data",
+  external_api: "external",
+  publishes_event: "event",
+  subscribes_event: "event",
+  tests: "test"
 };

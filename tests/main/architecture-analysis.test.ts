@@ -6,6 +6,7 @@ import {
   aggregateArchitectureRelationships,
   analyzeArchitecture,
   architectureMapToGraph,
+  buildArchitectureInputFingerprint,
   buildArchitecturePrompt,
   enhanceLocalArchitecture,
   parseArchitectureJson,
@@ -13,10 +14,12 @@ import {
 } from "../../src/main/services/architecture-analysis.service";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
 import { adoptArtifactRun } from "../../src/main/services/artifact-run-adoption.service";
+import { writeArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
 import { listRunSummaries } from "../../src/main/services/run-log.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
+import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject } from "../../src/types";
 import { createNodeCliFixture } from "./test-cli-fixture";
@@ -219,10 +222,12 @@ describe("architecture-analysis.service", () => {
     expect(parseArchitectureJson("not json", project, facts)).toBeUndefined();
 
     const result = await analyzeArchitecture(project, "mock");
+    await waitForArchitectureSource(root, "agent");
     const stored = await readArchitectureMap(root);
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error(result.error.message);
+    expect(result.localGenerationStatus).toBe("local-ready");
     expect(result.graph.nodes.length).toBeGreaterThan(0);
     expect(stored?.modules.length).toBeGreaterThan(0);
     expect(stored?.modules[0].description).not.toContain("groups");
@@ -291,17 +296,21 @@ describe("architecture-analysis.service", () => {
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error("Expected local analysis.");
+    expect(result.localGenerationStatus).toBe("local-ready");
     expect(result.architectureMap.source).toBe("local");
     expect(result.review).toMatchObject({
       state: "reviewing",
       reviewId: expect.stringMatching(/^review-/),
-      scanFingerprint: expect.any(String),
+      scanFingerprint: "scan-test",
+      inputFingerprint: expect.not.stringMatching(/^scan-test$/),
       agentId: agent.id
     });
     expect(result.architectureMap.metadata).toMatchObject({
       source: "local",
-      inputFingerprint: expect.any(String)
+      scanFingerprint: "scan-test",
+      inputFingerprint: result.review.inputFingerprint
     });
+    expect(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")).toContain(result.review.inputFingerprint);
     expect(stored?.metadata).toMatchObject({
       source: "local",
       inputFingerprint: result.architectureMap.metadata?.inputFingerprint
@@ -447,6 +456,66 @@ describe("architecture-analysis.service", () => {
     expect(await readArchitectureMap(root)).toBeUndefined();
   });
 
+  it("rejects a previous review identically for automatic and manual adoption", async () => {
+    const root = await createFixtureFiles();
+    const project = await scanProject(root);
+    const scanFingerprint = project.scanFingerprint ?? "";
+    await writeFile(
+      join(root, FLOWWEAVE_DIR, "project.json"),
+      JSON.stringify({ scanFingerprint }),
+      "utf8"
+    );
+    const { index } = await buildSemanticIndex(project);
+    const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
+    const local = {
+      ...architectureFixtureMap("local"),
+      version: 2 as const,
+      rootPath: root,
+      metadata: {
+        source: "local" as const,
+        generatedAt: "2026-06-25T00:00:00.000Z",
+        scanFingerprint,
+        inputFingerprint,
+        fileCoverage: 1,
+        evidenceCoverage: 1
+      }
+    };
+    await writeFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), JSON.stringify(local), "utf8");
+    await writeArchitectureReviewStatus(root, {
+      state: "reviewing",
+      projectId: "project-1",
+      artifactTarget: "architecture-map",
+      reviewId: "review-current",
+      scanFingerprint,
+      inputFingerprint,
+      agentId: "mock",
+      startedAt: "2026-06-25T00:00:00.000Z"
+    });
+    const oldRun = {
+      id: "run-old",
+      projectId: "project-1",
+      toolId: "mock" as const,
+      status: "completed" as const,
+      projectPath: root,
+      startedAt: "2026-06-25T00:00:00.000Z",
+      completedAt: "2026-06-25T00:01:00.000Z",
+      events: [],
+      executionMode: "plan" as const,
+      purpose: "artifact-analysis" as const,
+      artifactTarget: "architecture-map" as const,
+      scanFingerprint,
+      inputFingerprint,
+      reviewId: "review-old"
+    };
+
+    const automatic = await adoptArtifactRun(root, oldRun, validArchitectureJson(), "auto");
+    const manual = await adoptArtifactRun(root, oldRun, validArchitectureJson(), "manual");
+
+    expect(automatic).toMatchObject({ status: "stale" });
+    expect(manual).toEqual(automatic);
+    expect(await readArchitectureMap(root)).toBeUndefined();
+  });
+
   it("retries invalid Agent output once and publishes a review failure", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-architecture-invalid-"));
     const root = await createFixtureFiles();
@@ -506,7 +575,7 @@ describe("architecture-analysis.service", () => {
     expect((await readArchitectureMap(root))?.source).toBe("local");
   });
 
-  it("returns a local semantic graph on connection failure without overwriting a trusted Agent artifact", async () => {
+  it("keeps the new local baseline active when the background review fails", async () => {
     const originalPath = process.env.PATH;
     const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-failure-"));
     const root = await createFixtureFiles();
@@ -530,11 +599,14 @@ describe("architecture-analysis.service", () => {
       expect(result.architectureMap.source).toBe("local");
       expect(result.architectureMap.metadata).toMatchObject({
         source: "local",
+        scanFingerprint: "scan-test",
         inputFingerprint: expect.any(String)
       });
       expect(result.warning).toBeUndefined();
-      expect(stored?.source).toBe("agent");
-      expect(stored?.metadata?.agentId).toBe("mock");
+      expect(stored?.source).toBe("local");
+      expect(stored?.metadata?.inputFingerprint).toBe(result.architectureMap.metadata?.inputFingerprint);
+      const baseline = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")) as import("../../src/types").ArchitectureMap;
+      expect(baseline.metadata?.inputFingerprint).toBe(result.architectureMap.metadata?.inputFingerprint);
     } finally {
       process.env.PATH = originalPath;
     }
@@ -551,6 +623,14 @@ async function waitForReviewEvent(
     if (Date.now() >= deadline) {
       throw new Error(`Timed out waiting for architecture review state ${state}: ${JSON.stringify(events)}`);
     }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+async function waitForArchitectureSource(root: string, source: "agent" | "local"): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while ((await readArchitectureMap(root))?.source !== source) {
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for architecture source ${source}.`);
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }

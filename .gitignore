@@ -20,4 +20,9 @@ build/
 .DS_Store
 *.log
 artifacts-flowweave-*.png
-docs/
+docs/*
+!docs/plans/
+docs/plans/*
+!docs/plans/2026-09-20-module-graph-update-performance-remediation.md
+!docs/plans/2026-09-20-plugin-connection-remediation.md
+!docs/plans/2026-09-20-module-connection-remediation.md

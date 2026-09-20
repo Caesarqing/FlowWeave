@@ -12,6 +12,10 @@ export type FlowNodeData = GraphNode &
     selectedEdgeId?: string;
     selectedEdgeColor?: string;
     selectedEdgeRole?: "source" | "target";
+    cycleGroupId?: string;
+    isSupportNode?: boolean;
+    isExecutionEntry?: boolean;
+    isExecutionSink?: boolean;
   };
 export type FlowWeaveNode = Node<FlowNodeData>;
 

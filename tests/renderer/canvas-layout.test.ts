@@ -41,6 +41,65 @@ describe("canvas layout and tracing", () => {
     expect(repeated.map((item) => item.position)).toEqual(layout.map((item) => item.position));
   });
 
+  it("layers execution nodes from an entry through services to data and external systems", async () => {
+    const nodes = [
+      createFlowNode({ ...node("api", []), nodeType: "api" }),
+      createFlowNode(node("service", [])),
+      createFlowNode({ ...node("data", []), nodeType: "data" }),
+      createFlowNode({ ...node("external", []), nodeType: "external" })
+    ];
+    const edges: Edge[] = [
+      { id: "api-service", source: "api", target: "service", data: { relation: "calls", participatesInLayering: true } },
+      { id: "service-data", source: "service", target: "data", data: { relation: "reads_writes", participatesInLayering: true } },
+      { id: "service-external", source: "service", target: "external", data: { relation: "external_api", participatesInLayering: true } }
+    ];
+
+    const layout = await layoutCanvasNodesWithEngine(nodes, edges, "execution", deterministicLayout);
+    const positions = new Map(layout.map((item) => [item.id, item.position.x]));
+    const nodesById = new Map(layout.map((item) => [item.id, item]));
+
+    expect(positions.get("api")).toBeLessThan(positions.get("service") ?? 0);
+    expect(positions.get("service")).toBeLessThan(positions.get("data") ?? 0);
+    expect(positions.get("service")).toBeLessThan(positions.get("external") ?? 0);
+    expect(nodesById.get("api")?.data.isExecutionEntry).toBe(true);
+    expect(nodesById.get("data")?.data.isExecutionSink).toBe(true);
+    expect(nodesById.get("external")?.data.isExecutionSink).toBe(true);
+  });
+
+  it("compresses cycles for layout and marks every cycle member", async () => {
+    const nodes = [createFlowNode(node("service-a", [])), createFlowNode(node("service-b", []))];
+    const edges: Edge[] = [
+      { id: "a-b", source: "service-a", target: "service-b", data: { relation: "calls", participatesInLayering: true } },
+      { id: "b-a", source: "service-b", target: "service-a", data: { relation: "calls", participatesInLayering: true } }
+    ];
+
+    const layout = await layoutCanvasNodesWithEngine(nodes, edges, "execution", deterministicLayout);
+
+    expect(layout.every((item) => item.data.cycleGroupId === "cycle:service-a,service-b")).toBe(true);
+    expect(layout[0].position).not.toEqual(layout[1].position);
+  });
+
+  it("places test and unconnected support nodes outside the execution path", async () => {
+    const nodes = [
+      createFlowNode({ ...node("api", []), nodeType: "api" }),
+      createFlowNode(node("service", [])),
+      createFlowNode({ ...node("tests", []), nodeType: "test" }),
+      createFlowNode(node("helper", []))
+    ];
+    const edges: Edge[] = [
+      { id: "api-service", source: "api", target: "service", data: { relation: "calls", participatesInLayering: true } },
+      { id: "tests-service", source: "tests", target: "service", data: { relation: "tests", participatesInLayering: false } }
+    ];
+
+    const layout = await layoutCanvasNodesWithEngine(nodes, edges, "execution", deterministicLayout);
+    const positioned = new Map(layout.map((item) => [item.id, item]));
+
+    expect(positioned.get("tests")?.data.isSupportNode).toBe(true);
+    expect(positioned.get("helper")?.data.isSupportNode).toBe(true);
+    expect(positioned.get("tests")?.position.x).toBeGreaterThan(positioned.get("service")?.position.x ?? 0);
+    expect(positioned.get("helper")?.position.x).toBeGreaterThan(positioned.get("service")?.position.x ?? 0);
+  });
+
   it("traces upstream and downstream nodes without mutating the graph", () => {
     const edges: Edge[] = [
       { id: "api-service", source: "api", target: "service" },

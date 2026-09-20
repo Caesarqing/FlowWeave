@@ -6,6 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { UtilityPanels } from "./components/UtilityPanels";
 import { useAppController } from "./hooks/useAppController";
+import { isArchitectureUpdateDisabled } from "./hooks/useProjectActions";
 import { useProjectWorkspaceTabs } from "./hooks/useProjectWorkspaceTabs";
 import { usePreferencesStore } from "./stores/preferences.store";
 import { lazy, Suspense, useEffect } from "react";
@@ -89,6 +90,16 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
   const { t } = useI18n();
   const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
   const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
+  const architectureUpdateDisabled = isArchitectureUpdateDisabled(
+    app.localGenerationStatus,
+    app.architectureReview,
+    app.tools.selectedAgentId
+  );
+  const architectureActionLabel = app.localGenerationStatus === "generating"
+    ? t("canvas.analyzing")
+    : app.architectureReview.state === "reviewing"
+      ? t("canvas.agentEnhancing")
+      : t("canvas.generate");
 
   function changePage(page: Parameters<typeof app.onPageChange>[0]) {
     setUtilityPanel(undefined);
@@ -174,15 +185,15 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
             actions={(
               <>
                 <Button
-                  disabled={app.canvas.isProjectLoading}
+                  disabled={app.canvas.isProjectLoading || architectureUpdateDisabled}
                   icon={<BrainCircuit size={15} />}
-                  label={app.canvas.isProjectLoading ? t("canvas.analyzing") : t("canvas.generate")}
+                  label={architectureActionLabel}
                   size="default"
                   variant="primary"
                   onClick={app.canvas.onAnalyzeProject}
                 >
                   <span className="workspace-action-label">
-                    {app.canvas.isProjectLoading ? t("canvas.analyzing") : t("canvas.generate")}
+                    {architectureActionLabel}
                   </span>
                 </Button>
                 <Button icon={<Plus size={15} />} label={t("canvas.addNode")} variant="secondary" onClick={app.canvas.onAddNode}>

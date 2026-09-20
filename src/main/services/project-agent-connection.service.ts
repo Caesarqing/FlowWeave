@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type {
   ArchitectureMap,
@@ -32,6 +32,12 @@ type ProjectArtifacts = {
   sequences?: SequenceDiagramBundle;
   fileTree?: string;
   taskPaths: string[];
+  warnings: string[];
+};
+
+type ArtifactReadResult<T> = {
+  artifact?: T;
+  warning?: string;
 };
 
 type PlatformEntry = {
@@ -128,7 +134,6 @@ async function writeProjectAgentConnection(
   for (const update of plannedUpdates) {
     await writeTextAtomic(update.filePath, update.content);
   }
-  await removeLegacyAgentConnectorArtifacts(projectPath);
 
   const config: ProjectAgentConnectionConfig = {
     version: 1,
@@ -231,8 +236,10 @@ async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifac
     readOptionalText(join(root, "context", "file-tree.md")),
     listTaskPaths(join(root, "tasks"), projectPath)
   ]);
-  const canvas = currentCanvasArtifact(storedCanvas, canvasPath);
-  const sequences = currentSequenceArtifact(storedSequences, sequencePath);
+  const canvasResult = currentCanvasArtifact(storedCanvas, canvasPath);
+  const sequenceResult = currentSequenceArtifact(storedSequences, sequencePath);
+  const canvas = canvasResult.artifact;
+  const sequences = sequenceResult.artifact;
   const scanFingerprint = project.scanFingerprint;
   return {
     project,
@@ -240,24 +247,29 @@ async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifac
     architecture: artifactMatchesScan(scanFingerprint, architecture?.metadata?.inputFingerprint) ? architecture : undefined,
     sequences: artifactMatchesScan(scanFingerprint, sequences?.metadata?.inputFingerprint) ? sequences : undefined,
     fileTree,
-    taskPaths
+    taskPaths,
+    warnings: [canvasResult.warning, sequenceResult.warning].filter((warning): warning is string => typeof warning === "string")
   };
 }
 
-function currentCanvasArtifact(value: unknown, filePath: string): CodeflowCanvas | undefined {
-  if (value === undefined) return undefined;
+function currentCanvasArtifact(value: unknown, filePath: string): ArtifactReadResult<CodeflowCanvas> {
+  if (value === undefined) return {};
   if (!isRecord(value) || value.version !== 4) {
-    throw new Error(`FlowWeave Canvas must be v4. Re-scan the project to rebuild it: ${filePath}`);
+    return {
+      warning: `Canvas artifact at ${filePath} uses an unsupported schema and was omitted from Agent context. Re-scan the project to rebuild it.`
+    };
   }
-  return value as CodeflowCanvas;
+  return { artifact: value as CodeflowCanvas };
 }
 
-function currentSequenceArtifact(value: unknown, filePath: string): SequenceDiagramBundle | undefined {
-  if (value === undefined) return undefined;
+function currentSequenceArtifact(value: unknown, filePath: string): ArtifactReadResult<SequenceDiagramBundle> {
+  if (value === undefined) return {};
   if (!isRecord(value) || value.version !== 2) {
-    throw new Error(`FlowWeave sequence diagram artifact must be v2. Regenerate it: ${filePath}`);
+    return {
+      warning: `Sequence diagram artifact at ${filePath} uses an unsupported schema and was omitted from Agent context. Regenerate it to include it.`
+    };
   }
-  return value as SequenceDiagramBundle;
+  return { artifact: value as SequenceDiagramBundle };
 }
 
 function artifactMatchesScan(scanFingerprint: string | undefined, artifactFingerprint: string | undefined) {
@@ -303,6 +315,9 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
   appendCanvasSummary(lines, artifacts.canvas);
   appendArchitectureSummary(lines, artifacts.architecture);
   appendSequenceSummary(lines, artifacts.sequences);
+  if (artifacts.warnings.length > 0) {
+    lines.push("## Artifact Notices", "", ...artifacts.warnings.map((warning) => `- ${warning}`), "");
+  }
   if (artifacts.fileTree) {
     lines.push("## File Tree", "", artifacts.fileTree.trim(), "");
   }
@@ -359,9 +374,8 @@ function buildManagedInstructionBlock() {
     "",
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
-    "When the user says `Use FlowWeave context to process the Agent Inbox.` or `使用 FlowWeave 上下文处理当前 Inbox`, read the run-specific `.flowweave/runs/<run-id>/agent-request.json` path supplied by FlowWeave and write one Agent Inbox v2 response atomically to the request's responsePath.",
-    "For artifact-analysis requests, write `response.json` with `protocolVersion: 2`; replying only in chat does not complete the FlowWeave review.",
-    "For artifact-analysis requests, `response.json.content` must be the exact structured artifact JSON requested by `request.json.prompt`, not an approval summary or markdown plan.",
+    "When the user says `Use FlowWeave context to process the Agent Inbox.` or `使用 FlowWeave 上下文处理当前 Inbox`, read the exact run-specific `.flowweave/runs/<run-id>/agent-request.json` path supplied by FlowWeave and write one Agent Inbox v2 `agent-response.json` with `protocolVersion: 2` atomically to the exact `responsePath` in that request.",
+    "For artifact-analysis requests, `response.content` must be the exact structured artifact JSON requested by `request.prompt`, not an approval summary or markdown plan.",
     "Do not edit `.flowweave/architecture-review.json` or `.flowweave/sequence-review.json`; FlowWeave Core validates responses and updates review state.",
     FLOWWEAVE_BLOCK_END
   ].join("\n");
@@ -487,64 +501,6 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
     }
   }
   return undefined;
-}
-
-async function removeLegacyAgentConnectorArtifacts(projectPath: string): Promise<void> {
-  const root = join(projectPath, FLOWWEAVE_DIR, "agent-connectors");
-  const legacyFiles = [
-    "codex.md",
-    "claude.md",
-    "gemini.md",
-    "cursor.md",
-    "context.md",
-    "context.json"
-  ];
-  for (const name of legacyFiles) {
-    await removeLegacyFile(join(root, name));
-  }
-  await removeLegacySkillFiles(join(root, "skills"));
-  await removeEmptyDirectory(join(root, "skills"));
-  await removeEmptyDirectory(root);
-}
-
-async function removeLegacySkillFiles(skillsPath: string): Promise<void> {
-  let entries;
-  try {
-    entries = await readdir(skillsPath, { withFileTypes: true });
-  } catch (error) {
-    if (isMissingFileError(error)) return;
-    throw error;
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const skillPath = join(skillsPath, entry.name);
-    await removeLegacyFile(join(skillPath, "SKILL.md"));
-    await removeEmptyDirectory(skillPath);
-  }
-}
-
-async function removeLegacyFile(filePath: string): Promise<void> {
-  const content = await readOptionalText(filePath);
-  if (content === undefined) return;
-  if (!isLegacyAgentConnectorContent(content)) return;
-  await rm(filePath, { force: true });
-}
-
-function isLegacyAgentConnectorContent(content: string): boolean {
-  return content.includes(".flowweave/agent-connectors") ||
-    content.includes("FlowWeave connector context:") ||
-    content.includes("FlowWeave connector") ||
-    content.includes("read-flowweave-context");
-}
-
-async function removeEmptyDirectory(directoryPath: string): Promise<void> {
-  try {
-    const entries = await readdir(directoryPath);
-    if (entries.length === 0) await rmdir(directoryPath);
-  } catch (error) {
-    if (isMissingFileError(error)) return;
-    throw error;
-  }
 }
 
 async function listTaskPaths(tasksPath: string, projectPath: string) {

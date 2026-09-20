@@ -4,7 +4,7 @@ import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, Tool
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
 import { adoptArtifactRun } from "./artifact-run-adoption.service";
-import { writeArchitectureReviewStatus } from "./architecture-review.service";
+import { markArchitectureReviewFailedIfCurrent } from "./architecture-review.service";
 import { writeSequenceReviewStatus } from "./sequence-review.service";
 import { readAgentInboxResponseForRun } from "./agent-inbox.service";
 
@@ -150,6 +150,7 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
       checkpointId: result.checkpointId,
       artifactTarget: result.artifactTarget,
       scanFingerprint: result.scanFingerprint,
+      inputFingerprint: result.inputFingerprint,
       reviewId: result.reviewId,
       artifactAdoption: result.artifactAdoption,
       agentReadiness: result.agentReadiness,
@@ -210,7 +211,24 @@ async function reconcileImportedArtifactReview(
   adoption: ToolRunResult["artifactAdoption"]
 ): Promise<void> {
   if (result.purpose !== "artifact-analysis") return;
-  if (adoption?.status !== "rejected" && adoption?.status !== "stale") return;
+  if (adoption?.status !== "rejected") return;
+  if (result.artifactTarget === "architecture-map") {
+    if (!result.projectId || !result.reviewId || !result.scanFingerprint || !result.inputFingerprint || !result.toolId) return;
+    await markArchitectureReviewFailedIfCurrent(projectPath, {
+      projectId: result.projectId,
+      artifactTarget: "architecture-map",
+      reviewId: result.reviewId,
+      scanFingerprint: result.scanFingerprint,
+      inputFingerprint: result.inputFingerprint,
+      agentId: result.toolId,
+      runId
+    }, {
+      code: "invalid-output",
+      message: adoption.message
+    });
+    return;
+  }
+  if (result.artifactTarget !== "sequence-diagrams" && result.artifactTarget !== "sequence-revision") return;
   const status = {
     state: "review-failed" as const,
     reviewId: result.reviewId,
@@ -223,9 +241,6 @@ async function reconcileImportedArtifactReview(
       message: adoption.message
     }
   };
-  if (result.artifactTarget === "architecture-map") {
-    await writeArchitectureReviewStatus(projectPath, status);
-  }
   if (result.artifactTarget === "sequence-diagrams" || result.artifactTarget === "sequence-revision") {
     await writeSequenceReviewStatus(projectPath, status);
   }

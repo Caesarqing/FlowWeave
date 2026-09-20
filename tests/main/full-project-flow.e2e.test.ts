@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { analyzeArchitecture } from "../../src/main/services/architecture-analysis.service";
+import {
+  analyzeArchitecture,
+  buildArchitectureInputFingerprint
+} from "../../src/main/services/architecture-analysis.service";
 import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { generateSequenceDiagrams } from "../../src/main/services/sequence-diagram.service";
 import { inferGraphFromProject } from "../../src/main/services/task-generator.service";
@@ -67,7 +70,9 @@ describe("full project flow", () => {
 
     expect(canvasArtifact.version).toBe(4);
     expect(canvasArtifact.scanFingerprint).toBe(projectArtifact.scanFingerprint);
-    expect(architectureArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);
+    expect(architectureArtifact.metadata.inputFingerprint).toBe(
+      buildArchitectureInputFingerprint(projectArtifact.scanFingerprint, semantic.index)
+    );
     expect(sequenceArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);
     expect(sequenceArtifact.detailedDesign).toBeUndefined();
     await expect(readFile(join(artifactRoot, "index", "semantic-index.json"), "utf8")).resolves.toContain('"version": 4');

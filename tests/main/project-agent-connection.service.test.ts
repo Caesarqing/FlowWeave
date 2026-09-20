@@ -24,8 +24,13 @@ describe("project Agent connection", () => {
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), ".flowweave/project.json");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "You may modify project files");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Agent Inbox Protocol v2");
+    const context = await readFile(join(projectPath, ".flowweave", "agent-context.md"), "utf8");
+    expect(context).toContain("responsePath");
+    expect(context).not.toMatch(/(?<!agent-)response\.json/);
+    expect(context).not.toMatch(/(?<!agent-)request\.json/);
     await expectFileToContain(join(projectPath, "AGENTS.md"), "<!-- flowweave:start -->");
     await expectFileToContain(join(projectPath, "AGENTS.md"), "protocolVersion");
+    await expectFileToContain(join(projectPath, "AGENTS.md"), "agent-response.json");
     await expectFileToContain(join(projectPath, "AGENTS.md"), "Do not edit `.flowweave/architecture-review.json`");
     await expectFileToContain(join(projectPath, "CLAUDE.md"), ".flowweave/agent-context.md");
     await expectFileToContain(join(projectPath, "GEMINI.md"), ".flowweave/agent-context.md");
@@ -95,14 +100,30 @@ describe("project Agent connection", () => {
     const contextPath = join(projectPath, ".flowweave", "agent-context.md");
     const context = await readFile(contextPath, "utf8");
     await writeFile(contextPath, context.replace(`Project root: ${projectPath}`, "Project root: /old/flowweave/path"), "utf8");
+    const canvasPath = join(projectPath, ".flowweave", "canvas", "main.canvas.json");
+    const canvas = JSON.parse(await readFile(canvasPath, "utf8")) as Record<string, unknown>;
+    canvas.version = 1;
+    const legacyCanvas = `${JSON.stringify(canvas)}\n`;
+    const sequencePath = join(projectPath, ".flowweave", "sequence-diagrams.json");
+    const legacySequence = JSON.stringify({ version: 1, generatedAt: new Date().toISOString() });
+    await writeFile(canvasPath, legacyCanvas, "utf8");
+    await writeFile(sequencePath, legacySequence, "utf8");
 
     const status = await getProjectAgentConnection(projectPath);
 
     expect(status.state).toBe("needs-refresh");
     expect(status.message).toContain("context root is stale");
+
+    const refreshed = await refreshProjectAgentConnection(projectPath);
+
+    expect(refreshed.state).toBe("ready");
+    await expectFileToContain(contextPath, `Project root: ${projectPath}`);
+    await expectFileToContain(contextPath, "uses an unsupported schema and was omitted from Agent context");
+    await expect(readFile(canvasPath, "utf8")).resolves.toBe(legacyCanvas);
+    await expect(readFile(sequencePath, "utf8")).resolves.toBe(legacySequence);
   });
 
-  it("removes recognized legacy agent connector artifacts during refresh", async () => {
+  it("preserves legacy connector artifacts until their manifests are migrated", async () => {
     const projectPath = await createProject();
     const connectorsPath = join(projectPath, ".flowweave", "agent-connectors");
     await mkdir(join(connectorsPath, "skills", "codex"), { recursive: true });
@@ -114,9 +135,10 @@ describe("project Agent connection", () => {
     await enableProjectAgentConnection(projectPath);
     await refreshProjectAgentConnection(projectPath);
 
-    await expect(fileExists(join(connectorsPath, "codex.md"))).resolves.toBe(false);
-    await expect(fileExists(join(connectorsPath, "context.md"))).resolves.toBe(false);
-    await expect(fileExists(join(connectorsPath, "skills", "codex", "SKILL.md"))).resolves.toBe(false);
+    await expect(readFile(join(connectorsPath, "codex.md"), "utf8")).resolves.toContain("FlowWeave connector context: old");
+    await expect(readFile(join(connectorsPath, "context.md"), "utf8")).resolves.toBe("FlowWeave connector context: old\n");
+    await expect(readFile(join(connectorsPath, "skills", "codex", "SKILL.md"), "utf8"))
+      .resolves.toBe("Read .flowweave/agent-connectors/codex.md\n");
     await expect(readFile(join(connectorsPath, "custom.md"), "utf8")).resolves.toBe("User content\n");
   });
 });
