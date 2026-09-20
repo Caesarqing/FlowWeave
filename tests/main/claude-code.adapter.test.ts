@@ -49,7 +49,9 @@ describe("claude-code.adapter", () => {
       "process.stdin.setEncoding('utf8');",
       "process.stdin.on('data', (chunk) => { input += chunk; });",
       "process.stdin.on('end', async () => {",
-      "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+      "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+      "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+      "  const request = JSON.parse(await readFile(requestPath, 'utf8'));",
       "  process.stdout.write(String(request.prompt.length));",
       "  await mkdir(dirname(request.responsePath), { recursive: true });",
       "  await writeFile(request.responsePath, JSON.stringify({",
@@ -109,10 +111,7 @@ describe("claude-code.adapter", () => {
         id: "claude-provider",
         status: "warning"
       }));
-      expect(health.checks).toContainEqual(expect.objectContaining({
-        id: "claude-model-probe",
-        status: "passed"
-      }));
+      expect(health.checks.some((check) => check.id === "claude-model-probe")).toBe(false);
     } finally {
       process.env.PATH = originalPath;
       restoreEnv("ANTHROPIC_API_KEY", originalApiKey);

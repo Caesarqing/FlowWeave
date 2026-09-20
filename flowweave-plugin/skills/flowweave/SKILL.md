@@ -5,10 +5,10 @@ description: Process the active FlowWeave Agent Inbox request when the user asks
 
 # FlowWeave Agent Inbox Protocol v2
 
-Use this skill only inside a project containing `.flowweave/agent-inbox/current/request.json`.
+Use this skill only when FlowWeave provides a run-specific `.flowweave/runs/<run-id>/agent-request.json` path.
 
 1. Read `.flowweave/agent-context.md`.
-2. Read `.flowweave/agent-inbox/current/request.json`.
+2. Read the run-specific `agent-request.json` path provided by FlowWeave.
 3. Verify that `request.projectPath` is the current project and do not access another project.
 4. Follow `executionMode`:
    - `plan`: inspect only; do not modify project source files.

@@ -220,7 +220,6 @@ describe("architecture-analysis.service", () => {
 
     const result = await analyzeArchitecture(project, "mock");
     const stored = await readArchitectureMap(root);
-    const fileInsights = await readFile(join(root, FLOWWEAVE_DIR, "file-insights.json"), "utf8");
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error(result.error.message);
@@ -234,7 +233,7 @@ describe("architecture-analysis.service", () => {
     expect(stored?.metadata?.agentId).toBe("mock");
     expect(stored?.modules[0].assessment?.confidence.factors).toHaveLength(5);
     expect(stored?.modules[0].confidence).toBeUndefined();
-    expect(fileInsights).toContain("src/api/user.controller.ts");
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "file-insights.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("reports and preserves a corrupted architecture artifact", async () => {
@@ -255,7 +254,9 @@ describe("architecture-analysis.service", () => {
     await writeFile(
       scriptPath,
       [
-        "process.stdin.resume();",
+        "let input = '';",
+        "process.stdin.setEncoding('utf8');",
+        "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', () => {",
         "  console.log(JSON.stringify({",
         "    architectureStyle: 'layered service',",
@@ -319,9 +320,13 @@ describe("architecture-analysis.service", () => {
       [
         "import { mkdir, readFile, writeFile } from 'node:fs/promises';",
         "import { dirname } from 'node:path';",
-        "process.stdin.resume();",
+        "let input = '';",
+        "process.stdin.setEncoding('utf8');",
+        "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', async () => {",
-        "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+        "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+        "  const request = JSON.parse(await readFile(requestPath, 'utf8'));",
         "  const content = {",
         "    architectureStyle: 'layered service',",
         "    modules: [",
@@ -452,9 +457,13 @@ describe("architecture-analysis.service", () => {
       [
         "import { mkdir, readFile, writeFile } from 'node:fs/promises';",
         "import { dirname } from 'node:path';",
-        "process.stdin.resume();",
+        "let input = '';",
+        "process.stdin.setEncoding('utf8');",
+        "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', async () => {",
-        "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+        "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+        "  const request = JSON.parse(await readFile(requestPath, 'utf8'));",
         "  await mkdir(dirname(request.responsePath), { recursive: true });",
         "  await writeFile(request.responsePath, JSON.stringify({",
         "    protocolVersion: 2,",
@@ -497,21 +506,6 @@ describe("architecture-analysis.service", () => {
     expect((await readArchitectureMap(root))?.source).toBe("local");
   });
 
-  it("does not publish architecture artifacts after cancellation", async () => {
-    const root = await createFixtureFiles();
-    const controller = new AbortController();
-    controller.abort("test-cancel");
-
-    await expect(analyzeArchitecture(projectFixture(root), "mock", {
-      signal: controller.signal
-    })).rejects.toMatchObject({
-      code: "operation-canceled"
-    });
-    await expect(readFile(join(root, FLOWWEAVE_DIR, "architecture-map.json"), "utf8")).rejects.toMatchObject({
-      code: "ENOENT"
-    });
-  });
-
   it("returns a local semantic graph on connection failure without overwriting a trusted Agent artifact", async () => {
     const originalPath = process.env.PATH;
     const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-failure-"));
@@ -546,18 +540,6 @@ describe("architecture-analysis.service", () => {
     }
   });
 
-  it("reads legacy fallback architecture artifacts as local maps", async () => {
-    const root = await createFixtureFiles();
-    const trusted = await analyzeArchitecture(projectFixture(root), "mock");
-    if (trusted.outcome !== "generated") throw new Error("Expected trusted architecture.");
-    const artifactPath = join(root, FLOWWEAVE_DIR, "architecture-map.json");
-    const artifact = JSON.parse(await readFile(artifactPath, "utf8"));
-    await writeFile(artifactPath, `${JSON.stringify({ ...artifact, source: "fallback", metadata: undefined }, null, 2)}\n`, "utf8");
-
-    const stored = await readArchitectureMap(root);
-
-    expect(stored?.source).toBe("local");
-  });
 });
 
 async function waitForReviewEvent(

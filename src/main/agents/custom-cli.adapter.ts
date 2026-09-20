@@ -1,7 +1,5 @@
-import { spawn } from "node:child_process";
 import type { AgentDefinition, AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "../../types";
 import { resolveCandidate } from "./agent-command";
-import { prepareCommandInvocation } from "./command-invocation";
 import { nowIso } from "./time";
 import { runCliAgentInbox } from "./agent-inbox-runner";
 
@@ -17,13 +15,11 @@ export class CustomCliAdapter implements ToolAdapter {
 
   async detect() {
     const commandPath = await resolveCandidate(this.definition.command);
-    const version = commandPath ? await readVersion(commandPath, this.definition.args) : undefined;
     return {
       toolId: this.definition.id,
       available: Boolean(commandPath),
       method: commandPath ? ("cli" as const) : ("none" as const),
       commandPath,
-      version,
       message: commandPath ? `${this.definition.name} CLI detected.` : `${this.definition.name} command was not found.`
     };
   }
@@ -114,27 +110,4 @@ function argsForRequest(definition: AgentDefinition, request: ToolRunRequest): s
     return definition.planArgs && definition.planArgs.length > 0 ? definition.planArgs : definition.args;
   }
   return definition.executeArgs && definition.executeArgs.length > 0 ? definition.executeArgs : definition.args;
-}
-
-async function readVersion(commandPath: string, args: string[]) {
-  const invocation = await prepareCommandInvocation(commandPath, ["--version"], process.platform);
-  return new Promise<string | undefined>((resolve) => {
-    const child = spawn(invocation.commandPath, invocation.args, { stdio: ["ignore", "pipe", "ignore"] });
-    let output = "";
-    const timeout = setTimeout(() => {
-      child.kill();
-      resolve(undefined);
-    }, 1200);
-    child.stdout.on("data", (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.on("close", () => {
-      clearTimeout(timeout);
-      resolve(output.trim() || args.join(" ") || undefined);
-    });
-    child.on("error", () => {
-      clearTimeout(timeout);
-      resolve(undefined);
-    });
-  });
 }

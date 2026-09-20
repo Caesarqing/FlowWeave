@@ -57,8 +57,8 @@ describe("desktop-bridge.adapter", () => {
     });
 
     expect(result.status).toBe("pending");
-    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).resolves.toContain('"protocolVersion": 2');
-    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).resolves.toContain('"agentId": "codex-desktop"');
+    await expect(readFile(getAgentInboxRequestPath(projectPath, runId), "utf8")).resolves.toContain('"protocolVersion": 2');
+    await expect(readFile(getAgentInboxRequestPath(projectPath, runId), "utf8")).resolves.toContain('"agentId": "codex-desktop"');
   });
 
   it("uses Agent Inbox instructions for artifact analysis", () => {
@@ -70,7 +70,7 @@ describe("desktop-bridge.adapter", () => {
     expect(instructions).not.toContain("pending-requests.json");
   });
 
-  it("maps legacy open helper to the current inbox folder", () => {
-    expect(getDesktopBridgeDir("/tmp/project", "run-1")).toBe("/tmp/project/.flowweave/agent-inbox/current");
+  it("maps the open helper to the run directory", () => {
+    expect(getDesktopBridgeDir("/tmp/project", "run-1")).toBe("/tmp/project/.flowweave/runs/run-1");
   });
 });

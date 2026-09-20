@@ -9,7 +9,8 @@ import {
   generateSequenceDiagrams,
   parseSequenceDiagramBundleJson,
   readSequenceDiagrams,
-  reviseSequenceDiagram
+  reviseSequenceDiagram,
+  writeSequenceDiagramBundle
 } from "../../src/main/services/sequence-diagram.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
@@ -244,7 +245,6 @@ describe("sequence-diagram.service", () => {
     const result = await generateSequenceDiagrams(projectFixture(root), "codex-desktop", {
       projectId,
       onSequenceReview: (event) => events.push(event),
-      planTimeoutMs: 1_000
     });
     const reviewed = await waitForEvent(events, "reviewed");
 
@@ -270,11 +270,10 @@ describe("sequence-diagram.service", () => {
     const running = await waitForRunId(events);
     const runId = running.status.runId;
     if (!runId) throw new Error("Expected sequence review run id.");
-    const inboxDir = join(root, FLOWWEAVE_DIR, "agent-inbox", "current");
-    await waitForPath(join(inboxDir, "request.json"));
-    await mkdir(inboxDir, { recursive: true });
+    await waitForPath(join(root, FLOWWEAVE_DIR, "runs", runId, "agent-request.json"));
+    await mkdir(join(root, FLOWWEAVE_DIR, "runs", runId), { recursive: true });
     await writeFile(
-      join(inboxDir, "response.json"),
+      join(root, ".flowweave", "runs", runId, "agent-response.json"),
       JSON.stringify({
         protocolVersion: 2,
         runId,
@@ -344,18 +343,26 @@ describe("sequence-diagram.service", () => {
     expect(stored.architectural.title).not.toBe("Existing Architectural");
   });
 
-  it("reads legacy fallback bundles as local sequence diagrams", async () => {
+  it("rejects v1 sequence bundles and requires regeneration", async () => {
     const root = await createFixtureFiles();
     await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
     await writeFile(
       join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"),
-      `${JSON.stringify({ ...existingBundle(root), source: "fallback" }, null, 2)}\n`,
+      `${JSON.stringify({ ...existingBundle(root), version: 1 }, null, 2)}\n`,
       "utf8"
     );
 
-    const bundle = await readSequenceDiagrams(root);
+    await expect(readSequenceDiagrams(root)).rejects.toThrow("must be v2. Regenerate it");
+  });
 
-    expect(bundle?.source).toBe("local");
+  it("does not overwrite a v1 sequence bundle during v2 generation", async () => {
+    const root = await createFixtureFiles();
+    const artifactPath = join(root, FLOWWEAVE_DIR, "sequence-diagrams.json");
+    const legacy = `${JSON.stringify({ ...existingBundle(root), version: 1 }, null, 2)}\n`;
+    await writeFile(artifactPath, legacy, "utf8");
+
+    await expect(writeSequenceDiagramBundle(root, existingBundle(root), undefined)).rejects.toThrow("must be v2. Regenerate it");
+    await expect(readFile(artifactPath, "utf8")).resolves.toBe(legacy);
   });
 
   it("returns generated when valid output is parsed and written", async () => {
@@ -377,24 +384,28 @@ describe("sequence-diagram.service", () => {
     await expect(readFile(artifactPath, "utf8")).resolves.toBe("{invalid-json");
   });
 
-  it("reads legacy bundles that still contain detailed-design diagrams", async () => {
+  it("writes sequence diagram bundles as v2 artifacts", async () => {
+    const root = await createFixtureFiles();
+    const bundle = existingBundle(root);
+
+    await writeSequenceDiagramBundle(root, bundle, undefined);
+
+    const stored = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")) as { version: number };
+    expect(stored.version).toBe(2);
+  });
+
+  it("reads a v2 sequence bundle without compatibility rewriting", async () => {
     const root = await createFixtureFiles();
     await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-    const legacyBundle = {
+    const storedBundle = {
       ...existingBundle(root),
-      detailedDesign: {
-        ...diagramJson([{ id: "legacy-detail", sequence: 1, from: "frontend-app", to: "api-gateway", kind: "sync", label: "Legacy detail" }]),
-        id: "detailed-design-sequence",
-        title: "Detailed Design Sequence Diagram",
-        kind: "detailed-design"
-      }
+      source: "agent" as const
     };
-    await writeFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), `${JSON.stringify(legacyBundle, null, 2)}\n`, "utf8");
+    await writeFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), `${JSON.stringify(storedBundle, null, 2)}\n`, "utf8");
 
     const bundle = await readSequenceDiagrams(root);
 
-    expect(bundle?.architectural.title).toBe("Existing Architectural");
-    expect("detailedDesign" in (bundle as object)).toBe(false);
+    expect(bundle).toEqual(storedBundle);
   });
 
   it("revises the current diagram with the selected agent", async () => {
@@ -412,20 +423,6 @@ describe("sequence-diagram.service", () => {
     expect(guidance).toContain("split payment into authorize and capture");
   });
 
-  it("does not publish sequence artifacts after cancellation", async () => {
-    const root = await createFixtureFiles();
-    const controller = new AbortController();
-    controller.abort("test-cancel");
-
-    await expect(generateSequenceDiagrams(projectFixture(root), "mock", {
-      signal: controller.signal
-    })).rejects.toMatchObject({
-      code: "operation-canceled"
-    });
-    await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).rejects.toMatchObject({
-      code: "ENOENT"
-    });
-  });
 });
 
 async function createFixtureFiles() {
@@ -516,7 +513,7 @@ function diagramJson(messages: unknown[]) {
 
 function existingBundle(rootPath: string): SequenceDiagramBundle {
   return {
-    version: 1,
+    version: 2,
     projectName: "sequence-fixture",
     rootPath,
     generatedAt: "2026-05-31T01:00:00.000Z",
@@ -530,7 +527,7 @@ function existingBundle(rootPath: string): SequenceDiagramBundle {
 
 function validSequenceBundle(rootPath: string): SequenceDiagramBundle {
   return {
-    version: 1,
+    version: 2,
     projectName: "sequence-fixture",
     rootPath,
     generatedAt: "2026-06-26T04:00:00.000Z",

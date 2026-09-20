@@ -247,32 +247,6 @@ function createLightweightAnalyzer(): LanguageAnalyzer {
   };
 }
 
-function collectSymbols(
-  filePath: string,
-  content: string,
-  definitions: Array<{ kind: StructureSymbol["kind"]; pattern: RegExp }>
-): StructureSymbol[] {
-  const symbols: StructureSymbol[] = [];
-  for (const definition of definitions) {
-    definition.pattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = definition.pattern.exec(content))) {
-      const name = match[1];
-      if (!name) continue;
-      symbols.push({
-        name,
-        kind: definition.kind,
-        filePath,
-        line: content.slice(0, match.index).split("\n").length,
-        signature: match[2] !== undefined
-          ? `${name}(${match[2].trim()})${match[3] ? ` -> ${match[3].trim()}` : ""}`
-          : undefined
-      });
-    }
-  }
-  return symbols;
-}
-
 function enhanceSymbols(insight: FileInsight, symbols: StructureSymbol[]): FileInsight {
   const seen = new Set<string>();
   return {

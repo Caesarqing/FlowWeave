@@ -1,5 +1,5 @@
 # FlowWeave for Codex
 
-Use the `flowweave` skill when a project contains `.flowweave/agent-inbox/current/request.json`.
+Use the `flowweave` skill when FlowWeave provides a run-specific `.flowweave/runs/<run-id>/agent-request.json` path.
 
-Codex Desktop and Codex CLI should read `.flowweave/agent-context.md`, read the active Agent Inbox request, and write Agent Inbox v2 `response.json` to the request's `responsePath`.
+Codex Desktop and Codex CLI should read `.flowweave/agent-context.md`, read the run-specific Agent Inbox request, and write Agent Inbox v2 `agent-response.json` to the request's `responsePath`.

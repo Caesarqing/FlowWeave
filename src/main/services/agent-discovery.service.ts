@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AgentCapability, AgentDefinition, AgentDiscoveryResult, AgentDiscoverySource, AgentProtocol, ToolDetectionResult } from "../../types";
+import type { AgentCapability, AgentDefinition, AgentDiscoveryResult, AgentDiscoverySource, AgentProtocol, AgentProtocolVersion, ToolDetectionResult } from "../../types";
 import { resolveProjectPath } from "./project-registry.service";
 import { createAdapterFromDefinition, getAgentAdapter, getAgentRegistryRoot, listAgentDefinitions, registerDiscoveredAgentDefinitions } from "./agent-registry.service";
 
@@ -89,6 +89,7 @@ function parseManifest(content: string, path: string): AgentDefinition {
     throw new Error(`Agent connector manifest ${path} has an invalid id; expected a custom:* id.`);
   }
   const protocol = requiredProtocol(value, path);
+  const protocolVersion = requiredProtocolVersion(value, path);
   const command = requiredString(value, "command", path);
   const appPath = optionalString(value, "appPath", path);
   return {
@@ -96,19 +97,25 @@ function parseManifest(content: string, path: string): AgentDefinition {
     name: requiredString(value, "name", path),
     kind: appPath ? "desktop" : "cli",
     protocol,
-    protocolVersion: 2,
+    protocolVersion,
     command,
     args: stringArray(value, "args", path),
     planArgs: optionalStringArray(value, "planArgs", path),
     executeArgs: optionalStringArray(value, "executeArgs", path),
     appPath,
-    bridgeInstructions: optionalString(value, "bridgeInstructions", path),
     capabilities: capabilities(value, path),
     description: requiredString(value, "description", path),
     builtIn: false,
     createdAt: optionalString(value, "createdAt", path) ?? "manifest",
     updatedAt: optionalString(value, "updatedAt", path) ?? "manifest"
   };
+}
+
+function requiredProtocolVersion(value: Record<string, unknown>, path: string): AgentProtocolVersion {
+  if (value.protocolVersion !== 2) {
+    throw new Error(`Agent connector manifest ${path} requires protocolVersion 2; update or reinstall the connector.`);
+  }
+  return 2;
 }
 
 function requiredProtocol(value: Record<string, unknown>, path: string): AgentProtocol {

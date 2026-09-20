@@ -26,7 +26,7 @@ describe("i18n translations", () => {
     expect(translate("en", "desktopOnly.title")).toBe("Open FlowWeave from the desktop app");
     expect(translate("en", "agent.bridgeWarning")).not.toContain("Browser preview");
     expect(translate("en", "agent.codexDescription")).toContain("local Codex CLI");
-    expect(translate("en", "agent.claudeDesktopDescription")).toContain("agent-inbox");
+    expect(translate("en", "agent.claudeDesktopDescription")).toContain("run-specific");
     expect(translate("en", "agent.codexDesktopDescription")).toContain("response.json");
     expect(translate("en", "agent.geminiDescription")).toContain("Gemini CLI");
     expect(translate("en", "agent.healthCheck")).toBe("Health check");
@@ -35,19 +35,16 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.copyConnector")).toBe("Copy connector");
     expect(translate("en", "agent.applyRunArtifact")).toBe("Apply result");
     expect(translate("en", "agent.openAgentInbox")).toBe("Open Agent Inbox folder");
-    expect(translate("en", "agent.openRunBridge")).toBe("Open Agent Inbox folder");
     expect(translate("en", "agent.artifactAdoption.applied")).toBe("Applied");
     expect(translate("en", "agent.protocolCli")).toBe("CLI");
     expect(translate("en", "agent.protocolDesktop")).toBe("Desktop");
     expect(translate("en", "agent.capabilityArtifactAnalysis")).toBe("Artifact analysis");
     expect(translate("en", "module.manualSubtitle")).toBe("Manual module");
     expect(translate("en", "assessment.high")).toBe("high");
-    expect(translate("en", "settings.planTimeout")).toContain("Plan timeout");
     expect(translate("en", "module.riskOverridePrompt")).toContain("overridden");
     expect(translate("en", "artifact.state.stale")).toBe("Outdated");
     expect(translate("en", "artifact.sequences")).toBe("Architectural sequence diagram");
     expect(translate("en", "onboarding.title")).toContain("Understand the project");
-    expect(translate("en", "settings.executeTimeout")).toContain("minutes");
   });
 
   it("uses Simplified Chinese UI copy in the Chinese locale", () => {
@@ -62,7 +59,7 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "desktopOnly.title")).toBe("请从桌面端打开 FlowWeave");
     expect(translate("zh-CN", "agent.bridgeWarning")).not.toContain("浏览器预览");
     expect(translate("zh-CN", "agent.codexDescription")).toContain("本地 Codex CLI");
-    expect(translate("zh-CN", "agent.claudeDesktopDescription")).toContain("agent-inbox");
+    expect(translate("zh-CN", "agent.claudeDesktopDescription")).toContain("本次运行专属");
     expect(translate("zh-CN", "agent.codexDesktopDescription")).toContain("response.json");
     expect(translate("zh-CN", "agent.geminiDescription")).toContain("Gemini CLI");
     expect(translate("zh-CN", "agent.healthCheck")).toBe("健康检查");
@@ -71,23 +68,32 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.copyConnector")).toBe("复制连接");
     expect(translate("zh-CN", "agent.applyRunArtifact")).toBe("应用结果");
     expect(translate("zh-CN", "agent.openAgentInbox")).toBe("打开 Agent Inbox 文件夹");
-    expect(translate("zh-CN", "agent.openRunBridge")).toBe("打开 Agent Inbox 文件夹");
     expect(translate("zh-CN", "agent.artifactAdoption.applied")).toBe("已应用");
     expect(translate("zh-CN", "agent.protocolCli")).toBe("CLI");
     expect(translate("zh-CN", "agent.protocolDesktop")).toBe("桌面端");
     expect(translate("zh-CN", "agent.capabilityArtifactAnalysis")).toBe("产物分析");
     expect(translate("zh-CN", "module.manualSubtitle")).toBe("手动补充模块");
     expect(translate("zh-CN", "assessment.high")).toBe("高");
-    expect(translate("zh-CN", "settings.planTimeout")).toContain("计划超时");
     expect(translate("zh-CN", "module.riskOverridePrompt")).toContain("覆写");
     expect(translate("zh-CN", "artifact.state.stale")).toBe("已过期");
     expect(translate("zh-CN", "artifact.sequences")).toBe("架构时序图");
     expect(translate("zh-CN", "onboarding.title")).toContain("先理解项目");
-    expect(translate("zh-CN", "settings.executeTimeout")).toContain("分钟");
   });
 
   it("keeps both locale dictionaries aligned", () => {
     expect(Object.keys(translationMessages.en).sort()).toEqual(Object.keys(translationMessages["zh-CN"]).sort());
+  });
+
+  it("does not promise timeout, redaction, or canceled operation behavior", () => {
+    for (const locale of ["en", "zh-CN"] as const) {
+      const messages = translationMessages[locale];
+      expect(messages["onboarding.agentBody"].toLowerCase()).not.toContain("timeout");
+      expect(messages["onboarding.agentBody"]).not.toContain("超时");
+      expect(messages["settings.exportDiagnosticsHelp"].toLowerCase()).not.toContain("redacted");
+      expect(messages["settings.exportDiagnosticsHelp"]).not.toContain("脱敏");
+      expect(messages).not.toHaveProperty("operation.stage.canceled");
+      expect(messages).not.toHaveProperty("sequence.canceled");
+    }
   });
 
   it("does not ship Chinese copy in the English dictionary", () => {

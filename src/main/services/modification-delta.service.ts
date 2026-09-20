@@ -140,8 +140,8 @@ async function readCurrentCanvas(projectPath: string): Promise<CodeflowCanvas> {
     return emptyCanvas(projectPath);
   }
   const canvas = value as Partial<CodeflowCanvas>;
-  if ((canvas.version !== 3 && canvas.version !== 4) || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
-    throw new Error(`FlowWeave Canvas is invalid and was preserved: ${path}`);
+  if (canvas.version !== 4) {
+    throw new Error(`FlowWeave Canvas must be v4. Re-scan the project to rebuild it: ${path}`);
   }
   return canvas as CodeflowCanvas;
 }

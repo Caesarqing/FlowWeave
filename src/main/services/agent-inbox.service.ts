@@ -1,5 +1,5 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type {
   AgentProtocolVersion,
   ArtifactRunTarget,
@@ -11,7 +11,7 @@ import type {
   ToolRunStatus
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
+import { writeJsonAtomic } from "../storage/artifact-store";
 
 export const AGENT_INBOX_PROTOCOL_VERSION = 2 as AgentProtocolVersion;
 
@@ -46,32 +46,19 @@ export type AgentInboxResponse = {
   sourcePath: string;
 };
 
-export function getAgentInboxCurrentDir(projectPath: string): string {
-  return join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current");
+export function getAgentInboxRunDir(projectPath: string, runId: string): string {
+  return join(projectPath, FLOWWEAVE_DIR, "runs", runId);
 }
 
-export function getAgentInboxRequestPath(projectPath: string): string {
-  return join(getAgentInboxCurrentDir(projectPath), "request.json");
+export function getAgentInboxRequestPath(projectPath: string, runId: string): string {
+  return join(getAgentInboxRunDir(projectPath, runId), "agent-request.json");
 }
 
-export function getAgentInboxResponsePath(projectPath: string): string {
-  return join(getAgentInboxCurrentDir(projectPath), "response.json");
-}
-
-export function getAgentInboxArchiveRequestPath(projectPath: string, runId: string): string {
-  return join(projectPath, FLOWWEAVE_DIR, "runs", runId, "agent-request.json");
-}
-
-export function getAgentInboxArchiveResponsePath(projectPath: string, runId: string): string {
-  return join(projectPath, FLOWWEAVE_DIR, "runs", runId, "agent-response.json");
-}
-
-export function getAgentInboxArchiveInvalidResponsePath(projectPath: string, runId: string): string {
-  return join(projectPath, FLOWWEAVE_DIR, "runs", runId, "agent-response.invalid.txt");
+export function getAgentInboxResponsePath(projectPath: string, runId: string): string {
+  return join(getAgentInboxRunDir(projectPath, runId), "agent-response.json");
 }
 
 export async function writeAgentInboxRequest(request: ToolRunRequest, agentId: RuntimeAgentId): Promise<AgentInboxRequest> {
-  await assertNoActiveInboxRequest(request.projectPath, request.id);
   const inboxRequest: AgentInboxRequest = {
     protocolVersion: AGENT_INBOX_PROTOCOL_VERSION,
     runId: request.id,
@@ -84,16 +71,16 @@ export async function writeAgentInboxRequest(request: ToolRunRequest, agentId: R
     scanFingerprint: request.scanFingerprint,
     reviewId: request.reviewId,
     prompt: request.prompt,
-    responsePath: getAgentInboxResponsePath(request.projectPath),
+    responsePath: getAgentInboxResponsePath(request.projectPath, request.id),
     createdAt: new Date().toISOString()
   };
-  await writeJsonAtomic(getAgentInboxRequestPath(request.projectPath), inboxRequest);
+  await writeJsonAtomic(getAgentInboxRequestPath(request.projectPath, request.id), inboxRequest);
   return inboxRequest;
 }
 
-export function buildAgentInboxInstruction(projectPath: string): string {
-  const requestPath = getAgentInboxRequestPath(projectPath);
-  const responsePath = getAgentInboxResponsePath(projectPath);
+export function buildAgentInboxInstruction(projectPath: string, runId: string): string {
+  const requestPath = getAgentInboxRequestPath(projectPath, runId);
+  const responsePath = getAgentInboxResponsePath(projectPath, runId);
   return [
     "Use the FlowWeave Agent Inbox protocol.",
     `Read the request JSON at: ${requestPath}`,
@@ -112,7 +99,7 @@ export async function readAgentInboxResponseForRun(
   runId: string,
   result: Partial<ToolRunResult>
 ): Promise<AgentInboxResponse | undefined> {
-  const responsePath = getAgentInboxResponsePath(projectPath);
+  const responsePath = getAgentInboxResponsePath(projectPath, runId);
   const content = await readFile(responsePath, "utf8").catch(() => "");
   if (!content.trim()) return undefined;
   const response = parseAgentInboxResponse(content, responsePath);
@@ -151,45 +138,6 @@ export function parseAgentInboxResponse(content: string, sourcePath: string): Ag
 export function validateAgentInboxResponseForRun(response: AgentInboxResponse, result: Partial<ToolRunResult>): void {
   requireMatchedInboxField("runId", result.id, response.runId);
   requireMatchedInboxField("projectId", result.projectId, response.projectId);
-}
-
-export async function archiveAndClearAgentInbox(projectPath: string, runId: string): Promise<void> {
-  const requestPath = getAgentInboxRequestPath(projectPath);
-  const responsePath = getAgentInboxResponsePath(projectPath);
-  const [requestText, responseText] = await Promise.all([
-    readFile(requestPath, "utf8").catch(() => ""),
-    readFile(responsePath, "utf8").catch(() => "")
-  ]);
-  await mkdir(dirname(getAgentInboxArchiveRequestPath(projectPath, runId)), { recursive: true });
-  if (requestText.trim()) {
-    await writeJsonAtomic(getAgentInboxArchiveRequestPath(projectPath, runId), JSON.parse(requestText) as unknown);
-  }
-  if (responseText.trim()) {
-    await archiveResponseText(projectPath, runId, responseText);
-  }
-  await rm(getAgentInboxCurrentDir(projectPath), { recursive: true, force: true });
-}
-
-async function archiveResponseText(projectPath: string, runId: string, responseText: string): Promise<void> {
-  try {
-    await writeJsonAtomic(getAgentInboxArchiveResponsePath(projectPath, runId), JSON.parse(responseText) as unknown);
-  } catch (error) {
-    if (!(error instanceof SyntaxError)) throw error;
-    await writeTextAtomic(getAgentInboxArchiveInvalidResponsePath(projectPath, runId), responseText);
-  }
-}
-
-async function assertNoActiveInboxRequest(projectPath: string, nextRunId: string): Promise<void> {
-  const requestPath = getAgentInboxRequestPath(projectPath);
-  const responsePath = getAgentInboxResponsePath(projectPath);
-  const requestText = await readFile(requestPath, "utf8").catch(() => "");
-  if (!requestText.trim()) return;
-  const responseText = await readFile(responsePath, "utf8").catch(() => "");
-  if (responseText.trim()) {
-    throw new Error(`Agent inbox has an unimported response for an active request before starting ${nextRunId}: ${responsePath}`);
-  }
-  const active = JSON.parse(requestText) as Partial<AgentInboxRequest>;
-  throw new Error(`Agent inbox already has an active request: ${active.runId ?? "unknown"} at ${requestPath}`);
 }
 
 function normalizeResponseContent(

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -44,6 +44,35 @@ describe("agent-run.service", () => {
     await expect(readFile(result.resultPath ?? "", "utf8")).resolves.toContain('"toolId": "mock"');
   });
 
+  it("assigns isolated UUID run IDs to concurrent plans", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-concurrent-run-"));
+    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
+
+    const [first, second] = await Promise.all([
+      startToolPlan({
+        projectId,
+        toolId: "mock",
+        prompt: "Review the first module.",
+        executionMode: "plan",
+        purpose: "implementation-plan"
+      }),
+      startToolPlan({
+        projectId,
+        toolId: "mock",
+        prompt: "Review the second module.",
+        executionMode: "plan",
+        purpose: "implementation-plan"
+      })
+    ]);
+
+    expect(first.id).toMatch(/^run-[a-f0-9-]{36}$/);
+    expect(second.id).toMatch(/^run-[a-f0-9-]{36}$/);
+    expect(first.id).not.toBe(second.id);
+    await expect(readFile(first.resultPath ?? "", "utf8")).resolves.toContain('"toolId": "mock"');
+    await expect(readFile(second.resultPath ?? "", "utf8")).resolves.toContain('"toolId": "mock"');
+  });
+
   it("does not run model probes during CLI run preflight", async () => {
     const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-no-probe-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-"));
@@ -62,7 +91,9 @@ describe("agent-run.service", () => {
       "process.stdin.on('end', () => {",
       "  if (input.includes('FlowWeave health check')) { console.error('unexpected model probe'); process.exit(7); }",
       "  const fs = require('fs');",
-      "  const request = JSON.parse(fs.readFileSync('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+      "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+      "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+      "  const request = JSON.parse(fs.readFileSync(requestPath, 'utf8'));",
       "  fs.writeFileSync(request.responsePath, JSON.stringify({",
       "    protocolVersion: 2,",
       "    runId: request.runId,",
@@ -131,16 +162,15 @@ describe("agent-run.service", () => {
 
   it("writes Agent Inbox responses into run artifacts", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-run-"));
-    const runId = "run-1700000000000";
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
     const projectId = await registerProject(projectPath);
-    vi.spyOn(Date, "now").mockReturnValue(1700000000000);
-
     setTimeout(() => {
-      const inboxDir = join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current");
-      void mkdir(inboxDir, { recursive: true }).then(() =>
+      void readdir(join(projectPath, FLOWWEAVE_DIR, "runs")).then((runIds) => {
+        const runId = runIds.find((id) => id.startsWith("run-"));
+        if (!runId) throw new Error("Expected a run directory for the desktop response.");
+        return mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true }).then(() =>
         writeFile(
-          join(inboxDir, "response.json"),
+          join(projectPath, ".flowweave", "runs", runId, "agent-response.json"),
           JSON.stringify({
             protocolVersion: 2,
             runId,
@@ -152,7 +182,8 @@ describe("agent-run.service", () => {
           }),
           "utf8"
         )
-      );
+        );
+      });
     }, 20);
 
     const result = await startToolPlan({
@@ -174,15 +205,14 @@ describe("agent-run.service", () => {
 
   it("imports Agent Inbox response.json for implementation-plan runs", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-md-run-"));
-    const runId = "run-1700000000001";
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
     const projectId = await registerProject(projectPath);
-    vi.spyOn(Date, "now").mockReturnValue(1700000000001);
-
     setTimeout(() => {
-      const inboxDir = join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current");
-      void mkdir(inboxDir, { recursive: true }).then(() =>
-        writeFile(join(inboxDir, "response.json"), JSON.stringify({
+      void readdir(join(projectPath, FLOWWEAVE_DIR, "runs")).then((runIds) => {
+        const runId = runIds.find((id) => id.startsWith("run-"));
+        if (!runId) throw new Error("Expected a run directory for the desktop response.");
+        return mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true }).then(() =>
+        writeFile(join(projectPath, ".flowweave", "runs", runId, "agent-response.json"), JSON.stringify({
           protocolVersion: 2,
           runId,
           projectId,
@@ -191,7 +221,8 @@ describe("agent-run.service", () => {
           content: "# Desktop Markdown Plan",
           completedAt: "2026-06-09T12:00:00.000Z"
         }), "utf8")
-      );
+        );
+      });
     }, 20);
 
     const result = await startToolPlan({

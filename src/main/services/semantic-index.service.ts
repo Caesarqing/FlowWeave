@@ -19,7 +19,6 @@ import { flattenProjectFilePaths, resolveProjectImport } from "./import-parser.s
 import { analyzeTypeScriptProject } from "./typescript-semantic.service";
 import { analyzeSourceFile } from "./language-analyzer.service";
 import { buildCrossStackHttpRelations } from "./cross-stack-relation.service";
-import { throwIfAborted } from "./flowweave-error.service";
 
 const GENERATOR_VERSION = "4.0.0";
 const INDEX_VERSION = 4;
@@ -31,7 +30,6 @@ const CODE_EXTENSIONS = new Set([
 
 export type BuildSemanticIndexOptions = {
   concurrency?: number;
-  signal?: AbortSignal;
   onProgress?: (progress: AnalysisProgressUpdate) => void;
 };
 
@@ -60,7 +58,6 @@ export async function buildSemanticIndex(
   });
   const semanticFiles = await mapWithConcurrency(paths, concurrency, async (path) =>
     {
-      throwIfAborted(options?.signal, "Semantic indexing");
       const file = await buildSemanticFile(project, path, previousByPath.get(path));
       completed += 1;
       if (file?.status === "failed") failed += 1;
@@ -74,7 +71,6 @@ export async function buildSemanticIndex(
       return file;
     }
   );
-  throwIfAborted(options?.signal, "Semantic indexing");
   const files = semanticFiles.filter((file): file is SemanticFile => Boolean(file));
   const manifestEntries = files.map(toManifestEntry);
   const delta = createScanDelta(previousManifest?.files ?? [], manifestEntries);
@@ -132,7 +128,6 @@ export async function buildSemanticIndex(
     files: enrichedFiles.map(toManifestEntry)
   };
 
-  throwIfAborted(options?.signal, "Semantic indexing");
   options?.onProgress?.({
     stage: "persisting",
     completed: paths.length,
@@ -149,8 +144,7 @@ export async function buildSemanticIndex(
     manifest,
     cacheWritePaths,
     delta.deleted,
-    previousByPath,
-    options?.signal
+    previousByPath
   );
   project.scanDelta = delta;
   return { index, delta };
@@ -374,8 +368,7 @@ async function persistSemanticIndex(
   manifest: SemanticIndexManifest,
   cacheWritePaths: Set<string>,
   deletedPaths: string[],
-  previousByPath: Map<string, SemanticIndexManifestEntry>,
-  signal: AbortSignal | undefined
+  previousByPath: Map<string, SemanticIndexManifestEntry>
 ): Promise<void> {
   const root = indexRoot(projectPath);
   const filesRoot = join(root, "files");
@@ -387,7 +380,6 @@ async function persistSemanticIndex(
     const previous = previousByPath.get(path);
     if (previous) await rm(join(filesRoot, `${previous.cacheKey}.json`), { force: true });
   }));
-  throwIfAborted(signal, "Semantic index persistence");
   await Promise.all([
     writeJsonAtomic(join(root, "manifest.json"), manifest),
     writeJsonAtomic(join(root, "semantic-index.json"), index)

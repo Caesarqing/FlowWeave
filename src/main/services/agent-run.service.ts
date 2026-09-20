@@ -1,18 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { AgentDefinition, AgentReadinessResult, AgentId, ArtifactRunTarget, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
-import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
-import { CodexLocalAdapter } from "../agents/codex-local.adapter";
-import { CursorAdapter } from "../agents/cursor.adapter";
-import { ClaudeDesktopAdapter, CodexDesktopAdapter } from "../agents/desktop-bridge.adapter";
-import { GeminiCliAdapter } from "../agents/gemini-cli.adapter";
-import { MockAgentAdapter } from "../agents/mock.adapter";
-import { deleteCustomAgent, getAgentAdapter as getRegistryAgentAdapter, isBuiltInAgentId, listAgentDefinitions, saveCustomAgent } from "./agent-registry.service";
+import { deleteCustomAgent, getAgentAdapter, listAgentDefinitions, saveCustomAgent } from "./agent-registry.service";
 import { createCheckpoint } from "./git.service";
 import { prepareRunPaths, serializeAgentEvents, writeRunResult } from "./run-log.service";
 import { resolveProjectPath } from "./project-registry.service";
 import { executeAgentWithPolicy } from "./agent-execution.service";
-import { redactSensitiveText } from "./sensitive-data.service";
 import { writeTextAtomic } from "../storage/artifact-store";
 import { recordDiagnostic } from "./diagnostic.service";
 import { checkAgentReadiness } from "./agent-readiness.service";
@@ -29,30 +23,17 @@ export type StartToolPlanOptions = {
   reviewId?: string;
   model?: string;
   confirmedExecute?: boolean;
-  executeTimeoutMs?: number;
-  planTimeoutMs?: number;
-  signal?: AbortSignal;
 };
 
 export type StartToolPlanResult = ToolRunResult & {
   executionMode: ExecutionMode;
 };
 
-const adapters: Record<ToolId, ToolAdapter> = {
-  "claude-code": new ClaudeCodeAdapter(),
-  "claude-desktop": new ClaudeDesktopAdapter(),
-  "codex-local": new CodexLocalAdapter(),
-  "codex-desktop": new CodexDesktopAdapter(),
-  "gemini-cli": new GeminiCliAdapter(),
-  cursor: new CursorAdapter(),
-  mock: new MockAgentAdapter()
-};
-
 export async function startToolPlan(options: StartToolPlanOptions): Promise<StartToolPlanResult> {
   const projectPath = resolveProjectPath(options.projectId);
-  const runId = `run-${Date.now()}`;
+  const runId = `run-${randomUUID()}`;
   const paths = await prepareRunPaths(projectPath, runId);
-  const prompt = redactSensitiveText(buildRunPrompt(await resolvePrompt(options), options.executionMode, options.purpose));
+  const prompt = buildRunPrompt(await resolvePrompt(options), options.executionMode, options.purpose);
 
   await writeTextAtomic(paths.promptPath, prompt);
 
@@ -92,11 +73,10 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     artifactTarget: options.artifactTarget,
     scanFingerprint: options.scanFingerprint,
     reviewId: options.reviewId,
-    model: options.model,
-    signal: options.signal
-  }, resolveRunPolicyOverride(executionMode, options));
+    model: options.model
+  });
 
-  const logText = redactSensitiveText(serializeAgentEvents(result.events));
+  const logText = serializeAgentEvents(result.events);
   const planText = await resolvePlanText(result, logText);
   await Promise.all([
     writeTextAtomic(paths.logPath, logText),
@@ -219,7 +199,7 @@ async function writePreflightFailureRun({
     agentReadiness,
     terminationReason: "failed"
   };
-  const logText = redactSensitiveText(serializeAgentEvents(events));
+  const logText = serializeAgentEvents(events);
   const planText = fallbackPlan({ ...result, toolId: adapter.id }, logText);
   await Promise.all([
     writeTextAtomic(paths.logPath, logText),
@@ -237,7 +217,7 @@ Dry run only: inspect the request and return an implementation plan, affected fi
 }
 
 export async function detectTool(toolId: ToolId): Promise<ToolDetectionResult> {
-  return adapters[toolId].detect();
+  return (await getAgentAdapter(toolId)).detect();
 }
 
 export async function detectAgent(agentId: RuntimeAgentId, projectId?: string): Promise<ToolDetectionResult> {
@@ -254,17 +234,6 @@ export async function healthCheckAgent(agentId: RuntimeAgentId, projectId?: stri
     refreshConnection: false,
     runModelProbe: true
   });
-}
-
-export function getToolAdapter(toolId: ToolId): ToolAdapter {
-  return adapters[toolId];
-}
-
-export function getAgentAdapter(agentId: RuntimeAgentId, projectId?: string): Promise<ToolAdapter> {
-  if (agentId === "mock" || isBuiltInAgentId(agentId)) {
-    return Promise.resolve(adapters[agentId]);
-  }
-  return getRegistryAgentAdapter(agentId, projectId);
 }
 
 export async function openToolProject(agentId: RuntimeAgentId, projectId: string, projectPath: string): Promise<ToolOpenResult> {
@@ -346,19 +315,6 @@ function collectStderr(events: ToolRunResult["events"]) {
     .filter(Boolean)
     .join("\n");
   return stderr || undefined;
-}
-
-function resolveRunPolicyOverride(
-  executionMode: ExecutionMode,
-  options: StartToolPlanOptions
-) {
-  if (executionMode === "execute" && options.executeTimeoutMs !== undefined) {
-    return { timeoutMs: options.executeTimeoutMs };
-  }
-  if (executionMode === "plan" && options.planTimeoutMs !== undefined) {
-    return { timeoutMs: options.planTimeoutMs };
-  }
-  return undefined;
 }
 
 function firstUsefulLine(text: string) {

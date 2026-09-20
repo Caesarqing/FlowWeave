@@ -1,11 +1,10 @@
-import { execFile, spawn } from "node:child_process";
-import type { RuntimeAgentId, ToolRunEvent, ToolRunRequest, ToolRunResult, ToolRunTerminationReason } from "../../types";
+import { spawn } from "node:child_process";
+import type { RuntimeAgentId, ToolRunEvent, ToolRunRequest, ToolRunResult } from "../../types";
 import { prepareCommandInvocation } from "./command-invocation";
 import { nowIso } from "./time";
 
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_EVENTS = 10_000;
-const FORCE_KILL_DELAY_MS = 2_000;
 const BASE_ENVIRONMENT_KEYS = [
   "PATH", "HOME", "USER", "SHELL", "TMPDIR", "LANG", "LC_ALL",
   "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
@@ -31,8 +30,6 @@ export async function runSpawnedAgent(
   const events: ToolRunEvent[] = [];
   let outputBytes = 0;
   let outputTruncated = false;
-  let forcedReason: ToolRunTerminationReason | undefined;
-  let forceKillTimer: NodeJS.Timeout | undefined;
 
   return new Promise<ToolRunResult>((resolve) => {
     let settled = false;
@@ -40,11 +37,9 @@ export async function runSpawnedAgent(
       events.push(event);
       onEvent?.(event);
     };
-    const finish = (exitCode: number | null, reason: ToolRunTerminationReason) => {
+    const finish = (exitCode: number | null, reason: "completed" | "failed") => {
       if (settled) return;
       settled = true;
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      options.request.signal?.removeEventListener("abort", abortProcessTree);
       const completedAt = nowIso();
       const status = reason === "completed" ? "completed" : "failed";
       pushEvent({ type: "status", status, timestamp: completedAt });
@@ -65,70 +60,48 @@ export async function runSpawnedAgent(
         terminationReason: reason
       });
     };
-    const maxOutputBytes = options.request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+    const maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES;
     pushEvent({ type: "status", status: "running", timestamp: startedAt });
     const child = spawn(invocation.commandPath, invocation.args, {
       cwd: options.request.projectPath,
-      detached: process.platform !== "win32",
+      detached: false,
       stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       env: safeAgentEnvironment(process.env, options.toolId)
     });
-
-    const abortProcessTree = () => {
-      forcedReason = abortReason(options.request.signal);
-      pushEvent({
-        type: "error",
-        message: forcedReason === "timeout" ? "Agent run timed out and was terminated." : "Agent run was canceled and terminated.",
-        timestamp: nowIso()
-      });
-      terminateProcessTree(child.pid, "SIGTERM");
-      forceKillTimer = setTimeout(() => terminateProcessTree(child.pid, "SIGKILL"), FORCE_KILL_DELAY_MS);
-    };
-    if (options.request.signal?.aborted) abortProcessTree();
-    else options.request.signal?.addEventListener("abort", abortProcessTree, { once: true });
 
     const readOutput = (type: "stdout" | "stderr", chunk: Buffer) => {
       if (outputTruncated) return;
       outputBytes += chunk.byteLength;
       if (outputBytes > maxOutputBytes || events.length >= MAX_EVENTS) {
         outputTruncated = true;
-        forcedReason = "output-limit";
         pushEvent({
           type: "error",
           message: outputBytes > maxOutputBytes
-            ? `Agent output exceeded the ${maxOutputBytes} byte limit.`
-            : `Agent output exceeded the ${MAX_EVENTS} event limit.`,
+            ? `Agent output exceeded the ${maxOutputBytes} byte capture limit; remaining output was discarded.`
+            : `Agent output exceeded the ${MAX_EVENTS} event capture limit; remaining output was discarded.`,
           timestamp: nowIso()
         });
-        terminateProcessTree(child.pid, "SIGTERM");
-        forceKillTimer = setTimeout(() => terminateProcessTree(child.pid, "SIGKILL"), FORCE_KILL_DELAY_MS);
         return;
       }
       pushEvent({ type, content: chunk.toString(), timestamp: nowIso() });
     };
 
     if (!child.stdout || !child.stderr) {
-      terminateProcessTree(child.pid, "SIGTERM");
       finish(null, "failed");
       return;
     }
     child.stdout.on("data", (chunk: Buffer) => readOutput("stdout", chunk));
     child.stderr.on("data", (chunk: Buffer) => readOutput("stderr", chunk));
     child.on("error", (error: Error) => {
-      const aborted = error.name === "AbortError" || options.request.signal?.aborted;
-      const reason = forcedReason ?? (aborted ? abortReason(options.request.signal) : "failed");
-      pushEvent({ type: "error", message: aborted ? `Agent run ${reason}.` : error.message, timestamp: nowIso() });
-      finish(null, reason);
+      pushEvent({ type: "error", message: error.message, timestamp: nowIso() });
+      finish(null, "failed");
     });
     child.on("close", (code: number | null) => {
-      const reason = forcedReason ??
-        (options.request.signal?.aborted ? abortReason(options.request.signal) : code === 0 ? "completed" : "failed");
-      finish(code, reason);
+      finish(code, code === 0 ? "completed" : "failed");
     });
 
     if (options.stdin !== undefined) {
       if (!child.stdin) {
-        terminateProcessTree(child.pid, "SIGTERM");
         finish(null, "failed");
         return;
       }
@@ -160,39 +133,4 @@ export function safeAgentEnvironment(source: NodeJS.ProcessEnv, toolId: RuntimeA
     [...BASE_ENVIRONMENT_KEYS, ...credentialKeys]
       .flatMap((key) => source[key] === undefined ? [] : [[key, source[key]]])
   );
-}
-
-function abortReason(signal: AbortSignal | undefined): ToolRunTerminationReason {
-  return signal?.reason === "timeout" ? "timeout" : "canceled";
-}
-
-function terminateProcessTree(pid: number | undefined, signal: NodeJS.Signals): void {
-  if (pid === undefined) return;
-  if (process.platform === "win32") {
-    execFile("taskkill.exe", buildWindowsTaskkillArgs(pid), (error) => {
-      if (error && !isMissingProcess(error)) {
-        console.error("Failed to terminate Windows Agent process tree.", {
-          pid,
-          code: "code" in error ? error.code : undefined
-        });
-      }
-    });
-    return;
-  }
-  try {
-    process.kill(-pid, signal);
-  } catch (error) {
-    if (!isMissingProcess(error)) throw error;
-  }
-}
-
-export function buildWindowsTaskkillArgs(pid: number): string[] {
-  return ["/PID", String(pid), "/T", "/F"];
-}
-
-function isMissingProcess(error: unknown): boolean {
-  return typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "ESRCH";
 }

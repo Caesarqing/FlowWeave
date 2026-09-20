@@ -1,23 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ToolAdapter, ToolRunRequest, ToolRunResult } from "../../src/types";
-import { executeAgentWithPolicy, resetAgentExecutionStateForTests } from "../../src/main/services/agent-execution.service";
+import { executeAgentWithPolicy } from "../../src/main/services/agent-execution.service";
 
 describe("agent-execution.service", () => {
-  it("times out an Agent that honors the abort signal", async () => {
-    const result = await executeAgentWithPolicy(abortAwareAdapter(), request("plan"), {
-      timeoutMs: 120,
-      maxOutputBytes: 1024,
-      retryCount: 0,
-      retryDelayMs: 0
-    });
-
-    expect(result.status).toBe("failed");
-    expect(result.terminationReason).toBe("timeout");
-    expect(result.failure?.code).toBe("timeout");
-    expect(result.attempts).toBe(1);
-  });
-
-  it("classifies silent SIGTERM exit 143 as a timeout-style termination", async () => {
+  it("classifies silent SIGTERM exit 143 as a process failure", async () => {
     const adapter: ToolAdapter = {
       id: "mock",
       name: "Silent SIGTERM",
@@ -40,16 +26,14 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 0,
       retryDelayMs: 0
     });
 
     expect(execution.failure).toMatchObject({
-      code: "timeout",
+      code: "process",
       transient: false,
-      message: expect.stringContaining("SIGTERM")
+      message: expect.stringContaining("exit code 143")
     });
   });
 
@@ -67,8 +51,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 1,
       retryDelayMs: 0
     });
@@ -103,8 +85,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 1,
       retryDelayMs: 0
     });
@@ -131,8 +111,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 0,
       retryDelayMs: 0
     });
@@ -153,8 +131,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 0,
       retryDelayMs: 0
     });
@@ -175,8 +151,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 0,
       retryDelayMs: 0
     });
@@ -209,8 +183,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryCount: 1,
       retryDelayMs: 0
     });
@@ -234,8 +206,6 @@ describe("agent-execution.service", () => {
     };
 
     const execution = await executeAgentWithPolicy(adapter, request("plan"), {
-      timeoutMs: 1000,
-      maxOutputBytes: 1024,
       retryDelayMs: 0
     });
 
@@ -245,27 +215,7 @@ describe("agent-execution.service", () => {
     expect(execution.events.filter((event) => event.type === "status" && event.message?.includes("Retrying transient Agent failure"))).toHaveLength(2);
   });
 
-  it("rejects concurrent write executions for the same project", async () => {
-    resetAgentExecutionStateForTests();
-    const adapter = abortAwareAdapter();
-    const first = executeAgentWithPolicy(adapter, request("execute"), {
-      timeoutMs: 150,
-      maxOutputBytes: 1024,
-      retryCount: 0,
-      retryDelayMs: 0
-    });
-
-    await expect(executeAgentWithPolicy(adapter, request("execute"), {
-      timeoutMs: 150,
-      maxOutputBytes: 1024,
-      retryCount: 0,
-      retryDelayMs: 0
-    })).rejects.toThrow("already running");
-    await first;
-  });
-
-  it("queues concurrent read executions for the same project", async () => {
-    resetAgentExecutionStateForTests();
+  it("allows concurrent Agent executions for the same project", async () => {
     let active = 0;
     let maxActive = 0;
     const adapter = delayedAdapter(() => {
@@ -275,43 +225,20 @@ describe("agent-execution.service", () => {
         active -= 1;
       };
     });
-    const first = executeAgentWithPolicy(adapter, request("plan", "run-1"), policy(1000));
-    const second = executeAgentWithPolicy(adapter, request("plan", "run-2"), policy(1000));
-    const third = executeAgentWithPolicy(adapter, request("plan", "run-3"), policy(1000));
+    const first = executeAgentWithPolicy(adapter, request("plan", "run-1"), policy());
+    const second = executeAgentWithPolicy(adapter, request("plan", "run-2"), policy());
+    const third = executeAgentWithPolicy(adapter, request("execute", "run-3"), policy());
 
     const results = await Promise.all([first, second, third]);
 
     expect(results).toHaveLength(3);
-    expect(maxActive).toBe(1);
-    expect(results.every((result) => result.status === "completed")).toBe(true);
-  });
-
-  it("allows concurrent read executions for different projects", async () => {
-    resetAgentExecutionStateForTests();
-    let active = 0;
-    let maxActive = 0;
-    const adapter = delayedAdapter(() => {
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      return () => {
-        active -= 1;
-      };
-    });
-    const first = executeAgentWithPolicy(adapter, request("plan", "run-1", "/tmp/flowweave-agent-execution-a"), policy(1000));
-    const second = executeAgentWithPolicy(adapter, request("plan", "run-2", "/tmp/flowweave-agent-execution-b"), policy(1000));
-
-    const results = await Promise.all([first, second]);
-
-    expect(results).toHaveLength(2);
-    expect(maxActive).toBe(2);
+    expect(maxActive).toBe(3);
     expect(results.every((result) => result.status === "completed")).toBe(true);
   });
 });
 
-function policy(timeoutMs = 150) {
+function policy() {
   return {
-    timeoutMs,
-    maxOutputBytes: 1024,
     retryCount: 0,
     retryDelayMs: 0
   };
@@ -329,23 +256,6 @@ function request(
     prompt: "test",
     executionMode,
     purpose: "implementation-plan"
-  };
-}
-
-function abortAwareAdapter(): ToolAdapter {
-  return {
-    id: "mock",
-    name: "Abort aware",
-    kind: "mock",
-    detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
-    runPlan: (runRequest) => new Promise((resolve) => {
-      runRequest.signal?.addEventListener("abort", () => {
-        resolve({
-          ...result(runRequest, "failed", "aborted"),
-          terminationReason: runRequest.signal?.reason === "timeout" ? "timeout" : "canceled"
-        });
-      }, { once: true });
-    })
   };
 }
 

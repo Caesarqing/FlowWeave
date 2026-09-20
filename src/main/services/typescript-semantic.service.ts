@@ -22,7 +22,7 @@ export function analyzeTypeScriptProject(
   const sourcePaths = files.filter((file) => isTypeScriptFile(file.path)).map((file) => join(configurationRoot, file.path));
   if (!loadedTypeScript || sourcePaths.length === 0) return { relations: [], symbolsByFile: new Map() };
   const ts = loadedTypeScript;
-  const options = compilerOptions(ts, workspaceRoot, configurationRoot, sourcePaths);
+  const options = compilerOptions(ts, workspaceRoot, configurationRoot);
   const program = ts.createProgram({ rootNames: sourcePaths, options });
   const checker = program.getTypeChecker();
   const relations: SemanticRelation[] = [];
@@ -82,8 +82,7 @@ export function analyzeTypeScriptProject(
 function compilerOptions(
   ts: TypeScriptApi,
   workspaceRoot: string,
-  configurationRoot: string,
-  sourcePaths: string[]
+  configurationRoot: string
 ): TypeScript.CompilerOptions {
   const workspacePaths = workspaceCompilerPaths(workspaceRoot, configurationRoot);
   const configPath = ["tsconfig.json", "jsconfig.json"]

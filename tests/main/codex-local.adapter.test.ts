@@ -82,7 +82,7 @@ describe("codex-local.adapter", () => {
     ).toContain("workspace-write");
   });
 
-  it("reports Codex exec readiness and CLI warnings", async () => {
+  it("reports Codex command and version readiness", async () => {
     const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-bin-"));
     await createNodeCliFixture(binDir, "codex", [
       "if (process.argv.includes('--version')) { console.error('could not create PATH aliases'); console.log('codex-test 1.0'); process.exit(0); }",
@@ -95,20 +95,9 @@ describe("codex-local.adapter", () => {
     ].join("\n"), process.platform);
     process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
 
-    const health = await new CodexLocalAdapter().healthCheck({ runModelProbe: true });
+    const health = await new CodexLocalAdapter().healthCheck();
 
-    expect(health.checks).toContainEqual(expect.objectContaining({
-      id: "codex-exec-flags",
-      status: "passed"
-    }));
-    expect(health.checks).toContainEqual(expect.objectContaining({
-      id: "codex-cli-warning",
-      status: "warning"
-    }));
-    expect(health.checks).toContainEqual(expect.objectContaining({
-      id: "codex-model-probe",
-      status: "passed"
-    }));
+    expect(health.checks).toContainEqual(expect.objectContaining({ id: "codex-command", status: "passed" }));
   });
 
   it("does not run Codex model probe unless explicitly requested", async () => {
@@ -128,21 +117,4 @@ describe("codex-local.adapter", () => {
     expect(health.checks.some((check) => check.id === "codex-model-probe")).toBe(false);
   });
 
-  it("fails Codex exec readiness when help output hangs", async () => {
-    const binDir = await mkdtemp(join(tmpdir(), "flowweave-codex-bin-"));
-    await createNodeCliFixture(binDir, "codex", [
-      "if (process.argv.includes('--version')) { console.log('codex-test 1.0'); process.exit(0); }",
-      "setInterval(() => undefined, 1000);"
-    ].join("\n"), process.platform);
-    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
-
-    const health = await new CodexLocalAdapter().healthCheck();
-
-    expect(health.severity).toBe("error");
-    expect(health.checks).toContainEqual(expect.objectContaining({
-      id: "codex-exec-flags",
-      status: "failed",
-      message: expect.stringContaining("timed out after 3000ms")
-    }));
-  }, 8000);
 });

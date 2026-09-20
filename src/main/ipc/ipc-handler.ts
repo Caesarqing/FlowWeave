@@ -26,7 +26,7 @@ export function normalizeIpcError(channel: string, error: unknown): FlowWeaveErr
       message: error.message,
       context: { channel, ...error.context },
       suggestedActions: error.suggestedActions,
-      technicalDetails: error.category === "canceled" ? undefined : error.technicalDetails ?? error.stack
+      technicalDetails: error.technicalDetails ?? error.stack
     };
   }
   const message = error instanceof Error ? error.message : String(error);
@@ -36,31 +36,23 @@ export function normalizeIpcError(channel: string, error: unknown): FlowWeaveErr
     category,
     message,
     context: { channel },
-    suggestedActions: suggestedActions(category, message),
+    suggestedActions: suggestedActions(category),
     technicalDetails: error instanceof Error ? error.stack : undefined
   };
 }
 
 function categorizeError(message: string): FlowWeaveErrorData["category"] {
-  if (/cancel/i.test(message)) return "canceled";
   if (/unauthori[sz]ed|escapes|traversal|sensitive|permission|checkpoint/i.test(message)) return "security";
-  if (/agent|codex|claude|gemini|cursor|cli|timeout|output limit/i.test(message)) return "agent";
+  if (/agent|codex|claude|gemini|cursor|cli/i.test(message)) return "agent";
   if (/ENOENT|EACCES|file|directory|path|read|write|artifact/i.test(message)) return "filesystem";
   if (/invalid|required|expected|must|cannot contain|exceeds/i.test(message)) return "validation";
   return "internal";
 }
 
-function suggestedActions(category: FlowWeaveErrorData["category"], message: string): string[] {
-  if (/already running|read execution|queue is full|concurrent/i.test(message)) {
-    return [
-      "Wait for the current Agent run to finish, then retry.",
-      "Open the Agent run history to check whether another plan is still running or pending."
-    ];
-  }
+function suggestedActions(category: FlowWeaveErrorData["category"]): string[] {
   if (category === "validation") return ["Review the submitted values and retry."];
   if (category === "security") return ["Verify the project path, Git state, and requested permissions before retrying."];
   if (category === "filesystem") return ["Verify the file still exists and that FlowWeave has permission to access it."];
   if (category === "agent") return ["Check the Agent installation and configuration, then retry the operation."];
-  if (category === "canceled") return ["Retry the operation when ready."];
   return ["Export diagnostics and review the technical details before retrying."];
 }

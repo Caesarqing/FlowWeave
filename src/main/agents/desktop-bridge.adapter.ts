@@ -6,7 +6,7 @@ import { resolveAppPathFromCandidates } from "./agent-command";
 import { nowIso } from "./time";
 import {
   buildAgentInboxInstruction,
-  getAgentInboxCurrentDir,
+  getAgentInboxRunDir,
   writeAgentInboxRequest
 } from "../services/agent-inbox.service";
 
@@ -16,7 +16,6 @@ export type DesktopBridgeConfig = {
   name: string;
   appPath: string;
   appPathCandidates?: string[];
-  bridgeInstructions?: string;
 };
 
 export class DesktopBridgeAdapter implements ToolAdapter {
@@ -24,13 +23,11 @@ export class DesktopBridgeAdapter implements ToolAdapter {
   name: string;
   kind = "desktop" as const;
   private appPathCandidates: string[];
-  private bridgeInstructions?: string;
 
   constructor(config: DesktopBridgeConfig) {
     this.id = config.id;
     this.name = config.name;
     this.appPathCandidates = config.appPathCandidates ?? [config.appPath];
-    this.bridgeInstructions = config.bridgeInstructions;
   }
 
   async detect() {
@@ -69,7 +66,7 @@ export class DesktopBridgeAdapter implements ToolAdapter {
       toolId: this.id,
       opened: true,
       method: "app" as const,
-      message: `Opened ${this.name}. Agent Inbox request is written under .flowweave/agent-inbox/current.`
+      message: `Opened ${this.name}. Agent Inbox requests are stored in their FlowWeave run directories.`
     };
   }
 
@@ -91,7 +88,7 @@ export class DesktopBridgeAdapter implements ToolAdapter {
         .then(() => {
           pushEvent({
             type: "stdout",
-            content: `${this.name} opened. ${buildAgentInboxInstruction(request.projectPath)}`,
+            content: `${this.name} opened. ${buildAgentInboxInstruction(request.projectPath, request.id)}`,
             timestamp: nowIso()
           });
         })
@@ -169,15 +166,13 @@ export function desktopBridgePlatformSupport(platform: NodeJS.Platform): {
 }
 
 export function getDesktopBridgeDir(projectPath: string, runId: string) {
-  void runId;
-  return getAgentInboxCurrentDir(projectPath);
+  return getAgentInboxRunDir(projectPath, runId);
 }
 
 export function buildDesktopBridgeInstructions(
   agentName: string,
   executionMode: ExecutionMode,
-  purpose: ToolRunRequest["purpose"],
-  extraInstructions?: string
+  purpose: ToolRunRequest["purpose"]
 ) {
   const baseInstructions = `# FlowWeave Agent Inbox Instructions
 
@@ -185,11 +180,9 @@ Agent: ${agentName}
 Execution mode: ${executionMode}
 Purpose: ${purpose}
 
-Read .flowweave/agent-inbox/current/request.json from the project.
+Read the run-specific .flowweave/runs/<run-id>/agent-request.json path provided by FlowWeave.
 Write exactly one response to the request responsePath.
 Use Agent Inbox protocol v2. Copy runId and projectId exactly from request.json.
 In plan mode, do not modify project source files.`;
-  return extraInstructions?.trim()
-    ? `${baseInstructions}\n\n## Agent-specific instructions\n\n${extraInstructions.trim()}\n`
-    : baseInstructions;
+  return baseInstructions;
 }

@@ -10,7 +10,7 @@ import {
 import { recordAgentRunFailure } from "../../src/main/services/agent-run.service";
 
 describe("diagnostic.service", () => {
-  it("keeps a bounded redacted diagnostic history and exports it", async () => {
+  it("keeps a bounded raw diagnostic history and exports it", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-diagnostics-"));
     for (let index = 0; index < 105; index += 1) {
       await recordDiagnostic(root, {
@@ -27,8 +27,7 @@ describe("diagnostic.service", () => {
 
     expect(history).toHaveLength(100);
     expect(history[0].code).toBe("failure-5");
-    expect(exported).not.toContain("not-a-real-openai-key");
-    expect(exported).toContain("[REDACTED]");
+    expect(exported).toContain("not-a-real-openai-key");
   });
 
   it("records failed Agent runs without persisting prompts", async () => {
@@ -55,7 +54,7 @@ describe("diagnostic.service", () => {
     const [record] = await readDiagnostics(root);
     expect(record.category).toBe("agent");
     expect(record.context).toMatchObject({ runId: "run-1", attempts: 2 });
-    expect(record.message).toContain("[REDACTED]");
+    expect(record.message).toContain("not-a-real-openai-key");
     expect(JSON.stringify(record)).not.toContain("prompt");
   });
 });

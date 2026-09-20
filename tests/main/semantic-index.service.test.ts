@@ -84,19 +84,4 @@ describe("semantic-index.service", () => {
     ]));
   });
 
-  it("does not publish a current semantic index after cancellation", async () => {
-    const root = await mkdtemp(join(tmpdir(), "flowweave-semantic-canceled-"));
-    await writeFile(join(root, "app.ts"), "export const app = true;\n", "utf8");
-    const controller = new AbortController();
-    controller.abort("test-cancel");
-
-    await expect(buildSemanticIndex(await scanProject(root), {
-      signal: controller.signal
-    })).rejects.toMatchObject({
-      code: "operation-canceled"
-    });
-    await expect(readFile(join(root, ".flowweave", "index", "semantic-index.json"), "utf8")).rejects.toMatchObject({
-      code: "ENOENT"
-    });
-  });
 });

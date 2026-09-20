@@ -426,7 +426,7 @@ export type ScanDelta = {
 };
 
 export type CodeflowCanvas = {
-  version: 1 | 2 | 3 | 4;
+  version: 4;
   generatorVersion?: string;
   inputFingerprint?: string;
   id: string;
@@ -649,7 +649,7 @@ export type SequenceDiagram = {
 };
 
 export type SequenceDiagramBundle = {
-  version: 1 | 2;
+  version: 2;
   projectName: string;
   rootPath: string;
   generatedAt: string;
@@ -694,7 +694,7 @@ export type RuntimeAgentId = AgentId | "mock";
 export type ExecutionMode = "plan" | "execute";
 export type ToolRunPurpose = "implementation-plan" | "artifact-analysis";
 export type ArtifactRunTarget = "architecture-map" | "sequence-diagrams" | "sequence-revision";
-export type AgentProtocolVersion = 1 | 2;
+export type AgentProtocolVersion = 2;
 export type AgentExpectedContentKind = "artifact-json" | "markdown-plan";
 export type ArtifactAdoptionStatus = "not-applicable" | "pending" | "late" | "applied" | "rejected" | "stale";
 export type ArtifactAdoption = {
@@ -713,7 +713,6 @@ export type AnalysisOperationStage =
   | "validating"
   | "persisting"
   | "completed"
-  | "canceled"
   | "failed";
 export type AnalysisProgressUpdate = {
   stage: AnalysisOperationStage;
@@ -735,7 +734,7 @@ export type AnalysisOperation = {
   message: string;
 };
 
-export type FlowWeaveErrorCategory = "validation" | "security" | "filesystem" | "agent" | "canceled" | "internal";
+export type FlowWeaveErrorCategory = "validation" | "security" | "filesystem" | "agent" | "internal";
 export type FlowWeaveErrorData = {
   code: string;
   category: FlowWeaveErrorCategory;
@@ -746,9 +745,7 @@ export type FlowWeaveErrorData = {
 };
 
 export type AnalysisGenerationOptions = {
-  signal?: AbortSignal;
   onProgress?: (progress: AnalysisProgressUpdate) => void;
-  planTimeoutMs?: number;
   projectId?: string;
   onArchitectureReview?: (event: ArchitectureReviewEvent) => void;
   resumeArchitectureReview?: ArchitectureReviewStatus;
@@ -919,7 +916,6 @@ export type AgentDefinition = {
   planArgs?: string[];
   executeArgs?: string[];
   appPath?: string;
-  bridgeInstructions?: string;
   capabilities?: AgentCapability[];
   description: string;
   builtIn: boolean;
@@ -974,7 +970,6 @@ export type CustomAgentInput = {
   planArgs?: string[];
   executeArgs?: string[];
   appPath?: string;
-  bridgeInstructions?: string;
   capabilities?: AgentCapability[];
   description?: string;
 };
@@ -1003,25 +998,20 @@ export type ToolRunRequest = {
   expectedContentKind?: AgentExpectedContentKind;
   pluginHint?: string;
   model?: string;
-  signal?: AbortSignal;
-  maxOutputBytes?: number;
 };
 
 export type AgentRunPolicy = {
-  timeoutMs: number;
-  maxOutputBytes: number;
   retryCount: number;
   retryDelayMs: number;
 };
 
-export type ToolRunTerminationReason = "completed" | "failed" | "timeout" | "canceled" | "output-limit";
+export type ToolRunTerminationReason = "completed" | "failed";
 export type ToolRunFailureCode =
   | "authentication"
   | "connection"
   | "model-not-found"
   | "rate-limit"
   | "provider"
-  | "timeout"
   | "invalid-output"
   | "process";
 export type ToolRunOutputSource = "stdout" | "stderr" | "error" | "last-message";
@@ -1135,24 +1125,6 @@ export type GitDiffResult = {
   };
 };
 
-export type ProjectMap = {
-  language: string;
-  framework?: string;
-  entryFiles: string[];
-  directories: Array<{ path: string; purpose: string }>;
-};
-
-export type ModuleMap = {
-  modules: Array<{
-    id: string;
-    title: string;
-    description: string;
-    files: string[];
-    dependencies: Array<{ target: string; relation: GraphEdgeRelation }>;
-    risk: GraphRisk;
-  }>;
-};
-
 export type ApiMap = {
   endpoints: Array<{
     method: string;
@@ -1160,18 +1132,6 @@ export type ApiMap = {
     handler: string;
     description?: string;
   }>;
-};
-
-export type AgentAnalysisResult = {
-  projectMap: ProjectMap;
-  moduleMap: ModuleMap;
-  apiMap?: ApiMap;
-  source: "agent" | "local";
-  agentOutput?: string;
-  graph: {
-    nodes: GraphNode[];
-    edges: GraphEdge[];
-  };
 };
 
 export type ArchitectureAnalysisResult =
@@ -1207,7 +1167,6 @@ export type FlowWeaveApi = {
   readProjectWorkspaceSession(): Promise<ProjectWorkspaceSession>;
   saveProjectWorkspaceSession(session: ProjectWorkspaceSession): Promise<void>;
   scanProject(projectId: string, options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
-  cancelOperation(operationId: string): Promise<AnalysisOperation>;
   onOperationProgress(listener: (operation: AnalysisOperation) => void): () => void;
   onArchitectureReview(listener: (event: ArchitectureReviewEvent) => void): () => void;
   onSequenceReview(listener: (event: SequenceReviewEvent) => void): () => void;
@@ -1230,14 +1189,11 @@ export type FlowWeaveApi = {
     reviewId?: string;
     model?: string;
     confirmedExecute?: boolean;
-    executeTimeoutMs?: number;
-    planTimeoutMs?: number;
   }): Promise<ToolRunResult>;
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
   applyRunArtifact(projectId: string, runId: string): Promise<ToolRunSummary>;
   openAgentInbox(projectId: string, runId: string): Promise<void>;
-  openRunBridge(projectId: string, runId: string): Promise<void>;
   openToolProject(agentId: RuntimeAgentId, projectId: string): Promise<ToolOpenResult>;
   getAgentPluginStatuses(projectId: string): Promise<AgentPluginStatus[]>;
   installAgentPlugin(projectId: string): Promise<AgentPluginStatus[]>;
@@ -1247,12 +1203,10 @@ export type FlowWeaveApi = {
   gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;
   gitCheckpoint(projectId: string): Promise<string>;
   gitRollback(projectId: string, checkpointId: string): Promise<void>;
-  analyzeProject(projectId: string, toolId: ToolId): Promise<AgentAnalysisResult>;
-  analyzeArchitecture(projectId: string, toolId: ToolId): Promise<ArchitectureAnalysisResult>;
   analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
   readArchitectureMap(projectId: string): Promise<ArchitectureMap | undefined>;
-  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId, planTimeoutMs?: number): Promise<SequenceDiagramGenerationResult>;
-  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string, planTimeoutMs?: number): Promise<SequenceDiagramBundle>;
+  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
+  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string): Promise<SequenceDiagramBundle>;
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectId: string, filePath: string): Promise<string | undefined>;
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;

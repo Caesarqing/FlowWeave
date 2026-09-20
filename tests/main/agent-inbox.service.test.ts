@@ -3,9 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  archiveAndClearAgentInbox,
-  getAgentInboxArchiveInvalidResponsePath,
-  getAgentInboxArchiveRequestPath,
   getAgentInboxRequestPath,
   getAgentInboxResponsePath,
   parseAgentInboxResponse,
@@ -15,7 +12,7 @@ import {
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 
 describe("agent-inbox.service", () => {
-  it("writes the active request to the current inbox", async () => {
+  it("writes each request into its run directory", async () => {
     const projectPath = await createProject();
 
     await writeAgentInboxRequest({
@@ -27,11 +24,11 @@ describe("agent-inbox.service", () => {
       purpose: "implementation-plan"
     }, "codex-local");
 
-    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).resolves.toContain('"protocolVersion": 2');
-    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).resolves.toContain('"responsePath"');
+    await expect(readFile(getAgentInboxRequestPath(projectPath, "run-1"), "utf8")).resolves.toContain('"protocolVersion": 2');
+    await expect(readFile(getAgentInboxRequestPath(projectPath, "run-1"), "utf8")).resolves.toContain('"responsePath"');
   });
 
-  it("rejects a second active request before the first response is imported", async () => {
+  it("keeps concurrent requests and responses isolated by run", async () => {
     const projectPath = await createProject();
 
     await writeAgentInboxRequest({
@@ -43,14 +40,17 @@ describe("agent-inbox.service", () => {
       purpose: "implementation-plan"
     }, "codex-local");
 
-    await expect(writeAgentInboxRequest({
+    const second = await writeAgentInboxRequest({
       id: "run-2",
       projectId: "project-1",
       projectPath,
       prompt: "Inspect again.",
       executionMode: "plan",
       purpose: "implementation-plan"
-    }, "codex-local")).rejects.toThrow("Agent inbox already has an active request: run-1");
+    }, "codex-local");
+    expect(second.responsePath).toBe(getAgentInboxResponsePath(projectPath, "run-2"));
+    await expect(readFile(getAgentInboxRequestPath(projectPath, "run-1"), "utf8")).resolves.toContain('"runId": "run-1"');
+    await expect(readFile(getAgentInboxRequestPath(projectPath, "run-2"), "utf8")).resolves.toContain('"runId": "run-2"');
   });
 
   it("parses string and object content responses", () => {
@@ -79,8 +79,8 @@ describe("agent-inbox.service", () => {
 
   it("validates response identity for the expected run", async () => {
     const projectPath = await createProject();
-    await mkdir(join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current"), { recursive: true });
-    await writeFile(getAgentInboxResponsePath(projectPath), JSON.stringify({
+    await mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", "run-1"), { recursive: true });
+    await writeFile(getAgentInboxResponsePath(projectPath, "run-1"), JSON.stringify({
       protocolVersion: 2,
       runId: "run-other",
       projectId: "project-1",
@@ -96,7 +96,7 @@ describe("agent-inbox.service", () => {
     })).rejects.toThrow("runId mismatch: expected run-1, received run-other");
   });
 
-  it("archives malformed response JSON as raw text and clears the current inbox", async () => {
+  it("preserves malformed responses in their run directory", async () => {
     const projectPath = await createProject();
     await writeAgentInboxRequest({
       id: "run-1",
@@ -106,13 +106,11 @@ describe("agent-inbox.service", () => {
       executionMode: "plan",
       purpose: "implementation-plan"
     }, "codex-local");
-    await writeFile(getAgentInboxResponsePath(projectPath), "{not valid json", "utf8");
+    await mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", "run-1"), { recursive: true });
+    await writeFile(getAgentInboxResponsePath(projectPath, "run-1"), "{not valid json", "utf8");
 
-    await archiveAndClearAgentInbox(projectPath, "run-1");
-
-    await expect(readFile(getAgentInboxArchiveRequestPath(projectPath, "run-1"), "utf8")).resolves.toContain('"runId": "run-1"');
-    await expect(readFile(getAgentInboxArchiveInvalidResponsePath(projectPath, "run-1"), "utf8")).resolves.toBe("{not valid json");
-    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(getAgentInboxResponsePath(projectPath, "run-1"), "utf8")).resolves.toBe("{not valid json");
+    await expect(readFile(getAgentInboxRequestPath(projectPath, "run-1"), "utf8")).resolves.toContain('"runId": "run-1"');
   });
 });
 

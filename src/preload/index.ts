@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer as electronIpcRenderer } from "electron";
 import type {
-  AgentAnalysisResult,
   AgentPluginHostId,
   AnalysisOperation,
   AgentDefinition,
@@ -30,7 +29,6 @@ import type {
 } from "../types";
 import type { StartToolPlanOptions, StartToolPlanResult } from "../main/services/agent-run.service";
 import { GIT_CHANNELS, PROJECT_CHANNELS, TOOL_CHANNELS } from "../common/ipc-channels";
-import { shouldBroadcastFlowWeaveError } from "../main/services/flowweave-error.service";
 
 const FLOWWEAVE_ERROR_PREFIX = "FLOWWEAVE_ERROR:";
 const flowweaveErrorListeners = new Set<(error: FlowWeaveErrorData) => void>();
@@ -85,12 +83,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(TOOL_CHANNELS.applyRunArtifact, projectId, runId) as Promise<ToolRunSummary>,
   openAgentInbox: (projectId: string, runId: string) =>
     ipcRenderer.invoke(TOOL_CHANNELS.openAgentInbox, projectId, runId) as Promise<void>,
-  openRunBridge: (projectId: string, runId: string) =>
-    ipcRenderer.invoke(TOOL_CHANNELS.openRunBridge, projectId, runId) as Promise<void>,
   scanProject: (projectId: string, options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.scanProject, projectId, options) as Promise<FlowWeaveProjectOpenResult>,
-  cancelOperation: (operationId: string) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.cancelOperation, operationId) as Promise<AnalysisOperation>,
   onOperationProgress: (listener: (operation: AnalysisOperation) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, operation: AnalysisOperation) => listener(operation);
     ipcRenderer.on(PROJECT_CHANNELS.operationProgress, handler);
@@ -112,18 +106,14 @@ const flowweaveApi = {
   gitCheckpoint: (projectId: string) => ipcRenderer.invoke(GIT_CHANNELS.checkpoint, projectId) as Promise<string>,
   gitRollback: (projectId: string, checkpointId: string) =>
     ipcRenderer.invoke(GIT_CHANNELS.rollback, projectId, checkpointId) as Promise<void>,
-  analyzeProject: (projectId: string, toolId: ToolId) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.analyzeProject, projectId, toolId) as Promise<AgentAnalysisResult>,
-  analyzeArchitecture: (projectId: string, toolId: ToolId) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.analyzeArchitecture, projectId, toolId) as Promise<ArchitectureAnalysisResult>,
   analyzeArchitectureWithAgent: (projectId: string, agentId: AgentId | "mock") =>
     ipcRenderer.invoke(PROJECT_CHANNELS.analyzeArchitectureWithAgent, projectId, agentId) as Promise<ArchitectureAnalysisResult>,
   readArchitectureMap: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readArchitectureMap, projectId) as Promise<ArchitectureMap | undefined>,
-  generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock", planTimeoutMs?: number) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId, planTimeoutMs) as Promise<SequenceDiagramGenerationResult>,
-  reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string, planTimeoutMs?: number) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction, planTimeoutMs) as Promise<SequenceDiagramBundle>,
+  generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock") =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId) as Promise<SequenceDiagramGenerationResult>,
+  reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction) as Promise<SequenceDiagramBundle>,
   readSequenceDiagrams: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readSequenceDiagrams, projectId) as Promise<SequenceDiagramBundle | undefined>,
   readProjectFile: (projectId: string, filePath: string) =>
@@ -171,9 +161,7 @@ async function invokeFlowWeave(channel: string, ...args: unknown[]): Promise<unk
   } catch (error) {
     const data = parseFlowWeaveError(error);
     if (!data) throw error;
-    if (shouldBroadcastFlowWeaveError(data)) {
-      flowweaveErrorListeners.forEach((listener) => listener(data));
-    }
+    flowweaveErrorListeners.forEach((listener) => listener(data));
     throw new FlowWeaveClientError(data);
   }
 }

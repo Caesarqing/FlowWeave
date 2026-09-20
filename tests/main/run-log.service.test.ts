@@ -8,7 +8,6 @@ import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-l
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import { readArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
 import {
-  getAgentInboxArchiveInvalidResponsePath,
   getAgentInboxRequestPath,
   getAgentInboxResponsePath,
   writeAgentInboxRequest
@@ -93,7 +92,7 @@ describe("run-log.service", () => {
       scanFingerprint: "scan-1",
       reviewId: "review-1"
     }, "codex-desktop");
-    await writeFile(getAgentInboxResponsePath(projectPath), JSON.stringify({
+    await writeFile(getAgentInboxResponsePath(projectPath, runId), JSON.stringify({
       protocolVersion: 2,
       runId,
       projectId,
@@ -149,7 +148,7 @@ describe("run-log.service", () => {
       scanFingerprint: "scan-1",
       reviewId: "review-1"
     }, "codex-desktop");
-    await writeFile(getAgentInboxResponsePath(projectPath), "{not valid json", "utf8");
+    await writeFile(getAgentInboxResponsePath(projectPath, runId), "{not valid json", "utf8");
 
     const summaries = await listRunSummaries(projectPath);
 
@@ -161,8 +160,8 @@ describe("run-log.service", () => {
         message: expect.stringContaining("Expected property name")
       }
     });
-    await expect(readFile(getAgentInboxRequestPath(projectPath), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(readFile(getAgentInboxArchiveInvalidResponsePath(projectPath, runId), "utf8")).resolves.toBe("{not valid json");
+    await expect(readFile(getAgentInboxRequestPath(projectPath, runId), "utf8")).resolves.toContain(`"runId": "${runId}"`);
+    await expect(readFile(getAgentInboxResponsePath(projectPath, runId), "utf8")).resolves.toBe("{not valid json");
   });
 });
 

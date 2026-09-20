@@ -17,7 +17,6 @@ import { createAsyncRequestGuard } from "../utils/async-request-guard";
 export function useProjectActions({
   maxRenderedTreeRows,
   projectId,
-  projectPath,
   projectFiles,
   scanFingerprint,
   architectureReview,
@@ -37,7 +36,6 @@ export function useProjectActions({
 }: {
   maxRenderedTreeRows: number;
   projectId: string;
-  projectPath: string;
   projectFiles: ProjectFileNode[];
   scanFingerprint: string;
   architectureReview: ArchitectureReviewStatus;
@@ -70,7 +68,6 @@ export function useProjectActions({
   const { t } = useI18n();
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
   const [operation, setOperation] = useState<AnalysisOperation | null>(null);
-  const activeOperationId = useRef<string | null>(null);
   const acceptsNewProjectScan = useRef(false);
   const architectureReviewRef = useRef(architectureReview);
   const requestGuard = useRef(createAsyncRequestGuard()).current;
@@ -92,11 +89,6 @@ export function useProjectActions({
     return window.flowweave.onOperationProgress((nextOperation) => {
       if (nextOperation.kind === "sequence-analysis") return;
       if (nextOperation.projectId !== projectId && !(acceptsNewProjectScan.current && nextOperation.kind === "project-scan")) return;
-      const isTerminal =
-        nextOperation.stage === "completed" ||
-        nextOperation.stage === "failed" ||
-        nextOperation.stage === "canceled";
-      activeOperationId.current = isTerminal ? null : nextOperation.operationId;
       setOperation(nextOperation);
       setProjectStatus(t("operation.progress", {
         stage: t(`operation.stage.${nextOperation.stage}`),
@@ -263,15 +255,6 @@ export function useProjectActions({
     }
   }
 
-  async function cancelProjectOperation() {
-    const operationId = activeOperationId.current;
-    if (!window.flowweave || !operationId) {
-      return;
-    }
-
-    await window.flowweave.cancelOperation(operationId);
-  }
-
   async function analyzeProject(agentId: RuntimeAgentId) {
     if (!window.flowweave || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
@@ -318,7 +301,7 @@ export function useProjectActions({
     }
   }
 
-  return { openProject, restoreProject, refreshProject, analyzeProject, cancelProjectOperation, operation };
+  return { openProject, restoreProject, refreshProject, analyzeProject, operation };
 }
 
 export function shouldApplyArchitectureReviewEvent(

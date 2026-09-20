@@ -237,6 +237,9 @@ async function deriveReviewStatusFromBundle(
   if (typeof value !== "object" || value === null) {
     return { state: "missing", scanFingerprint };
   }
+  if (!("version" in value) || value.version !== 2) {
+    throw new Error(`FlowWeave sequence diagram artifact must be v2. Regenerate it: ${join(projectPath, FLOWWEAVE_DIR, "sequence-diagrams.json")}`);
+  }
   const source = "source" in value ? value.source : undefined;
   const metadata = "metadata" in value && typeof value.metadata === "object" && value.metadata !== null
     ? value.metadata

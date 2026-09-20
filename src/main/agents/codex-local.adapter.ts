@@ -1,17 +1,10 @@
-import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import type { AgentHealthCheck, AgentHealthCheckResult, ToolAdapter, ToolRunEvent, ToolRunRequest, ToolRunResult } from "./agent-adapter";
 import { nowIso } from "./time";
 import { resolveToolCommand } from "./agent-command";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { prepareCommandInvocation } from "./command-invocation";
-import { runAgentModelProbe } from "./agent-probe";
 import { runCliAgentInbox } from "./agent-inbox-runner";
-
-const execFileAsync = promisify(execFile);
-const CODEX_HEALTH_TIMEOUT_MS = 3_000;
 
 export class CodexLocalAdapter implements ToolAdapter {
   id = "codex-local" as const;
@@ -30,7 +23,7 @@ export class CodexLocalAdapter implements ToolAdapter {
     };
   }
 
-  async healthCheck(options?: { runModelProbe: boolean }): Promise<AgentHealthCheckResult> {
+  async healthCheck(): Promise<AgentHealthCheckResult> {
     const resolved = await resolveToolCommand(this.id);
     const checks: AgentHealthCheck[] = [{
       id: "codex-command",
@@ -43,28 +36,6 @@ export class CodexLocalAdapter implements ToolAdapter {
       status: resolved.version ? "passed" : resolved.installed ? "warning" : "failed",
       message: resolved.version ? `Codex CLI version ${resolved.version}.` : "Codex CLI version could not be read with --version."
     }];
-    if (resolved.commandPath) {
-      const versionWarning = await codexVersionWarning(resolved.commandPath);
-      if (versionWarning) {
-        checks.push({
-          id: "codex-cli-warning",
-          label: "Codex CLI warning",
-          status: "warning",
-          message: versionWarning
-        });
-      }
-      checks.push(...await codexExecChecks(resolved.commandPath));
-      if (options?.runModelProbe === true && !checks.some((check) => check.status === "failed")) {
-        checks.push(await runAgentModelProbe({
-          toolId: this.id,
-          commandPath: resolved.commandPath,
-          args: ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "-"],
-          stdin: "FlowWeave health check. Reply with OK only. Do not edit files.",
-          checkId: "codex-model-probe",
-          label: "Codex model probe"
-        }));
-      }
-    }
     return {
       agentId: this.id,
       severity: healthSeverity(checks),
@@ -119,61 +90,6 @@ export class CodexLocalAdapter implements ToolAdapter {
   }
 }
 
-async function codexVersionWarning(commandPath: string): Promise<string | undefined> {
-  try {
-    const result = await execCodexHealthCommand(commandPath, ["--version"]);
-    return result.stderr.trim() || undefined;
-  } catch (error) {
-    return isTimeoutError(error)
-      ? `Codex --version timed out after ${CODEX_HEALTH_TIMEOUT_MS}ms.`
-      : undefined;
-  }
-}
-
-async function codexExecChecks(commandPath: string): Promise<AgentHealthCheck[]> {
-  try {
-    const result = await execCodexHealthCommand(commandPath, ["exec", "--help"]);
-    const help = `${result.stdout}\n${result.stderr}`;
-    const requiredFlags = ["--cd", "--sandbox", "--output-last-message"];
-    const missing = requiredFlags.filter((flag) => !help.includes(flag));
-    const checks: AgentHealthCheck[] = [{
-      id: "codex-exec-flags",
-      label: "Codex exec flags",
-      status: missing.length === 0 && /stdin/i.test(help) ? "passed" : "failed",
-      message: missing.length === 0
-        ? "Codex exec supports FlowWeave non-interactive flags and stdin prompts."
-        : `Codex exec is missing required flags: ${missing.join(", ")}.`
-    }];
-    if (result.stderr.trim()) {
-      checks.push({
-        id: "codex-cli-warning",
-        label: "Codex CLI warning",
-        status: "warning",
-        message: result.stderr.trim()
-      });
-    }
-    return checks;
-  } catch (error) {
-    return [{
-      id: "codex-exec-flags",
-      label: "Codex exec flags",
-      status: "failed",
-      message: isTimeoutError(error)
-        ? `Codex exec --help timed out after ${CODEX_HEALTH_TIMEOUT_MS}ms.`
-        : `Codex exec --help failed: ${formatError(error)}`
-    }];
-  }
-}
-
-async function execCodexHealthCommand(commandPath: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-  const invocation = await prepareCommandInvocation(commandPath, args, process.platform);
-  const result = await execFileAsync(invocation.commandPath, invocation.args, { timeout: CODEX_HEALTH_TIMEOUT_MS });
-  return {
-    stdout: String(result.stdout ?? ""),
-    stderr: String(result.stderr ?? "")
-  };
-}
-
 function healthSeverity(checks: AgentHealthCheck[]): AgentHealthCheckResult["severity"] {
   if (checks.some((check) => check.status === "failed")) return "error";
   if (checks.some((check) => check.status === "warning")) return "warning";
@@ -188,16 +104,6 @@ function buildCodexSuggestedActions(checks: AgentHealthCheck[]): string[] {
     return ["Codex CLI is available, but warnings may affect Electron-launched runs. Inspect the warning before retrying if runs fail."];
   }
   return ["Codex CLI is ready for FlowWeave non-interactive runs."];
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isTimeoutError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const processError = error as NodeJS.ErrnoException & { killed?: boolean; signal?: NodeJS.Signals | null };
-  return processError.killed === true || processError.signal === "SIGTERM" || /timed out/i.test(error.message);
 }
 
 export function buildCodexPlanArgs({

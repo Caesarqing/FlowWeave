@@ -222,13 +222,17 @@ async function requireProjectArtifact(projectPath: string) {
 async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifacts> {
   const root = join(projectPath, FLOWWEAVE_DIR);
   const project = await readRequiredJson<CodeflowProject>(join(root, "project.json"));
-  const [canvas, architecture, sequences, fileTree, taskPaths] = await Promise.all([
-    readOptionalJson<CodeflowCanvas>(join(root, "canvas", "main.canvas.json")),
+  const canvasPath = join(root, "canvas", "main.canvas.json");
+  const sequencePath = join(root, "sequence-diagrams.json");
+  const [storedCanvas, architecture, storedSequences, fileTree, taskPaths] = await Promise.all([
+    readOptionalJson<unknown>(canvasPath),
     readOptionalJson<ArchitectureMap>(join(root, "architecture-map.json")),
-    readOptionalJson<SequenceDiagramBundle>(join(root, "sequence-diagrams.json")),
+    readOptionalJson<unknown>(sequencePath),
     readOptionalText(join(root, "context", "file-tree.md")),
     listTaskPaths(join(root, "tasks"), projectPath)
   ]);
+  const canvas = currentCanvasArtifact(storedCanvas, canvasPath);
+  const sequences = currentSequenceArtifact(storedSequences, sequencePath);
   const scanFingerprint = project.scanFingerprint;
   return {
     project,
@@ -238,6 +242,22 @@ async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifac
     fileTree,
     taskPaths
   };
+}
+
+function currentCanvasArtifact(value: unknown, filePath: string): CodeflowCanvas | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || value.version !== 4) {
+    throw new Error(`FlowWeave Canvas must be v4. Re-scan the project to rebuild it: ${filePath}`);
+  }
+  return value as CodeflowCanvas;
+}
+
+function currentSequenceArtifact(value: unknown, filePath: string): SequenceDiagramBundle | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || value.version !== 2) {
+    throw new Error(`FlowWeave sequence diagram artifact must be v2. Regenerate it: ${filePath}`);
+  }
+  return value as SequenceDiagramBundle;
 }
 
 function artifactMatchesScan(scanFingerprint: string | undefined, artifactFingerprint: string | undefined) {
@@ -259,7 +279,7 @@ function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
     "- You may modify project files when the user asks you to implement a change.",
     "- After modifying files, report the changed file paths and the verification you ran.",
     "- Ask the user to return to FlowWeave to review Git diff, refresh the project scan, or rollback when needed.",
-    "- When asked to process the FlowWeave Agent Inbox, read `.flowweave/agent-inbox/current/request.json` and write exactly one response to the request's `responsePath`.",
+    "- When asked to process the FlowWeave Agent Inbox, read the run-specific `.flowweave/runs/<run-id>/agent-request.json` path supplied by FlowWeave and write exactly one response to the request's `responsePath`.",
     "",
     ...buildAgentProtocolContextInstructions(),
     "## FlowWeave Artifacts",
@@ -339,7 +359,7 @@ function buildManagedInstructionBlock() {
     "",
     "Before analyzing or changing this project, read `.flowweave/agent-context.md`.",
     "Use it as navigation context, verify behavior against source code, and report changed files after edits.",
-    "When the user says `Use FlowWeave context to process the Agent Inbox.` or `使用 FlowWeave 上下文处理当前 Inbox`, read `.flowweave/agent-inbox/current/request.json` and write one Agent Inbox v2 response atomically to the request's responsePath.",
+    "When the user says `Use FlowWeave context to process the Agent Inbox.` or `使用 FlowWeave 上下文处理当前 Inbox`, read the run-specific `.flowweave/runs/<run-id>/agent-request.json` path supplied by FlowWeave and write one Agent Inbox v2 response atomically to the request's responsePath.",
     "For artifact-analysis requests, write `response.json` with `protocolVersion: 2`; replying only in chat does not complete the FlowWeave review.",
     "For artifact-analysis requests, `response.json.content` must be the exact structured artifact JSON requested by `request.json.prompt`, not an approval summary or markdown plan.",
     "Do not edit `.flowweave/architecture-review.json` or `.flowweave/sequence-review.json`; FlowWeave Core validates responses and updates review state.",
@@ -448,7 +468,7 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
   if (contextRoot !== projectPath) {
     return `FlowWeave Agent context root is stale: expected "${projectPath}" but found "${contextRoot ?? "unknown"}".`;
   }
-  if (!context.includes("agent-inbox/current/request.json")) {
+  if (!context.includes("runs/<run-id>/agent-request.json")) {
     return `FlowWeave Agent context is missing Agent Inbox instructions: ${contextPath}`;
   }
   for (const entry of platformEntries(projectPath, platforms)) {
@@ -459,7 +479,7 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
       return `FlowWeave managed instructions are missing from: ${entry.filePath}`;
     }
     const managedContent = content.slice(block.start, block.end);
-    if (!managedContent.includes("agent-inbox/current/request.json")) {
+    if (!managedContent.includes("runs/<run-id>/agent-request.json")) {
       return `FlowWeave managed instructions are stale in: ${entry.filePath}`;
     }
     if (entry.platform === "cursor" && !content.includes("alwaysApply: true")) {

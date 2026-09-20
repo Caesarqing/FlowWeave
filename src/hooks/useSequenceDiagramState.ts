@@ -13,7 +13,6 @@ import type {
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { useProjectStore } from "../stores/project.store";
-import { usePreferencesStore } from "../stores/preferences.store";
 
 export type SequenceDiagramState = {
   bundle?: SequenceDiagramBundle;
@@ -29,7 +28,6 @@ export type SequenceDiagramState = {
   selectedParticipant?: SequenceParticipant;
   selectedParticipantId: string;
   status: string;
-  cancelOperation: () => Promise<void>;
   generateDiagrams: (agentId?: RuntimeAgentId) => Promise<void>;
   reviseDiagram: () => Promise<void>;
   saveInstruction: () => Promise<void>;
@@ -59,7 +57,6 @@ export function useSequenceDiagramState({
   const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
   const sequenceReview = useProjectStore((state) => state.sequenceReview);
   const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
-  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
@@ -67,7 +64,6 @@ export function useSequenceDiagramState({
   const [guidanceOperation, setGuidanceOperation] = useState<"save" | "send" | "">("");
   const [status, setStatus] = useState(() => t("sequence.openProject"));
   const [isBusy, setIsBusy] = useState(false);
-  const activeOperationId = useRef<string | null>(null);
   const sequenceReviewRef = useRef(sequenceReview);
   const fileCount = useMemo(() => countFiles(files), [files]);
   const diagram = bundle?.architectural;
@@ -91,13 +87,7 @@ export function useSequenceDiagramState({
       if (operation.kind !== "sequence-analysis" || operation.projectId !== projectId) return;
       const isTerminal =
         operation.stage === "completed" ||
-        operation.stage === "failed" ||
-        operation.stage === "canceled";
-      activeOperationId.current = isTerminal ? null : operation.operationId;
-      if (operation.stage === "canceled") {
-        setStatus(t("sequence.canceled"));
-        return;
-      }
+        operation.stage === "failed";
       if (isTerminal) return;
       setStatus(t("operation.progress", {
         stage: t(`operation.stage.${operation.stage}`),
@@ -168,7 +158,7 @@ export function useSequenceDiagramState({
     setIsBusy(true);
     setStatus(t("sequence.generatingWith", { agent: runAgentId }));
     try {
-      const result = await window.flowweave.generateSequenceDiagrams(projectId, runAgentId, planTimeoutMinutes * 60_000);
+      const result = await window.flowweave.generateSequenceDiagrams(projectId, runAgentId);
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
@@ -183,12 +173,8 @@ export function useSequenceDiagramState({
       setSelectedParticipantId("");
       setStatus(generationStatusMessage(result, t));
     } catch (error) {
-      if (!isCancellationError(error)) {
-        setArtifactStatuses((current) => current ? { ...current, sequences: "failed" } : current);
-      }
-      setStatus(isCancellationError(error)
-        ? t("sequence.canceled")
-        : t("sequence.generationFailed", { error: formatErrorMessage(error) }));
+      setArtifactStatuses((current) => current ? { ...current, sequences: "failed" } : current);
+      setStatus(t("sequence.generationFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
     }
@@ -208,7 +194,7 @@ export function useSequenceDiagramState({
     setStatus(t("sequence.revising", { kind: t("structure.architectural") }));
     try {
       const sent = await persistInstruction();
-      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim(), planTimeoutMinutes * 60_000);
+      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim());
       await window.flowweave.acknowledgeModificationChanges(projectId, sent.snapshot, { kind: "sequence" });
       await window.flowweave.saveModificationDocs(projectId, instruction.trim());
       setBundle(nextBundle);
@@ -217,9 +203,7 @@ export function useSequenceDiagramState({
       setSelectedParticipantId("");
       setStatus(t("sequence.revised"));
     } catch (error) {
-      setStatus(isCancellationError(error)
-        ? t("sequence.canceled")
-        : t("sequence.revisionFailed", { error: formatErrorMessage(error) }));
+      setStatus(t("sequence.revisionFailed", { error: formatErrorMessage(error) }));
     } finally {
       setIsBusy(false);
       setGuidanceOperation("");
@@ -268,15 +252,8 @@ export function useSequenceDiagramState({
     setSelectedMessageId("");
   }
 
-  async function cancelOperation() {
-    const operationId = activeOperationId.current;
-    if (!window.flowweave || !operationId) return;
-    await window.flowweave.cancelOperation(operationId);
-  }
-
   return {
     bundle,
-    cancelOperation,
     diagram,
     fileCount,
     generateDiagrams,
@@ -317,10 +294,6 @@ function countFiles(nodes: ProjectFileNode[]): number {
 function formatErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return String(error);
-}
-
-function isCancellationError(error: unknown) {
-  return /cancel(?:ed|led)/i.test(formatErrorMessage(error));
 }
 
 export function sequenceArtifactStateFromGenerationResult(result: SequenceDiagramGenerationResult): ProjectArtifactState {

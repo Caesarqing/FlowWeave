@@ -73,14 +73,10 @@ function SettingsPanel({ onClose, projectId }: { onClose: () => void; projectId?
   const locale = usePreferencesStore((state) => state.locale);
   const reducedMotion = usePreferencesStore((state) => state.reducedMotion);
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
-  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
-  const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const setDefaultRelation = usePreferencesStore((state) => state.setDefaultRelation);
   const setLocale = usePreferencesStore((state) => state.setLocale);
   const setReducedMotion = usePreferencesStore((state) => state.setReducedMotion);
   const setScanConcurrency = usePreferencesStore((state) => state.setScanConcurrency);
-  const setPlanTimeoutMinutes = usePreferencesStore((state) => state.setPlanTimeoutMinutes);
-  const setExecuteTimeoutMinutes = usePreferencesStore((state) => state.setExecuteTimeoutMinutes);
   const { t } = useI18n();
   const [diagnosticStatus, setDiagnosticStatus] = useState("");
   const [openSections, setOpenSections] = useState({
@@ -208,32 +204,6 @@ function SettingsPanel({ onClose, projectId }: { onClose: () => void; projectId?
         </label>
       </SettingsSection>
       <SettingsSection icon={<ShieldCheck size={14} />} isOpen={openSections.agentPermissions} title={t("settings.agentPermissions")} onToggle={() => toggleSection("agentPermissions")}>
-        <label className="settings-row">
-          <span>
-            <strong>{t("settings.planTimeout")}</strong>
-            <small>{t("settings.planTimeoutHelp")}</small>
-          </span>
-          <input
-            max={30}
-            min={1}
-            type="number"
-            value={planTimeoutMinutes}
-            onChange={(event) => setPlanTimeoutMinutes(clampInteger(event.target.value, 1, 30, planTimeoutMinutes))}
-          />
-        </label>
-        <label className="settings-row">
-          <span>
-            <strong>{t("settings.executeTimeout")}</strong>
-            <small>{t("settings.executeTimeoutHelp")}</small>
-          </span>
-          <input
-            max={120}
-            min={1}
-            type="number"
-            value={executeTimeoutMinutes}
-            onChange={(event) => setExecuteTimeoutMinutes(clampInteger(event.target.value, 1, 120, executeTimeoutMinutes))}
-          />
-        </label>
         <div className="settings-row static">
           <span>
             <strong>{t("settings.executeGuard")}</strong>

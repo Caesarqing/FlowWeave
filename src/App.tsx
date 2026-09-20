@@ -140,7 +140,6 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
               maxVisibleRows={app.canvas.maxRenderedTreeRows}
               onOpenProject={app.canvas.onOpenProject}
               onRefreshProject={app.canvas.onRefreshProject}
-              onCancelOperation={app.canvas.onCancelProjectOperation}
               onTogglePath={app.canvas.onTogglePath}
               projectPath={app.canvas.projectPath}
               statusMessage={app.canvas.projectStatus}

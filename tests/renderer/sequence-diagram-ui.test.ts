@@ -117,16 +117,16 @@ describe("sequence diagram UI helpers", () => {
     })).toBe("current");
   });
 
-  it("passes the configured plan timeout into sequence agent runs", () => {
-    expect(sequenceStateSource).toContain("planTimeoutMinutes * 60_000");
-    expect(sequenceStateSource).toContain("generateSequenceDiagrams(projectId, runAgentId, planTimeoutMinutes * 60_000)");
-    expect(sequenceStateSource).toContain("reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim(), planTimeoutMinutes * 60_000)");
+  it("runs sequence Agents without a configured timeout", () => {
+    expect(sequenceStateSource).toContain("generateSequenceDiagrams(projectId, runAgentId)");
+    expect(sequenceStateSource).toContain("reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim())");
+    expect(sequenceStateSource).not.toContain("planTimeoutMinutes");
   });
 });
 
 function bundleFixture(): SequenceDiagramBundle {
   return {
-    version: 1,
+    version: 2,
     projectName: "Checkout",
     rootPath: "/tmp/checkout",
     generatedAt: "2026-05-31T00:00:00.000Z",

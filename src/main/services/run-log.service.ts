@@ -6,7 +6,7 @@ import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
 import { adoptArtifactRun } from "./artifact-run-adoption.service";
 import { writeArchitectureReviewStatus } from "./architecture-review.service";
 import { writeSequenceReviewStatus } from "./sequence-review.service";
-import { archiveAndClearAgentInbox, readAgentInboxResponseForRun } from "./agent-inbox.service";
+import { readAgentInboxResponseForRun } from "./agent-inbox.service";
 
 export type RunPaths = {
   runDir: string;
@@ -132,7 +132,6 @@ async function readRunSummary(projectPath: string, runId: string): Promise<ToolR
         };
         await reconcileImportedArtifactReview(projectPath, runId, result, artifactAdoption);
         await writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result);
-        await archiveAgentInboxBestEffort(projectPath, runId);
       }
     }
     return {
@@ -191,7 +190,6 @@ export async function importPendingAgentInboxRun(
     writeTextAtomic(join(runDir, "plan.md"), response.content),
     writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption })
   ]);
-  await archiveAgentInboxBestEffort(projectPath, runId);
   return { ...updated, artifactAdoption: adoption };
 }
 
@@ -203,16 +201,6 @@ function rejectedAdoptionForFailedImport(
     return result.artifactAdoption ?? { status: "not-applicable", message: "Run is not an artifact-analysis run." };
   }
   return { status: "rejected", message };
-}
-
-async function archiveAgentInboxBestEffort(projectPath: string, runId: string): Promise<void> {
-  await archiveAndClearAgentInbox(projectPath, runId).catch((error) => {
-    console.warn("Failed to archive Agent Inbox after run import.", {
-      projectPath,
-      runId,
-      error: formatError(error)
-    });
-  });
 }
 
 async function reconcileImportedArtifactReview(

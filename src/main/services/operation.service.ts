@@ -1,10 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AnalysisOperation, AnalysisProgressUpdate } from "../../types";
 
-type ActiveOperation = {
-  state: AnalysisOperation;
-  controller: AbortController;
-};
+type ActiveOperation = { state: AnalysisOperation };
 
 const operations = new Map<string, ActiveOperation>();
 
@@ -12,7 +9,7 @@ export function startOperation(
   kind: AnalysisOperation["kind"],
   message: string,
   projectId: string
-): { operation: AnalysisOperation; signal: AbortSignal } {
+): { operation: AnalysisOperation } {
   const timestamp = new Date().toISOString();
   const operation: AnalysisOperation = {
     operationId: `operation-${randomUUID()}`,
@@ -26,9 +23,8 @@ export function startOperation(
     updatedAt: timestamp,
     message
   };
-  const controller = new AbortController();
-  operations.set(operation.operationId, { state: operation, controller });
-  return { operation, signal: controller.signal };
+  operations.set(operation.operationId, { state: operation });
+  return { operation };
 }
 
 export function updateOperation(
@@ -39,18 +35,6 @@ export function updateOperation(
   const state = { ...active.state, ...update, updatedAt: new Date().toISOString() };
   operations.set(operationId, { ...active, state });
   return state;
-}
-
-export function cancelOperation(operationId: string): AnalysisOperation {
-  const active = requireOperation(operationId);
-  active.controller.abort("user-canceled");
-  return updateOperation(operationId, {
-    stage: "canceled",
-    completed: active.state.completed,
-    total: active.state.total,
-    failed: active.state.failed,
-    message: "Operation canceled by user."
-  });
 }
 
 export function finishOperation(operationId: string): void {

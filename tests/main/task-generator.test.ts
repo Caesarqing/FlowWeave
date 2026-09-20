@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { graphEdges, graphNodes } from "../../src/data";
+import { graphEdges, graphNodes } from "./graph.fixture";
 import {
   createCanvasArtifact,
   createTaskArtifact,
@@ -42,7 +42,7 @@ describe("task-generator.service", () => {
     expect(task.inputFingerprint).toBe("scan-1");
     expect(task.artifactState).toBe("current");
     expect(task.modules.every((module) => module.kind)).toBe(true);
-    expect(task.relations.some((relation) => relation.relation === "reads_writes")).toBe(true);
+    expect(task.relations.some((relation) => relation.relation === "tests")).toBe(true);
     expect(markdown).toContain("### User API");
     expect(markdown).toContain("apps/api/src/user/user.controller.ts");
     expect(markdown).toContain("## Module Relations");

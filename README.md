@@ -67,8 +67,8 @@ FlowWeave includes built-in adapters for:
 
 | Agent | Protocol | Notes |
 | --- | --- | --- |
-| Claude Code CLI | Agent Inbox | Runs Claude Code in plan mode and imports `.flowweave/agent-inbox/current/response.json`. |
-| Claude Desktop | Agent Inbox | Opens Claude Desktop and waits for the same inbox response file. |
+| Claude Code CLI | Agent Inbox | Runs Claude Code in plan mode and imports its run-specific Agent Inbox response. |
+| Claude Desktop | Agent Inbox | Opens Claude Desktop and waits for that run's Agent Inbox response. |
 | Codex CLI | Agent Inbox | Runs `codex exec --sandbox read-only` and imports the inbox response. |
 | Codex Desktop | Agent Inbox | Opens Codex Desktop and waits for the inbox response. |
 | Gemini CLI | Agent Inbox | Runs Gemini CLI and imports the inbox response. |
@@ -107,8 +107,6 @@ FlowWeave persists project-specific state in a `.flowweave/` directory inside th
 ├── project.json
 ├── architecture-map.json
 ├── sequence-diagrams.json
-├── file-insights.json
-├── module-map.json
 ├── semantic-index/
 ├── canvas/main.canvas.json
 ├── context/file-tree.md
@@ -143,7 +141,7 @@ FlowWeave persists project-specific state in a `.flowweave/` directory inside th
 │   ├── stores/        # Zustand stores
 │   ├── utils/         # Graph, i18n, sequence, and UI helpers
 │   └── common/        # Shared IPC channel definitions
-├── flowweave-plugin/  # Built-in Agent Protocol v1 bridge package
+├── flowweave-plugin/  # Built-in Agent Protocol v2 bridge package
 ├── logo/              # App icons and README branding assets
 ├── scripts/           # Build, smoke, benchmark, and asset checks
 └── tests/             # Main-process and renderer tests
@@ -224,7 +222,7 @@ There are also internal CLI entry points under `src/main/cli/` for project scann
 
 ## Agent Plugin Inbox
 
-The bundled plugin package lives in `flowweave-plugin/` and defines FlowWeave Agent Protocol v1. From the Agent workspace, FlowWeave can install or refresh the project-local protocol copy and external Agent discovery files at:
+The bundled plugin package lives in `flowweave-plugin/` and defines FlowWeave Agent Protocol v2. From the Agent workspace, FlowWeave can install or refresh the project-local protocol copy and external Agent discovery files at:
 
 ```txt
 .flowweave/agent-plugins/flowweave/
@@ -242,7 +240,7 @@ claude plugin marketplace add .
 claude plugin install flowweave@flowweave-local --scope user
 ```
 
-Agents read the active request from `.flowweave/agent-inbox/current/request.json`, process it in plan or execute mode, and atomically write `response.json` to the request's `responsePath`. FlowWeave imports and validates that response before updating review state.
+Agents read the run-specific request from `.flowweave/runs/<run-id>/agent-request.json`, process it in plan or execute mode, and atomically write `agent-response.json` to the request's `responsePath`. FlowWeave imports and validates that response before updating review state.
 
 ## Generated Artifacts
 
@@ -253,7 +251,7 @@ When FlowWeave opens a project, it may create local artifacts such as:
 - sequence diagram bundles;
 - document drafts and task specs;
 - agent prompts, logs, plans, and results;
-- Git checkpoint markers and bridge request files.
+- Git checkpoint markers and Agent Inbox request files.
 
 These artifacts are meant to be reviewable and reproducible. Keep them local unless you intentionally want to share a specific FlowWeave analysis snapshot.
 
@@ -263,7 +261,7 @@ FlowWeave is designed as a local, review-first tool:
 
 - Project scans ignore common dependency, build, cache, secret, key, and credential paths.
 - Custom agent commands and arguments are validated before saving.
-- Agent prompts and logs are redacted for sensitive text before being stored.
+- Agent prompts and logs are stored as raw local records for review and diagnostics.
 - Plan mode adds explicit dry-run instructions and does not ask agents to edit files.
 - Execute mode requires explicit confirmation and creates a Git checkpoint.
 - Artifact reads are restricted to known `.flowweave/runs/<run-id>/` files.

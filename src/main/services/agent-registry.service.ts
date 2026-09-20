@@ -38,7 +38,7 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     pluginId: "flowweave",
     installTarget: "Claude skills/plugins directory",
     command: "/Applications/Claude.app",
-    args: [".flowweave/agent-inbox/current"],
+    args: [".flowweave/runs/<run-id>"],
     appPath: "/Applications/Claude.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Claude 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
@@ -71,7 +71,7 @@ const BUILT_IN_AGENTS: AgentDefinition[] = [
     pluginId: "flowweave",
     installTarget: "Codex skills/plugins directory",
     command: "/Applications/ChatGPT.app",
-    args: [".flowweave/agent-inbox/current"],
+    args: [".flowweave/runs/<run-id>"],
     appPath: "/Applications/ChatGPT.app",
     capabilities: ["artifact-analysis", "implementation-plan"],
     description: "检测并打开 Codex 桌面端，通过项目内文件系统桥接请求等待桌面端回写计划。",
@@ -156,7 +156,6 @@ export async function saveCustomAgent(input: CustomAgentInput): Promise<AgentDef
     planArgs: input.planArgs ?? [],
     executeArgs: input.executeArgs ?? [],
     appPath: isDesktop ? commandPath : undefined,
-    bridgeInstructions: input.bridgeInstructions?.trim() || undefined,
     capabilities,
     description: input.description?.trim() || (isDesktop ? "Custom Desktop Agent" : "Custom CLI Agent"),
     builtIn: false,
@@ -257,8 +256,7 @@ export function createAdapterFromDefinition(definition: AgentDefinition): ToolAd
     return new DesktopBridgeAdapter({
       id: definition.id,
       name: definition.name,
-      appPath: definition.appPath ?? definition.command,
-      bridgeInstructions: definition.bridgeInstructions
+      appPath: definition.appPath ?? definition.command
     });
   }
   return new CustomCliAdapter(definition);

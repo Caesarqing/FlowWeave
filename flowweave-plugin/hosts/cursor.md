@@ -2,4 +2,4 @@
 
 Cursor is treated as a manual Agent Inbox host.
 
-Open the project, read `.flowweave/agent-context.md`, read `.flowweave/agent-inbox/current/request.json`, and write Agent Inbox v2 `response.json` to the request's `responsePath`.
+Open the project, read `.flowweave/agent-context.md`, read the run-specific `.flowweave/runs/<run-id>/agent-request.json` path provided by FlowWeave, and write Agent Inbox v2 `agent-response.json` to the request's `responsePath`.

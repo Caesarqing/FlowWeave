@@ -149,7 +149,7 @@ async function createProject() {
 
 function createCanvas(projectPath: string, title: string): CodeflowCanvas {
   return {
-    version: 1,
+    version: 4,
     id: "main",
     title: "Main Canvas",
     projectPath,

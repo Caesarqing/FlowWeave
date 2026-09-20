@@ -68,7 +68,7 @@ describe("project-registry.service", () => {
     ]);
   });
 
-  it("deduplicates persisted projects with the same path and remaps workspace session references", async () => {
+  it("reads current registry entries without deduplicating persisted state", async () => {
     const appDataPath = await mkdtemp(join(tmpdir(), "flowweave-project-registry-duplicate-path-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-project-registry-duplicate-"));
     const keptProjectId = "project-00000000-0000-4000-8000-000000000002";
@@ -109,15 +109,13 @@ describe("project-registry.service", () => {
     }), "utf8");
 
     await expect(configureProjectRegistry(appDataPath)).resolves.toBeUndefined();
-    await expect(listRegisteredProjects()).resolves.toEqual([
-      expect.objectContaining({ id: keptProjectId, path: projectPath })
-    ]);
+    await expect(listRegisteredProjects()).resolves.toHaveLength(2);
     await expect(readProjectWorkspaceSession()).resolves.toMatchObject({
-      openProjectIds: [keptProjectId],
-      activeProjectId: keptProjectId,
-      lastPageByProject: { [keptProjectId]: "tools" },
+      openProjectIds: [droppedProjectId],
+      activeProjectId: droppedProjectId,
+      lastPageByProject: { [droppedProjectId]: "tools" },
       contextsByProject: {
-        [keptProjectId]: expect.objectContaining({ selectedAgentId: "claude-code" })
+        [droppedProjectId]: expect.objectContaining({ selectedAgentId: "claude-code" })
       }
     });
   });

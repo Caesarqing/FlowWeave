@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readOptionalProjectTextFile, requireProjectWorkspaceSession } from "../../src/main/ipc/project.ipc";
+import { readOptionalProjectTextFile, requireCanvasV4, requireProjectWorkspaceSession } from "../../src/main/ipc/project.ipc";
 
 describe("project ipc document reads", () => {
   it("returns undefined for missing FlowWeave docs files", async () => {
@@ -46,5 +46,13 @@ describe("project ipc document reads", () => {
       openProjectIds: [],
       lastPageByProject: { "project-00000000-0000-0000-0000-000000000000": "unknown" }
     })).toThrow("lastPageByProject");
+  });
+
+  it("accepts Canvas v4 and rejects Canvas v3 at the IPC boundary", () => {
+    const canvas = { version: 4, nodes: [], edges: [] };
+
+    expect(requireCanvasV4("project:save-canvas", canvas)).toBe(canvas);
+    expect(() => requireCanvasV4("project:save-canvas", { ...canvas, version: 3 }))
+      .toThrow("current v4 Canvas. Re-scan the project");
   });
 });

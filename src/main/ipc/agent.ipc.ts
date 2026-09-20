@@ -4,10 +4,10 @@ import type { AgentCapability, AgentId, AgentPluginHostId, AgentProtocol, Custom
 import { deleteAgent, detectAgent, detectTool, healthCheckAgent, listAgents, openToolProject, saveAgent, startToolPlan, type StartToolPlanOptions } from "../services/agent-run.service";
 import { applyRunArtifact, listRunSummaries, readRunArtifact } from "../services/run-log.service";
 import { resolveProjectFile, resolveProjectPath } from "../services/project-registry.service";
-import { getAgentInboxCurrentDir } from "../services/agent-inbox.service";
+import { getAgentInboxRunDir } from "../services/agent-inbox.service";
 import { getBuiltInAgentPluginStatuses, installBuiltInAgentPlugin, resolveAgentPluginInstructionPath } from "../services/agent-plugin.service";
 import { discoverAgents } from "../services/agent-discovery.service";
-import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
+import { requireBoolean, requireBoundedString, requireEnum, requireObject, requireString, requireStringArray } from "./ipc-validation";
 import { handleIpc } from "./ipc-handler";
 
 export function registerAgentIpc() {
@@ -41,9 +41,6 @@ export function registerAgentIpc() {
       appPath: value.appPath === undefined
         ? undefined
         : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.appPath, "appPath", 2048),
-      bridgeInstructions: value.bridgeInstructions === undefined
-        ? undefined
-        : requireBoundedString(TOOL_CHANNELS.saveCustomAgent, value.bridgeInstructions, "bridgeInstructions", 4000),
       capabilities: value.capabilities === undefined
         ? undefined
         : requireCapabilityArray(value.capabilities),
@@ -101,13 +98,7 @@ export function registerAgentIpc() {
         : requireBoundedString(TOOL_CHANNELS.runPlan, options.model, "model", 200),
       confirmedExecute: options.executionMode === "execute"
         ? requireBoolean(TOOL_CHANNELS.runPlan, options.confirmedExecute, "confirmedExecute")
-        : false,
-      executeTimeoutMs: options.executionMode === "execute"
-        ? requireInteger(TOOL_CHANNELS.runPlan, options.executeTimeoutMs, "executeTimeoutMs", 60_000, 7_200_000)
-        : undefined,
-      planTimeoutMs: options.executionMode === "plan" && options.planTimeoutMs !== undefined
-        ? requireInteger(TOOL_CHANNELS.runPlan, options.planTimeoutMs, "planTimeoutMs", 60_000, 1_800_000)
-        : undefined
+        : false
     });
   });
 
@@ -131,17 +122,13 @@ export function registerAgentIpc() {
 
   const openAgentInbox = async (channel: string, projectId: unknown, runId: unknown) => {
     const projectPath = resolveProjectPath(requireString(channel, projectId, "projectId"));
-    requireRunId(channel, runId);
-    const error = await shell.openPath(getAgentInboxCurrentDir(projectPath));
+    const safeRunId = requireRunId(channel, runId);
+    const error = await shell.openPath(getAgentInboxRunDir(projectPath, safeRunId));
     if (error) throw new Error(`Opening FlowWeave Agent Inbox folder failed: ${error}`);
   };
 
   handleIpc(TOOL_CHANNELS.openAgentInbox, async (_event, projectId: unknown, runId: unknown) => {
     await openAgentInbox(TOOL_CHANNELS.openAgentInbox, projectId, runId);
-  });
-
-  handleIpc(TOOL_CHANNELS.openRunBridge, async (_event, projectId: unknown, runId: unknown) => {
-    await openAgentInbox(TOOL_CHANNELS.openRunBridge, projectId, runId);
   });
 
   handleIpc(TOOL_CHANNELS.openProject, async (_event, toolId: unknown, projectId: unknown) => {
@@ -188,9 +175,9 @@ function requireAgentId(channel: string, value: unknown): RuntimeAgentId {
   return requireEnum(channel, value, "agentId", ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"]);
 }
 
-function requireRunId(channel: string, value: unknown) {
+export function requireRunId(channel: string, value: unknown) {
   const runId = requireString(channel, value, "runId");
-  if (!/^run-\d+$/.test(runId)) throw new Error(`[${channel}] Invalid "runId".`);
+  if (!/^run-[a-f0-9-]{36}$/i.test(runId)) throw new Error(`[${channel}] Invalid "runId".`);
   return runId;
 }
 

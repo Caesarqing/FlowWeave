@@ -183,6 +183,20 @@ describe("agent-plugin.service", () => {
     expect(statuses[0]?.message).toContain("version mismatch");
   });
 
+  it.each([
+    ["missing", undefined],
+    ["v1", 1]
+  ])("rejects installed plugin manifests with %s protocolVersion", async (_label, protocolVersion) => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const manifestPath = join(resolveProjectPluginRoot(projectPath), "manifest.json");
+    await installBuiltInAgentPlugin(projectPath);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.protocolVersion = protocolVersion;
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    await expect(getBuiltInAgentPluginStatuses(projectPath)).rejects.toThrow("requires protocolVersion 2");
+  });
+
   it("resolves host instructions from bundled resources before install and project copy after install", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
     const pluginRoot = resolveProjectPluginRoot(projectPath);

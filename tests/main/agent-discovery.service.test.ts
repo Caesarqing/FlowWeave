@@ -81,6 +81,25 @@ describe('agent-discovery.service', () => {
       detectDefinition: async () => detection(true)
     })).rejects.toThrow('Unsupported Agent protocol');
   });
+
+  it.each([
+    ['missing', undefined],
+    ['v1', 1]
+  ])('rejects connector manifests with %s protocolVersion', async (_label, protocolVersion) => {
+    const root = await mkdtemp(join(tmpdir(), 'flowweave-agent-discovery-'));
+    const manifestRoot = join(root, 'agents', 'connectors');
+    await mkdir(manifestRoot, { recursive: true });
+    await writeFile(join(manifestRoot, 'reviewer.json'), JSON.stringify({
+      ...manifest({ id: 'custom:reviewer', name: 'Reviewer', command: 'reviewer' }),
+      protocolVersion
+    }), 'utf8');
+
+    await expect(discoverAgentDefinitions({
+      builtinDefinitions: [],
+      userDataPath: root,
+      detectDefinition: async () => detection(true)
+    })).rejects.toThrow('requires protocolVersion 2');
+  });
 });
 
 function manifest(input: { id: string; name: string; command: string }): AgentDefinition {

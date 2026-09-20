@@ -14,12 +14,10 @@ import type {
   ProjectScanOptions,
   RuntimeAgentId,
   SequenceReviewEvent,
-  ToolId,
   ModificationAcknowledgementScope,
   ModificationSnapshot,
   ProjectWorkspaceSession
 } from "../../types";
-import { analyzeProject } from "../services/agent-analysis.service";
 import { analyzeArchitecture, readArchitectureMap } from "../services/architecture-analysis.service";
 import {
   isArchitectureReviewActive,
@@ -29,7 +27,6 @@ import {
   isSequenceReviewActive,
   readSequenceReviewStatus
 } from "../services/sequence-review.service";
-import { migrateCanvasToScan } from "../services/canvas-migration.service";
 import {
   disableProjectAgentConnection,
   enableProjectAgentConnection,
@@ -53,10 +50,10 @@ import { assessModules } from "../../utils/module-assessment";
 import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram } from "../services/sequence-diagram.service";
 import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { writeFlowWeaveProject, writeFlowWeaveProjectPreservingCanvas } from "../storage/flowweave-store";
+import { writeFlowWeaveProject } from "../storage/flowweave-store";
 import { writeJsonAtomic } from "../storage/artifact-store";
 import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString, requireStringArray } from "./ipc-validation";
-import { cancelOperation, finishOperation, startOperation, updateOperation } from "../services/operation.service";
+import { finishOperation, startOperation, updateOperation } from "../services/operation.service";
 import { exportDiagnostics, recordDiagnostic } from "../services/diagnostic.service";
 import { writeModificationDocs } from "../services/modification-doc.service";
 import {
@@ -102,27 +99,6 @@ export function registerProjectIpc() {
       requireScanOptions(PROJECT_CHANNELS.scanProject, options)
     ));
 
-  handleIpc(PROJECT_CHANNELS.cancelOperation, (event, operationId: unknown) => {
-    const operation = cancelOperation(requireString(PROJECT_CHANNELS.cancelOperation, operationId, "operationId"));
-    event.sender.send(PROJECT_CHANNELS.operationProgress, operation);
-    return operation;
-  });
-
-  handleIpc(PROJECT_CHANNELS.analyzeProject, async (_event, projectId: unknown, toolId: unknown) => {
-    const projectPath = resolveProjectPath(requireString(PROJECT_CHANNELS.analyzeProject, projectId, "projectId"));
-    return analyzeProject(
-      await scanProjectWithCurrentProjectArtifact(projectPath),
-      requireEnum(PROJECT_CHANNELS.analyzeProject, toolId, "toolId", TOOL_IDS) as ToolId
-    );
-  });
-
-  handleIpc(PROJECT_CHANNELS.analyzeArchitecture, (event, projectId: unknown, toolId: unknown) =>
-    analyzeArchitectureForProject(
-      requireString(PROJECT_CHANNELS.analyzeArchitecture, projectId, "projectId"),
-      requireEnum(PROJECT_CHANNELS.analyzeArchitecture, toolId, "toolId", TOOL_IDS),
-      event.sender
-    ));
-
   handleIpc(PROJECT_CHANNELS.analyzeArchitectureWithAgent, (event, projectId: unknown, agentId: unknown) =>
     analyzeArchitectureForProject(
       requireString(PROJECT_CHANNELS.analyzeArchitectureWithAgent, projectId, "projectId"),
@@ -133,24 +109,18 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.readArchitectureMap, (_event, projectId: unknown) =>
     readArchitectureMap(resolveProjectPath(requireString(PROJECT_CHANNELS.readArchitectureMap, projectId, "projectId"))));
 
-  handleIpc(PROJECT_CHANNELS.generateSequenceDiagrams, (event, projectId: unknown, agentId: unknown, planTimeoutMs: unknown) =>
+  handleIpc(PROJECT_CHANNELS.generateSequenceDiagrams, (event, projectId: unknown, agentId: unknown) =>
     generateSequenceDiagramsForProject(
       requireString(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.generateSequenceDiagrams, agentId),
-      planTimeoutMs === undefined
-        ? undefined
-        : requireInteger(PROJECT_CHANNELS.generateSequenceDiagrams, planTimeoutMs, "planTimeoutMs", 60_000, 1_800_000),
       event.sender
     ));
 
-  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown, planTimeoutMs: unknown) =>
+  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown) =>
     reviseSequenceDiagramForProject(
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.reviseSequenceDiagram, agentId),
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, instruction, "instruction"),
-      planTimeoutMs === undefined
-        ? undefined
-        : requireInteger(PROJECT_CHANNELS.reviseSequenceDiagram, planTimeoutMs, "planTimeoutMs", 60_000, 1_800_000),
       event.sender
     ));
 
@@ -193,7 +163,7 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.readModificationDelta, (_event, projectId: unknown, sequenceInstruction: unknown, canvas: unknown) => {
     const value = canvas === undefined
       ? undefined
-      : requireCanvas(PROJECT_CHANNELS.readModificationDelta, canvas);
+      : requireCanvasV4(PROJECT_CHANNELS.readModificationDelta, canvas);
     return readModificationDelta(
       resolveProjectPath(requireString(PROJECT_CHANNELS.readModificationDelta, projectId, "projectId")),
       optionalTrimmedString(
@@ -223,15 +193,12 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.saveCanvas, async (_event, projectId: unknown, canvas: unknown, options: unknown) => {
     const safeProjectId = requireString(PROJECT_CHANNELS.saveCanvas, projectId, "projectId");
     const projectPath = resolveProjectPath(safeProjectId);
-    const value = requireObject(PROJECT_CHANNELS.saveCanvas, canvas, "canvas") as Partial<CodeflowCanvas>;
+    const value = requireCanvasV4(PROJECT_CHANNELS.saveCanvas, canvas);
     const saveOptions = options === undefined
       ? { allowStaleNoop: false }
       : requireObject(PROJECT_CHANNELS.saveCanvas, options, "options") as { allowStaleNoop?: unknown };
-    if ((value.version !== 3 && value.version !== 4) || value.artifactState !== "current") {
-      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v3 can be saved.`);
-    }
-    if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
-      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Canvas nodes and edges must be arrays.`);
+    if (value.artifactState !== "current") {
+      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v4 can be saved.`);
     }
     for (const node of value.nodes) {
       const override = node.assessment?.risk.override;
@@ -286,9 +253,8 @@ async function analyzeArchitectureForProject(
   sender: WebContents
 ) {
   const projectPath = resolveProjectPath(projectId);
-  return runTrackedAnalysis("architecture-analysis", "Preparing architecture analysis.", sender, async (signal, onProgress) => {
+  return runTrackedAnalysis("architecture-analysis", "Preparing architecture analysis.", sender, async (onProgress) => {
     const result = await analyzeArchitecture(await scanProjectWithCurrentProjectArtifact(projectPath), agentId, {
-      signal,
       onProgress,
       projectId,
       onArchitectureReview: (reviewEvent) => sendArchitectureReview(sender, reviewEvent)
@@ -301,15 +267,12 @@ async function analyzeArchitectureForProject(
 async function generateSequenceDiagramsForProject(
   projectId: string,
   agentId: RuntimeAgentId,
-  planTimeoutMs: number | undefined,
   sender: WebContents
 ) {
   const projectPath = resolveProjectPath(projectId);
-  return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram analysis.", sender, async (signal, onProgress) => {
+  return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram analysis.", sender, async (onProgress) => {
     const result = await generateSequenceDiagrams(await scanProjectWithCurrentProjectArtifact(projectPath), agentId, {
-      signal,
       onProgress,
-      planTimeoutMs,
       projectId,
       onSequenceReview: (reviewEvent) => sendSequenceReview(sender, reviewEvent)
     });
@@ -338,12 +301,11 @@ async function reviseSequenceDiagramForProject(
   projectId: string,
   agentId: RuntimeAgentId,
   instruction: string,
-  planTimeoutMs: number | undefined,
   sender: WebContents
 ) {
   const projectPath = resolveProjectPath(projectId);
-  return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram revision.", sender, async (signal, onProgress) => {
-    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { signal, onProgress, planTimeoutMs });
+  return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram revision.", sender, async (onProgress) => {
+    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { onProgress });
   }, projectId, projectPath);
 }
 
@@ -365,31 +327,20 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       message: `Discovered ${total} project files.`
     }));
     const { index } = await buildSemanticIndex(project, {
-      signal: started.signal,
       onProgress: (progress) => notify(updateOperation(started.operation.operationId, progress))
     });
     const scanFingerprint = project.scanFingerprint ?? "";
     const inferredGraph = await inferGraphFromProject(project);
-    const canvasRead = await readCanvasArtifactState(projectPath);
-    const canvas = canvasRead.state === "loaded"
-      ? migrateCanvasToScan(canvasRead.canvas, projectPath, scanFingerprint, project.files)
-      : undefined;
-    const baseGraph = canvas ? { nodes: canvas.nodes, edges: canvas.edges } : inferredGraph;
     const graph = {
-      nodes: assessModules(baseGraph.nodes, baseGraph.edges, index, scanFingerprint, new Date().toISOString()),
-      edges: baseGraph.edges
+      nodes: assessModules(inferredGraph.nodes, inferredGraph.edges, index, scanFingerprint, new Date().toISOString()),
+      edges: inferredGraph.edges
     };
-    const assessedCanvas = canvas ? { ...canvas, nodes: graph.nodes, edges: graph.edges } : undefined;
-    const written = canvasRead.state === "failed"
-      ? await writeFlowWeaveProjectPreservingCanvas(projectPath, project, graph.nodes, graph.edges, scanFingerprint)
-      : await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint, assessedCanvas);
-    if (canvasRead.state !== "failed") {
-      await readModificationDelta(projectPath, "");
-    }
+    const written = await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint);
+    await readModificationDelta(projectPath, "");
     await refreshConnectionWithoutFailing(projectId, projectPath);
     const artifacts: ProjectArtifactStatuses = {
       project: "current",
-      canvas: canvasRead.state === "failed" ? "failed" : "current",
+      canvas: "current",
       task: "current",
       context: "current",
       architecture: await artifactStateForFingerprint(projectPath, "architecture-map.json", scanFingerprint),
@@ -454,23 +405,19 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       written
     };
   } catch (error) {
-    if (!started.signal.aborted) {
-      notify(updateOperation(started.operation.operationId, {
-        stage: "failed",
-        completed: 0,
-        total: 0,
-        failed: 1,
-        message: error instanceof Error ? error.message : String(error)
-      }));
-    }
-    if (!started.signal.aborted) {
-      await recordDiagnostic(projectPath, {
-        category: "scan",
-        code: "project-scan-failed",
-        message: error instanceof Error ? error.message : String(error),
-        context: { projectId }
-      });
-    }
+    notify(updateOperation(started.operation.operationId, {
+      stage: "failed",
+      completed: 0,
+      total: 0,
+      failed: 1,
+      message: error instanceof Error ? error.message : String(error)
+    }));
+    await recordDiagnostic(projectPath, {
+      category: "scan",
+      code: "project-scan-failed",
+      message: error instanceof Error ? error.message : String(error),
+      context: { projectId }
+    });
     throw error;
   } finally {
     finishOperation(started.operation.operationId);
@@ -500,7 +447,7 @@ async function runTrackedAnalysis<T>(
   kind: AnalysisOperation["kind"],
   message: string,
   sender: WebContents,
-  task: (signal: AbortSignal, onProgress: (progress: AnalysisProgressUpdate) => void) => Promise<T>,
+  task: (onProgress: (progress: AnalysisProgressUpdate) => void) => Promise<T>,
   projectId: string,
   projectPath: string
 ): Promise<T> {
@@ -510,10 +457,7 @@ async function runTrackedAnalysis<T>(
   };
   notify(started.operation);
   try {
-    const result = await task(
-      started.signal,
-      (progress) => notify(updateOperation(started.operation.operationId, progress))
-    );
+    const result = await task((progress) => notify(updateOperation(started.operation.operationId, progress)));
     notify(updateOperation(started.operation.operationId, {
       stage: "completed",
       completed: 1,
@@ -523,21 +467,19 @@ async function runTrackedAnalysis<T>(
     }));
     return result;
   } catch (error) {
-    if (!started.signal.aborted) {
-      notify(updateOperation(started.operation.operationId, {
-        stage: "failed",
-        completed: 0,
-        total: 1,
-        failed: 1,
-        message: error instanceof Error ? error.message : String(error)
-      }));
-      await recordDiagnostic(projectPath, {
-        category: "analysis",
-        code: `${kind}-failed`,
-        message: error instanceof Error ? error.message : String(error),
-        context: { kind }
-      });
-    }
+    notify(updateOperation(started.operation.operationId, {
+      stage: "failed",
+      completed: 0,
+      total: 1,
+      failed: 1,
+      message: error instanceof Error ? error.message : String(error)
+    }));
+    await recordDiagnostic(projectPath, {
+      category: "analysis",
+      code: `${kind}-failed`,
+      message: error instanceof Error ? error.message : String(error),
+      context: { kind }
+    });
     throw error;
   } finally {
     finishOperation(started.operation.operationId);
@@ -549,7 +491,9 @@ async function readCanvasArtifactState(projectPath: string): Promise<
 > {
   const path = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
   try {
-    return { state: "loaded", canvas: JSON.parse(await readFile(path, "utf8")) as CodeflowCanvas };
+    const canvas = JSON.parse(await readFile(path, "utf8")) as CodeflowCanvas;
+    if (canvas.version !== 4) throw new Error("Canvas version must be 4. Re-scan the project to rebuild it.");
+    return { state: "loaded", canvas };
   } catch (error) {
     if (isMissing(error)) return { state: "missing" };
     return { state: "failed", error: error instanceof Error ? error.message : String(error) };
@@ -584,10 +528,10 @@ function requireRuntimeAgentId(channel: string, value: unknown): RuntimeAgentId 
   return requireEnum(channel, value, "agentId", TOOL_IDS);
 }
 
-function requireCanvas(channel: string, value: unknown): CodeflowCanvas {
+export function requireCanvasV4(channel: string, value: unknown): CodeflowCanvas {
   const canvas = requireObject(channel, value, "canvas") as Partial<CodeflowCanvas>;
-  if ((canvas.version !== 3 && canvas.version !== 4) || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
-    throw new Error(`[${channel}] Canvas must be a valid v3 or v4 Canvas.`);
+  if (canvas.version !== 4 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
+    throw new Error(`[${channel}] Canvas must be a current v4 Canvas. Re-scan the project to rebuild it.`);
   }
   return canvas as CodeflowCanvas;
 }

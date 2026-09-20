@@ -13,10 +13,7 @@ const FLOWWEAVE_PLUGIN_PATH = "./plugins/flowweave";
 export async function getBuiltInAgentPluginManifest(): Promise<AgentPluginManifest> {
   const manifestPath = join(resolveBundledPluginRoot(), MANIFEST_FILE);
   const value = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;
-  if (!isAgentPluginManifest(value)) {
-    throw new Error(`Invalid FlowWeave built-in plugin manifest: ${manifestPath}`);
-  }
-  return value;
+  return parseAgentPluginManifest(value, manifestPath);
 }
 
 export async function getBuiltInAgentPluginStatuses(projectPath: string): Promise<AgentPluginStatus[]> {
@@ -126,7 +123,7 @@ async function readInstalledManifest(manifestPath: string): Promise<AgentPluginM
   const content = await readFile(manifestPath, "utf8").catch(() => undefined);
   if (!content) return undefined;
   const value = JSON.parse(content) as unknown;
-  return isAgentPluginManifest(value) ? value : undefined;
+  return parseAgentPluginManifest(value, manifestPath);
 }
 
 type ProjectPluginInstallation = {
@@ -240,6 +237,16 @@ function isAgentPluginManifest(value: unknown): value is AgentPluginManifest {
     Array.isArray(host.protocols) &&
     host.protocols.every((protocol) => protocol === "agent-inbox")
   ));
+}
+
+function parseAgentPluginManifest(value: unknown, manifestPath: string): AgentPluginManifest {
+  if (!isRecord(value) || value.protocolVersion !== 2) {
+    throw new Error(`FlowWeave plugin manifest ${manifestPath} requires protocolVersion 2; update or reinstall the plugin.`);
+  }
+  if (!isAgentPluginManifest(value)) {
+    throw new Error(`Invalid FlowWeave plugin manifest: ${manifestPath}`);
+  }
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

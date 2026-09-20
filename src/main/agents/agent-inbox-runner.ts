@@ -1,6 +1,5 @@
 import type { RuntimeAgentId, ToolRunEvent, ToolRunRequest, ToolRunResult } from "../../types";
 import {
-  archiveAndClearAgentInbox,
   buildAgentInboxInstruction,
   readAgentInboxResponseForRun,
   writeAgentInboxRequest
@@ -26,7 +25,7 @@ export async function runCliAgentInbox(
     commandPath: options.commandPath,
     args: options.args,
     request: options.request,
-    stdin: buildAgentInboxInstruction(options.request.projectPath),
+    stdin: buildAgentInboxInstruction(options.request.projectPath, options.request.id),
     lastMessagePath: options.lastMessagePath
   }, onEvent);
   const response = await readAgentInboxResponseForRun(options.request.projectPath, options.request.id, {
@@ -34,7 +33,6 @@ export async function runCliAgentInbox(
     projectId: options.request.projectId
   });
   if (response) {
-    await archiveAndClearAgentInbox(options.request.projectPath, options.request.id);
     return {
       ...processResult,
       projectId: options.request.projectId,
@@ -56,13 +54,12 @@ export async function runCliAgentInbox(
     };
   }
 
-  await archiveAndClearAgentInbox(options.request.projectPath, options.request.id);
   const timestamp = nowIso();
   const events = [
     ...processResult.events,
     {
       type: "error" as const,
-      message: `Agent did not write Agent Inbox response.json for run ${options.request.id}.`,
+      message: `Agent did not write Agent Inbox response for run ${options.request.id}.`,
       timestamp
     },
     { type: "status" as const, status: "failed" as const, timestamp }
@@ -73,7 +70,7 @@ export async function runCliAgentInbox(
     status: "failed",
     completedAt: timestamp,
     exitCode: processResult.exitCode ?? 1,
-    summary: `Agent did not write Agent Inbox response.json for run ${options.request.id}.`,
+    summary: `Agent did not write Agent Inbox response for run ${options.request.id}.`,
     events,
     terminationReason: processResult.terminationReason === "completed" ? "failed" : processResult.terminationReason
   };

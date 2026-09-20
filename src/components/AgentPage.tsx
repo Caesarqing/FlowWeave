@@ -30,7 +30,7 @@ const fallbackAgents: AgentDefinition[] = [
     name: "Claude Desktop",
     kind: "desktop",
     command: "/Applications/Claude.app",
-    args: [".flowweave/agent-inbox/current"],
+    args: [".flowweave/runs/<run-id>"],
     protocol: "agent-inbox",
     protocolVersion: 2,
     pluginId: "flowweave",
@@ -63,7 +63,7 @@ const fallbackAgents: AgentDefinition[] = [
     name: "Codex Desktop",
     kind: "desktop",
     command: "/Applications/ChatGPT.app",
-    args: [".flowweave/agent-inbox/current"],
+    args: [".flowweave/runs/<run-id>"],
     protocol: "agent-inbox",
     protocolVersion: 2,
     pluginId: "flowweave",
@@ -495,7 +495,7 @@ export function AgentPage({
                       {t("agent.applyRunArtifact")}
                     </button>
                   ) : null}
-                  {canOpenRunBridge(selectedRunArtifact.summary) ? (
+                  {canOpenAgentInbox(selectedRunArtifact.summary) ? (
                     <button className="ghost-button" type="button" onClick={onOpenAgentInbox}>
                       {t("agent.openAgentInbox")}
                     </button>
@@ -588,7 +588,6 @@ function AddAgentCard({
   const [planArgs, setPlanArgs] = useState("");
   const [executeArgs, setExecuteArgs] = useState("");
   const [appPath, setAppPath] = useState("");
-  const [bridgeInstructions, setBridgeInstructions] = useState("");
   const [artifactAnalysis, setArtifactAnalysis] = useState(true);
   const [implementationPlan, setImplementationPlan] = useState(true);
   const [execute, setExecute] = useState(false);
@@ -657,10 +656,6 @@ function AddAgentCard({
             {t("agent.appPath")}
             <input value={appPath} onChange={(event) => setAppPath(event.target.value)} placeholder="/Applications/Custom Agent.app" />
           </label>
-          <label>
-            {t("agent.bridgeInstructions")}
-            <textarea value={bridgeInstructions} onChange={(event) => setBridgeInstructions(event.target.value)} placeholder={t("agent.bridgeInstructionsPlaceholder")} />
-          </label>
         </>
       )}
       <fieldset className="agent-form-section">
@@ -703,7 +698,6 @@ function AddAgentCard({
               name: name.trim(),
               protocol: "agent-inbox",
               appPath: appPath.trim(),
-              bridgeInstructions: bridgeInstructions.trim(),
               capabilities,
               description: description.trim()
             });
@@ -714,7 +708,6 @@ function AddAgentCard({
           setPlanArgs("");
           setExecuteArgs("");
           setAppPath("");
-          setBridgeInstructions("");
           setArtifactAnalysis(true);
           setImplementationPlan(true);
           setExecute(false);
@@ -782,7 +775,7 @@ function canApplyRunArtifact(summary: ToolRunSummary) {
   return status === undefined || status === "pending" || status === "rejected";
 }
 
-function canOpenRunBridge(summary: ToolRunSummary) {
+function canOpenAgentInbox(summary: ToolRunSummary) {
   if (summary.purpose !== "artifact-analysis") return false;
   const status = summary.artifactAdoption?.status;
   return summary.status === "pending" || status === "pending" || status === "late";

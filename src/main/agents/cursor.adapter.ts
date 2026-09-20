@@ -101,7 +101,7 @@ export class CursorAdapter implements ToolAdapter {
     pushEvent({
       type: "stdout",
       content: detection.available
-        ? `Cursor opened. ${buildAgentInboxInstruction(request.projectPath)}`
+        ? `Cursor opened. ${buildAgentInboxInstruction(request.projectPath, request.id)}`
         : `Agent Inbox request written, but Cursor was not detected. ${detection.message ?? ""}`,
       timestamp: nowIso()
     });

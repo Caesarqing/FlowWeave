@@ -9,7 +9,7 @@ import {
 } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import { useMemo, useRef, useState } from "react";
-import { Focus, RefreshCcw, Search, Square, Workflow } from "lucide-react";
+import { Focus, RefreshCcw, Search, Workflow } from "lucide-react";
 import type {
   SequenceDiagram,
   SequenceMessage,
@@ -122,11 +122,6 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
           >
             {generateLabel}
           </Button>
-          {sequence.isBusy ? (
-            <Button icon={<Square size={12} />} variant="danger" onClick={() => void sequence.cancelOperation()}>
-              {t("sequence.cancel")}
-            </Button>
-          ) : null}
         </>
       )}
       className="workspace-page structure-workspace sequence-workspace"

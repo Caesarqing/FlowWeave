@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -64,6 +64,26 @@ describe("agent-registry.service", () => {
     })).rejects.toThrow("Agent executable was not found or is not executable");
   });
 
+  it("detects a custom CLI without starting its version command", async () => {
+    const configRoot = await mkdtemp(join(tmpdir(), "flowweave-agents-"));
+    const commandPath = join(configRoot, "never-exits.sh");
+    const markerPath = join(configRoot, "command-started");
+    configureAgentRegistry(configRoot);
+    await writeFile(commandPath, `#!/bin/sh\nprintf invoked > '${markerPath}'\nwhile :; do sleep 1; done\n`, "utf8");
+    await chmod(commandPath, 0o755);
+    const agent = await saveCustomAgent({
+      name: "Never exits",
+      command: commandPath
+    });
+
+    const adapter = await getAgentAdapter(agent.id);
+    const detection = await adapter.detect();
+
+    expect(detection.available).toBe(true);
+    expect(detection.version).toBeUndefined();
+    await expect(readFile(markerPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("rejects custom CLI plan runs without declared read-only capabilities", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-agents-"));
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-custom-agent-"));
@@ -78,7 +98,9 @@ describe("agent-registry.service", () => {
         "process.stdin.setEncoding('utf8');",
         "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', () => {",
-        "  const request = JSON.parse(readFileSync('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+        "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+        "  const request = JSON.parse(readFileSync(requestPath, 'utf8'));",
         "  writeFileSync(request.responsePath, JSON.stringify({",
         "    protocolVersion: 2,",
         "    runId: request.runId,",
@@ -124,7 +146,9 @@ describe("agent-registry.service", () => {
         "process.stdin.setEncoding('utf8');",
         "process.stdin.on('data', (chunk) => { input += chunk; });",
         "process.stdin.on('end', () => {",
-        "  const request = JSON.parse(readFileSync('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+        "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+        "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+        "  const request = JSON.parse(readFileSync(requestPath, 'utf8'));",
         "  writeFileSync(request.responsePath, JSON.stringify({",
         "    protocolVersion: 2,",
         "    runId: request.runId,",
@@ -171,7 +195,6 @@ describe("agent-registry.service", () => {
       name: "Local Desktop Agent",
       protocol: "agent-inbox",
       appPath: "/definitely/not/LocalAgent.app",
-      bridgeInstructions: "Return a concise response.",
       capabilities: ["artifact-analysis", "implementation-plan"],
       description: "Test desktop inbox adapter."
     });
@@ -187,7 +210,7 @@ describe("agent-registry.service", () => {
 
     expect(result.status).toBe("pending");
     expect(result.agentReadiness?.severity).toBe("warning");
-    const inboxRequestPath = join(projectPath, FLOWWEAVE_DIR, "agent-inbox", "current", "request.json");
+    const inboxRequestPath = join(projectPath, FLOWWEAVE_DIR, "runs", result.id, "agent-request.json");
     await expect(readFile(inboxRequestPath, "utf8")).resolves.toContain('"agentId": "custom:local-desktop-agent"');
   });
 });

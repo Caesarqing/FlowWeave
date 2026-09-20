@@ -12,7 +12,6 @@ import { useAgentStore } from "../stores/agents.store";
 import { useNavigationStore } from "../stores/navigation.store";
 import { useProjectStore } from "../stores/project.store";
 import { useRunsStore } from "../stores/runs.store";
-import { usePreferencesStore } from "../stores/preferences.store";
 import { useFlowWeaveState } from "./useFlowWeaveState";
 import { useModuleActions } from "./useModuleActions";
 import { useProjectActions } from "./useProjectActions";
@@ -60,8 +59,6 @@ export function useAppController({
   const selectedRunArtifact = useRunsStore((state) => state.selectedRunArtifact);
   const runArtifactTab = useRunsStore((state) => state.runArtifactTab);
   const isRunsLoading = useRunsStore((state) => state.isRunsLoading);
-  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
-  const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const setActivePage = useNavigationStore((state) => state.setActivePage);
   const setProjectLabel = useProjectStore((state) => state.setProjectLabel);
   const setProjectId = useProjectStore((state) => state.setProjectId);
@@ -115,7 +112,6 @@ export function useAppController({
   const projectActions = useProjectActions({
     maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
     projectId,
-    projectPath,
     projectFiles: flow.projectFiles,
     scanFingerprint,
     architectureReview,
@@ -367,8 +363,6 @@ export function useAppController({
         toolId: selectedAgentId,
         executionMode,
         confirmedExecute: executionMode === "execute",
-        planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
-        executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
         prompt
       });
@@ -512,7 +506,6 @@ export function useAppController({
       onOpenProject: projectActions.openProject,
       onRefreshProject: projectActions.refreshProject,
       onRestoreManualLayout: flow.restoreManualLayout,
-      onCancelProjectOperation: projectActions.cancelProjectOperation,
       onSelectEdge: flow.selectEdge,
       onSelectNode: (nodeId: string) => {
         flow.clearConnectionSelection();
@@ -527,7 +520,6 @@ export function useAppController({
       projectFiles: flow.projectFiles,
       projectPath,
       projectStatus,
-      operation: projectActions.operation,
       selectedEdge: flow.selectedEdge,
       selectedEdgeId: flow.selectedEdgeId,
       selectedNode: flow.selectedNode,

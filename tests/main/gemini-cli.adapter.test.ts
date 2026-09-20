@@ -42,7 +42,9 @@ describe("gemini-cli.adapter", () => {
       "process.stdin.on('data', (chunk) => { input += chunk; });",
       "process.stdin.on('end', async () => {",
       "  if (input.includes('Agent Inbox')) console.log('received inbox instruction');",
-      "  const request = JSON.parse(await readFile('.flowweave/agent-inbox/current/request.json', 'utf8'));",
+      "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
+      "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
+      "  const request = JSON.parse(await readFile(requestPath, 'utf8'));",
       "  await mkdir(dirname(request.responsePath), { recursive: true });",
       "  await writeFile(request.responsePath, JSON.stringify({",
       "    protocolVersion: 2,",
@@ -78,25 +80,6 @@ describe("gemini-cli.adapter", () => {
     expect(result.status).toBe("completed");
     expect(result.outputText).toContain("# Gemini Plan");
     expect(result.events.map((event) => ("content" in event ? event.content : "")).join("\n")).toContain("received inbox instruction");
-  });
-
-  it("reports Gemini model probe failures without running project writes", async () => {
-    const binDir = await mkdtemp(join(tmpdir(), "flowweave-gemini-bin-"));
-    await createNodeCliFixture(binDir, "gemini", [
-      "if (process.argv.includes('--version')) { console.log('gemini-test 1.0'); process.exit(0); }",
-      "console.error('model_not_found: no available channel for model');",
-      "process.exit(1);"
-    ].join("\n"), process.platform);
-    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
-
-    const health = await new GeminiCliAdapter().healthCheck({ runModelProbe: true });
-
-    expect(health.severity).toBe("error");
-    expect(health.checks).toContainEqual(expect.objectContaining({
-      id: "gemini-model-probe",
-      status: "failed",
-      message: expect.stringContaining("model-not-found")
-    }));
   });
 
   it("does not run Gemini model probe unless explicitly requested", async () => {

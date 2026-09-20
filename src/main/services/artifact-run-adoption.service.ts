@@ -12,7 +12,6 @@ import type {
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readJsonArtifact } from "../storage/artifact-store";
 import {
-  architectureMapToGraph,
   assessArchitectureMap,
   parseArchitectureJson,
   readArchitectureMap,
@@ -159,7 +158,7 @@ async function adoptSequenceRun(
     inputFingerprint,
     quality
   );
-  const previous = await readSequenceDiagrams(projectPath).catch(() => undefined);
+  const previous = await readSequenceDiagrams(projectPath);
   await writeSequenceDiagramBundle(projectPath, bundle, undefined);
   await writeSequenceReviewStatus(projectPath, {
     state: "reviewed",

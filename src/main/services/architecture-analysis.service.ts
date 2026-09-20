@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   ArchitectureLayer,
@@ -15,8 +16,6 @@ import type {
   GraphEdgeRelation,
   GraphNode,
   GraphNodeType,
-  ModuleMap,
-  ProjectMap,
   ProjectStructureFacts,
   RuntimeAgentId,
   StructureSymbol,
@@ -28,10 +27,9 @@ import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
 import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
-import { FlowWeaveError, throwIfAborted } from "./flowweave-error.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
-import { assessModules, unknownAssessment } from "../../utils/module-assessment";
+import { assessModules } from "../../utils/module-assessment";
 import {
   startArchitectureReview,
   writeArchitectureReviewStatus,
@@ -50,7 +48,6 @@ export async function analyzeArchitecture(
   toolId: RuntimeAgentId,
   options?: AnalysisGenerationOptions
 ): Promise<ArchitectureAnalysisResult> {
-  if (options?.signal) return analyzeArchitectureOnce(project, toolId, options);
   const flightKey = `${project.rootPath}:${toolId}`;
   const existing = architectureFlights.get(flightKey);
   if (existing) return existing;
@@ -73,11 +70,7 @@ async function analyzeArchitectureOnce(
   toolId: RuntimeAgentId,
   options: AnalysisGenerationOptions | undefined
 ): Promise<ArchitectureAnalysisResult> {
-  const { index } = await buildSemanticIndex(project, {
-    signal: options?.signal,
-    onProgress: options?.onProgress
-  });
-  throwIfAborted(options?.signal, "Architecture analysis");
+  const { index } = await buildSemanticIndex(project, { onProgress: options?.onProgress });
   const facts = semanticIndexToStructureFacts(project, index);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const inputFingerprint = await readCurrentProjectScanFingerprint(project.rootPath);
@@ -108,7 +101,6 @@ async function analyzeArchitectureOnce(
       index,
       inputFingerprint
     );
-    throwIfAborted(options?.signal, "Architecture analysis");
     await writeArchitectureArtifacts(project.rootPath, architectureMap);
     const review = {
       state: "reviewed",
@@ -122,7 +114,6 @@ async function analyzeArchitectureOnce(
     return architectureMapToResult(architectureMap, review, "mock");
   }
 
-  throwIfAborted(options?.signal, "Architecture analysis");
   await writeLocalArchitectureArtifacts(project.rootPath, localArchitecture);
   const projectId = options?.projectId ?? await registerProject(project.rootPath);
   const reviewId = options?.resumeArchitectureReview?.reviewId ?? `review-${randomUUID()}`;
@@ -147,9 +138,7 @@ async function analyzeArchitectureOnce(
       inputFingerprint,
       reviewId,
       onRunId,
-      options?.resumeArchitectureReview?.runId,
-      options?.planTimeoutMs,
-      options?.signal
+      options?.resumeArchitectureReview?.runId
     ),
     onEvent: options?.onArchitectureReview ?? (() => undefined)
   });
@@ -160,10 +149,11 @@ export async function readArchitectureMap(projectPath: string): Promise<Architec
   const architecturePath = join(projectPath, FLOWWEAVE_DIR, "architecture-map.json");
   const value = await readJsonArtifact(architecturePath);
   if (value === undefined) return undefined;
-  if (!isArchitectureMap(value)) {
-    throw new Error(`FlowWeave architecture artifact is invalid and was preserved: ${architecturePath}`);
+  const architectureMap = value as ArchitectureMap;
+  if (architectureMap.version !== 2) {
+    throw new Error(`FlowWeave architecture artifact must be v2. Regenerate it: ${architecturePath}`);
   }
-  return migrateLegacyArchitectureSource(migrateArchitectureAssessments(value));
+  return architectureMap;
 }
 
 export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
@@ -281,9 +271,7 @@ async function runArchitectureReview(
   inputFingerprint: string,
   reviewId: string,
   onRunId: (runId: string) => Promise<void>,
-  resumeRunId: string | undefined,
-  planTimeoutMs: number | undefined,
-  signal: AbortSignal | undefined
+  resumeRunId: string | undefined
 ): Promise<ArchitectureReviewRunResult> {
   try {
     const projectId = await registerProject(project.rootPath);
@@ -297,11 +285,10 @@ async function runArchitectureReview(
           purpose: "artifact-analysis",
           artifactTarget: "architecture-map",
           scanFingerprint: inputFingerprint,
-          reviewId,
-          planTimeoutMs
+          reviewId
         });
     await onRunId(firstStarted.id);
-    const firstRun = await waitForArchitectureRun(project.rootPath, firstStarted, toolId, reviewId, inputFingerprint, planTimeoutMs, signal);
+    const firstRun = await waitForArchitectureRun(project.rootPath, firstStarted);
     if (firstRun.status !== "completed") {
       return reviewFailure(toolId, "agent-failed", firstRun.failure?.message ?? firstRun.summary ?? "Agent review did not complete.", firstRun.id);
     }
@@ -337,11 +324,10 @@ async function runArchitectureReview(
       purpose: "artifact-analysis",
       artifactTarget: "architecture-map",
       scanFingerprint: inputFingerprint,
-      reviewId,
-      planTimeoutMs
+      reviewId
     });
     await onRunId(retryStarted.id);
-    const retry = await waitForArchitectureRun(project.rootPath, retryStarted, toolId, reviewId, inputFingerprint, planTimeoutMs, signal);
+    const retry = await waitForArchitectureRun(project.rootPath, retryStarted);
     if (retry.status !== "completed") {
       return reviewFailure(toolId, "agent-failed", retry.failure?.message ?? retry.summary ?? "Agent repair review did not complete.", retry.id);
     }
@@ -370,9 +356,6 @@ async function runArchitectureReview(
     });
     return { outcome: "reviewed", architectureMap, runId: retry.id };
   } catch (error) {
-    if (error instanceof FlowWeaveError && error.category === "canceled") {
-      return reviewFailure(toolId, "agent-failed", error.message, undefined);
-    }
     return reviewFailure(toolId, "agent-failed", formatError(error), undefined);
   }
 }
@@ -480,72 +463,26 @@ function normalizeDomain(value: string): string {
   return normalized || "shared";
 }
 
-export function architectureMapToProjectMap(map: ArchitectureMap): ProjectMap {
-  return {
-    language: Object.entries(languageCounts(map.files)).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown",
-    framework: map.architectureStyle,
-    entryFiles: map.modules.filter((module) => module.category === "api-boundary").flatMap((module) => module.files).slice(0, 8),
-    directories: map.modules.map((module) => ({
-      path: module.files[0] ?? module.id,
-      purpose: module.role
-    }))
-  };
-}
-
-export function architectureMapToModuleMap(map: ArchitectureMap): ModuleMap {
-  return {
-    modules: map.modules.map((module) => ({
-      id: module.id,
-      title: module.title,
-      description: module.description,
-      files: module.files,
-      dependencies: map.relationships
-        .filter((relationship) => relationship.source === module.id)
-        .map((relationship) => ({ target: relationship.target, relation: relationship.relation })),
-      risk: module.risk
-    }))
-  };
-}
-
 export async function writeArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap) {
   const root = join(projectPath, FLOWWEAVE_DIR);
+  await writeJsonAtomic(join(root, "architecture-map.json"), architectureMap);
   await Promise.all([
-    writeJsonAtomic(join(root, "architecture-map.json"), architectureMap),
-    writeJsonAtomic(join(root, "file-insights.json"), architectureMap.files),
-    writeJsonAtomic(join(root, "module-map.json"), architectureMapToModuleMap(architectureMap))
+    rm(join(root, "file-insights.json"), { force: true }),
+    rm(join(root, "module-map.json"), { force: true })
   ]);
 }
 
 async function waitForArchitectureRun(
   projectPath: string,
-  initial: ToolRunResult,
-  agentId: RuntimeAgentId,
-  reviewId: string,
-  inputFingerprint: string,
-  planTimeoutMs: number | undefined,
-  signal: AbortSignal | undefined
+  initial: ToolRunResult
 ): Promise<ToolRunResult> {
   return waitForArtifactRunResponse(projectPath, initial, {
-    softTimeoutMs: planTimeoutMs ?? 300_000,
-    signal,
-    pollIntervalMs: 1_000,
-    onLate: async (late) => {
-      await writeArchitectureReviewStatus(projectPath, {
-        state: "reviewing",
-        reviewId,
-        scanFingerprint: inputFingerprint,
-        agentId,
-        runId: initial.id,
-        startedAt: initial.startedAt,
-        softTimedOutAt: late.softTimedOutAt,
-        message: late.message
-      });
-    }
+    pollIntervalMs: 1_000
   });
 }
 
 function reviewFailure(
-  agentId: RuntimeAgentId,
+  _agentId: RuntimeAgentId,
   code: "agent-failed" | "invalid-output" | "quality-rejected" | "persistence-failed",
   message: string,
   runId: string | undefined
@@ -754,7 +691,7 @@ function inferFallbackRelationships(modules: ArchitectureModule[], facts: Projec
       const targetFile = resolveImportBySuffix(specifier, moduleByFile);
       const target = targetFile ? moduleByFile.get(targetFile) : undefined;
       if (!target || target === source) continue;
-      const relation = relationForModules(modules, source, target);
+      const relation = relationForModules(modules, target);
       const key = `${source}:${target}:${relation}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -915,19 +852,6 @@ function normalizeModule(module: Partial<ArchitectureModule>, facts: ProjectStru
   };
 }
 
-function normalizeRelationship(relationship: Partial<ArchitectureRelationship>, moduleIds: Set<string>, index: number): ArchitectureRelationship | undefined {
-  if (!relationship.source || !relationship.target || !moduleIds.has(relationship.source) || !moduleIds.has(relationship.target)) return undefined;
-  const relation = isRelation(relationship.relation) ? relationship.relation : "depends_on";
-  return {
-    id: relationship.id || `${relationship.source}-${relationship.target}-${relation}-${index}`,
-    source: relationship.source,
-    target: relationship.target,
-    relation,
-    description: relationship.description || `${relationship.source} ${relation} ${relationship.target}`,
-    evidence: normalizeEvidence(relationship.evidence, [])
-  };
-}
-
 function compactFactsForPrompt(facts: ProjectStructureFacts) {
   return {
     ...facts,
@@ -1016,7 +940,7 @@ function architectureRelationFromSemantic(kind: import("../../types").SemanticRe
   return "calls";
 }
 
-function relationForModules(modules: ArchitectureModule[], source: string, target: string): GraphEdgeRelation {
+function relationForModules(modules: ArchitectureModule[], target: string): GraphEdgeRelation {
   const targetModule = modules.find((module) => module.id === target);
   if (targetModule?.category === "data-access") return "reads_writes";
   if (targetModule?.category === "external-integration") return "external_api";
@@ -1253,29 +1177,6 @@ function isCategory(value: unknown): value is ArchitectureModuleCategory {
   );
 }
 
-function isArchitectureMap(value: unknown): value is ArchitectureMap {
-  return typeof value === "object" &&
-    value !== null &&
-    "version" in value &&
-    (value.version === 1 || value.version === 2) &&
-    "projectName" in value &&
-    typeof value.projectName === "string" &&
-    "rootPath" in value &&
-    typeof value.rootPath === "string" &&
-    "modules" in value &&
-    Array.isArray(value.modules) &&
-    "relationships" in value &&
-    Array.isArray(value.relationships) &&
-    "files" in value &&
-    Array.isArray(value.files) &&
-    "symbols" in value &&
-    Array.isArray(value.symbols);
-}
-
-function isRelation(value: unknown): value is GraphEdgeRelation {
-  return value === "depends_on" || value === "calls" || value === "reads_writes" || value === "external_api" || value === "publishes_event" || value === "subscribes_event" || value === "tests";
-}
-
 export function assessArchitectureMap(
   architectureMap: ArchitectureMap,
   index: import("../../types").SemanticIndex,
@@ -1298,67 +1199,6 @@ export function assessArchitectureMap(
   };
 }
 
-function migrateArchitectureAssessments(architectureMap: ArchitectureMap): ArchitectureMap {
-  return {
-    ...architectureMap,
-    modules: architectureMap.modules.map((module) => {
-      if (module.assessment) return module;
-      const legacyRisk = module.risk as unknown as string;
-      const risk = legacyRisk === "blocked" ? "high" : legacyRisk === "review" ? "medium" : legacyRisk === "normal" ? "low" : module.risk;
-      const assessment = unknownAssessment(architectureMap.metadata?.inputFingerprint ?? "", architectureMap.generatedAt);
-      const legacyConfidence = typeof module.confidence === "number"
-        ? Math.max(0, Math.min(100, Math.round(module.confidence * 100)))
-        : undefined;
-      return {
-        ...module,
-        risk,
-        confidence: undefined,
-        assessment: {
-          ...assessment,
-          confidence: legacyConfidence === undefined ? assessment.confidence : {
-            score: legacyConfidence,
-            level: legacyConfidence >= 80 ? "high" : legacyConfidence >= 50 ? "medium" : "low",
-            factors: [{
-              id: "legacy-confidence",
-              label: "Legacy confidence",
-              score: legacyConfidence,
-              maxScore: 100,
-              reason: "Migrated from a previous architecture artifact. Regenerate architecture to calculate evidence-backed confidence.",
-              evidence: [{ detail: "Legacy architecture confidence value" }]
-            }]
-          },
-          risk: {
-            systemLevel: risk,
-            effectiveLevel: risk,
-            factors: [{
-              id: "legacy-risk",
-              label: "Legacy risk",
-              score: risk === "high" ? 70 : risk === "medium" ? 30 : 0,
-              maxScore: 100,
-              reason: "Migrated from a previous architecture artifact. Regenerate architecture to calculate impact risk.",
-              evidence: [{ detail: "Legacy architecture risk value" }]
-            }]
-          }
-        }
-      };
-    })
-  };
-}
-
-function migrateLegacyArchitectureSource(architectureMap: ArchitectureMap): ArchitectureMap {
-  const legacySource = (architectureMap as unknown as { source?: string }).source;
-  if (legacySource !== "fallback") return architectureMap;
-  return { ...architectureMap, source: "local", metadata: undefined };
-}
-
 function stringOrUndefined(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
-}
-
-function languageCounts(files: FileInsight[]) {
-  return files.reduce<Record<string, number>>((counts, file) => {
-    if (!file.language) return counts;
-    counts[file.language] = (counts[file.language] ?? 0) + 1;
-    return counts;
-  }, {});
 }

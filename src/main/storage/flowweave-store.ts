@@ -11,20 +11,9 @@ export async function writeFlowWeaveProject(
   project: CodeflowProject,
   modules: GraphNode[],
   edges: GraphEdge[] | undefined,
-  scanFingerprint: string,
-  canvas?: CodeflowCanvas
-): Promise<CodeflowWriteResult> {
-  return writeProjectArtifacts(rootPath, project, modules, edges, scanFingerprint, { mode: "write", canvas });
-}
-
-export async function writeFlowWeaveProjectPreservingCanvas(
-  rootPath: string,
-  project: CodeflowProject,
-  modules: GraphNode[],
-  edges: GraphEdge[] | undefined,
   scanFingerprint: string
 ): Promise<CodeflowWriteResult> {
-  return writeProjectArtifacts(rootPath, project, modules, edges, scanFingerprint, { mode: "preserve" });
+  return writeProjectArtifacts(rootPath, project, modules, edges, scanFingerprint);
 }
 
 async function writeProjectArtifacts(
@@ -32,8 +21,7 @@ async function writeProjectArtifacts(
   project: CodeflowProject,
   modules: GraphNode[],
   edges: GraphEdge[] | undefined,
-  scanFingerprint: string,
-  canvasUpdate: { mode: "write"; canvas?: CodeflowCanvas } | { mode: "preserve" }
+  scanFingerprint: string
 ) {
   const flowweaveRoot = join(rootPath, FLOWWEAVE_DIR);
   const canvasDir = join(flowweaveRoot, "canvas");
@@ -45,9 +33,7 @@ async function writeProjectArtifacts(
     mkdir(contextDir, { recursive: true })
   ]);
 
-  const nextCanvas = canvasUpdate.mode === "write"
-    ? canvasUpdate.canvas ?? createCanvasArtifact(rootPath, modules, edges, scanFingerprint)
-    : undefined;
+  const nextCanvas: CodeflowCanvas = createCanvasArtifact(rootPath, modules, edges, scanFingerprint);
   const task = createTaskArtifact(modules, edges, scanFingerprint);
   const updates = [
     {
@@ -64,7 +50,7 @@ async function writeProjectArtifacts(
     { path: join(tasksDir, "current.task.json"), content: jsonText(task) },
     { path: join(contextDir, "file-tree.md"), content: createFileTreeMarkdown(project.files) }
   ];
-  if (nextCanvas) updates.splice(1, 0, { path: join(canvasDir, "main.canvas.json"), content: jsonText(nextCanvas) });
+  updates.splice(1, 0, { path: join(canvasDir, "main.canvas.json"), content: jsonText(nextCanvas) });
 
   await writeBatchAtomic(updates);
   await removeHistoricalTasks(tasksDir);

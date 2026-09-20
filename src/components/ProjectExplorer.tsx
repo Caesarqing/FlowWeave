@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileCode2, Folder, RefreshCw, Square } from "lucide-react";
+import { ChevronDown, ChevronRight, FileCode2, Folder, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 import type { ProjectFileNode, ProjectFileRow } from "../types";
 import { flattenVisibleProjectFiles } from "../utils/file-utils";
@@ -15,7 +15,6 @@ export function ProjectExplorer({
   maxVisibleRows,
   onOpenProject,
   onRefreshProject,
-  onCancelOperation,
   onTogglePath,
   projectPath,
   statusMessage
@@ -27,7 +26,6 @@ export function ProjectExplorer({
   maxVisibleRows: number;
   onOpenProject: () => void;
   onRefreshProject: () => void;
-  onCancelOperation: () => void;
   onTogglePath: (path: string) => void;
   projectPath: string;
   statusMessage: string;
@@ -55,11 +53,6 @@ export function ProjectExplorer({
           <Button disabled={isProjectLoading || !projectPath} icon={<RefreshCw size={14} />} variant="secondary" type="button" onClick={onRefreshProject}>
             {t("project.refresh")}
           </Button>
-          {isProjectLoading ? (
-            <Button icon={<Square size={12} />} variant="danger" type="button" onClick={onCancelOperation}>
-              {t("project.cancel")}
-            </Button>
-          ) : null}
         </div>
         <p className="project-status">{statusMessage}</p>
       </div>

@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
-import { redactSensitiveText } from "./sensitive-data.service";
 
 const MAX_DIAGNOSTICS = 100;
 
@@ -22,8 +21,8 @@ export async function recordDiagnostic(projectPath: string, input: DiagnosticInp
     ...input,
     id: `diagnostic-${Date.now()}-${history.length}`,
     timestamp: new Date().toISOString(),
-    message: redactSensitiveText(input.message),
-    context: redactContext(input.context)
+    message: input.message,
+    context: input.context
   };
   await writeJsonAtomic(historyPath(projectPath), [...history, record].slice(-MAX_DIAGNOSTICS));
   return record;
@@ -50,15 +49,6 @@ export async function exportDiagnostics(projectPath: string): Promise<string> {
 
 function historyPath(projectPath: string): string {
   return join(projectPath, FLOWWEAVE_DIR, "diagnostics", "history.json");
-}
-
-function redactContext(
-  context: DiagnosticInput["context"]
-): DiagnosticRecord["context"] {
-  return Object.fromEntries(Object.entries(context).map(([key, value]) => [
-    key,
-    typeof value === "string" ? redactSensitiveText(value) : value
-  ]));
 }
 
 function isDiagnosticRecord(value: unknown): value is DiagnosticRecord {

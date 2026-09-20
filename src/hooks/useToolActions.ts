@@ -1,6 +1,5 @@
 import type { AgentDefinition, AgentId, AgentPluginHostId, AgentPluginStatus, ExecutionMode, GraphEdge, GraphNode, RuntimeAgentId, ToolUiStatus } from "../types";
 import { useI18n } from "../utils/i18n";
-import { usePreferencesStore } from "../stores/preferences.store";
 import { buildAgentPrompt, buildExecutionAssessmentSummary, buildModificationContext, scopeGraphForModule } from "../utils/export-artifacts";
 
 export function useToolActions({
@@ -33,8 +32,6 @@ export function useToolActions({
   setToolStatuses: (updater: Record<string, ToolUiStatus> | ((current: Record<string, ToolUiStatus>) => Record<string, ToolUiStatus>)) => void;
 }) {
   const { t } = useI18n();
-  const planTimeoutMinutes = usePreferencesStore((state) => state.planTimeoutMinutes);
-  const executeTimeoutMinutes = usePreferencesStore((state) => state.executeTimeoutMinutes);
   const agentNames = new Map<string, string>(agents.map((agent) => [agent.id, agent.name]));
   const getAgentName = (agentId: RuntimeAgentId) => agentNames.get(agentId) ?? (agentId === "mock" ? "Mock Agent" : agentId);
 
@@ -143,8 +140,6 @@ export function useToolActions({
         toolId: agentId,
         executionMode,
         confirmedExecute: executionMode === "execute",
-        planTimeoutMs: executionMode === "plan" ? planTimeoutMinutes * 60_000 : undefined,
-        executeTimeoutMs: executionMode === "execute" ? executeTimeoutMinutes * 60_000 : undefined,
         purpose: "implementation-plan",
         prompt: buildAgentPrompt(
           buildModificationContext({
