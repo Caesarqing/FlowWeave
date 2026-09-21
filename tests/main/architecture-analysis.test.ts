@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   aggregateArchitectureRelationships,
@@ -105,6 +105,42 @@ describe("architecture-analysis.service", () => {
     if (result.outcome !== "generated") throw new Error(result.error.message);
     expect(result.architectureMap.modules).toHaveLength(moduleCount);
     expect(result.architectureMap.modules.flatMap((module) => module.files)).toHaveLength(moduleCount);
+  });
+
+  it("groups files by functional responsibility instead of the top-level source scope", async () => {
+    const root = await createModuleClusteringFiles();
+    const project = await scanProject(root);
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: project.scanFingerprint }), "utf8");
+
+    const result = await analyzeArchitecture(project, "mock");
+
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error(result.error.message);
+    const modules = result.architectureMap.modules;
+    const moduleFor = (file: string) => modules.find((module) => module.files.includes(file));
+    const billingModule = moduleFor("src/features/billing/billing.service.ts");
+    expect(billingModule).toBeDefined();
+    expect(moduleFor("src/features/billing/BillingPanel.tsx")?.id).toBe(billingModule?.id);
+    expect(moduleFor("src/features/billing/billing.ipc.ts")?.id).toBe(billingModule?.id);
+    expect(moduleFor("src/features/billing/storage/invoice.repository.ts")?.id).toBe(billingModule?.id);
+    expect(moduleFor("src/features/identity/identity.service.ts")?.id).not.toBe(billingModule?.id);
+    expect(billingModule?.id).not.toBe("features");
+    expect(moduleFor("src/integrations/stripe/stripe.adapter.ts")?.category).toBe("external-integration");
+    expect(moduleFor("tests/billing.service.test.ts")?.category).toBe("test-surface");
+    expect(moduleFor("src/shared/date.util.ts")?.category).toBe("shared-utility");
+    const unknownModule = moduleFor("src/index.ts");
+    expect(unknownModule).toMatchObject({ title: "Unknown", category: "unknown" });
+    expect(result.graph.nodes.find((node) => node.id === unknownModule?.id)).toMatchObject({
+      title: "Unknown",
+      subtitle: "Unknown",
+      category: "unknown",
+      architectureLayer: "unknown",
+      files: ["src/index.ts"]
+    });
+    expect(result.architectureMap.moduleDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "unknown-files", filePaths: ["src/index.ts"] })
+    ]));
   });
 
   it("builds an architecture prompt from structure facts", async () => {
@@ -643,6 +679,29 @@ async function createFixtureFiles() {
   await writeFile(join(root, "src/service/user.service.ts"), "export class UserService { load() { return true; } }\n", "utf8");
   await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
   await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: "scan-test" }), "utf8");
+  return root;
+}
+
+async function createModuleClusteringFiles(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "flowweave-module-clustering-"));
+  const files: Record<string, string> = {
+    "src/features/billing/BillingPanel.tsx": 'import { handleBilling } from "./billing.ipc"; export const BillingPanel = () => handleBilling();\n',
+    "src/features/billing/billing.ipc.ts": 'import { runBilling } from "./billing.service"; export const handleBilling = () => runBilling();\n',
+    "src/features/billing/billing.service.ts": 'import { InvoiceRepository } from "./storage/invoice.repository"; import { formatDate } from "../../shared/date.util"; export const runBilling = () => formatDate(new InvoiceRepository().load());\n',
+    "src/features/billing/storage/invoice.repository.ts": "export class InvoiceRepository { load() { return new Date(); } }\n",
+    "src/features/identity/IdentityPanel.tsx": 'import { runIdentity } from "./identity.service"; export const IdentityPanel = () => runIdentity();\n',
+    "src/features/identity/identity.service.ts": 'import { formatDate } from "../../shared/date.util"; export const runIdentity = () => formatDate(new Date());\n',
+    "src/features/notifications/notifications.worker.ts": 'import { formatDate } from "../../shared/date.util"; export const runNotifications = () => formatDate(new Date());\n',
+    "src/integrations/stripe/stripe.adapter.ts": "export class StripeAdapter { charge() { return true; } }\n",
+    "src/shared/date.util.ts": "export const formatDate = (value: Date) => value.toISOString();\n",
+    "src/index.ts": "export const application = true;\n",
+    "tests/billing.service.test.ts": 'import { runBilling } from "../src/features/billing/billing.service"; export const verifiesBilling = () => runBilling();\n'
+  };
+  await Promise.all(Object.entries(files).map(async ([path, content]) => {
+    const absolutePath = join(root, path);
+    await mkdir(dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, content, "utf8");
+  }));
   return root;
 }
 

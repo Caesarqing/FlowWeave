@@ -242,6 +242,22 @@ export function semanticIndexToStructureFacts(
   };
 }
 
+export function moduleClusteringRelations(index: SemanticIndex): SemanticRelation[] {
+  const moduleKinds = new Set<SemanticRelation["kind"]>(["call", "render", "database", "filesystem", "event"]);
+  return index.relations
+    .filter((relation) =>
+      relation.confidence === "confirmed" &&
+      moduleKinds.has(relation.kind) &&
+      Boolean(relation.targetFile)
+    )
+    .sort((left, right) =>
+      left.sourceFile.localeCompare(right.sourceFile) ||
+      (left.targetFile ?? "").localeCompare(right.targetFile ?? "") ||
+      left.kind.localeCompare(right.kind) ||
+      left.id.localeCompare(right.id)
+    );
+}
+
 function normalizeConcurrency(value: number | undefined): number {
   if (value === undefined) return DEFAULT_PARSE_CONCURRENCY;
   if (!Number.isInteger(value) || value < 1 || value > 32) {

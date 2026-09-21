@@ -118,7 +118,22 @@ export type ArchitectureModuleCategory =
   | "external-integration"
   | "job-worker"
   | "shared-utility"
-  | "test-surface";
+  | "test-surface"
+  | "unknown";
+
+export type ModuleIdentity = {
+  id: string;
+  anchor: string;
+  clusterFingerprint: string;
+  predecessorIds: string[];
+};
+
+export type ModuleClusteringDiagnostic = {
+  code: "unknown-files" | "oversized-module" | "lineage-split" | "lineage-merge";
+  moduleIds: string[];
+  filePaths: string[];
+  message: string;
+};
 
 export type StructureSymbolKind = "function" | "class" | "method" | "export" | "variable";
 
@@ -559,6 +574,7 @@ export type SequenceReviewEvent = {
 
 export type ArchitectureModule = {
   id: string;
+  identity?: ModuleIdentity;
   title: string;
   category: ArchitectureModuleCategory;
   nodeType: GraphNodeType;
@@ -599,6 +615,7 @@ export type ArchitectureMap = {
   metadata?: ArtifactGenerationMetadata;
   architectureStyle?: string;
   modules: ArchitectureModule[];
+  moduleDiagnostics?: ModuleClusteringDiagnostic[];
   relationships: ArchitectureRelationship[];
   files: FileInsight[];
   symbols: StructureSymbol[];

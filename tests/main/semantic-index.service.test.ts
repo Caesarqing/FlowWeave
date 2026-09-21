@@ -2,10 +2,26 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildSemanticIndex, readSemanticIndex } from "../../src/main/services/semantic-index.service";
+import { buildSemanticIndex, moduleClusteringRelations, readSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
+import type { SemanticIndex, SemanticRelation } from "../../src/types";
 
 describe("semantic-index.service", () => {
+  it("exposes only confirmed, file-resolved runtime relations for module clustering", () => {
+    const relations: SemanticRelation[] = [
+      semanticRelation("import", "import", "src/z.ts", "src/a.ts", "confirmed"),
+      semanticRelation("call-z", "call", "src/z.ts", "src/a.ts", "confirmed"),
+      semanticRelation("call-inferred", "call", "src/b.ts", "src/a.ts", "inferred"),
+      semanticRelation("test", "test", "tests/a.test.ts", "src/a.ts", "confirmed"),
+      semanticRelation("call-a", "call", "src/a.ts", "src/b.ts", "confirmed"),
+      semanticRelation("external", "http", "src/c.ts", undefined, "confirmed")
+    ];
+
+    const selected = moduleClusteringRelations({ relations } as SemanticIndex);
+
+    expect(selected.map((relation) => relation.id)).toEqual(["call-a", "call-z"]);
+  });
+
   it("persists a versioned semantic index and reuses unchanged files", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-semantic-index-"));
     await mkdir(join(root, "src"), { recursive: true });
@@ -85,3 +101,22 @@ describe("semantic-index.service", () => {
   });
 
 });
+
+function semanticRelation(
+  id: string,
+  kind: SemanticRelation["kind"],
+  sourceFile: string,
+  targetFile: string | undefined,
+  confidence: SemanticRelation["confidence"]
+): SemanticRelation {
+  return {
+    id,
+    kind,
+    source: sourceFile,
+    target: targetFile ?? "external",
+    sourceFile,
+    targetFile,
+    detail: id,
+    confidence
+  };
+}

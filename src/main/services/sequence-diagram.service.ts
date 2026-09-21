@@ -878,7 +878,8 @@ function participantKindFromCategory(category: ArchitectureMap["modules"][number
     "external-integration": "external",
     "job-worker": "worker",
     "shared-utility": "utility",
-    "test-surface": "component"
+    "test-surface": "component",
+    "unknown": "component"
   };
   return map[category];
 }
@@ -920,7 +921,8 @@ function participantPriority(category: ArchitectureMap["modules"][number]["categ
     "data-access": 3,
     "external-integration": 4,
     "shared-utility": 5,
-    "test-surface": 6
+    "test-surface": 6,
+    "unknown": 7
   };
   return priorities[category];
 }

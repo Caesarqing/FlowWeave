@@ -18,6 +18,7 @@ import type {
   GraphNodeType,
   ProjectStructureFacts,
   RuntimeAgentId,
+  SemanticRelation,
   StructureSymbol,
   TechnologyStack,
   ToolRunResult,
@@ -26,7 +27,8 @@ import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
 import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
-import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
+import { buildSemanticIndex, moduleClusteringRelations, semanticIndexToStructureFacts } from "./semantic-index.service";
+import { clusterArchitectureModules } from "./module-clustering.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { assessModules } from "../../utils/module-assessment";
@@ -44,7 +46,7 @@ import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.se
 const MAX_PROMPT_FILES = 80;
 const MAX_PROMPT_SYMBOLS_PER_FILE = 8;
 const REPRESENTATIVE_FILE_LIMIT = 40;
-const MODULE_CLUSTERING_CONFIG_VERSION = "1";
+const MODULE_CLUSTERING_CONFIG_VERSION = "2";
 const ARCHITECTURE_GENERATOR_VERSION = "1";
 const ARCHITECTURE_REVIEW_CONTRACT_VERSION = "1";
 
@@ -69,11 +71,13 @@ async function analyzeArchitectureOnce(
 ): Promise<ArchitectureAnalysisResult> {
   const { index } = await buildSemanticIndex(project, { onProgress: options?.onProgress });
   const facts = semanticIndexToStructureFacts(project, index);
+  const clusteringRelations = moduleClusteringRelations(index);
+  const previousModules = await readPreviousLocalModules(project.rootPath);
   const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const scanFingerprint = project.scanFingerprint ?? await readCurrentProjectScanFingerprint(project.rootPath);
   const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
   const prompt = buildArchitecturePrompt(representativeFacts);
-  const localArchitectureBase = createLocalArchitectureMap(project, facts, "local");
+  const localArchitectureBase = createLocalArchitectureMap(project, facts, "local", previousModules, clusteringRelations);
   const localQuality = validateArchitectureMap(localArchitectureBase, facts);
   const localArchitecture = assessArchitectureMap(
     withLocalArchitectureMetadata(localArchitectureBase, scanFingerprint, inputFingerprint, localQuality),
@@ -167,6 +171,21 @@ export async function readArchitectureMap(projectPath: string): Promise<Architec
   return architectureMap;
 }
 
+async function readPreviousLocalModules(projectPath: string): Promise<ArchitectureModule[]> {
+  const artifactPath = join(projectPath, FLOWWEAVE_DIR, "architecture-local.json");
+  const value = await readJsonArtifact(artifactPath);
+  if (value === undefined) return [];
+  if (
+    typeof value !== "object" || value === null ||
+    !("version" in value) || (value.version !== 1 && value.version !== 2) ||
+    !("source" in value) || value.source !== "local" ||
+    !("modules" in value) || !Array.isArray(value.modules)
+  ) {
+    throw new Error(`FlowWeave local architecture baseline is invalid: ${artifactPath}`);
+  }
+  return value.modules as ArchitectureModule[];
+}
+
 export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
   return `You are FlowWeave's architecture analyst. Return only JSON.
 
@@ -192,7 +211,7 @@ Return this exact JSON shape:
   "modules": [{
     "id": "stable-kebab-id",
     "title": "Human module title",
-    "category": "api-boundary|domain-service|data-access|external-integration|job-worker|shared-utility|test-surface",
+    "category": "api-boundary|domain-service|data-access|external-integration|job-worker|shared-utility|test-surface|unknown",
     "role": "one sentence role",
     "description": "one concise paragraph that explains this module's function and purpose in the project",
     "files": ["path"],
@@ -441,6 +460,7 @@ function technologyStackForModule(module: ArchitectureModule): TechnologyStack {
 }
 
 function technologyStacksForModule(module: ArchitectureModule): TechnologyStack[] {
+  if (module.category === "unknown") return ["unknown"];
   const paths = module.files.map((file) => file.toLowerCase());
   const detected: TechnologyStack[] = [];
   if (paths.some((file) => /\.(tsx|jsx|vue|svelte|css|scss|html)$/.test(file))) detected.push("frontend");
@@ -458,6 +478,7 @@ function architectureLayerForCategory(category: ArchitectureModuleCategory): Arc
   if (category === "data-access") return "data";
   if (category === "external-integration") return "integration";
   if (category === "test-surface") return "test";
+  if (category === "unknown") return "unknown";
   return "infrastructure";
 }
 
@@ -654,19 +675,21 @@ function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createLocalArchitectureMap(project: CodeflowProject, facts: ProjectStructureFacts, source: ArchitectureMap["source"]): ArchitectureMap {
-  const groups = new Map<string, FileInsight[]>();
-  for (const file of facts.files) {
-    const key = fallbackModuleId(file, facts);
-    groups.set(key, [...(groups.get(key) ?? []), file]);
-  }
-
-  const modules = [...groups.entries()].map(([id, files]): ArchitectureModule => {
-    const category = fallbackCategoryWithRelations(files, facts);
+function createLocalArchitectureMap(
+  project: CodeflowProject,
+  facts: ProjectStructureFacts,
+  source: ArchitectureMap["source"],
+  previousModules: ArchitectureModule[],
+  clusteringRelations: SemanticRelation[]
+): ArchitectureMap {
+  const clustering = clusterArchitectureModules(facts.files, clusteringRelations, previousModules);
+  const modules = clustering.modules.map((cluster): ArchitectureModule => {
+    const files = facts.files.filter((file) => cluster.files.includes(file.path));
+    const { id, identity, title, category } = cluster;
     const symbols = files.flatMap((file) => file.symbols.slice(0, 12));
-    const title = titleFromId(id);
     return {
       id,
+      identity,
       title,
       category,
       nodeType: nodeTypeFromCategory(category),
@@ -694,6 +717,7 @@ function createLocalArchitectureMap(project: CodeflowProject, facts: ProjectStru
     source,
     architectureStyle: "inferred functional architecture",
     modules,
+    moduleDiagnostics: clustering.diagnostics,
     relationships,
     files: applyModuleIds(facts.files, modules),
     symbols: modules.flatMap((module) => module.symbols)
@@ -886,20 +910,6 @@ function applyModuleIds(files: FileInsight[], modules: ArchitectureModule[]) {
   return files.map((file) => ({ ...file, moduleId: moduleByFile.get(file.path), role: file.role ?? fileRoleFromInsight(file, modules.find((module) => module.id === moduleByFile.get(file.path))?.category) }));
 }
 
-function fallbackModuleId(file: FileInsight, facts: ProjectStructureFacts) {
-  const category = fallbackCategoryWithRelations([file], facts);
-  const parts = file.path.split("/");
-  const srcIndex = parts.lastIndexOf("src");
-  const scope = srcIndex >= 0 ? parts[srcIndex + 1] : parts[0];
-  if (category === "external-integration") return "external-integrations";
-  if (category === "data-access") return "data-access";
-  if (category === "api-boundary") return `${scope ?? "api"}-api`;
-  if (category === "test-surface") return "test-surface";
-  if (category === "job-worker") return `${scope ?? "worker"}-worker`;
-  if (category === "shared-utility") return "shared-utilities";
-  return safeId(scope ?? "domain-service");
-}
-
 function fallbackCategoryWithRelations(
   files: FileInsight[],
   facts: ProjectStructureFacts
@@ -957,7 +967,8 @@ function nodeTypeFromCategory(category: ArchitectureModuleCategory): GraphNodeTy
     "external-integration": "external",
     "job-worker": "worker",
     "shared-utility": "utility",
-    "test-surface": "test"
+    "test-surface": "test",
+    "unknown": "module"
   };
   return map[category];
 }
@@ -970,7 +981,8 @@ function categoryLabel(category: ArchitectureModuleCategory) {
     "external-integration": "External Integration",
     "job-worker": "Job / Worker",
     "shared-utility": "Shared Utility",
-    "test-surface": "Test Surface"
+    "test-surface": "Test Surface",
+    "unknown": "Unknown"
   };
   return labels[category];
 }
@@ -997,7 +1009,8 @@ function fallbackRole(category: ArchitectureModuleCategory, files: FileInsight[]
     "external-integration": `${prefix} code that connects FlowWeave to external runtimes or APIs.`,
     "job-worker": `${prefix} background analysis and generated artifact workflows.`,
     "shared-utility": `${prefix} shared utilities, UI helpers, configuration, and cross-cutting support.`,
-    "test-surface": `${prefix} tests that verify behavior and protect regressions.`
+    "test-surface": `${prefix} tests that verify behavior and protect regressions.`,
+    "unknown": "These files could not be assigned to a functional module from the available static evidence."
   };
   return descriptions[category];
 }
@@ -1017,7 +1030,8 @@ function fallbackModuleDescription(title: string, category: ArchitectureModuleCa
     "external-integration": `${title} isolates calls into external tools, runtimes, or service boundaries${location}.`,
     "job-worker": `${title} runs background analysis or generated-artifact workflows across ${fileCount} files${location}.`,
     "shared-utility": `${title} provides reusable support code used across FlowWeave features${location}.`,
-    "test-surface": `${title} verifies expected behavior and regression coverage for the project${location}.`
+    "test-surface": `${title} verifies expected behavior and regression coverage for the project${location}.`,
+    "unknown": `${title} contains files whose functional responsibility is not clear from the available static evidence${location}.`
   };
   return `${descriptions[category]}${evidence}`;
 }
@@ -1169,7 +1183,8 @@ function isCategory(value: unknown): value is ArchitectureModuleCategory {
     value === "external-integration" ||
     value === "job-worker" ||
     value === "shared-utility" ||
-    value === "test-surface"
+    value === "test-surface" ||
+    value === "unknown"
   );
 }
 
