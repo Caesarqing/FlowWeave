@@ -779,6 +779,7 @@ export type ProjectAgentConnectionStatus = {
   contextPath: string;
   configPath: string;
   generatedFiles: string[];
+  missingFiles?: string[];
   platforms: ProjectAgentPlatform[];
   updatedAt?: string;
   message: string;
@@ -889,6 +890,10 @@ export type AgentHealthCheck = {
   status: AgentHealthCheckStatus;
   message: string;
   blocking?: boolean;
+  missingFiles?: string[];
+  suggestedActions?: string[];
+  purpose?: ToolRunPurpose;
+  artifactTarget?: ArtifactRunTarget;
 };
 export type AgentHealthCheckResult = {
   agentId: RuntimeAgentId;
@@ -945,6 +950,25 @@ export type AgentProtocol = "agent-inbox";
 export type AgentCapability = "artifact-analysis" | "implementation-plan" | "execute";
 export type AgentPluginHostId = "codex" | "claude" | "gemini" | "cursor";
 export type AgentPluginInstallState = "missing" | "installed" | "outdated" | "unavailable" | "error";
+export type AgentPluginCheckCode =
+  | "plugin-copy-missing"
+  | "native-manifest-missing"
+  | "marketplace-entry-missing"
+  | "host-instruction-missing"
+  | "managed-block-missing"
+  | "managed-block-invalid"
+  | "version-mismatch"
+  | "protocol-mismatch"
+  | "content-hash-mismatch"
+  | "check-error"
+  | "host-ready";
+export type AgentPluginStatusCheck = {
+  code: AgentPluginCheckCode;
+  status: "passed" | "failed";
+  filePath?: string;
+  message: string;
+};
+export type AgentPluginSuggestedAction = "install" | "refresh" | "repair" | "connect";
 export type AgentPluginHostManifest = {
   id: AgentPluginHostId;
   displayName: string;
@@ -969,6 +993,12 @@ export type AgentPluginStatus = {
   bundledVersion: string;
   installTarget: string;
   hostInstructionPath?: string;
+  requiredFiles: string[];
+  missingFiles: string[];
+  protocolVersion: AgentProtocolVersion;
+  contentHash: string;
+  checks: AgentPluginStatusCheck[];
+  suggestedActions: AgentPluginSuggestedAction[];
   message: string;
 };
 export type AgentPluginHostCheck = {

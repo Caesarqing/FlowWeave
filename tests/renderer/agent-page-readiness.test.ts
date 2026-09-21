@@ -91,11 +91,68 @@ describe("AgentPage readiness", () => {
       bundledVersion: "0.2.0",
       installTarget: "/tmp/project/.flowweave/agent-plugins/flowweave",
       hostInstructionPath: "/tmp/project/.flowweave/agent-plugins/flowweave/hosts/codex.md",
+      requiredFiles: [],
+      missingFiles: [],
+      protocolVersion: 2,
+      contentHash: "codex-hash",
+      checks: [{ code: "host-ready", status: "passed", message: "Codex is ready." }],
+      suggestedActions: [],
       message: "Project FlowWeave plugin copy is installed for Codex."
     }]);
 
     expect(html).toContain("View instructions");
     expect(html).not.toContain("hosts/codex.md");
+  });
+
+  it("renders host-specific plugin checks, missing files, and repair actions", () => {
+    const html = renderAgentPage(cliStatus({ severity: "ok", checks: [] }), [
+      {
+        pluginId: "flowweave",
+        hostId: "codex",
+        displayName: "Codex",
+        status: "missing",
+        bundledVersion: "0.2.0",
+        installTarget: "/tmp/project/plugins/flowweave",
+        hostInstructionPath: "/tmp/project/plugins/flowweave/hosts/codex.md",
+        requiredFiles: ["plugins/flowweave/.codex-plugin/plugin.json"],
+        missingFiles: ["plugins/flowweave/.codex-plugin/plugin.json"],
+        protocolVersion: 2,
+        contentHash: "codex-hash",
+        checks: [{
+          code: "native-manifest-missing",
+          status: "failed",
+          filePath: "plugins/flowweave/.codex-plugin/plugin.json",
+          message: "Codex native manifest is missing."
+        }],
+        suggestedActions: ["install"],
+        message: "Codex native manifest is missing."
+      },
+      {
+        pluginId: "flowweave",
+        hostId: "claude",
+        displayName: "Claude",
+        status: "installed",
+        installedVersion: "0.2.0",
+        bundledVersion: "0.2.0",
+        installTarget: "/tmp/project/plugins/flowweave",
+        hostInstructionPath: "/tmp/project/plugins/flowweave/hosts/claude.md",
+        requiredFiles: [],
+        missingFiles: [],
+        protocolVersion: 2,
+        contentHash: "claude-hash",
+        checks: [{ code: "host-ready", status: "passed", message: "Claude is ready." }],
+        suggestedActions: [],
+        message: "Claude is ready."
+      }
+    ]);
+
+    expect(html).toContain("Codex: missing");
+    expect(html).toContain("Claude: installed");
+    expect(html).toContain("plugins/flowweave/.codex-plugin/plugin.json");
+    expect(html).toContain("Native plugin manifest is missing");
+    expect(html).toContain("Install the Codex plugin");
+    expect(html).toContain("Repair host");
+    expect(html.slice(html.indexOf("Claude:"))).not.toContain("Install the Codex plugin");
   });
 });
 

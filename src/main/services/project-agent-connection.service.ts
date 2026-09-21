@@ -46,31 +46,63 @@ type PlatformEntry = {
 };
 
 export async function getProjectAgentConnection(projectPath: string): Promise<ProjectAgentConnectionStatus> {
+  return getProjectAgentConnectionStatus(projectPath, undefined);
+}
+
+export async function getProjectAgentConnectionForPlatform(
+  projectPath: string,
+  platform: ProjectAgentPlatform
+): Promise<ProjectAgentConnectionStatus> {
+  return getProjectAgentConnectionStatus(projectPath, platform);
+}
+
+async function getProjectAgentConnectionStatus(
+  projectPath: string,
+  platform: ProjectAgentPlatform | undefined
+): Promise<ProjectAgentConnectionStatus> {
   const paths = connectionPaths(projectPath);
   const config = await readConnectionConfig(paths.configPath);
   if (!config) {
-    return createStatus(projectPath, undefined, "disabled", "External Agent connection has not been configured.");
+    return createStatus(projectPath, undefined, "disabled", "External Agent connection has not been configured.", []);
   }
   if (!config.enabled) {
-    return createStatus(projectPath, config, "disabled", "External Agent connection is disabled for this project.");
+    return createStatus(projectPath, config, "disabled", "External Agent connection is disabled for this project.", []);
   }
 
-  const connectionIssue = await findConnectionFileIssue(projectPath, config.platforms);
+  if (platform && !config.platforms.includes(platform)) {
+    const filePath = platformEntries(projectPath, [platform])[0]?.filePath;
+    return createStatus(
+      projectPath,
+      config,
+      "disabled",
+      `External Agent connection is not configured for ${platform}.`,
+      filePath ? [filePath] : []
+    );
+  }
+
+  const platformsToCheck = platform ? [platform] : config.platforms;
+  const connectionIssue = await findConnectionFileIssue(projectPath, platformsToCheck);
   if (connectionIssue) {
-    return createStatus(projectPath, config, "needs-refresh", connectionIssue);
+    return createStatus(projectPath, config, "needs-refresh", connectionIssue.message, [connectionIssue.filePath]);
   }
 
   const latestSourceTime = await latestArtifactModificationTime(projectPath);
   if (latestSourceTime > Date.parse(config.updatedAt)) {
-    return createStatus(projectPath, config, "needs-refresh", "FlowWeave project artifacts changed after the Agent context was generated.");
+    return createStatus(
+      projectPath,
+      config,
+      "needs-refresh",
+      "FlowWeave project artifacts changed after the Agent context was generated.",
+      [paths.contextPath]
+    );
   }
 
-  return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.");
+  return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.", []);
 }
 
 export async function enableProjectAgentConnection(projectPath: string): Promise<ProjectAgentConnectionStatus> {
   await requireProjectArtifact(projectPath);
-  return writeProjectAgentConnection(projectPath, DEFAULT_PLATFORMS);
+  return writeProjectAgentConnection(projectPath, DEFAULT_PLATFORMS, DEFAULT_PLATFORMS);
 }
 
 export async function refreshProjectAgentConnection(projectPath: string): Promise<ProjectAgentConnectionStatus> {
@@ -82,7 +114,25 @@ export async function refreshProjectAgentConnection(projectPath: string): Promis
     throw new Error(`Cannot refresh Agent connection for "${projectPath}": the connection is disabled.`);
   }
   await requireProjectArtifact(projectPath);
-  return writeProjectAgentConnection(projectPath, config.platforms);
+  return writeProjectAgentConnection(projectPath, config.platforms, config.platforms);
+}
+
+export async function refreshProjectAgentConnectionForPlatform(
+  projectPath: string,
+  platform: ProjectAgentPlatform
+): Promise<ProjectAgentConnectionStatus> {
+  const config = await readConnectionConfig(connectionPaths(projectPath).configPath);
+  if (!config) {
+    throw new Error(`Cannot refresh Agent connection for "${projectPath}": the project has not been configured.`);
+  }
+  if (!config.enabled) {
+    throw new Error(`Cannot refresh Agent connection for "${projectPath}": the connection is disabled.`);
+  }
+  if (!config.platforms.includes(platform)) {
+    throw new Error(`Cannot refresh Agent connection for "${projectPath}": ${platform} is not an enabled project platform.`);
+  }
+  await requireProjectArtifact(projectPath);
+  return writeProjectAgentConnection(projectPath, config.platforms, [platform]);
 }
 
 export async function refreshProjectAgentConnectionIfEnabled(projectPath: string): Promise<ProjectAgentConnectionStatus | undefined> {
@@ -113,7 +163,7 @@ export async function disableProjectAgentConnection(projectPath: string): Promis
     updatedAt: new Date().toISOString()
   };
   await writeJsonAtomic(paths.configPath, config);
-  return createStatus(projectPath, config, "disabled", "External Agent connection is disabled for this project.");
+  return createStatus(projectPath, config, "disabled", "External Agent connection is disabled for this project.", []);
 }
 
 export function getProjectAgentContextPath(projectPath: string) {
@@ -122,13 +172,14 @@ export function getProjectAgentContextPath(projectPath: string) {
 
 async function writeProjectAgentConnection(
   projectPath: string,
-  platforms: ProjectAgentPlatform[]
+  configuredPlatforms: ProjectAgentPlatform[],
+  platformsToWrite: ProjectAgentPlatform[]
 ): Promise<ProjectAgentConnectionStatus> {
   const paths = connectionPaths(projectPath);
   const artifacts = await readProjectArtifacts(projectPath);
   const context = buildAgentContext(projectPath, artifacts);
   const block = buildManagedInstructionBlock();
-  const plannedUpdates = await planManagedBlockUpsert(platformEntries(projectPath, platforms), block);
+  const plannedUpdates = await planManagedBlockUpsert(platformEntries(projectPath, platformsToWrite), block);
 
   await writeTextAtomic(paths.contextPath, context);
   for (const update of plannedUpdates) {
@@ -138,11 +189,11 @@ async function writeProjectAgentConnection(
   const config: ProjectAgentConnectionConfig = {
     version: 1,
     enabled: true,
-    platforms: [...platforms],
+    platforms: [...configuredPlatforms],
     updatedAt: new Date().toISOString()
   };
   await writeJsonAtomic(paths.configPath, config);
-  return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.");
+  return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.", []);
 }
 
 function connectionPaths(projectPath: string) {
@@ -174,7 +225,8 @@ function createStatus(
   projectPath: string,
   config: ProjectAgentConnectionConfig | undefined,
   state: ProjectAgentConnectionStatus["state"],
-  message: string
+  message: string,
+  missingFiles: string[]
 ): ProjectAgentConnectionStatus {
   const platforms = config?.platforms ?? DEFAULT_PLATFORMS;
   const paths = connectionPaths(projectPath);
@@ -186,6 +238,7 @@ function createStatus(
     contextPath: paths.contextPath,
     configPath: paths.configPath,
     generatedFiles: generatedFilePaths(projectPath, platforms),
+    missingFiles,
     platforms: [...platforms],
     updatedAt: config?.updatedAt,
     message
@@ -472,32 +525,40 @@ async function latestArtifactModificationTime(projectPath: string) {
   return Math.max(...times);
 }
 
-async function findConnectionFileIssue(projectPath: string, platforms: ProjectAgentPlatform[]) {
+async function findConnectionFileIssue(projectPath: string, platforms: ProjectAgentPlatform[]): Promise<{ message: string; filePath: string } | undefined> {
   const contextPath = connectionPaths(projectPath).contextPath;
   const context = await readOptionalText(contextPath);
   if (context === undefined) {
-    return `Connection file is missing: ${contextPath}`;
+    return { message: `Connection file is missing: ${contextPath}`, filePath: contextPath };
   }
   const contextRoot = /^Project root:\s*(.+)$/m.exec(context)?.[1]?.trim();
   if (contextRoot !== projectPath) {
-    return `FlowWeave Agent context root is stale: expected "${projectPath}" but found "${contextRoot ?? "unknown"}".`;
+    return {
+      message: `FlowWeave Agent context root is stale: expected "${projectPath}" but found "${contextRoot ?? "unknown"}".`,
+      filePath: contextPath
+    };
   }
   if (!context.includes("runs/<run-id>/agent-request.json")) {
-    return `FlowWeave Agent context is missing Agent Inbox instructions: ${contextPath}`;
+    return { message: `FlowWeave Agent context is missing Agent Inbox instructions: ${contextPath}`, filePath: contextPath };
   }
   for (const entry of platformEntries(projectPath, platforms)) {
     const content = await readOptionalText(entry.filePath);
-    if (content === undefined) return `Connection file is missing: ${entry.filePath}`;
-    const block = findManagedBlock(content, entry.filePath);
+    if (content === undefined) return { message: `Connection file is missing: ${entry.filePath}`, filePath: entry.filePath };
+    let block: { start: number; end: number } | undefined;
+    try {
+      block = findManagedBlock(content, entry.filePath);
+    } catch (error) {
+      return { message: formatError(error), filePath: entry.filePath };
+    }
     if (!block) {
-      return `FlowWeave managed instructions are missing from: ${entry.filePath}`;
+      return { message: `FlowWeave managed instructions are missing from: ${entry.filePath}`, filePath: entry.filePath };
     }
     const managedContent = content.slice(block.start, block.end);
     if (!managedContent.includes("runs/<run-id>/agent-request.json")) {
-      return `FlowWeave managed instructions are stale in: ${entry.filePath}`;
+      return { message: `FlowWeave managed instructions are stale in: ${entry.filePath}`, filePath: entry.filePath };
     }
     if (entry.platform === "cursor" && !content.includes("alwaysApply: true")) {
-      return `Cursor FlowWeave rule is not configured as an automatic project rule: ${entry.filePath}`;
+      return { message: `Cursor FlowWeave rule is not configured as an automatic project rule: ${entry.filePath}`, filePath: entry.filePath };
     }
   }
   return undefined;

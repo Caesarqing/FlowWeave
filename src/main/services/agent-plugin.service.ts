@@ -7,7 +7,9 @@ import type {
   AgentPluginManifest,
   AgentPluginMigrationResult,
   AgentPluginState,
-  AgentPluginStatus
+  AgentPluginStatus,
+  AgentPluginStatusCheck,
+  AgentPluginCheckCode
 } from "../../types";
 
 const BUILT_IN_PLUGIN_DIR = "flowweave-plugin";
@@ -19,6 +21,8 @@ const CODEX_MARKETPLACE_FILE = ".agents/plugins/marketplace.json";
 const CLAUDE_MARKETPLACE_FILE = ".claude-plugin/marketplace.json";
 const FLOWWEAVE_PLUGIN_PATH = "./plugins/flowweave";
 const HOST_IDS = ["codex", "claude", "gemini", "cursor"] as const;
+const MANAGED_BLOCK_START = "<!-- flowweave:start -->";
+const MANAGED_BLOCK_END = "<!-- flowweave:end -->";
 
 export async function getBuiltInAgentPluginManifest(): Promise<AgentPluginManifest> {
   const manifestPath = join(resolveBundledPluginRoot(), MANIFEST_FILE);
@@ -36,22 +40,19 @@ export async function getBuiltInAgentPluginStatuses(projectPath: string): Promis
     return unavailableStatuses(pluginRoot, formatError(error));
   }
 
-  const installation = await readProjectPluginInstallation(projectPath, manifest);
-  return manifest.hosts.map((host) => {
-    return {
-      pluginId: manifest.id,
-      hostId: host.id,
-      displayName: host.displayName,
-      status: installation.status,
-      installedVersion: installation.installedVersion,
-      bundledVersion: manifest.version,
-      installTarget: pluginRoot,
-      hostInstructionPath: join(pluginRoot, "hosts", `${host.id}.md`),
-      message: installation.status === "installed"
-        ? `Project FlowWeave plugin copy is installed for ${host.displayName}.`
-        : installation.message
-    };
-  });
+  const installedManifest = await readInstalledManifest(join(pluginRoot, MANIFEST_FILE));
+  const persistedHostChecks = await readPersistedHostChecks(projectPath);
+  const sourceRoot = resolveBundledPluginRoot();
+  return Promise.all(manifest.hosts.map((host) => readHostPluginStatus({
+    projectPath,
+    pluginRoot,
+    sourceRoot,
+    bundledManifest: manifest,
+    installedManifest,
+    persistedHostCheck: persistedHostChecks.find((check) => check.hostId === host.id),
+    hostId: host.id,
+    displayName: host.displayName
+  })));
 }
 
 export async function installBuiltInAgentPlugin(projectPath: string): Promise<AgentPluginStatus[]> {
@@ -149,13 +150,6 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
     if (installedHash !== stagedHash) {
       throw new Error(`Installed plugin content hash ${installedHash} does not match staged hash ${stagedHash}.`);
     }
-    const statuses = await getBuiltInAgentPluginStatuses(projectPath);
-    const failedStatus = statuses.find((status) => status.status !== "installed");
-    if (failedStatus) {
-      activeHostId = failedStatus.hostId;
-      throw new Error(`Host verification failed: ${failedStatus.message}`);
-    }
-
     phase = "remove-legacy-plugin-copy";
     if (existingLegacyPlugin) {
       await rename(legacyPluginPath, legacyBackupPath);
@@ -182,7 +176,13 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
     };
     await writeTextAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
     stateWriteAttempted = true;
-    installedStatuses = statuses;
+    installedStatuses = await getBuiltInAgentPluginStatuses(projectPath);
+    const failedInstallCheck = findFailedPluginInstallationCheck(installedStatuses);
+    if (failedInstallCheck) {
+      phase = "verify-installed-plugin";
+      activeHostId = failedInstallCheck.hostId;
+      throw new Error(failedInstallCheck.message);
+    }
   } catch (error) {
     const rollbackErrors = await rollbackPluginInstall({
       pluginRoot,
@@ -278,47 +278,320 @@ type NativePluginManifest = {
   description?: string;
 };
 
-async function readProjectPluginInstallation(projectPath: string, manifest: AgentPluginManifest): Promise<ProjectPluginInstallation> {
-  const pluginRoot = resolveExternalPluginRoot(projectPath);
-  const flowweaveManifest = await readInstalledManifest(join(pluginRoot, MANIFEST_FILE));
-  const codexManifest = await readNativePluginManifest(join(pluginRoot, ".codex-plugin", "plugin.json"), "Codex plugin manifest");
-  const claudeManifest = await readNativePluginManifest(join(pluginRoot, ".claude-plugin", "plugin.json"), "Claude plugin manifest");
-  const codexMarketplace = await readJsonRecord(resolve(projectPath, CODEX_MARKETPLACE_FILE), "Codex marketplace");
-  const claudeMarketplace = await readJsonRecord(resolve(projectPath, CLAUDE_MARKETPLACE_FILE), "Claude marketplace");
+type PersistedHostCheck = Pick<AgentPluginHostCheck, "hostId" | "version">;
 
-  const missing = [
-    flowweaveManifest ? undefined : "FlowWeave plugin copy",
-    codexManifest ? undefined : "Codex plugin manifest",
-    marketplaceIncludesPlugin(codexMarketplace) ? undefined : "Codex marketplace",
-    claudeManifest ? undefined : "Claude plugin manifest",
-    marketplaceIncludesPlugin(claudeMarketplace) ? undefined : "Claude marketplace"
-  ].filter(isString);
-  const installedVersion = [flowweaveManifest?.version, codexManifest?.version, claudeManifest?.version].find(isString);
-  const outdated = [
-    flowweaveManifest && (flowweaveManifest.version !== manifest.version || flowweaveManifest.protocolVersion !== manifest.protocolVersion),
-    codexManifest && (codexManifest.version !== manifest.version || !codexManifest.description?.includes("Agent Inbox v2")),
-    claudeManifest && (claudeManifest.version !== manifest.version || !claudeManifest.description?.includes("Agent Inbox v2"))
-  ].some(Boolean);
+type ReadHostStatusInput = {
+  projectPath: string;
+  pluginRoot: string;
+  sourceRoot: string;
+  bundledManifest: AgentPluginManifest;
+  installedManifest: AgentPluginManifest | undefined;
+  persistedHostCheck: PersistedHostCheck | undefined;
+  hostId: AgentPluginHostId;
+  displayName: string;
+};
 
-  if (outdated) {
-    return {
-      status: "outdated",
-      installedVersion,
-      message: `Project FlowWeave plugin discovery can be refreshed: ${missing.length > 0 ? `${missing.join(", ")} missing; ` : ""}version mismatch with bundled ${manifest.version}.`
-    };
+async function readPersistedHostChecks(projectPath: string): Promise<PersistedHostCheck[]> {
+  const statePath = resolve(projectPath, PLUGIN_STATE_PATH);
+  const content = await readOptionalText(statePath);
+  if (content === undefined) return [];
+  const state = parseJsonRecord(content, "FlowWeave plugin state", statePath);
+  if (!Array.isArray(state.hostChecks)) {
+    throw new Error(`FlowWeave plugin state is missing hostChecks at ${statePath}.`);
   }
-  if (missing.length > 0) {
-    return {
-      status: "missing",
-      installedVersion,
-      message: `Project FlowWeave plugin discovery is incomplete: ${missing.join(", ")} missing.`
-    };
+  return state.hostChecks.filter((value): value is PersistedHostCheck => (
+    isRecord(value) &&
+    HOST_IDS.includes(value.hostId as AgentPluginHostId) &&
+    typeof value.version === "string"
+  ));
+}
+
+async function readHostPluginStatus(input: ReadHostStatusInput): Promise<AgentPluginStatus> {
+  const {
+    projectPath,
+    pluginRoot,
+    sourceRoot,
+    bundledManifest,
+    installedManifest,
+    persistedHostCheck,
+    hostId,
+    displayName
+  } = input;
+  const requiredFiles = requiredFilesForHost(hostId);
+  const missingFiles: string[] = [];
+  const checks: AgentPluginStatusCheck[] = [];
+  let installedVersion: string | undefined = installedManifest?.version;
+  let contentHash: string | undefined;
+  let checkingFilePath: string | undefined;
+
+  try {
+    for (const filePath of requiredFiles) {
+      checkingFilePath = resolve(projectPath, filePath);
+      const exists = await pathExists(checkingFilePath);
+      checkingFilePath = undefined;
+      if (exists) continue;
+      missingFiles.push(filePath);
+      checks.push({
+        code: missingCodeForPath(filePath),
+        status: "failed",
+        filePath,
+        message: `${displayName} required file is missing: ${filePath}.`
+      });
+    }
+
+    if (installedManifest) {
+      if (installedManifest.version !== bundledManifest.version || persistedHostCheck?.version !== undefined &&
+        persistedHostCheck.version !== bundledManifest.version) {
+        checks.push({
+          code: "version-mismatch",
+          status: "failed",
+          filePath: join("plugins", "flowweave", MANIFEST_FILE),
+          message: `${displayName} plugin version does not match bundled version ${bundledManifest.version}.`
+        });
+      }
+      if (installedManifest.protocolVersion !== bundledManifest.protocolVersion) {
+        checks.push({
+          code: "protocol-mismatch",
+          status: "failed",
+          filePath: join("plugins", "flowweave", MANIFEST_FILE),
+          message: `${displayName} plugin protocol does not match Agent Inbox v${bundledManifest.protocolVersion}.`
+        });
+      }
+    }
+
+    checkingFilePath = hostId === "codex"
+      ? resolve(projectPath, "plugins/flowweave/.codex-plugin/plugin.json")
+      : hostId === "claude"
+        ? resolve(projectPath, "plugins/flowweave/.claude-plugin/plugin.json")
+        : undefined;
+    installedVersion = await addNativeManifestChecks(projectPath, hostId, bundledManifest, checks, missingFiles) ?? installedVersion;
+    checkingFilePath = undefined;
+    checkingFilePath = hostId === "codex"
+      ? resolve(projectPath, CODEX_MARKETPLACE_FILE)
+      : hostId === "claude"
+        ? resolve(projectPath, CLAUDE_MARKETPLACE_FILE)
+        : undefined;
+    await addMarketplaceChecks(projectPath, hostId, checks, missingFiles);
+    checkingFilePath = undefined;
+    checkingFilePath = hostId === "gemini"
+      ? resolve(projectPath, "GEMINI.md")
+      : hostId === "cursor"
+        ? resolve(projectPath, ".cursor/rules/flowweave.mdc")
+        : undefined;
+    await addManagedBlockChecks(projectPath, hostId, checks, missingFiles);
+    checkingFilePath = undefined;
+    const pluginFilesReady = pluginRequiredFilesForHost(hostId).every((filePath) => !missingFiles.includes(filePath));
+    if (installedManifest && pluginFilesReady) {
+      const [expectedHash, actualHash] = await Promise.all([
+        calculateHostPluginContentHash(sourceRoot, hostId),
+        calculateHostPluginContentHash(pluginRoot, hostId)
+      ]);
+      contentHash = actualHash;
+      if (actualHash !== expectedHash) {
+        checks.push({
+          code: "content-hash-mismatch",
+          status: "failed",
+          filePath: join("plugins", "flowweave", "hosts", `${hostId}.md`),
+          message: `${displayName} plugin content hash does not match the bundled host resources.`
+        });
+      }
+    }
+  } catch (error) {
+    const filePath = checkingFilePath ? relative(projectPath, checkingFilePath) : undefined;
+    if (filePath && !missingFiles.includes(filePath)) missingFiles.push(filePath);
+    checks.push({
+      code: "check-error",
+      status: "failed",
+      ...(filePath ? { filePath } : {}),
+      message: `${displayName} plugin check failed${filePath ? ` at ${filePath}` : ""}: ${formatError(error)}`
+    });
   }
+
+  if (checks.length === 0 || checks.every((check) => check.status === "passed")) {
+    checks.push({ code: "host-ready", status: "passed", message: `${displayName} Agent Inbox v2 checks passed.` });
+  }
+  const status = statusForChecks(checks, missingFiles);
+  const suggestedActions = suggestedActionsForChecks(checks);
+  const failedMessages = checks.filter((check) => check.status === "failed").map((check) => check.message);
   return {
-    status: "installed",
+    pluginId: bundledManifest.id,
+    hostId,
+    displayName,
+    status,
     installedVersion,
-    message: "Project FlowWeave plugin copy and Codex/Claude marketplace discovery files are installed."
+    bundledVersion: bundledManifest.version,
+    installTarget: pluginRoot,
+    hostInstructionPath: join(pluginRoot, "hosts", `${hostId}.md`),
+    requiredFiles,
+    missingFiles,
+    protocolVersion: installedManifest?.protocolVersion ?? bundledManifest.protocolVersion,
+    contentHash: contentHash ?? "",
+    checks,
+    suggestedActions,
+    message: failedMessages.join(" ") || `${displayName} Agent Inbox v2 is ready.`
   };
+}
+
+async function addNativeManifestChecks(
+  projectPath: string,
+  hostId: AgentPluginHostId,
+  bundledManifest: AgentPluginManifest,
+  checks: AgentPluginStatusCheck[],
+  missingFiles: string[]
+): Promise<string | undefined> {
+  if (hostId !== "codex" && hostId !== "claude") return undefined;
+  const filePath = hostId === "codex"
+    ? "plugins/flowweave/.codex-plugin/plugin.json"
+    : "plugins/flowweave/.claude-plugin/plugin.json";
+  if (missingFiles.includes(filePath)) return undefined;
+  const nativeManifest = await readNativePluginManifest(resolve(projectPath, filePath), `${displayNameForHost(hostId)} plugin manifest`);
+  if (!nativeManifest) {
+    missingFiles.push(filePath);
+    checks.push({
+      code: "native-manifest-missing",
+      status: "failed",
+      filePath,
+      message: `${displayNameForHost(hostId)} native plugin manifest is missing or has a different plugin ID.`
+    });
+    return undefined;
+  }
+  if (nativeManifest.version !== bundledManifest.version) {
+    checks.push({
+      code: "version-mismatch",
+      status: "failed",
+      filePath,
+      message: `${displayNameForHost(hostId)} native plugin version does not match bundled version ${bundledManifest.version}.`
+    });
+  }
+  if (!nativeManifest.description?.includes("Agent Inbox v2")) {
+    checks.push({
+      code: "protocol-mismatch",
+      status: "failed",
+      filePath,
+      message: `${displayNameForHost(hostId)} native plugin manifest must declare Agent Inbox v2.`
+    });
+  }
+  return nativeManifest.version;
+}
+
+async function addMarketplaceChecks(
+  projectPath: string,
+  hostId: AgentPluginHostId,
+  checks: AgentPluginStatusCheck[],
+  missingFiles: string[]
+): Promise<void> {
+  const marketplacePath = hostId === "codex"
+    ? CODEX_MARKETPLACE_FILE
+    : hostId === "claude"
+      ? CLAUDE_MARKETPLACE_FILE
+      : undefined;
+  if (!marketplacePath) return;
+  if (missingFiles.includes(marketplacePath)) return;
+  const filePath = resolve(projectPath, marketplacePath);
+  const marketplace = await readJsonRecord(filePath, `${displayNameForHost(hostId)} marketplace`);
+  if (!marketplaceIncludesPlugin(marketplace)) {
+    missingFiles.push(marketplacePath);
+    checks.push({
+      code: "marketplace-entry-missing",
+      status: "failed",
+      filePath: marketplacePath,
+      message: `${displayNameForHost(hostId)} marketplace is missing the FlowWeave entry.`
+    });
+  }
+}
+
+async function addManagedBlockChecks(
+  projectPath: string,
+  hostId: AgentPluginHostId,
+  checks: AgentPluginStatusCheck[],
+  missingFiles: string[]
+): Promise<void> {
+  const filePath = hostId === "gemini"
+    ? "GEMINI.md"
+    : hostId === "cursor"
+      ? ".cursor/rules/flowweave.mdc"
+      : undefined;
+  if (!filePath) return;
+  if (missingFiles.includes(filePath)) {
+    return;
+  }
+  const content = await readFile(resolve(projectPath, filePath), "utf8");
+  const starts = content.split(MANAGED_BLOCK_START).length - 1;
+  const ends = content.split(MANAGED_BLOCK_END).length - 1;
+  const start = content.indexOf(MANAGED_BLOCK_START);
+  const end = content.indexOf(MANAGED_BLOCK_END);
+  const hasValidBlock = starts === 1 && ends === 1 && start < end &&
+    content.slice(start, end).includes("runs/<run-id>/agent-request.json");
+  const cursorRuleEnabled = hostId !== "cursor" || /alwaysApply:\s*true/.test(content);
+  if (!hasValidBlock || !cursorRuleEnabled) {
+    checks.push({
+      code: "managed-block-invalid",
+      status: "failed",
+      filePath,
+      message: `${displayNameForHost(hostId)} FlowWeave managed block is invalid in ${filePath}.`
+    });
+  }
+}
+
+function missingCodeForPath(filePath: string): AgentPluginCheckCode {
+  if (filePath === join("plugins", "flowweave", MANIFEST_FILE) ||
+    filePath === join("plugins", "flowweave", "skills", "flowweave", "SKILL.md")) return "plugin-copy-missing";
+  if (filePath === CODEX_MARKETPLACE_FILE || filePath === CLAUDE_MARKETPLACE_FILE) return "marketplace-entry-missing";
+  if (filePath.includes(".codex-plugin") || filePath.includes(".claude-plugin")) return "native-manifest-missing";
+  if (filePath === "GEMINI.md" || filePath === ".cursor/rules/flowweave.mdc") return "managed-block-missing";
+  return "host-instruction-missing";
+}
+
+function statusForChecks(
+  checks: AgentPluginStatusCheck[],
+  missingFiles: string[]
+): AgentPluginStatus["status"] {
+  if (checks.some((check) => check.code === "check-error")) return "error";
+  if (missingFiles.length > 0 || checks.some((check) => check.code === "managed-block-invalid")) return "missing";
+  if (checks.some((check) => check.code === "version-mismatch" || check.code === "protocol-mismatch" || check.code === "content-hash-mismatch")) {
+    return "outdated";
+  }
+  return "installed";
+}
+
+function suggestedActionsForChecks(checks: AgentPluginStatusCheck[]): AgentPluginStatus["suggestedActions"] {
+  const failedCodes = new Set(checks.filter((check) => check.status === "failed").map((check) => check.code));
+  const actions: AgentPluginStatus["suggestedActions"] = [];
+  if (failedCodes.has("check-error")) actions.push("repair");
+  if (failedCodes.has("version-mismatch") || failedCodes.has("protocol-mismatch") || failedCodes.has("content-hash-mismatch")) actions.push("refresh");
+  if (failedCodes.has("plugin-copy-missing") || failedCodes.has("native-manifest-missing") || failedCodes.has("marketplace-entry-missing") || failedCodes.has("host-instruction-missing")) actions.push("install");
+  if (failedCodes.has("managed-block-missing") || failedCodes.has("managed-block-invalid")) actions.push("connect");
+  return actions;
+}
+
+function findFailedPluginInstallationCheck(statuses: AgentPluginStatus[]): {
+  hostId: AgentPluginHostId;
+  message: string;
+} | undefined {
+  for (const status of statuses) {
+    const failedCheck = status.checks.find((check) => check.status === "failed" && !isProjectConnectionCheck(check));
+    if (failedCheck) return { hostId: status.hostId, message: failedCheck.message };
+  }
+  return undefined;
+}
+
+function isProjectConnectionCheck(check: AgentPluginStatusCheck): boolean {
+  return check.code === "managed-block-missing" || check.code === "managed-block-invalid" ||
+    check.filePath === "GEMINI.md" || check.filePath === join(".cursor", "rules", "flowweave.mdc");
+}
+
+async function calculateHostPluginContentHash(pluginRoot: string, hostId: AgentPluginHostId): Promise<string> {
+  const relativePaths = ["manifest.json", "skills/flowweave/SKILL.md", `hosts/${hostId}.md`];
+  if (hostId === "codex") relativePaths.push(".codex-plugin/plugin.json");
+  if (hostId === "claude") relativePaths.push(".claude-plugin/plugin.json");
+  const hash = createHash("sha256");
+  for (const relativePath of relativePaths) {
+    const filePath = join(pluginRoot, relativePath);
+    hash.update(`${relativePath}\0file\0`);
+    hash.update(await readFile(filePath));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 async function readNativePluginManifest(manifestPath: string, label: string): Promise<NativePluginManifest | undefined> {
@@ -534,6 +807,11 @@ async function validateStagedPlugin(
     }
   }
 
+  const skillPath = join(stagingPath, "skills", "flowweave", "SKILL.md");
+  if (!await pathExists(skillPath)) {
+    throw new Error(`required shared Skill is missing at ${skillPath}.`);
+  }
+
   await validateNativePluginManifest(
     join(stagingPath, ".codex-plugin", "plugin.json"),
     "Codex plugin manifest",
@@ -566,7 +844,7 @@ async function buildHostChecks(
 ): Promise<AgentPluginHostCheck[]> {
   const checks: AgentPluginHostCheck[] = [];
   for (const hostId of HOST_IDS) {
-    const requiredFiles = requiredFilesForHost(hostId);
+    const requiredFiles = pluginRequiredFilesForHost(hostId);
     const missingFiles: string[] = [];
     for (const path of requiredFiles) {
       if (!await pathExists(resolve(projectPath, path))) missingFiles.push(path);
@@ -588,7 +866,18 @@ async function buildHostChecks(
 }
 
 function requiredFilesForHost(hostId: AgentPluginHostId): string[] {
-  const pluginFiles = ["plugins/flowweave/manifest.json", `plugins/flowweave/hosts/${hostId}.md`];
+  const pluginFiles = pluginRequiredFilesForHost(hostId);
+  if (hostId === "gemini") return [...pluginFiles, "GEMINI.md"];
+  if (hostId === "cursor") return [...pluginFiles, ".cursor/rules/flowweave.mdc"];
+  return pluginFiles;
+}
+
+function pluginRequiredFilesForHost(hostId: AgentPluginHostId): string[] {
+  const pluginFiles = [
+    "plugins/flowweave/manifest.json",
+    "plugins/flowweave/skills/flowweave/SKILL.md",
+    `plugins/flowweave/hosts/${hostId}.md`
+  ];
   if (hostId === "codex") {
     return [...pluginFiles, "plugins/flowweave/.codex-plugin/plugin.json", CODEX_MARKETPLACE_FILE];
   }
@@ -745,6 +1034,12 @@ function unavailableStatuses(installTarget: string, message: string): AgentPlugi
     bundledVersion: "unknown",
     installTarget,
     hostInstructionPath: join(installTarget, "hosts", `${hostId}.md`),
+    requiredFiles: requiredFilesForHost(hostId),
+    missingFiles: [],
+    protocolVersion: 2,
+    contentHash: "",
+    checks: [{ code: "check-error", status: "failed", message: `FlowWeave bundled plugin is unavailable: ${message}` }],
+    suggestedActions: ["repair"],
     message: `FlowWeave bundled plugin is unavailable: ${message}`
   }));
 }

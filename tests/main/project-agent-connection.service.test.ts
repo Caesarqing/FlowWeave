@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,7 +7,9 @@ import {
   disableProjectAgentConnection,
   enableProjectAgentConnection,
   getProjectAgentConnection,
+  getProjectAgentConnectionForPlatform,
   refreshProjectAgentConnection,
+  refreshProjectAgentConnectionForPlatform,
   refreshProjectAgentConnectionIfEnabled
 } from "../../src/main/services/project-agent-connection.service";
 
@@ -60,6 +62,56 @@ describe("project Agent connection", () => {
     await expect(enableProjectAgentConnection(projectPath)).rejects.toThrow("malformed or duplicated");
     await expect(fileExists(join(projectPath, ".flowweave", "agent-context.md"))).resolves.toBe(false);
     await expect(readFile(agentsPath, "utf8")).resolves.toBe("<!-- flowweave:start -->\nBroken block\n");
+  });
+
+  it("reports the host instruction file that makes an enabled connection stale", async () => {
+    const projectPath = await createProject();
+    await enableProjectAgentConnection(projectPath);
+    const geminiPath = join(projectPath, "GEMINI.md");
+    await writeFile(geminiPath, "<!-- flowweave:start -->\nBroken block\n", "utf8");
+
+    const status = await getProjectAgentConnection(projectPath);
+
+    expect(status.state).toBe("needs-refresh");
+    expect(status.missingFiles).toEqual([geminiPath]);
+  });
+
+  it("scopes readiness to one platform while preserving aggregate connection status", async () => {
+    const projectPath = await createProject();
+    await enableProjectAgentConnection(projectPath);
+    const geminiPath = join(projectPath, "GEMINI.md");
+    await writeFile(geminiPath, "<!-- flowweave:start -->\nBroken block\n", "utf8");
+
+    const codexStatus = await getProjectAgentConnectionForPlatform(projectPath, "codex");
+    const geminiStatus = await getProjectAgentConnectionForPlatform(projectPath, "gemini");
+    const aggregateStatus = await getProjectAgentConnection(projectPath);
+
+    expect(codexStatus.state).toBe("ready");
+    expect(geminiStatus.state).toBe("needs-refresh");
+    expect(geminiStatus.missingFiles).toEqual([geminiPath]);
+    expect(aggregateStatus.state).toBe("needs-refresh");
+    expect(aggregateStatus.missingFiles).toEqual([geminiPath]);
+  });
+
+  it("refreshes one platform without reading or rewriting another platform block", async () => {
+    const projectPath = await createProject();
+    await enableProjectAgentConnection(projectPath);
+    const geminiPath = join(projectPath, "GEMINI.md");
+    const cursorPath = join(projectPath, ".cursor", "rules", "flowweave.mdc");
+    const originalGemini = "<!-- flowweave:start -->\nBroken Gemini block\n";
+    await writeFile(geminiPath, originalGemini, "utf8");
+    await rm(cursorPath);
+
+    const refreshed = await refreshProjectAgentConnectionForPlatform(projectPath, "cursor");
+    const cursorStatus = await getProjectAgentConnectionForPlatform(projectPath, "cursor");
+    const geminiStatus = await getProjectAgentConnectionForPlatform(projectPath, "gemini");
+
+    expect(refreshed.state).toBe("ready");
+    expect(cursorStatus.state).toBe("ready");
+    expect(geminiStatus.state).toBe("needs-refresh");
+    expect(geminiStatus.missingFiles).toEqual([geminiPath]);
+    await expect(readFile(geminiPath, "utf8")).resolves.toBe(originalGemini);
+    await expectFileToContain(cursorPath, "alwaysApply: true");
   });
 
   it("disconnects by removing only FlowWeave-managed content", async () => {

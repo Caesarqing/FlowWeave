@@ -5,6 +5,9 @@ import { useI18n } from "../utils/i18n";
 export function useAgentConnection(projectId: string, projectPath: string) {
   const { t } = useI18n();
   const promptedProjects = useRef(new Set<string>());
+  const requiresExternalContext = useAgentStore((state) =>
+    state.agents.find((agent) => agent.id === state.selectedAgentId)?.kind === "desktop"
+  );
   const connection = useAgentStore((state) => state.connection);
   const operation = useAgentStore((state) => state.connectionOperation);
   const setConnection = useAgentStore((state) => state.setConnection);
@@ -19,7 +22,7 @@ export function useAgentConnection(projectId: string, projectPath: string) {
     try {
       const status = await window.flowweave.getProjectAgentConnection(projectId);
       setConnection(status);
-      if (!status.needsConfirmation || promptedProjects.current.has(projectId)) return;
+      if (!requiresExternalContext || !status.needsConfirmation || promptedProjects.current.has(projectId)) return;
       promptedProjects.current.add(projectId);
       const nextStatus = window.confirm(t("agent.connectionConfirm"))
         ? await window.flowweave.enableProjectAgentConnection(projectId)
@@ -67,7 +70,7 @@ export function useAgentConnection(projectId: string, projectPath: string) {
 
   useEffect(() => {
     void load();
-  }, [projectId]);
+  }, [projectId, requiresExternalContext]);
 
   return {
     connection,

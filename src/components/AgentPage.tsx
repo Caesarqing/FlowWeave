@@ -276,13 +276,38 @@ export function AgentPage({
         </div>
         <div className="agent-plugin-statuses">
           {pluginStatuses.length > 0 ? pluginStatuses.map((status) => (
-            <span className={cn("agent-plugin-status", status.status)} key={status.hostId}>
-              {status.displayName}: {t(`agent.pluginStatus.${status.status}`)} · {status.installedVersion ?? status.bundledVersion}
-              <button className="inline-link-button" type="button" onClick={() => onOpenAgentPluginInstructions(status.hostId)}>
-                <FileText size={13} />
-                {t("agent.pluginOpenInstructions")}
-              </button>
-            </span>
+            <article className={cn("agent-plugin-status-card", status.status)} key={status.hostId}>
+              <div className="agent-plugin-status-heading">
+                <strong className={cn("agent-plugin-status", status.status)}>
+                  {status.displayName}: {t(`agent.pluginStatus.${status.status}`)} · {status.installedVersion ?? status.bundledVersion}
+                </strong>
+                <button className="inline-link-button" type="button" onClick={() => onOpenAgentPluginInstructions(status.hostId)}>
+                  <FileText size={13} />
+                  {t("agent.pluginOpenInstructions")}
+                </button>
+              </div>
+              {status.checks.map((check, index) => (
+                <small className={cn("agent-plugin-check", check.status)} key={`${check.code}-${index}`}>
+                  {t(`agent.pluginCheck.${check.code}`)}
+                  {check.filePath ? <code>{check.filePath}</code> : null}
+                </small>
+              ))}
+              {status.missingFiles.length > 0 ? (
+                <small className="agent-plugin-missing-files">
+                  <strong>{t("agent.pluginMissingFiles")}</strong>
+                  {status.missingFiles.map((filePath) => <code key={filePath}>{filePath}</code>)}
+                </small>
+              ) : null}
+              {status.suggestedActions.map((action) => (
+                <small className="agent-plugin-action" key={action}>{t(`agent.pluginAction.${action}`, { host: status.displayName })}</small>
+              ))}
+              {status.suggestedActions.some((action) => action !== "connect") ? (
+                <button className="inline-link-button" type="button" onClick={onInstallAgentPlugins}>
+                  <Settings2 size={13} />
+                  {t("agent.pluginRepairHost")}
+                </button>
+              ) : null}
+            </article>
           )) : (
             <span>{t("agent.pluginStatusUnknown")}</span>
           )}

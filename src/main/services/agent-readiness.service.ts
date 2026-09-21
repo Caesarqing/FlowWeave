@@ -1,32 +1,43 @@
 import type {
+  ArtifactRunTarget,
   AgentHealthCheck,
   AgentHealthCheckResult,
+  AgentPluginHostId,
+  AgentPluginSuggestedAction,
   AgentReadinessResult,
   ProjectAgentConnectionStatus,
   RuntimeAgentId,
+  ToolKind,
+  ToolRunPurpose,
   ToolAdapter
 } from "../../types";
 import {
-  getProjectAgentConnection,
-  refreshProjectAgentConnection
+  getProjectAgentConnectionForPlatform,
+  refreshProjectAgentConnectionForPlatform
 } from "./project-agent-connection.service";
 import { getBuiltInAgentPluginStatuses } from "./agent-plugin.service";
 
 export type AgentReadinessOptions = {
   agentId: RuntimeAgentId;
+  adapterKind: ToolKind;
   projectId?: string;
   projectPath?: string;
   refreshConnection: boolean;
   runModelProbe: boolean;
+  purpose?: ToolRunPurpose;
+  artifactTarget?: ArtifactRunTarget;
 };
 
 export async function checkAgentReadiness(
   adapter: ToolAdapter,
   options: AgentReadinessOptions
 ): Promise<AgentReadinessResult> {
+  if (adapter.kind !== options.adapterKind) {
+    throw new Error(`Agent readiness adapter kind mismatch for agentId=${options.agentId}: adapter=${adapter.kind}, readiness=${options.adapterKind}.`);
+  }
   const base = await adapterHealth(adapter, options.agentId, options.runModelProbe);
   const connectionResult = options.projectId && options.projectPath
-    ? await projectReadinessChecks(options.projectId, options.projectPath, options.refreshConnection)
+    ? await projectReadinessChecks(options)
     : { checks: [], suggestedActions: [], connection: undefined, refreshedConnection: false };
   const checks = [...base.checks, ...connectionResult.checks];
   return {
@@ -42,22 +53,29 @@ export async function checkAgentReadiness(
   };
 }
 
-async function projectReadinessChecks(
-  projectId: string,
-  projectPath: string,
-  refreshConnection: boolean
-): Promise<{
+async function projectReadinessChecks(options: AgentReadinessOptions): Promise<{
   checks: AgentHealthCheck[];
   suggestedActions: string[];
   connection?: ProjectAgentConnectionStatus;
   refreshedConnection: boolean;
 }> {
-  const [connection, plugin] = await Promise.all([
-    projectConnectionChecks(projectId, projectPath, refreshConnection),
-    projectPluginChecks(projectPath)
-  ]);
+  const { agentId, projectId, projectPath } = options;
+  if (!projectId || !projectPath) throw new Error("Project readiness requires projectId and projectPath.");
+  const platform = hostIdForAgent(agentId);
+  const connection = options.adapterKind === "desktop" && platform
+    ? await projectConnectionChecks({
+        agentId,
+        projectId,
+        projectPath,
+        platform,
+        refreshConnection: options.refreshConnection,
+        purpose: options.purpose,
+        artifactTarget: options.artifactTarget
+      })
+    : { checks: [], suggestedActions: [], connection: undefined, refreshedConnection: false };
+  const plugin = await projectPluginChecks(projectId, projectPath, agentId, options.adapterKind);
   return {
-    checks: [...connection.checks, ...plugin.checks],
+    checks: [...plugin.checks, ...connection.checks],
     suggestedActions: [...connection.suggestedActions, ...plugin.suggestedActions],
     connection: connection.connection,
     refreshedConnection: connection.refreshedConnection
@@ -90,61 +108,132 @@ async function adapterHealth(adapter: ToolAdapter, agentId: RuntimeAgentId, runM
   };
 }
 
-async function projectPluginChecks(projectPath: string): Promise<{
+async function projectPluginChecks(
+  projectId: string,
+  projectPath: string,
+  agentId: RuntimeAgentId,
+  adapterKind: ToolKind
+): Promise<{
   checks: AgentHealthCheck[];
   suggestedActions: string[];
 }> {
-  const statuses = await getBuiltInAgentPluginStatuses(projectPath);
-  const first = statuses[0];
-  if (!first) {
+  const hostId = hostIdForAgent(agentId);
+  if (!hostId) return { checks: [], suggestedActions: [] };
+  let statuses: Awaited<ReturnType<typeof getBuiltInAgentPluginStatuses>>;
+  try {
+    statuses = await getBuiltInAgentPluginStatuses(projectPath);
+  } catch (error) {
+    const blocking = adapterKind === "desktop";
+    const missingFiles: string[] = [];
+    const message = `agentId=${agentId} projectId=${projectId} missingFiles=[] FlowWeave plugin check failed for hostId=${hostId}: ${formatError(error)}`;
+    const suggestedActions = [`Repair FlowWeave plugin status for hostId=${hostId}, agentId=${agentId}, projectId=${projectId}.`];
     return {
       checks: [{
-        id: "project-agent-plugin",
+        id: `project-agent-plugin-${hostId}`,
         label: "Project Agent plugin",
-        status: "failed",
-        message: "FlowWeave project plugin status could not be determined."
+        status: blocking ? "failed" : "warning",
+        blocking,
+        message,
+        missingFiles,
+        suggestedActions
       }],
-      suggestedActions: ["Refresh the FlowWeave project plugin status."]
+      suggestedActions
     };
   }
-  const failed = statuses.some((status) => status.status === "error" || status.status === "unavailable");
-  const warning = statuses.some((status) => status.status === "missing" || status.status === "outdated");
+  const status = statuses.find((pluginStatus) => pluginStatus.hostId === hostId);
+  if (!status) {
+    const blocking = adapterKind === "desktop";
+    const missingFiles: string[] = [];
+    const message = `agentId=${agentId} projectId=${projectId} missingFiles=[] FlowWeave project plugin status could not be determined for hostId=${hostId}.`;
+    const suggestedActions = [`Refresh FlowWeave plugin status for hostId=${hostId}, agentId=${agentId}, projectId=${projectId}.`];
+    return {
+      checks: [{
+        id: `project-agent-plugin-${hostId}`,
+        label: "Project Agent plugin",
+        status: blocking ? "failed" : "warning",
+        blocking,
+        message,
+        missingFiles,
+        suggestedActions
+      }],
+      suggestedActions
+    };
+  }
+  const ready = status.status === "installed";
+  const blocking = adapterKind === "desktop";
+  const checkMessage = [
+    `agentId=${agentId}`,
+    `projectId=${projectId}`,
+    status.message,
+    status.missingFiles.length > 0 ? `Missing files: ${status.missingFiles.join(", ")}.` : ""
+  ].filter(Boolean).join(" ");
+  const suggestedActions = status.suggestedActions.map((action) =>
+    `${pluginActionMessage(action)} for hostId=${hostId}, agentId=${agentId}, projectId=${projectId}.`
+  );
   return {
     checks: [{
-      id: "project-agent-plugin",
+      id: `project-agent-plugin-${hostId}`,
       label: "Project Agent plugin",
-      status: failed ? "failed" : warning ? "warning" : "passed",
-      message: first.message
+      status: ready ? "passed" : blocking ? "failed" : "warning",
+      message: checkMessage,
+      blocking: !ready && blocking,
+      missingFiles: status.missingFiles,
+      suggestedActions
     }],
-    suggestedActions: failed
-      ? ["Repair the bundled FlowWeave plugin resources, then retry health check."]
-      : warning
-        ? ["Install or refresh the project FlowWeave plugin copy before desktop/manual bridge review."]
-        : []
+    suggestedActions
   };
 }
 
-async function projectConnectionChecks(
-  projectId: string,
-  projectPath: string,
-  refreshConnection: boolean
-): Promise<{
+function pluginActionMessage(action: AgentPluginSuggestedAction): string {
+  if (action === "install") return "Install the FlowWeave plugin";
+  if (action === "refresh") return "Refresh the FlowWeave plugin";
+  if (action === "connect") return "Connect project context for the FlowWeave plugin";
+  return "Repair the FlowWeave plugin";
+}
+
+function hostIdForAgent(agentId: RuntimeAgentId): AgentPluginHostId | undefined {
+  if (agentId === "codex-local" || agentId === "codex-desktop") return "codex";
+  if (agentId === "claude-code" || agentId === "claude-desktop") return "claude";
+  if (agentId === "gemini-cli") return "gemini";
+  if (agentId === "cursor") return "cursor";
+  return undefined;
+}
+
+type ProjectConnectionCheckInput = {
+  agentId: RuntimeAgentId;
+  projectId: string;
+  projectPath: string;
+  platform: AgentPluginHostId;
+  refreshConnection: boolean;
+  purpose: AgentReadinessOptions["purpose"];
+  artifactTarget: AgentReadinessOptions["artifactTarget"];
+};
+
+async function projectConnectionChecks(input: ProjectConnectionCheckInput): Promise<{
   checks: AgentHealthCheck[];
   suggestedActions: string[];
   connection?: ProjectAgentConnectionStatus;
   refreshedConnection: boolean;
 }> {
+  const { agentId, projectId, projectPath, platform, refreshConnection, purpose, artifactTarget } = input;
   try {
-    const status = await getProjectAgentConnection(projectPath);
+    const status = await getProjectAgentConnectionForPlatform(projectPath, platform);
     if (status.state === "disabled") {
+      const missingFiles = status.missingFiles ?? [];
+      const suggestedActions = [`Connect project context for agentId=${agentId}, projectId=${projectId}.`];
       return {
         checks: [{
           id: "project-agent-connection",
           label: "Project Agent context",
-          status: "warning",
-          message: "External Agent connection is disabled. CLI runs still receive FlowWeave context through stdin."
+          status: "failed",
+          blocking: true,
+          message: connectionMessage(agentId, projectId, "External Agent connection is disabled.", missingFiles, purpose, artifactTarget),
+          missingFiles,
+          suggestedActions,
+          purpose,
+          artifactTarget
         }],
-        suggestedActions: ["Enable the project Agent connection only when external manual Agent sessions need FlowWeave context files."],
+        suggestedActions,
         connection: status,
         refreshedConnection: false
       };
@@ -155,51 +244,103 @@ async function projectConnectionChecks(
           id: "project-agent-connection",
           label: "Project Agent context",
           status: "passed",
-          message: status.message
+          message: connectionMessage(agentId, projectId, status.message, [], purpose, artifactTarget),
+          missingFiles: [],
+          suggestedActions: [],
+          purpose,
+          artifactTarget
         }],
         suggestedActions: [],
         connection: status,
         refreshedConnection: false
       };
     }
-    if (status.state === "needs-refresh" && refreshConnection) {
+    if (status.state === "needs-refresh" && purpose === "artifact-analysis") {
+      const missingFiles = status.missingFiles ?? [status.contextPath];
+      const suggestedActions = [
+        `Refresh project context for agentId=${agentId}, projectId=${projectId} before a general desktop run.`
+      ];
+      return {
+        checks: [{
+          id: "project-agent-connection",
+          label: "Project Agent context",
+          status: "warning",
+          blocking: false,
+          message: connectionMessage(
+            agentId,
+            projectId,
+            `Artifact analysis will continue with request-scoped context. ${status.message}`,
+            missingFiles,
+            purpose,
+            artifactTarget
+          ),
+          missingFiles,
+          suggestedActions,
+          purpose,
+          artifactTarget
+        }],
+        suggestedActions,
+        connection: status,
+        refreshedConnection: false
+      };
+    }
+    if (status.state === "needs-refresh" && refreshConnection && purpose !== "artifact-analysis") {
       try {
-        const refreshed = await refreshProjectAgentConnection(projectPath);
+        const refreshed = await refreshProjectAgentConnectionForPlatform(projectPath, platform);
+        const message = connectionMessage(
+          agentId,
+          projectId,
+          `Project Agent context was refreshed before run. ${refreshed.message}`,
+          [],
+          purpose,
+          artifactTarget
+        );
         return {
           checks: [{
             id: "project-agent-connection",
             label: "Project Agent context",
             status: "passed",
-            message: `Project Agent context was refreshed before run. ${refreshed.message}`
+            message,
+            missingFiles: [],
+            suggestedActions: [],
+            purpose,
+            artifactTarget
           }],
           suggestedActions: [],
           connection: refreshed,
           refreshedConnection: true
         };
       } catch (error) {
-        return failedConnection(projectId, error, status);
+        return failedConnection(input, error, status);
       }
     }
+    const missingFiles = status.missingFiles ?? [status.contextPath];
+    const suggestedActions = [
+      `Refresh project context for agentId=${agentId}, projectId=${projectId}${artifactTarget ? `, artifactTarget=${artifactTarget}` : ""}.`
+    ];
     return {
       checks: [{
         id: "project-agent-connection",
         label: "Project Agent context",
-        status: status.state === "needs-refresh" ? "warning" : "failed",
-        message: status.message
+        status: "failed",
+        blocking: true,
+        message: connectionMessage(agentId, projectId, status.message, missingFiles, purpose, artifactTarget),
+        missingFiles,
+        suggestedActions,
+        purpose,
+        artifactTarget
       }],
-      suggestedActions: status.state === "needs-refresh"
-        ? ["Refresh the FlowWeave Agent connection before starting external manual Agent sessions."]
-        : ["Repair or disable the FlowWeave Agent connection before running this Agent."],
+      suggestedActions,
       connection: status,
       refreshedConnection: false
     };
   } catch (error) {
-    return failedConnection(projectId, error, undefined);
+    return failedConnection(input, error, undefined);
   }
 }
 
 function failedConnection(
-  projectId: string,
+  input: ProjectConnectionCheckInput,
   error: unknown,
   connection: ProjectAgentConnectionStatus | undefined
 ): {
@@ -208,17 +349,40 @@ function failedConnection(
   connection?: ProjectAgentConnectionStatus;
   refreshedConnection: boolean;
 } {
+  const { agentId, projectId, projectPath, purpose, artifactTarget } = input;
+  const errorMessage = formatError(error);
+  const pathFromError = /(?:in|at) "([^"]+)"/.exec(errorMessage)?.[1];
+  const missingFiles = connection?.missingFiles ?? [pathFromError ?? `${projectPath}/.flowweave/agent-connection.json`];
+  const suggestedActions = [
+    `Repair or refresh project context for agentId=${agentId}, projectId=${projectId}${artifactTarget ? `, artifactTarget=${artifactTarget}` : ""}.`
+  ];
   return {
     checks: [{
       id: "project-agent-connection",
       label: "Project Agent context",
       status: "failed",
-      message: `Project Agent context preflight failed for ${projectId}: ${formatError(error)}`
+      blocking: true,
+      message: connectionMessage(agentId, projectId, `Project Agent context preflight failed: ${errorMessage}`, missingFiles, purpose, artifactTarget),
+      missingFiles,
+      suggestedActions,
+      purpose,
+      artifactTarget
     }],
-    suggestedActions: ["Fix malformed FlowWeave managed instructions or disable the project Agent connection, then retry."],
+    suggestedActions,
     connection,
     refreshedConnection: false
   };
+}
+
+function connectionMessage(
+  agentId: RuntimeAgentId,
+  projectId: string,
+  message: string,
+  missingFiles: string[],
+  purpose: AgentReadinessOptions["purpose"],
+  artifactTarget: AgentReadinessOptions["artifactTarget"]
+): string {
+  return `agentId=${agentId} projectId=${projectId} purpose=${purpose ?? "health-check"} artifactTarget=${artifactTarget ?? "none"} missingFiles=${JSON.stringify(missingFiles)} ${message}`;
 }
 
 function severityForChecks(checks: AgentHealthCheck[]): AgentReadinessResult["severity"] {

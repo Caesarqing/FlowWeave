@@ -2750,8 +2750,7 @@ button:disabled {
   min-width: 0;
 }
 
-.agent-plugin-panel > div:first-child span,
-.agent-plugin-statuses > span {
+.agent-plugin-panel > div:first-child span {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
@@ -2762,6 +2761,45 @@ button:disabled {
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+}
+
+.agent-plugin-status-card {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.agent-plugin-status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.agent-plugin-check,
+.agent-plugin-missing-files,
+.agent-plugin-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agent-plugin-missing-files code,
+.agent-plugin-check code {
+  color: var(--text);
 }
 
 .agent-plugin-status {

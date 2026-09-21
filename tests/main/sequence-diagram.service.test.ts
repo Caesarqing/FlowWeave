@@ -14,6 +14,8 @@ import {
 } from "../../src/main/services/sequence-diagram.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
+import { installBuiltInAgentPlugin } from "../../src/main/services/agent-plugin.service";
+import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject, SequenceDiagramBundle } from "../../src/types";
 
@@ -238,6 +240,8 @@ describe("sequence-diagram.service", () => {
   it("waits for Agent Inbox response.json before completing sequence review", async () => {
     const root = await createFixtureFiles();
     const projectId = await registerProject(root);
+    await installBuiltInAgentPlugin(root);
+    await enableProjectAgentConnection(root);
     const events: import("../../src/types").SequenceReviewEvent[] = [];
 
     void writeDesktopSequenceResponseWhenRunStarts(root, projectId, events);
@@ -432,7 +436,17 @@ async function createFixtureFiles() {
   await writeFile(join(root, "src/api/order.controller.ts"), 'import { OrderService } from "../service/order.service";\nexport class OrderController { createOrder(dto: CreateOrderDto) { return new OrderService().createOrder(dto); } }\n', "utf8");
   await writeFile(join(root, "src/service/order.service.ts"), "export class OrderService { createOrder(dto: unknown) { return { id: 'order-1', dto }; } }\n", "utf8");
   await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-  await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: "scan-test" }), "utf8");
+  const project: CodeflowProject = {
+    version: 1,
+    projectName: "sequence-fixture",
+    rootPath: root,
+    generatedAt: new Date().toISOString(),
+    scanFingerprint: "scan-test",
+    git: { isRepo: false },
+    summary: { totalFiles: 2, totalFolders: 3, languages: { TypeScript: 2 } },
+    files: []
+  };
+  await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), `${JSON.stringify(project, null, 2)}\n`, "utf8");
   return root;
 }
 

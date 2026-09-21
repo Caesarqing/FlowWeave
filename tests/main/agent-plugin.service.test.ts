@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -98,6 +98,7 @@ describe("agent-plugin.service", () => {
     expect(before.every((status) => status.status === "missing")).toBe(true);
     expect(before.every((status) => status.installTarget === pluginRoot)).toBe(true);
 
+    await writeManagedHostInstructions(projectPath);
     await installBuiltInAgentPlugin(projectPath);
     const after = await getBuiltInAgentPluginStatuses(projectPath);
 
@@ -132,6 +133,144 @@ describe("agent-plugin.service", () => {
       ["cursor", "installed"]
     ]);
   });
+
+  it.each([
+    ["codex", "plugins/flowweave/hosts/codex.md"],
+    ["claude", "plugins/flowweave/hosts/claude.md"],
+    ["gemini", "plugins/flowweave/hosts/gemini.md"],
+    ["cursor", "plugins/flowweave/hosts/cursor.md"]
+  ] as const)("reports a missing %s file without changing other host statuses", async (hostId, relativePath) => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-host-missing-"));
+    await writeManagedHostInstructions(projectPath);
+    await installBuiltInAgentPlugin(projectPath);
+    const missingPath = join(projectPath, relativePath);
+    await rm(missingPath);
+
+    const statuses = await getBuiltInAgentPluginStatuses(projectPath);
+    const targetStatus = statuses.find((status) => status.hostId === hostId);
+    const otherStatuses = statuses.filter((status) => status.hostId !== hostId);
+
+    expect(targetStatus?.status).toBe("missing");
+    expect(targetStatus?.missingFiles).toContain(relativePath);
+    expect(targetStatus?.checks).toContainEqual(expect.objectContaining({ code: "host-instruction-missing", status: "failed" }));
+    expect(otherStatuses.every((status) => status.status === "installed")).toBe(true);
+  });
+
+  it("contains a host-specific filesystem error to that host status", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-host-path-error-"));
+    await writeManagedHostInstructions(projectPath);
+    await installBuiltInAgentPlugin(projectPath);
+    const claudeManifestDirectory = join(projectPath, "plugins", "flowweave", ".claude-plugin");
+    await rm(claudeManifestDirectory, { recursive: true });
+    await writeFile(claudeManifestDirectory, "unexpected file", "utf8");
+
+    const statuses = await getBuiltInAgentPluginStatuses(projectPath);
+    const claudeStatus = statuses.find((status) => status.hostId === "claude");
+    const codexStatus = statuses.find((status) => status.hostId === "codex");
+
+    expect(claudeStatus?.status).toBe("error");
+    expect(claudeStatus?.checks).toContainEqual(expect.objectContaining({
+      code: "check-error",
+      status: "failed",
+      filePath: expect.stringContaining(".claude-plugin/plugin.json")
+    }));
+    expect(codexStatus?.status).toBe("installed");
+  });
+
+  it("preserves a healthy install when the bundled shared skill is incomplete", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-broken-bundle-"));
+    await writeManagedHostInstructions(projectPath);
+    await installBuiltInAgentPlugin(projectPath);
+    const pluginRoot = resolveExternalPluginRoot(projectPath);
+    const installedManifest = await readFile(join(pluginRoot, "manifest.json"), "utf8");
+    const codexMarketplacePath = join(projectPath, ".agents", "plugins", "marketplace.json");
+    const claudeMarketplacePath = join(projectPath, ".claude-plugin", "marketplace.json");
+    const codexMarketplace = await readFile(codexMarketplacePath, "utf8");
+    const claudeMarketplace = await readFile(claudeMarketplacePath, "utf8");
+    const bundledRoot = await mkdtemp(join(tmpdir(), "flowweave-plugin-bundled-copy-"));
+    await cp(resolveBundledPluginRoot(), bundledRoot, { recursive: true });
+    await rm(join(bundledRoot, "skills", "flowweave", "SKILL.md"));
+    const originalBundledRoot = process.env.FLOWWEAVE_BUNDLED_PLUGIN_ROOT;
+
+    process.env.FLOWWEAVE_BUNDLED_PLUGIN_ROOT = bundledRoot;
+    try {
+      await expect(installBuiltInAgentPlugin(projectPath)).rejects.toThrow("shared Skill is missing");
+    } finally {
+      if (originalBundledRoot === undefined) delete process.env.FLOWWEAVE_BUNDLED_PLUGIN_ROOT;
+      else process.env.FLOWWEAVE_BUNDLED_PLUGIN_ROOT = originalBundledRoot;
+    }
+
+    await expect(readFile(join(pluginRoot, "manifest.json"), "utf8")).resolves.toBe(installedManifest);
+    await expect(readFile(join(pluginRoot, "skills", "flowweave", "SKILL.md"), "utf8")).resolves.toContain("Agent Inbox v2");
+    await expect(readFile(codexMarketplacePath, "utf8")).resolves.toBe(codexMarketplace);
+    await expect(readFile(claudeMarketplacePath, "utf8")).resolves.toBe(claudeMarketplace);
+    await expect(readFile(join(projectPath, ".flowweave", "agent-plugin-state.json"), "utf8")).resolves.toContain('"status": "installed"');
+  });
+
+  it.each([
+    ["codex", ".agents/plugins/marketplace.json", "marketplace-entry-missing"],
+    ["claude", ".claude-plugin/marketplace.json", "marketplace-entry-missing"],
+    ["gemini", "GEMINI.md", "managed-block-missing"],
+    ["cursor", ".cursor/rules/flowweave.mdc", "managed-block-missing"]
+  ] as const)("isolates %s host integration failure to its own status", async (hostId, relativePath, code) => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-host-integration-"));
+    await writeManagedHostInstructions(projectPath);
+    await installBuiltInAgentPlugin(projectPath);
+    await rm(join(projectPath, relativePath), { force: true });
+
+    const statuses = await getBuiltInAgentPluginStatuses(projectPath);
+    const targetStatus = statuses.find((status) => status.hostId === hostId);
+    const otherStatuses = statuses.filter((status) => status.hostId !== hostId);
+
+    expect(targetStatus?.status).toBe("missing");
+    expect(targetStatus?.missingFiles).toContain(relativePath);
+    expect(targetStatus?.checks).toContainEqual(expect.objectContaining({ code, status: "failed" }));
+    expect(otherStatuses.every((status) => status.status === "installed")).toBe(true);
+  });
+
+  it.each(["codex", "claude", "gemini", "cursor"] as const)(
+    "reports a %s version mismatch only for that host",
+    async (hostId) => {
+      const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-host-version-"));
+      await writeManagedHostInstructions(projectPath);
+      await installBuiltInAgentPlugin(projectPath);
+      const statePath = join(projectPath, ".flowweave", "agent-plugin-state.json");
+      const state = JSON.parse(await readFile(statePath, "utf8")) as {
+        hostChecks: Array<{ hostId: string; version: string }>;
+      };
+      const targetCheck = state.hostChecks.find((check) => check.hostId === hostId);
+      if (!targetCheck) throw new Error(`Missing persisted host check for ${hostId}.`);
+      targetCheck.version = "0.1.0";
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+
+      const statuses = await getBuiltInAgentPluginStatuses(projectPath);
+      const targetStatus = statuses.find((status) => status.hostId === hostId);
+      const otherStatuses = statuses.filter((status) => status.hostId !== hostId);
+
+      expect(targetStatus?.status).toBe("outdated");
+      expect(targetStatus?.checks).toContainEqual(expect.objectContaining({ code: "version-mismatch", status: "failed" }));
+      expect(otherStatuses.every((status) => status.status === "installed")).toBe(true);
+    }
+  );
+
+  it.each(["codex", "claude", "gemini", "cursor"] as const)(
+    "reports a %s content hash mismatch only for that host",
+    async (hostId) => {
+      const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-host-hash-"));
+      await writeManagedHostInstructions(projectPath);
+      await installBuiltInAgentPlugin(projectPath);
+      const instructionPath = join(projectPath, "plugins", "flowweave", "hosts", `${hostId}.md`);
+      await writeFile(instructionPath, `${await readFile(instructionPath, "utf8")}\nHost-specific change.\n`, "utf8");
+
+      const statuses = await getBuiltInAgentPluginStatuses(projectPath);
+      const targetStatus = statuses.find((status) => status.hostId === hostId);
+      const otherStatuses = statuses.filter((status) => status.hostId !== hostId);
+
+      expect(targetStatus?.status).toBe("outdated");
+      expect(targetStatus?.checks).toContainEqual(expect.objectContaining({ code: "content-hash-mismatch", status: "failed" }));
+      expect(otherStatuses.every((status) => status.status === "installed")).toBe(true);
+    }
+  );
 
   it("installs native plugin manifests and marketplace discovery files for external agents", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
@@ -340,6 +479,7 @@ describe("agent-plugin.service", () => {
   it("marks installed project plugin discovery as outdated when a native manifest version differs", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
     const externalPluginRoot = resolveExternalPluginRoot(projectPath);
+    await writeManagedHostInstructions(projectPath);
     await installBuiltInAgentPlugin(projectPath);
     await writeFile(
       join(externalPluginRoot, ".codex-plugin", "plugin.json"),
@@ -353,8 +493,9 @@ describe("agent-plugin.service", () => {
 
     const statuses = await getBuiltInAgentPluginStatuses(projectPath);
 
-    expect(statuses.every((status) => status.status === "outdated")).toBe(true);
-    expect(statuses[0]?.message).toContain("version mismatch");
+    expect(statuses.find((status) => status.hostId === "codex")?.status).toBe("outdated");
+    expect(statuses.filter((status) => status.hostId !== "codex").every((status) => status.status === "installed")).toBe(true);
+    expect(statuses.find((status) => status.hostId === "codex")?.message).toContain("version");
   });
 
   it.each([
@@ -415,6 +556,22 @@ describe("agent-plugin.service", () => {
     });
   });
 });
+
+async function writeManagedHostInstructions(projectPath: string): Promise<void> {
+  const managedBlock = [
+    "<!-- flowweave:start -->",
+    "Read .flowweave/runs/<run-id>/agent-request.json and follow responsePath.",
+    "<!-- flowweave:end -->",
+    ""
+  ].join("\n");
+  await writeFile(join(projectPath, "GEMINI.md"), managedBlock, "utf8");
+  await mkdir(join(projectPath, ".cursor", "rules"), { recursive: true });
+  await writeFile(
+    join(projectPath, ".cursor", "rules", "flowweave.mdc"),
+    `---\ndescription: FlowWeave project instructions\nalwaysApply: true\n---\n${managedBlock}`,
+    "utf8"
+  );
+}
 
 async function captureInstalledPluginState(projectPath: string): Promise<{
   pluginFiles: Array<{ path: string; contents: string }>;

@@ -45,10 +45,13 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
   }
   const agentReadiness = await checkAgentReadiness(adapter, {
     agentId: options.toolId,
+    adapterKind: adapter.kind,
     projectId: options.projectId,
     projectPath,
     refreshConnection: true,
-    runModelProbe: false
+    runModelProbe: false,
+    purpose: options.purpose,
+    artifactTarget: options.artifactTarget
   });
   if (agentReadiness.severity === "error") {
     const failed = await writePreflightFailureRun({
@@ -232,6 +235,7 @@ export async function healthCheckAgent(agentId: RuntimeAgentId, projectId?: stri
   const projectPath = projectId ? resolveProjectPath(projectId) : undefined;
   return checkAgentReadiness(adapter, {
     agentId,
+    adapterKind: adapter.kind,
     projectId,
     projectPath,
     refreshConnection: false,

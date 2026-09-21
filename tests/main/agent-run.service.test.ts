@@ -7,6 +7,7 @@ import { buildRunPrompt, startToolPlan } from "../../src/main/services/agent-run
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
+import { installBuiltInAgentPlugin } from "../../src/main/services/agent-plugin.service";
 import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("agent-run.service", () => {
@@ -118,10 +119,15 @@ describe("agent-run.service", () => {
 
     expect(result.status).toBe("completed");
     expect(result.agentReadiness?.checks.some((check) => check.id === "codex-model-probe")).toBe(false);
+    const pluginCheck = result.agentReadiness?.checks.find((check) => check.id === "project-agent-plugin-codex");
+    expect(pluginCheck?.status).toBe("warning");
+    expect(pluginCheck?.missingFiles).toContain("plugins/flowweave/manifest.json");
+    expect(pluginCheck?.suggestedActions?.join(" ")).toContain("Install");
+    expect(result.agentReadiness?.severity).toBe("warning");
     await expect(readFile(result.planPath ?? "", "utf8")).resolves.toContain("Codex Plan");
   });
 
-  it("refreshes stale enabled Agent context before spawning a CLI run", async () => {
+  it("does not refresh stale enabled Agent context for a mock run", async () => {
     const projectPath = await createProjectWithConnection();
     const projectId = await registerProject(projectPath);
     const contextPath = join(projectPath, FLOWWEAVE_DIR, "agent-context.md");
@@ -137,11 +143,11 @@ describe("agent-run.service", () => {
     });
 
     expect(result.status).toBe("completed");
-    expect(result.agentReadiness?.refreshedConnection).toBe(true);
-    await expect(readFile(contextPath, "utf8")).resolves.toContain(`Project root: ${await realpath(projectPath)}`);
+    expect(result.agentReadiness?.refreshedConnection).toBe(false);
+    await expect(readFile(contextPath, "utf8")).resolves.toContain("Project root: /old/root");
   });
 
-  it("blocks CLI runs when enabled Agent context cannot refresh", async () => {
+  it("does not block a CLI-style run when external Agent context is malformed", async () => {
     const projectPath = await createProjectWithConnection();
     const projectId = await registerProject(projectPath);
     await writeFile(join(projectPath, "AGENTS.md"), "<!-- flowweave:start -->\nBroken block\n", "utf8");
@@ -154,15 +160,37 @@ describe("agent-run.service", () => {
       purpose: "implementation-plan"
     });
 
+    expect(result.status).toBe("completed");
+    expect(result.agentReadiness?.severity).toBe("ok");
+    expect(result.agentReadiness?.checks.some((check) => check.id === "project-agent-connection")).toBe(false);
+    await expect(readFile(join(projectPath, "AGENTS.md"), "utf8")).resolves.toContain("Broken block");
+  });
+
+  it("blocks Codex Desktop when its Codex plugin is missing", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-codex-desktop-missing-plugin-"));
+    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectId = await registerProject(projectPath);
+
+    const result = await startToolPlan({
+      projectId,
+      toolId: "codex-desktop",
+      prompt: "Review the architecture map.",
+      executionMode: "plan",
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map"
+    });
+
     expect(result.status).toBe("failed");
-    expect(result.agentReadiness?.severity).toBe("error");
-    expect(result.summary).toContain("Project Agent context");
-    await expect(readFile(result.logPath ?? "", "utf8")).resolves.toContain("preflight failed");
+    expect(result.summary).toContain("agentId=codex-desktop");
+    expect(result.summary).toContain(`projectId=${projectId}`);
+    expect(result.summary).toContain("plugins/flowweave/.codex-plugin/plugin.json");
+    expect(result.failure?.suggestedActions?.join(" ")).toContain("Install");
+    expect(result.agentReadiness?.checks.find((check) => check.id === "project-agent-plugin-codex")?.blocking).toBe(true);
   });
 
   it("writes Agent Inbox responses into run artifacts", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-run-"));
-    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectPath = await createProjectWithConnection();
+    await installBuiltInAgentPlugin(projectPath);
     const projectId = await registerProject(projectPath);
     setTimeout(() => {
       void readdir(join(projectPath, FLOWWEAVE_DIR, "runs")).then((runIds) => {
@@ -204,8 +232,8 @@ describe("agent-run.service", () => {
   });
 
   it("imports Agent Inbox response.json for implementation-plan runs", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-desktop-md-run-"));
-    await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    const projectPath = await createProjectWithConnection();
+    await installBuiltInAgentPlugin(projectPath);
     const projectId = await registerProject(projectPath);
     setTimeout(() => {
       void readdir(join(projectPath, FLOWWEAVE_DIR, "runs")).then((runIds) => {
