@@ -35,6 +35,13 @@
 3. 模块连接方案完成 Canvas v5 后，再把 Canvas 版本写入 context 指针，避免连续两次迁移。
 4. `.flowweave/agent-connectors`、`.flowweave/agent-bridge` 和隐藏插件副本的物理删除放在三份方案最后一个 P2 清理窗口。
 
+### 1.3 已实施的 P2 物理清理验收补充
+
+- 迁移先写入并复读目标，再通过四宿主安装复核；旧目录只能先隔离到操作专属路径。
+- 隔离目录及其哈希写入安装状态。仅在目标复核通过且全部隔离目录物理删除后，迁移状态才是 `completed`。
+- 删除失败写入 `cleanup-failed`，重试只允许操作状态中已记录且哈希未变化的隔离路径；未知文件、pending response 与符号链接继续阻断。
+- 只有 `request.json`、`prompt.md`、`instructions.md` 的 bridge run 记录 `abandoned` 摘要和每个文件哈希后删除；含 response、completion 异常或未知文件的 run 不删除。
+
 ## 2. 当前问题与证据
 
 ### 2.1 当前连接已过期（P0）

@@ -167,13 +167,17 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
     recentMigrationResult = legacyMigration.result;
     await legacyMigration.stage();
 
-    phase = "write-plugin-state";
+    phase = "verify-host-installation";
     const hostChecks = await buildHostChecks(projectPath, manifest, installedHash);
     const failedHostCheck = hostChecks.find((hostCheck) => hostCheck.status !== "installed");
     if (failedHostCheck) {
       activeHostId = failedHostCheck.hostId;
       throw new Error(failedHostCheck.message);
     }
+    await legacyMigration.commit();
+    recentMigrationResult = legacyMigration.result;
+
+    phase = "write-plugin-state";
     const state: AgentPluginState = {
       schemaVersion: 1,
       pluginId: manifest.id,
@@ -194,7 +198,6 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
       activeHostId = failedInstallCheck.hostId;
       throw new Error(failedInstallCheck.message);
     }
-    await legacyMigration.commit();
   } catch (error) {
     const migrationRollbackErrors = legacyMigration ? await legacyMigration.rollback() : [];
     const rollbackErrors = await rollbackPluginInstall({
@@ -814,6 +817,10 @@ async function prepareLegacyProjectData(
   await assertMigrationPathIsSafe(projectPath, legacyBridgePath);
   await assertMigrationPathIsSafe(projectPath, runsPath);
 
+  if (previousResult.status === "cleanup-failed") {
+    return retryLegacyCleanup(projectPath, previousResult);
+  }
+
   const connectorPlan = await planLegacyConnectorMigration(legacyConnectorPath, targetConnectorPath);
   const bridgePlan = await planLegacyBridgeMigration(legacyBridgePath, runsPath);
   const blockedPaths = [...connectorPlan.blockedPaths, ...bridgePlan.blockedPaths];
@@ -823,7 +830,9 @@ async function prepareLegacyProjectData(
       message: `Legacy Agent data was preserved because migration is blocked at: ${blockedPaths.join(", ")}.`
     });
   }
-  if (connectorPlan.entries.length === 0 && bridgePlan.runs.length === 0) {
+  const connectorExists = await pathExists(legacyConnectorPath);
+  const bridgeExists = await pathExists(legacyBridgePath);
+  if (!connectorExists && !bridgeExists) {
     return noOpLegacyMigration(previousResult.status === "completed" ? previousResult : {
       status: "completed",
       completedAt: new Date().toISOString(),
@@ -847,21 +856,20 @@ async function prepareLegacyProjectData(
   ];
   const operationId = randomUUID();
   const moves: MigrationMove[] = [];
-  if (connectorPlan.entries.length > 0) {
+  if (connectorExists) {
     moves.push({
       sourcePath: legacyConnectorPath,
       backupPath: join(dirname(legacyConnectorPath), `.${basename(legacyConnectorPath)}.flowweave-migration-${operationId}`)
     });
   }
-  if (bridgePlan.runs.length > 0) {
+  if (bridgeExists) {
     moves.push({
       sourcePath: legacyBridgePath,
       backupPath: join(dirname(legacyBridgePath), `.${basename(legacyBridgePath)}.flowweave-migration-${operationId}`)
     });
   }
   const result: AgentPluginMigrationResult = {
-    status: "completed",
-    completedAt: new Date().toISOString(),
+    status: "not-run",
     migratedFiles: connectorPlan.entries.map((entry) => ({
       sourcePath: entry.sourcePath,
       targetPath: entry.targetPath,
@@ -870,7 +878,8 @@ async function prepareLegacyProjectData(
     migratedRuns: bridgePlan.runs.map((run) => ({
       sourcePath: run.sourcePath,
       targetPath: run.summaryPath,
-      contentHash: createHash("sha256").update(run.summaryContent).digest("hex")
+      contentHash: createHash("sha256").update(run.summaryContent).digest("hex"),
+      disposition: run.disposition
     }))
   };
   const createdTargets = new Set<string>();
@@ -892,7 +901,24 @@ async function prepareLegacyProjectData(
           moved.add(move.sourcePath);
         }
         committed = true;
+        await verifyMigrationTargets(result);
+        result.cleanupPaths = await Promise.all(moves.map(async (move) => ({
+          path: move.backupPath,
+          contentHash: await calculateMigrationDirectoryHash(move.backupPath)
+        })));
+        for (const cleanup of result.cleanupPaths) {
+          try {
+            await rm(cleanup.path, { recursive: true });
+          } catch (error) {
+            result.status = "cleanup-failed";
+            result.message = `Legacy cleanup failed at ${cleanup.path}: ${formatError(error)}`;
+            return;
+          }
+        }
+        result.status = "completed";
+        result.completedAt = new Date().toISOString();
       } catch (error) {
+        if (committed) throw error;
         await rollbackLegacyMigration(moves, moved, createdTargets);
         throw error;
       }
@@ -902,6 +928,83 @@ async function prepareLegacyProjectData(
       return rollbackLegacyMigration(moves, moved, createdTargets);
     }
   };
+}
+
+async function retryLegacyCleanup(
+  projectPath: string,
+  previousResult: AgentPluginMigrationResult
+): Promise<LegacyMigrationTransaction> {
+  const cleanupPaths = previousResult.cleanupPaths ?? [];
+  if (cleanupPaths.length === 0) {
+    return noOpLegacyMigration({
+      ...previousResult,
+      status: "blocked",
+      message: "Legacy cleanup cannot retry because its recorded isolation paths are missing."
+    });
+  }
+  for (const cleanup of cleanupPaths) {
+    assertProjectPath(projectPath, cleanup.path);
+    await assertMigrationPathIsSafe(projectPath, cleanup.path);
+  }
+  const result: AgentPluginMigrationResult = { ...previousResult, cleanupPaths: [...cleanupPaths] };
+  return {
+    result,
+    stage: async () => { await verifyMigrationTargets(result); },
+    commit: async () => {
+      for (const cleanup of cleanupPaths) {
+        if (!await pathExists(cleanup.path)) continue;
+        const hash = await calculateMigrationDirectoryHash(cleanup.path);
+        if (hash !== cleanup.contentHash) {
+          result.status = "blocked";
+          result.message = `Refusing cleanup retry because isolation hash changed at ${cleanup.path}.`;
+          return;
+        }
+        try {
+          await rm(cleanup.path, { recursive: true });
+        } catch (error) {
+          result.status = "cleanup-failed";
+          result.message = `Legacy cleanup retry failed at ${cleanup.path}: ${formatError(error)}`;
+          return;
+        }
+      }
+      result.status = "completed";
+      result.completedAt = new Date().toISOString();
+      result.message = undefined;
+    },
+    rollback: async () => []
+  };
+}
+
+async function verifyMigrationTargets(result: AgentPluginMigrationResult): Promise<void> {
+  for (const migration of [...result.migratedFiles ?? [], ...result.migratedRuns ?? []]) {
+    const content = await readFile(migration.targetPath, "utf8");
+    const contentHash = createHash("sha256").update(content).digest("hex");
+    if (contentHash !== migration.contentHash) {
+      throw new Error(`Migrated target verification failed at ${migration.targetPath}.`);
+    }
+  }
+}
+
+async function calculateMigrationDirectoryHash(directoryPath: string): Promise<string> {
+  const hash = createHash("sha256");
+  async function visit(path: string, relativePath: string): Promise<void> {
+    const entries = await readdir(path, { withFileTypes: true });
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      const entryPath = join(path, entry.name);
+      const nextRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        hash.update(`${nextRelativePath}\u0000directory\u0000`);
+        await visit(entryPath, nextRelativePath);
+        continue;
+      }
+      if (!entry.isFile()) throw new Error(`Unsupported legacy migration entry at ${entryPath}.`);
+      hash.update(`${nextRelativePath}\u0000file\u0000`);
+      hash.update(await readFile(entryPath));
+      hash.update("\u0000");
+    }
+  }
+  await visit(directoryPath, "");
+  return hash.digest("hex");
 }
 
 function noOpLegacyMigration(result: AgentPluginMigrationResult): LegacyMigrationTransaction {
@@ -955,6 +1058,7 @@ async function planLegacyConnectorMigration(legacyPath: string, targetPath: stri
   const blockedPaths: string[] = [];
   for (const entry of entries) {
     const sourcePath = join(legacyPath, entry.name);
+    if (await isGeneratedLegacyConnectorArtifact(sourcePath, entry)) continue;
     if (!entry.isFile() || !entry.name.endsWith(".json")) {
       blockedPaths.push(sourcePath);
       continue;
@@ -977,10 +1081,41 @@ async function planLegacyConnectorMigration(legacyPath: string, targetPath: stri
   return { entries: migrationEntries, blockedPaths };
 }
 
+async function isGeneratedLegacyConnectorArtifact(
+  sourcePath: string,
+  entry: import("node:fs").Dirent
+): Promise<boolean> {
+  const generatedFiles = new Map([
+    ["context.md", "# FlowWeave Agent Context"],
+    ["context.json", '"version": 1'],
+    ["codex.md", "# Codex FlowWeave connector"],
+    ["claude.md", "# Claude FlowWeave connector"],
+    ["gemini.md", "# Gemini FlowWeave connector"],
+    ["cursor.md", "# Cursor FlowWeave connector"]
+  ]);
+  if (entry.isFile()) {
+    const marker = generatedFiles.get(entry.name);
+    return marker !== undefined && (await readFile(sourcePath, "utf8")).includes(marker);
+  }
+  if (!entry.isDirectory() || entry.name !== "skills") return false;
+  const hosts = await readdir(sourcePath, { withFileTypes: true });
+  if (hosts.length !== HOST_IDS.length || hosts.some((host) => !host.isDirectory() || !HOST_IDS.includes(host.name as AgentPluginHostId))) {
+    return false;
+  }
+  for (const host of hosts) {
+    const files = await readdir(join(sourcePath, host.name), { withFileTypes: true });
+    if (files.length !== 1 || !files[0].isFile() || files[0].name !== "SKILL.md") return false;
+    const content = await readFile(join(sourcePath, host.name, "SKILL.md"), "utf8");
+    if (!content.includes(`name: flowweave-${host.name}-connector`)) return false;
+  }
+  return true;
+}
+
 type BridgeMigrationRun = {
   sourcePath: string;
   summaryPath: string;
   summaryContent: string;
+  disposition: "completed" | "abandoned";
 };
 
 async function planLegacyBridgeMigration(legacyPath: string, runsPath: string): Promise<{
@@ -1004,20 +1139,7 @@ async function planLegacyBridgeMigration(legacyPath: string, runsPath: string): 
     }
     const files = await readdir(sourcePath, { withFileTypes: true });
     const fileNames = files.map((file) => file.name).sort();
-    if (!files.every((file) => file.isFile()) || !fileNames.includes("completion.json") ||
-      fileNames.some((name) => name !== "request.json" && name !== "completion.json")) {
-      blockedPaths.push(sourcePath);
-      continue;
-    }
-    const completionPath = join(sourcePath, "completion.json");
-    let completion: Record<string, unknown>;
-    try {
-      completion = parseJsonRecord(await readFile(completionPath, "utf8"), "Legacy Agent completion", completionPath);
-    } catch {
-      blockedPaths.push(sourcePath);
-      continue;
-    }
-    if (completion.status !== "completed") {
+    if (!files.every((file) => file.isFile())) {
       blockedPaths.push(sourcePath);
       continue;
     }
@@ -1026,15 +1148,39 @@ async function planLegacyBridgeMigration(legacyPath: string, runsPath: string): 
       blockedPaths.push(summaryPath);
       continue;
     }
+    const isCompleted = fileNames.includes("completion.json") &&
+      fileNames.every((name) => name === "request.json" || name === "completion.json");
+    const isAbandoned = ["instructions.md", "prompt.md", "request.json"].every((name) => fileNames.includes(name)) &&
+      fileNames.every((name) => name === "instructions.md" || name === "prompt.md" || name === "request.json");
+    if (!isCompleted && !isAbandoned) {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    let completion: Record<string, unknown> | undefined;
+    if (isCompleted) {
+      const completionPath = join(sourcePath, "completion.json");
+      try {
+        completion = parseJsonRecord(await readFile(completionPath, "utf8"), "Legacy Agent completion", completionPath);
+      } catch {
+        blockedPaths.push(sourcePath);
+        continue;
+      }
+      if (completion.status !== "completed") {
+        blockedPaths.push(sourcePath);
+        continue;
+      }
+    }
+    const disposition = isCompleted ? "completed" : "abandoned";
     const summaryContent = `${JSON.stringify({
       migratedFrom: sourcePath,
-      completedAt: completion.completedAt,
+      status: disposition,
+      ...(completion ? { completedAt: completion.completedAt } : { abandonedAt: new Date().toISOString() }),
       files: await Promise.all(fileNames.map(async (name) => ({
         name,
         contentHash: createHash("sha256").update(await readFile(join(sourcePath, name), "utf8")).digest("hex")
       })))
     }, null, 2)}\n`;
-    runs.push({ sourcePath, summaryPath, summaryContent });
+    runs.push({ sourcePath, summaryPath, summaryContent, disposition });
   }
   return { runs, blockedPaths };
 }
@@ -1190,7 +1336,19 @@ function readRecentMigrationResult(content: string | undefined, statePath: strin
   if (content === undefined) return { status: "not-run" };
   const state = parseJsonRecord(content, "FlowWeave plugin state", statePath);
   const result = state.recentMigrationResult;
-  if (!isRecord(result) || !["not-run", "completed", "blocked", "failed"].includes(String(result.status))) {
+  if (!isRecord(result)) {
+    throw new Error(`Invalid recent migration result in FlowWeave plugin state at ${statePath}.`);
+  }
+  if (result.status === "failed") {
+    return {
+      ...result,
+      status: "cleanup-failed",
+      message: typeof result.message === "string"
+        ? result.message
+        : "A legacy FlowWeave migration failed before cleanup state was recorded."
+    } as AgentPluginMigrationResult;
+  }
+  if (!["not-run", "completed", "blocked", "cleanup-failed"].includes(String(result.status))) {
     throw new Error(`Invalid recent migration result in FlowWeave plugin state at ${statePath}.`);
   }
   return result as AgentPluginMigrationResult;
