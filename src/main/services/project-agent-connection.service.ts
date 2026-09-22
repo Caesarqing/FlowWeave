@@ -1,14 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type {
-  ArchitectureMap,
-  CodeflowCanvas,
   CodeflowProject,
   ProjectAgentConnectionConfig,
   ProjectAgentConnectionStatus,
-  ProjectAgentPlatform,
-  SequenceDiagramBundle
+  ProjectAgentPlatform
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { buildAgentProtocolContextInstructions } from "./agent-protocol.service";
@@ -18,6 +15,7 @@ const FLOWWEAVE_BLOCK_END = "<!-- flowweave:end -->";
 const CONNECTION_CONFIG_FILE = "agent-connection.json";
 const AGENT_CONTEXT_FILE = "agent-context.md";
 const DEFAULT_PLATFORMS: ProjectAgentPlatform[] = ["codex", "claude", "gemini", "cursor"];
+const AGENT_PROTOCOL_VERSION = 2;
 const CURSOR_FRONTMATTER = [
   "---",
   "description: Use FlowWeave project context when analyzing or changing this project",
@@ -27,17 +25,20 @@ const CURSOR_FRONTMATTER = [
 
 type ProjectArtifacts = {
   project: CodeflowProject;
-  canvas?: CodeflowCanvas;
-  architecture?: ArchitectureMap;
-  sequences?: SequenceDiagramBundle;
-  fileTree?: string;
+  artifactSchemas: ArtifactSchema[];
   taskPaths: string[];
-  warnings: string[];
 };
 
-type ArtifactReadResult<T> = {
-  artifact?: T;
-  warning?: string;
+type ArtifactSchema = {
+  path: string;
+  schemaVersion: number | "text" | "missing" | "unknown";
+};
+
+type AgentContextInput = {
+  projectPath: string;
+  artifacts: ProjectArtifacts;
+  managedBlock: string;
+  contextFingerprint: string;
 };
 
 type PlatformEntry = {
@@ -81,18 +82,17 @@ async function getProjectAgentConnectionStatus(
   }
 
   const platformsToCheck = platform ? [platform] : config.platforms;
-  const connectionIssue = await findConnectionFileIssue(projectPath, platformsToCheck);
+  const contextInput = await createAgentContextInput(projectPath);
+  const connectionIssue = await findConnectionFileIssue(contextInput, platformsToCheck);
   if (connectionIssue) {
     return createStatus(projectPath, config, "needs-refresh", connectionIssue.message, [connectionIssue.filePath]);
   }
-
-  const latestSourceTime = await latestArtifactModificationTime(projectPath);
-  if (latestSourceTime > Date.parse(config.updatedAt)) {
+  if (config.contextFingerprint !== contextInput.contextFingerprint) {
     return createStatus(
       projectPath,
       config,
       "needs-refresh",
-      "FlowWeave project artifacts changed after the Agent context was generated.",
+      "FlowWeave Agent context inputs changed after the connection was generated.",
       [paths.contextPath]
     );
   }
@@ -176,10 +176,9 @@ async function writeProjectAgentConnection(
   platformsToWrite: ProjectAgentPlatform[]
 ): Promise<ProjectAgentConnectionStatus> {
   const paths = connectionPaths(projectPath);
-  const artifacts = await readProjectArtifacts(projectPath);
-  const context = buildAgentContext(projectPath, artifacts);
-  const block = buildManagedInstructionBlock();
-  const plannedUpdates = await planManagedBlockUpsert(platformEntries(projectPath, platformsToWrite), block);
+  const contextInput = await createAgentContextInput(projectPath);
+  const context = buildAgentContext(contextInput);
+  const plannedUpdates = await planManagedBlockUpsert(platformEntries(projectPath, platformsToWrite), contextInput.managedBlock);
 
   await writeTextAtomic(paths.contextPath, context);
   for (const update of plannedUpdates) {
@@ -190,9 +189,14 @@ async function writeProjectAgentConnection(
     version: 1,
     enabled: true,
     platforms: [...configuredPlatforms],
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    contextFingerprint: contextInput.contextFingerprint
   };
   await writeJsonAtomic(paths.configPath, config);
+  const connectionIssue = await findConnectionFileIssue(contextInput, platformsToWrite);
+  if (connectionIssue) {
+    throw new Error(`FlowWeave Agent connection verification failed: ${connectionIssue.message}`);
+  }
   return createStatus(projectPath, config, "ready", "Project instructions and FlowWeave Agent context are ready.", []);
 }
 
@@ -280,144 +284,70 @@ async function requireProjectArtifact(projectPath: string) {
 async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifacts> {
   const root = join(projectPath, FLOWWEAVE_DIR);
   const project = await readRequiredJson<CodeflowProject>(join(root, "project.json"));
-  const canvasPath = join(root, "canvas", "main.canvas.json");
-  const sequencePath = join(root, "sequence-diagrams.json");
-  const [storedCanvas, architecture, storedSequences, fileTree, taskPaths] = await Promise.all([
-    readOptionalJson<unknown>(canvasPath),
-    readOptionalJson<ArchitectureMap>(join(root, "architecture-map.json")),
-    readOptionalJson<unknown>(sequencePath),
+  const [canvas, architecture, sequences, fileTree, taskPaths] = await Promise.all([
+    readOptionalJson<unknown>(join(root, "canvas", "main.canvas.json")),
+    readOptionalJson<unknown>(join(root, "architecture-map.json")),
+    readOptionalJson<unknown>(join(root, "sequence-diagrams.json")),
     readOptionalText(join(root, "context", "file-tree.md")),
     listTaskPaths(join(root, "tasks"), projectPath)
   ]);
-  const canvasResult = currentCanvasArtifact(storedCanvas, canvasPath);
-  const sequenceResult = currentSequenceArtifact(storedSequences, sequencePath);
-  const canvas = canvasResult.artifact;
-  const sequences = sequenceResult.artifact;
-  const scanFingerprint = project.scanFingerprint;
   return {
     project,
-    canvas: artifactMatchesScan(scanFingerprint, canvas?.scanFingerprint) && canvas?.artifactState !== "stale" ? canvas : undefined,
-    architecture: artifactMatchesScan(scanFingerprint, architecture?.metadata?.inputFingerprint) ? architecture : undefined,
-    sequences: artifactMatchesScan(scanFingerprint, sequences?.metadata?.inputFingerprint) ? sequences : undefined,
-    fileTree,
+    artifactSchemas: [
+      { path: ".flowweave/project.json", schemaVersion: project.version },
+      { path: ".flowweave/canvas/main.canvas.json", schemaVersion: schemaVersion(canvas) },
+      { path: ".flowweave/architecture-map.json", schemaVersion: schemaVersion(architecture) },
+      { path: ".flowweave/sequence-diagrams.json", schemaVersion: schemaVersion(sequences) },
+      { path: ".flowweave/context/file-tree.md", schemaVersion: fileTree === undefined ? "missing" : "text" }
+    ],
     taskPaths,
-    warnings: [canvasResult.warning, sequenceResult.warning].filter((warning): warning is string => typeof warning === "string")
   };
 }
 
-function currentCanvasArtifact(value: unknown, filePath: string): ArtifactReadResult<CodeflowCanvas> {
-  if (value === undefined) return {};
-  if (!isRecord(value) || value.version !== 5) {
-    return {
-      warning: `Canvas artifact at ${filePath} uses an unsupported schema and was omitted from Agent context. Re-scan the project to rebuild it.`
-    };
-  }
-  return { artifact: value as CodeflowCanvas };
+function schemaVersion(value: unknown): ArtifactSchema["schemaVersion"] {
+  if (value === undefined) return "missing";
+  if (!isRecord(value) || typeof value.version !== "number") return "unknown";
+  return value.version;
 }
 
-function currentSequenceArtifact(value: unknown, filePath: string): ArtifactReadResult<SequenceDiagramBundle> {
-  if (value === undefined) return {};
-  if (!isRecord(value) || value.version !== 2) {
-    return {
-      warning: `Sequence diagram artifact at ${filePath} uses an unsupported schema and was omitted from Agent context. Regenerate it to include it.`
-    };
-  }
-  return { artifact: value as SequenceDiagramBundle };
+async function createAgentContextInput(projectPath: string): Promise<AgentContextInput> {
+  const resolvedProjectPath = await realpath(projectPath);
+  const artifacts = await readProjectArtifacts(projectPath);
+  const managedBlock = buildManagedInstructionBlock();
+  const contextFingerprint = contentHash(JSON.stringify({
+    projectPath: resolvedProjectPath,
+    scanFingerprint: artifacts.project.scanFingerprint ?? "unavailable",
+    protocolVersion: AGENT_PROTOCOL_VERSION,
+    artifactSchemas: artifacts.artifactSchemas,
+    managedBlockHash: contentHash(managedBlock)
+  }));
+  return { projectPath, artifacts, managedBlock, contextFingerprint };
 }
 
-function artifactMatchesScan(scanFingerprint: string | undefined, artifactFingerprint: string | undefined) {
-  return !scanFingerprint || scanFingerprint === artifactFingerprint;
-}
-
-function buildAgentContext(projectPath: string, artifacts: ProjectArtifacts) {
+function buildAgentContext(input: AgentContextInput) {
+  const { artifacts, contextFingerprint, projectPath } = input;
   const lines = [
     "# FlowWeave Agent Context",
     "",
     `Project: ${artifacts.project.projectName}`,
     `Project root: ${projectPath}`,
-    `Generated: ${new Date().toISOString()}`,
+    `Scan fingerprint: ${artifacts.project.scanFingerprint ?? "unavailable"}`,
+    `Protocol version: ${AGENT_PROTOCOL_VERSION}`,
+    `Context fingerprint: ${contextFingerprint}`,
     "",
     "## Agent Instructions",
     "",
     "- Treat FlowWeave artifacts as navigation context, then verify important claims against the source code.",
-    "- Read source files needed for the user's request. Do not invent files, symbols, calls, or behavior.",
-    "- You may modify project files when the user asks you to implement a change.",
-    "- After modifying files, report the changed file paths and the verification you ran.",
-    "- Ask the user to return to FlowWeave to review Git diff, refresh the project scan, or rollback when needed.",
-    "- When asked to process the FlowWeave Agent Inbox, read the run-specific `.flowweave/runs/<run-id>/agent-request.json` path supplied by FlowWeave and write exactly one response to the request's `responsePath`.",
+    "- Read only the request and artifact paths needed for the current task.",
     "",
     ...buildAgentProtocolContextInstructions(),
     "## FlowWeave Artifacts",
     "",
-    "- Project scan: `.flowweave/project.json`",
-    "- Canvas: `.flowweave/canvas/main.canvas.json`",
-    "- File tree: `.flowweave/context/file-tree.md`",
-    `- Architecture map: ${artifacts.architecture ? "`.flowweave/architecture-map.json`" : "not generated"}`,
-    `- Architectural sequence diagram: ${artifacts.sequences ? "`.flowweave/sequence-diagrams.json`" : "not generated"}`,
-    `- Tasks: ${artifacts.taskPaths.length > 0 ? artifacts.taskPaths.map((path) => `\`${path}\``).join(", ") : "none"}`,
-    "",
-    "## Project Snapshot",
-    "",
-    `- Files: ${artifacts.project.summary.totalFiles}`,
-    `- Folders: ${artifacts.project.summary.totalFolders}`,
-    `- Languages: ${formatLanguages(artifacts.project.summary.languages)}`,
-    `- Git branch: ${artifacts.project.git.branch ?? "unknown"}`,
+    ...artifacts.artifactSchemas.map((artifact) => `- ${artifact.path} (schema v${artifact.schemaVersion})`),
+    `- Active tasks: ${artifacts.taskPaths.length > 0 ? artifacts.taskPaths.map((path) => `\`${path}\``).join(", ") : "none"}`,
     ""
   ];
-
-  appendCanvasSummary(lines, artifacts.canvas);
-  appendArchitectureSummary(lines, artifacts.architecture);
-  appendSequenceSummary(lines, artifacts.sequences);
-  if (artifacts.warnings.length > 0) {
-    lines.push("## Artifact Notices", "", ...artifacts.warnings.map((warning) => `- ${warning}`), "");
-  }
-  if (artifacts.fileTree) {
-    lines.push("## File Tree", "", artifacts.fileTree.trim(), "");
-  }
   return `${lines.join("\n").trim()}\n`;
-}
-
-function appendCanvasSummary(lines: string[], canvas: CodeflowCanvas | undefined) {
-  if (!canvas) return;
-  lines.push("## Canvas Modules", "");
-  for (const node of canvas.nodes) {
-    const files = node.files.length > 0 ? ` Files: ${node.files.join(", ")}.` : "";
-    const assessment = node.assessment
-      ? ` Risk: ${node.assessment.risk.effectiveLevel}${node.assessment.risk.systemScore === undefined ? "" : ` (${node.assessment.risk.systemScore}/100)`}. Confidence: ${node.assessment.confidence.level}${node.assessment.confidence.score === undefined ? "" : ` (${node.assessment.confidence.score}/100)`}.`
-      : " Assessment unavailable.";
-    lines.push(`- ${node.title} (${node.nodeType}): ${node.description || node.role || "No description."}${assessment}${files}`);
-  }
-  lines.push("", "## Canvas Relationships", "");
-  for (const edge of canvas.edges) {
-    lines.push(`- ${edge.source} --${edge.relation}--> ${edge.target}${edge.guidanceNote ? `: ${edge.guidanceNote}` : ""}`);
-  }
-  lines.push("");
-}
-
-function appendArchitectureSummary(lines: string[], architecture: ArchitectureMap | undefined) {
-  if (!architecture) return;
-  lines.push("## Architecture Modules", "");
-  for (const module of architecture.modules) {
-    const assessment = module.assessment
-      ? ` Risk: ${module.assessment.risk.effectiveLevel}. Confidence: ${module.assessment.confidence.level}.`
-      : "";
-    lines.push(`- ${module.title} (${module.category}): ${module.role}.${assessment} Files: ${module.files.join(", ") || "none"}.`);
-  }
-  lines.push("", "## Architecture Relationships", "");
-  for (const relationship of architecture.relationships) {
-    lines.push(`- ${relationship.source} --${relationship.relation}--> ${relationship.target}: ${relationship.description}`);
-  }
-  lines.push("");
-}
-
-function appendSequenceSummary(lines: string[], sequences: SequenceDiagramBundle | undefined) {
-  if (!sequences) return;
-  lines.push(
-    "## Sequence Diagrams",
-    "",
-    `- Architectural: ${sequences.architectural.title}. ${sequences.architectural.summary}`,
-    ""
-  );
 }
 
 function buildManagedInstructionBlock() {
@@ -505,27 +435,15 @@ function markerIndexes(content: string, marker: string) {
   return indexes;
 }
 
-async function latestArtifactModificationTime(projectPath: string) {
-  const root = join(projectPath, FLOWWEAVE_DIR);
-  const paths = [
-    join(root, "project.json"),
-    join(root, "canvas", "main.canvas.json"),
-    join(root, "architecture-map.json"),
-    join(root, "sequence-diagrams.json"),
-    join(root, "context", "file-tree.md")
-  ];
-  const times = await Promise.all(paths.map(async (filePath) => {
-    try {
-      return (await stat(filePath)).mtimeMs;
-    } catch (error) {
-      if (isMissingFileError(error)) return 0;
-      throw error;
-    }
-  }));
-  return Math.max(...times);
+function contentHash(content: string) {
+  return createHash("sha256").update(content).digest("hex");
 }
 
-async function findConnectionFileIssue(projectPath: string, platforms: ProjectAgentPlatform[]): Promise<{ message: string; filePath: string } | undefined> {
+async function findConnectionFileIssue(
+  input: AgentContextInput,
+  platforms: ProjectAgentPlatform[]
+): Promise<{ message: string; filePath: string } | undefined> {
+  const { contextFingerprint, managedBlock, projectPath } = input;
   const contextPath = connectionPaths(projectPath).contextPath;
   const context = await readOptionalText(contextPath);
   if (context === undefined) {
@@ -537,6 +455,12 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
       message: `FlowWeave Agent context root is stale: expected "${projectPath}" but found "${contextRoot ?? "unknown"}".`,
       filePath: contextPath
     };
+  }
+  if (!context.includes(`Protocol version: ${AGENT_PROTOCOL_VERSION}`) || !context.includes(`Agent Inbox Protocol v${AGENT_PROTOCOL_VERSION}`)) {
+    return { message: `FlowWeave Agent context protocol is stale: ${contextPath}`, filePath: contextPath };
+  }
+  if (!context.includes(`Context fingerprint: ${contextFingerprint}`)) {
+    return { message: `FlowWeave Agent context fingerprint is stale: ${contextPath}`, filePath: contextPath };
   }
   if (!context.includes("runs/<run-id>/agent-request.json")) {
     return { message: `FlowWeave Agent context is missing Agent Inbox instructions: ${contextPath}`, filePath: contextPath };
@@ -554,7 +478,7 @@ async function findConnectionFileIssue(projectPath: string, platforms: ProjectAg
       return { message: `FlowWeave managed instructions are missing from: ${entry.filePath}`, filePath: entry.filePath };
     }
     const managedContent = content.slice(block.start, block.end);
-    if (!managedContent.includes("runs/<run-id>/agent-request.json")) {
+    if (managedContent !== managedBlock) {
       return { message: `FlowWeave managed instructions are stale in: ${entry.filePath}`, filePath: entry.filePath };
     }
     if (entry.platform === "cursor" && !content.includes("alwaysApply: true")) {
@@ -620,11 +544,6 @@ async function writeTextAtomic(filePath: string, content: string) {
     await rm(temporaryPath, { force: true });
     throw new Error(`Writing FlowWeave Agent connection file "${filePath}" failed: ${formatError(error)}`);
   }
-}
-
-function formatLanguages(languages: Record<string, number>) {
-  const entries = Object.entries(languages).sort((left, right) => right[1] - left[1]);
-  return entries.length > 0 ? entries.map(([language, count]) => `${language} (${count})`).join(", ") : "unknown";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

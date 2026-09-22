@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,7 +24,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     ...actual,
     rename: async (...args: Parameters<typeof actual.rename>) => {
       const [sourcePath, destinationPath] = args;
-      if (renameFailure.sourceMarker && renameFailure.destinationPath === String(destinationPath) &&
+      if (renameFailure.sourceMarker && (!renameFailure.destinationPath || renameFailure.destinationPath === String(destinationPath)) &&
         String(sourcePath).includes(renameFailure.sourceMarker)) {
         const message = renameFailure.message ?? "Injected filesystem rename failure.";
         renameFailure.sourceMarker = undefined;
@@ -123,7 +123,7 @@ describe("agent-plugin.service", () => {
       pluginId: "flowweave",
       installedVersion: "0.2.0",
       protocolVersion: 2,
-      recentMigrationResult: { status: "not-run" }
+      recentMigrationResult: { status: "completed" }
     });
     expect(state.contentHash).toBe(state.sourceHash);
     expect(state.hostChecks.map(({ hostId, status }) => [hostId, status])).toEqual([
@@ -132,6 +132,126 @@ describe("agent-plugin.service", () => {
       ["gemini", "installed"],
       ["cursor", "installed"]
     ]);
+  });
+
+  it("migrates valid legacy project manifests before installing the plugin state", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const legacyRoot = join(projectPath, ".flowweave", "agent-connectors");
+    const targetRoot = join(projectPath, ".flowweave", "agents", "connectors");
+    const legacyManifest = JSON.stringify({
+      id: "custom:reviewer",
+      name: "Project reviewer",
+      kind: "cli",
+      protocol: "agent-inbox",
+      protocolVersion: 2,
+      command: "reviewer",
+      args: [],
+      capabilities: ["implementation-plan"],
+      description: "Reviews the project"
+    }, null, 2) + "\n";
+    await mkdir(legacyRoot, { recursive: true });
+    await writeFile(join(legacyRoot, "reviewer.json"), legacyManifest, "utf8");
+    await writeManagedHostInstructions(projectPath);
+
+    await installBuiltInAgentPlugin(projectPath);
+
+    await expect(readFile(join(targetRoot, "reviewer.json"), "utf8")).resolves.toBe(legacyManifest);
+    await expect(readFile(join(legacyRoot, "reviewer.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    const state = JSON.parse(await readFile(join(projectPath, ".flowweave", "agent-plugin-state.json"), "utf8")) as {
+      recentMigrationResult: { status: string; migratedFiles?: Array<{ sourcePath: string; targetPath: string }> };
+    };
+    expect(state.recentMigrationResult.status).toBe("completed");
+    expect(state.recentMigrationResult.migratedFiles).toContainEqual(expect.objectContaining({
+      sourcePath: join(legacyRoot, "reviewer.json"),
+      targetPath: join(targetRoot, "reviewer.json")
+    }));
+
+    await installBuiltInAgentPlugin(projectPath);
+    const reinstalledState = JSON.parse(await readFile(join(projectPath, ".flowweave", "agent-plugin-state.json"), "utf8")) as {
+      recentMigrationResult: unknown;
+    };
+    expect(reinstalledState.recentMigrationResult).toEqual(state.recentMigrationResult);
+  });
+
+  it("migrates only explicitly completed legacy bridge runs into a summary", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const bridgeRun = join(projectPath, ".flowweave", "agent-bridge", "run-1");
+    const summaryPath = join(projectPath, ".flowweave", "runs", "run-1", "legacy-summary.json");
+    await mkdir(bridgeRun, { recursive: true });
+    await writeFile(join(bridgeRun, "request.json"), "{\"kind\":\"review\"}\n", "utf8");
+    await writeFile(join(bridgeRun, "completion.json"), "{\"status\":\"completed\",\"completedAt\":\"2026-09-20T00:00:00.000Z\"}\n", "utf8");
+
+    await installBuiltInAgentPlugin(projectPath);
+
+    const summary = JSON.parse(await readFile(summaryPath, "utf8")) as { migratedFrom: string; completedAt: string; files: unknown[] };
+    expect(summary.migratedFrom).toBe(bridgeRun);
+    expect(summary.completedAt).toBe("2026-09-20T00:00:00.000Z");
+    expect(summary.files).toHaveLength(2);
+    await expect(readFile(bridgeRun, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("blocks legacy cleanup without moving manifests when a target conflicts or a response is pending", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const legacyRoot = join(projectPath, ".flowweave", "agent-connectors");
+    const targetRoot = join(projectPath, ".flowweave", "agents", "connectors");
+    const bridgeRun = join(projectPath, ".flowweave", "agent-bridge", "run-1");
+    const source = JSON.stringify({
+      id: "custom:reviewer", name: "Legacy reviewer", protocol: "agent-inbox", protocolVersion: 2,
+      command: "legacy-reviewer", args: [], capabilities: ["implementation-plan"], description: "Legacy"
+    });
+    await mkdir(legacyRoot, { recursive: true });
+    await mkdir(targetRoot, { recursive: true });
+    await mkdir(bridgeRun, { recursive: true });
+    await writeFile(join(legacyRoot, "reviewer.json"), source, "utf8");
+    await writeFile(join(targetRoot, "reviewer.json"), "{\"different\":true}\n", "utf8");
+    await writeFile(join(bridgeRun, "agent-response.json"), "{}\n", "utf8");
+
+    await installBuiltInAgentPlugin(projectPath);
+
+    await expect(readFile(join(legacyRoot, "reviewer.json"), "utf8")).resolves.toBe(source);
+    await expect(readFile(join(targetRoot, "reviewer.json"), "utf8")).resolves.toBe("{\"different\":true}\n");
+    const state = JSON.parse(await readFile(join(projectPath, ".flowweave", "agent-plugin-state.json"), "utf8")) as {
+      recentMigrationResult: { status: string; message?: string };
+    };
+    expect(state.recentMigrationResult.status).toBe("blocked");
+    expect(state.recentMigrationResult.message).toContain(join(legacyRoot, "reviewer.json"));
+  });
+
+  it("preserves unknown bridge files and refuses legacy bridge symlinks", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const bridgeRun = join(projectPath, ".flowweave", "agent-bridge", "run-1");
+    await mkdir(bridgeRun, { recursive: true });
+    await writeFile(join(bridgeRun, "notes.txt"), "user note\n", "utf8");
+
+    await installBuiltInAgentPlugin(projectPath);
+
+    await expect(readFile(join(bridgeRun, "notes.txt"), "utf8")).resolves.toBe("user note\n");
+    const externalPath = await mkdtemp(join(tmpdir(), "flowweave-external-bridge-"));
+    await writeFile(join(externalPath, "keep.txt"), "outside project\n", "utf8");
+    await rm(join(projectPath, ".flowweave", "agent-bridge"), { recursive: true });
+    await symlink(externalPath, join(projectPath, ".flowweave", "agent-bridge"));
+
+    await expect(installBuiltInAgentPlugin(projectPath)).rejects.toThrow("symbolic link");
+    await expect(readFile(join(externalPath, "keep.txt"), "utf8")).resolves.toBe("outside project\n");
+  });
+
+  it("rolls back staged project manifests when legacy cleanup fails", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const legacyRoot = join(projectPath, ".flowweave", "agent-connectors");
+    const targetPath = join(projectPath, ".flowweave", "agents", "connectors", "reviewer.json");
+    const sourcePath = join(legacyRoot, "reviewer.json");
+    const manifest = JSON.stringify({
+      id: "custom:reviewer", name: "Legacy reviewer", protocol: "agent-inbox", protocolVersion: 2,
+      command: "reviewer", args: [], capabilities: ["implementation-plan"], description: "Legacy"
+    });
+    await mkdir(legacyRoot, { recursive: true });
+    await writeFile(sourcePath, manifest, "utf8");
+    renameFailure.sourceMarker = legacyRoot;
+    renameFailure.message = "Injected legacy cleanup failure.";
+
+    await expect(installBuiltInAgentPlugin(projectPath)).rejects.toThrow("Injected legacy cleanup failure");
+    await expect(readFile(sourcePath, "utf8")).resolves.toBe(manifest);
+    await expect(readFile(targetPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it.each([

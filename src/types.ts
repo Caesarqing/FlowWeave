@@ -818,6 +818,7 @@ export type ProjectAgentConnectionConfig = {
   enabled: boolean;
   platforms: ProjectAgentPlatform[];
   updatedAt: string;
+  contextFingerprint?: string;
 };
 export type ProjectAgentConnectionState = "ready" | "needs-refresh" | "disabled" | "failed";
 export type ProjectAgentConnectionStatus = {
@@ -1064,6 +1065,11 @@ export type AgentPluginMigrationResult = {
   status: "not-run" | "completed" | "blocked" | "failed";
   completedAt?: string;
   migratedFiles?: Array<{
+    sourcePath: string;
+    targetPath: string;
+    contentHash: string;
+  }>;
+  migratedRuns?: Array<{
     sourcePath: string;
     targetPath: string;
     contentHash: string;

@@ -11,11 +11,16 @@ import type {
   AgentPluginStatusCheck,
   AgentPluginCheckCode
 } from "../../types";
+import { parseAgentManifest } from "./agent-discovery.service";
 
 const BUILT_IN_PLUGIN_DIR = "flowweave-plugin";
 const MANIFEST_FILE = "manifest.json";
 const EXTERNAL_PLUGIN_ROOT = "plugins";
 const LEGACY_PROJECT_PLUGIN_PATH = ".flowweave/agent-plugins/flowweave";
+const LEGACY_CONNECTOR_DIRECTORY = ".flowweave/agent-connectors";
+const PROJECT_CONNECTOR_DIRECTORY = ".flowweave/agents/connectors";
+const LEGACY_BRIDGE_DIRECTORY = ".flowweave/agent-bridge";
+const AGENT_RUNS_DIRECTORY = ".flowweave/runs";
 const PLUGIN_STATE_PATH = ".flowweave/agent-plugin-state.json";
 const CODEX_MARKETPLACE_FILE = ".agents/plugins/marketplace.json";
 const CLAUDE_MARKETPLACE_FILE = ".claude-plugin/marketplace.json";
@@ -112,6 +117,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
   let stagedPluginActivated = false;
   let legacyPluginBackedUp = false;
   let stateWriteAttempted = false;
+  let legacyMigration: LegacyMigrationTransaction | undefined;
   let installedStatuses: AgentPluginStatus[] | undefined;
   const marketplaceWrites: MarketplacePlan[] = [];
   try {
@@ -156,6 +162,11 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
       legacyPluginBackedUp = true;
     }
 
+    phase = "migrate-legacy-project-data";
+    legacyMigration = await prepareLegacyProjectData(projectPath, recentMigrationResult);
+    recentMigrationResult = legacyMigration.result;
+    await legacyMigration.stage();
+
     phase = "write-plugin-state";
     const hostChecks = await buildHostChecks(projectPath, manifest, installedHash);
     const failedHostCheck = hostChecks.find((hostCheck) => hostCheck.status !== "installed");
@@ -183,7 +194,9 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
       activeHostId = failedInstallCheck.hostId;
       throw new Error(failedInstallCheck.message);
     }
+    await legacyMigration.commit();
   } catch (error) {
+    const migrationRollbackErrors = legacyMigration ? await legacyMigration.rollback() : [];
     const rollbackErrors = await rollbackPluginInstall({
       pluginRoot,
       backupPath,
@@ -198,7 +211,10 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
       legacyPluginBackedUp,
       marketplaceWrites
     });
-    throw pluginInstallationError(phase, sourceRoot, pluginRoot, activeHostId ?? "all", error, rollbackErrors);
+    throw pluginInstallationError(phase, sourceRoot, pluginRoot, activeHostId ?? "all", error, [
+      ...migrationRollbackErrors,
+      ...rollbackErrors
+    ]);
   }
 
   if (!installedStatuses) throw new Error(`FlowWeave plugin installation completed without host status results at ${pluginRoot}.`);
@@ -760,6 +776,289 @@ async function calculatePluginContentHash(pluginRoot: string): Promise<string> {
   const hash = createHash("sha256");
   await updatePluginContentHash(pluginRoot, "", hash);
   return hash.digest("hex");
+}
+
+type LegacyMigrationTransaction = {
+  result: AgentPluginMigrationResult;
+  stage: () => Promise<void>;
+  commit: () => Promise<void>;
+  rollback: () => Promise<string[]>;
+};
+
+type MigrationWrite = {
+  targetPath: string;
+  content: string;
+  sourcePath: string;
+  targetExists: boolean;
+};
+
+type MigrationMove = {
+  sourcePath: string;
+  backupPath: string;
+};
+
+async function prepareLegacyProjectData(
+  projectPath: string,
+  previousResult: AgentPluginMigrationResult
+): Promise<LegacyMigrationTransaction> {
+  const legacyConnectorPath = resolve(projectPath, LEGACY_CONNECTOR_DIRECTORY);
+  const targetConnectorPath = resolve(projectPath, PROJECT_CONNECTOR_DIRECTORY);
+  const legacyBridgePath = resolve(projectPath, LEGACY_BRIDGE_DIRECTORY);
+  const runsPath = resolve(projectPath, AGENT_RUNS_DIRECTORY);
+  assertProjectPath(projectPath, legacyConnectorPath);
+  assertProjectPath(projectPath, targetConnectorPath);
+  assertProjectPath(projectPath, legacyBridgePath);
+  assertProjectPath(projectPath, runsPath);
+  await assertMigrationPathIsSafe(projectPath, legacyConnectorPath);
+  await assertMigrationPathIsSafe(projectPath, targetConnectorPath);
+  await assertMigrationPathIsSafe(projectPath, legacyBridgePath);
+  await assertMigrationPathIsSafe(projectPath, runsPath);
+
+  const connectorPlan = await planLegacyConnectorMigration(legacyConnectorPath, targetConnectorPath);
+  const bridgePlan = await planLegacyBridgeMigration(legacyBridgePath, runsPath);
+  const blockedPaths = [...connectorPlan.blockedPaths, ...bridgePlan.blockedPaths];
+  if (blockedPaths.length > 0) {
+    return noOpLegacyMigration({
+      status: "blocked",
+      message: `Legacy Agent data was preserved because migration is blocked at: ${blockedPaths.join(", ")}.`
+    });
+  }
+  if (connectorPlan.entries.length === 0 && bridgePlan.runs.length === 0) {
+    return noOpLegacyMigration(previousResult.status === "completed" ? previousResult : {
+      status: "completed",
+      completedAt: new Date().toISOString(),
+      migratedFiles: [],
+      migratedRuns: []
+    });
+  }
+  const writes: MigrationWrite[] = [
+    ...connectorPlan.entries.map((entry) => ({
+      sourcePath: entry.sourcePath,
+      targetPath: entry.targetPath,
+      content: entry.content,
+      targetExists: entry.targetExists
+    })),
+    ...bridgePlan.runs.map((run) => ({
+      sourcePath: run.sourcePath,
+      targetPath: run.summaryPath,
+      content: run.summaryContent,
+      targetExists: false
+    }))
+  ];
+  const operationId = randomUUID();
+  const moves: MigrationMove[] = [];
+  if (connectorPlan.entries.length > 0) {
+    moves.push({
+      sourcePath: legacyConnectorPath,
+      backupPath: join(dirname(legacyConnectorPath), `.${basename(legacyConnectorPath)}.flowweave-migration-${operationId}`)
+    });
+  }
+  if (bridgePlan.runs.length > 0) {
+    moves.push({
+      sourcePath: legacyBridgePath,
+      backupPath: join(dirname(legacyBridgePath), `.${basename(legacyBridgePath)}.flowweave-migration-${operationId}`)
+    });
+  }
+  const result: AgentPluginMigrationResult = {
+    status: "completed",
+    completedAt: new Date().toISOString(),
+    migratedFiles: connectorPlan.entries.map((entry) => ({
+      sourcePath: entry.sourcePath,
+      targetPath: entry.targetPath,
+      contentHash: createHash("sha256").update(entry.content).digest("hex")
+    })),
+    migratedRuns: bridgePlan.runs.map((run) => ({
+      sourcePath: run.sourcePath,
+      targetPath: run.summaryPath,
+      contentHash: createHash("sha256").update(run.summaryContent).digest("hex")
+    }))
+  };
+  const createdTargets = new Set<string>();
+  const moved = new Set<string>();
+  let committed = false;
+  return {
+    result,
+    async stage(): Promise<void> {
+      for (const write of writes) {
+        if (write.targetExists) continue;
+        await writeTextAtomic(write.targetPath, write.content);
+        createdTargets.add(write.targetPath);
+      }
+    },
+    async commit(): Promise<void> {
+      try {
+        for (const move of moves) {
+          await rename(move.sourcePath, move.backupPath);
+          moved.add(move.sourcePath);
+        }
+        committed = true;
+      } catch (error) {
+        await rollbackLegacyMigration(moves, moved, createdTargets);
+        throw error;
+      }
+    },
+    async rollback(): Promise<string[]> {
+      if (committed) return [];
+      return rollbackLegacyMigration(moves, moved, createdTargets);
+    }
+  };
+}
+
+function noOpLegacyMigration(result: AgentPluginMigrationResult): LegacyMigrationTransaction {
+  return { result, stage: async () => {}, commit: async () => {}, rollback: async () => [] };
+}
+
+async function rollbackLegacyMigration(
+  moves: MigrationMove[],
+  moved: Set<string>,
+  createdTargets: Set<string>
+): Promise<string[]> {
+  const errors: string[] = [];
+  for (const move of [...moves].reverse()) {
+    if (!moved.has(move.sourcePath)) continue;
+    try {
+      await mkdir(dirname(move.sourcePath), { recursive: true });
+      if (await pathExists(move.backupPath)) await rename(move.backupPath, move.sourcePath);
+    } catch (error) {
+      errors.push(`legacy source at ${move.sourcePath}: ${formatError(error)}`);
+    }
+  }
+  for (const targetPath of createdTargets) {
+    try {
+      await rm(targetPath, { force: true });
+    } catch (error) {
+      errors.push(`staged migration target at ${targetPath}: ${formatError(error)}`);
+    }
+  }
+  return errors;
+}
+
+type ConnectorMigrationEntry = {
+  sourcePath: string;
+  targetPath: string;
+  content: string;
+  targetExists: boolean;
+};
+
+async function planLegacyConnectorMigration(legacyPath: string, targetPath: string): Promise<{
+  entries: ConnectorMigrationEntry[];
+  blockedPaths: string[];
+}> {
+  let entries;
+  try {
+    entries = await readdir(legacyPath, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) return { entries: [], blockedPaths: [] };
+    throw new Error(`Unable to inspect legacy Agent connector directory ${legacyPath}: ${formatError(error)}`);
+  }
+  const migrationEntries: ConnectorMigrationEntry[] = [];
+  const blockedPaths: string[] = [];
+  for (const entry of entries) {
+    const sourcePath = join(legacyPath, entry.name);
+    if (!entry.isFile() || !entry.name.endsWith(".json")) {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    const content = await readFile(sourcePath, "utf8");
+    try {
+      parseAgentManifest(content, sourcePath);
+    } catch {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    const targetPathname = join(targetPath, entry.name);
+    const existing = await readOptionalText(targetPathname);
+    if (existing !== undefined && existing !== content) {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    migrationEntries.push({ sourcePath, targetPath: targetPathname, content, targetExists: existing !== undefined });
+  }
+  return { entries: migrationEntries, blockedPaths };
+}
+
+type BridgeMigrationRun = {
+  sourcePath: string;
+  summaryPath: string;
+  summaryContent: string;
+};
+
+async function planLegacyBridgeMigration(legacyPath: string, runsPath: string): Promise<{
+  runs: BridgeMigrationRun[];
+  blockedPaths: string[];
+}> {
+  let entries;
+  try {
+    entries = await readdir(legacyPath, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) return { runs: [], blockedPaths: [] };
+    throw new Error(`Unable to inspect legacy Agent bridge directory ${legacyPath}: ${formatError(error)}`);
+  }
+  const runs: BridgeMigrationRun[] = [];
+  const blockedPaths: string[] = [];
+  for (const entry of entries) {
+    const sourcePath = join(legacyPath, entry.name);
+    if (!entry.isDirectory()) {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    const files = await readdir(sourcePath, { withFileTypes: true });
+    const fileNames = files.map((file) => file.name).sort();
+    if (!files.every((file) => file.isFile()) || !fileNames.includes("completion.json") ||
+      fileNames.some((name) => name !== "request.json" && name !== "completion.json")) {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    const completionPath = join(sourcePath, "completion.json");
+    let completion: Record<string, unknown>;
+    try {
+      completion = parseJsonRecord(await readFile(completionPath, "utf8"), "Legacy Agent completion", completionPath);
+    } catch {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    if (completion.status !== "completed") {
+      blockedPaths.push(sourcePath);
+      continue;
+    }
+    const summaryPath = join(runsPath, entry.name, "legacy-summary.json");
+    if (await pathExists(summaryPath)) {
+      blockedPaths.push(summaryPath);
+      continue;
+    }
+    const summaryContent = `${JSON.stringify({
+      migratedFrom: sourcePath,
+      completedAt: completion.completedAt,
+      files: await Promise.all(fileNames.map(async (name) => ({
+        name,
+        contentHash: createHash("sha256").update(await readFile(join(sourcePath, name), "utf8")).digest("hex")
+      })))
+    }, null, 2)}\n`;
+    runs.push({ sourcePath, summaryPath, summaryContent });
+  }
+  return { runs, blockedPaths };
+}
+
+async function assertMigrationPathIsSafe(projectPath: string, candidatePath: string): Promise<void> {
+  const normalizedProjectPath = resolve(projectPath);
+  const normalizedCandidatePath = resolve(candidatePath);
+  const pathFromProject = relative(normalizedProjectPath, normalizedCandidatePath);
+  if (pathFromProject === ".." || pathFromProject.startsWith(`..${sep}`) || isAbsolute(pathFromProject)) {
+    throw new Error(`Migration path escapes the project root: ${candidatePath}.`);
+  }
+  const segments = pathFromProject.split(sep).filter(Boolean);
+  let currentPath = normalizedProjectPath;
+  for (const segment of segments) {
+    currentPath = join(currentPath, segment);
+    try {
+      if ((await lstat(currentPath)).isSymbolicLink()) {
+        throw new Error(`Migration path contains a symbolic link: ${currentPath}.`);
+      }
+    } catch (error) {
+      if (isMissingFileError(error)) return;
+      throw error;
+    }
+  }
 }
 
 async function updatePluginContentHash(
