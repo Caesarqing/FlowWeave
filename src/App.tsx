@@ -171,6 +171,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
             ) : app.canvas.selectedNode ? (
               <ModulePanel
                 edges={app.canvas.graphRelations}
+                modules={app.canvas.modules}
                 guidanceOperation={app.canvas.guidanceOperation}
                 node={app.canvas.selectedNode}
                 onDeleteNode={app.canvas.deleteModuleNode}

@@ -167,7 +167,7 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.readModificationDelta, (_event, projectId: unknown, sequenceInstruction: unknown, canvas: unknown) => {
     const value = canvas === undefined
       ? undefined
-      : requireCanvasV4(PROJECT_CHANNELS.readModificationDelta, canvas);
+      : requireCanvasV5(PROJECT_CHANNELS.readModificationDelta, canvas);
     return readModificationDelta(
       resolveProjectPath(requireString(PROJECT_CHANNELS.readModificationDelta, projectId, "projectId")),
       optionalTrimmedString(
@@ -197,12 +197,12 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.saveCanvas, async (_event, projectId: unknown, canvas: unknown, options: unknown) => {
     const safeProjectId = requireString(PROJECT_CHANNELS.saveCanvas, projectId, "projectId");
     const projectPath = resolveProjectPath(safeProjectId);
-    const value = requireCanvasV4(PROJECT_CHANNELS.saveCanvas, canvas);
+    const value = requireCanvasV5(PROJECT_CHANNELS.saveCanvas, canvas);
     const saveOptions = options === undefined
       ? { allowStaleNoop: false }
       : requireObject(PROJECT_CHANNELS.saveCanvas, options, "options") as { allowStaleNoop?: unknown };
     if (value.artifactState !== "current") {
-      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v4 can be saved.`);
+      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v5 can be saved.`);
     }
     for (const node of value.nodes) {
       const override = node.assessment?.risk.override;
@@ -498,7 +498,7 @@ async function readCanvasArtifactState(projectPath: string): Promise<
   const path = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
   try {
     const canvas = JSON.parse(await readFile(path, "utf8")) as CodeflowCanvas;
-    if (canvas.version !== 4) throw new Error("Canvas version must be 4. Re-scan the project to rebuild it.");
+    if (canvas.version !== 5) throw new Error("Canvas version must be 5. Re-scan the project to rebuild it.");
     return { state: "loaded", canvas };
   } catch (error) {
     if (isMissing(error)) return { state: "missing" };
@@ -534,10 +534,10 @@ function requireRuntimeAgentId(channel: string, value: unknown): RuntimeAgentId 
   return requireEnum(channel, value, "agentId", TOOL_IDS);
 }
 
-export function requireCanvasV4(channel: string, value: unknown): CodeflowCanvas {
+export function requireCanvasV5(channel: string, value: unknown): CodeflowCanvas {
   const canvas = requireObject(channel, value, "canvas") as Partial<CodeflowCanvas>;
-  if (canvas.version !== 4 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
-    throw new Error(`[${channel}] Canvas must be a current v4 Canvas. Re-scan the project to rebuild it.`);
+  if (canvas.version !== 5 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
+    throw new Error(`[${channel}] Canvas must be a current v5 Canvas. Re-scan the project to rebuild it.`);
   }
   return canvas as CodeflowCanvas;
 }

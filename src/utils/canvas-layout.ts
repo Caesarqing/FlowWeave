@@ -425,9 +425,9 @@ export function nodeFunctionalModule(node: GraphNode): string {
 }
 
 export function nodeGroupKey(node: GraphNode, mode: Exclude<CanvasLayoutMode, "dependency">): string {
-  if (mode === "runtime" || mode === "technology") return `runtime:${nodeTechnologyStack(node)}`;
-  if (mode === "role" || mode === "architecture") return `role:${nodeArchitectureLayer(node)}`;
-  return `${mode === "functional" ? "functional" : "domain"}:${nodeFunctionalModule(node)}`;
+  if (mode === "technology") return `technology:${nodeTechnologyStack(node)}`;
+  if (mode === "architecture") return `architecture:${nodeArchitectureLayer(node)}`;
+  return `domain:${nodeFunctionalModule(node)}`;
 }
 
 export function traceNodeIds(rootId: string, edges: Edge[], direction: TraceDirection): Set<string> {
@@ -452,15 +452,15 @@ export function traceNodeIds(rootId: string, edges: Edge[], direction: TraceDire
 }
 
 function groupDepths(nodes: FlowWeaveNode[], mode: Exclude<CanvasLayoutMode, "dependency">): Map<string, number> {
-  const order = mode === "runtime" || mode === "technology"
+  const order = mode === "technology"
     ? ["frontend", "backend", "mobile", "data", "infrastructure", "shared", "unknown"]
-    : mode === "role" || mode === "architecture"
+    : mode === "architecture"
       ? ["presentation", "api", "domain", "data", "integration", "infrastructure", "test", "unknown"]
       : [...new Set(nodes.map((node) => nodeFunctionalModule(node.data)))].sort();
   return new Map(nodes.map((node) => {
-    const group = mode === "runtime" || mode === "technology"
+    const group = mode === "technology"
       ? nodeTechnologyStack(node.data)
-      : mode === "role" || mode === "architecture"
+      : mode === "architecture"
         ? nodeArchitectureLayer(node.data)
         : nodeFunctionalModule(node.data);
     const index = order.indexOf(group);

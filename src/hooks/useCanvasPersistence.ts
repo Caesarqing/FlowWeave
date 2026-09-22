@@ -11,7 +11,8 @@ export function useCanvasPersistence(
   snapshot: string,
   modules: GraphNode[],
   relations: GraphEdge[],
-  layout: CanvasLayoutState
+  layout: CanvasLayoutState,
+  orphanedEdges: GraphEdge[]
 ) {
   const { t } = useI18n();
   const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
@@ -22,7 +23,7 @@ export function useCanvasPersistence(
       void window.flowweave?.saveCanvas(
         projectId,
         {
-          version: 4,
+          version: 5,
           id: "main",
           title: "Main Canvas",
           projectPath,
@@ -31,7 +32,8 @@ export function useCanvasPersistence(
           artifactState: "current",
           layout,
           nodes: modules,
-          edges: relations
+          edges: relations,
+          orphanedEdges
         },
         { allowStaleNoop: true }
       ).catch((error) => {
@@ -39,7 +41,7 @@ export function useCanvasPersistence(
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [projectId, projectPath, scanFingerprint, artifactState, snapshot, layout]);
+  }, [projectId, projectPath, scanFingerprint, artifactState, snapshot, layout, orphanedEdges]);
 }
 
 function formatErrorMessage(error: unknown) {

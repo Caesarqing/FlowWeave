@@ -1,6 +1,7 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import type { ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
+import type { CanvasLayoutMode, ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
 import { cn } from "./classnames";
+import { nodeGroupKey } from "./canvas-layout";
 import { relationStyle } from "./relation-styles";
 
 export const HANDLE_COLLAPSE_THRESHOLD = 6;
@@ -38,7 +39,7 @@ export function createFlowEdge(edge: GraphEdge): Edge {
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed, color },
     style: { stroke: color },
-    data: { relation: edge.relation, guidanceNote: edge.guidanceNote, evidence: edge.evidence },
+    data: { relation: edge.relation, guidanceNote: edge.guidanceNote, evidence: edge.evidence, origin: edge.origin, aggregatedEdgeIds: edge.aggregatedEdgeIds, confidence: edge.confidence, edgeClass: edge.edgeClass },
     className: cn("relation-edge", edge.relation)
   };
 }
@@ -51,7 +52,59 @@ export function graphEdgeFromFlow(edge: Edge): GraphEdge {
     target: edge.target,
     relation,
     guidanceNote: edge.data?.guidanceNote as string | undefined,
-    evidence: edge.data?.evidence as GraphEdge["evidence"]
+    evidence: edge.data?.evidence as GraphEdge["evidence"],
+    origin: edge.data?.origin as GraphEdge["origin"],
+    aggregatedEdgeIds: edge.data?.aggregatedEdgeIds as string[] | undefined,
+    confidence: edge.data?.confidence as GraphEdge["confidence"],
+    edgeClass: edge.data?.edgeClass as GraphEdge["edgeClass"]
+  };
+}
+
+export function projectCollapsedFlowGraph(
+  nodes: FlowWeaveNode[],
+  edges: Edge[],
+  mode: CanvasLayoutMode,
+  collapsedGroups: string[]
+): { nodes: FlowWeaveNode[]; edges: Edge[] } {
+  if (mode === "dependency" || collapsedGroups.length === 0) {
+    return { nodes: [...nodes], edges: [...edges] };
+  }
+  const collapsed = new Set(collapsedGroups);
+  const representativeByGroup = new Map<string, string>();
+  for (const node of [...nodes].sort((left, right) => left.id.localeCompare(right.id))) {
+    const group = nodeGroupKey(node.data, mode);
+    if (collapsed.has(group) && !representativeByGroup.has(group)) representativeByGroup.set(group, node.id);
+  }
+  const projectedNodeId = (node: FlowWeaveNode): string => {
+    const group = nodeGroupKey(node.data, mode);
+    return collapsed.has(group) ? representativeByGroup.get(group) ?? node.id : node.id;
+  };
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const projectedEdges = new Map<string, Edge>();
+  for (const edge of edges) {
+    const sourceNode = nodesById.get(edge.source);
+    const targetNode = nodesById.get(edge.target);
+    if (!sourceNode || !targetNode) throw new Error(`Collapsed graph projection found unknown endpoint: edgeId=${edge.id} source=${edge.source} target=${edge.target}`);
+    const source = projectedNodeId(sourceNode);
+    const target = projectedNodeId(targetNode);
+    if (source === target) continue;
+    const relation = (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on";
+    const key = `${source}\u0000${target}\u0000${relation}`;
+    const existing = projectedEdges.get(key);
+    const aggregatedEdgeIds = [...new Set([...(existing?.data?.aggregatedEdgeIds as string[] | undefined ?? []), edge.id])].sort();
+    const evidence = [...(existing?.data?.evidence as GraphEdge["evidence"] ?? []), ...(edge.data?.evidence as GraphEdge["evidence"] ?? [])];
+    const { sourceHandle: _sourceHandle, targetHandle: _targetHandle, ...edgeWithoutHandles } = existing ?? edge;
+    projectedEdges.set(key, {
+      ...edgeWithoutHandles,
+      id: `aggregate:${source}:${target}:${relation}`,
+      source,
+      target,
+      data: { ...(existing?.data ?? edge.data ?? {}), relation, evidence, aggregatedEdgeIds }
+    });
+  }
+  return {
+    nodes: nodes.filter((node) => projectedNodeId(node) === node.id),
+    edges: [...projectedEdges.values()].sort((left, right) => left.id.localeCompare(right.id))
   };
 }
 

@@ -98,6 +98,8 @@ export function ConnectionPanel({
             <p>
               {moduleOptionLabel(sourceNode, selectedEdge.source)} {"->"} {moduleOptionLabel(targetNode, selectedEdge.target)}
             </p>
+            <p>{t("connection.direction", { source: moduleOptionLabel(sourceNode, selectedEdge.source), target: moduleOptionLabel(targetNode, selectedEdge.target) })}</p>
+            <p>{t("connection.confidence", { value: t(`connection.confidence.${selectedEdge.confidence ?? "confirmed"}`) })}</p>
           </section>
           <section className="module-card connection-form">
             <label>
@@ -142,6 +144,12 @@ export function ConnectionPanel({
                 <small>{t("connection.noEvidence")}</small>
               )}
             </div>
+            {selectedEdge.aggregatedEdgeIds && selectedEdge.aggregatedEdgeIds.length > 1 ? (
+              <div className="connection-evidence">
+                <strong>{t("connection.aggregated", { count: selectedEdge.aggregatedEdgeIds.length })}</strong>
+                {selectedEdge.aggregatedEdgeIds.map((edgeId) => <code key={edgeId}>{edgeId}</code>)}
+              </div>
+            ) : null}
             <button className="ghost-button danger-button" type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
               <Trash2 size={15} />
               {t("connection.delete")}

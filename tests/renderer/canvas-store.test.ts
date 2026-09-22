@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { useCanvasStore } from "../../src/stores/canvas.store";
-import type { CanvasLayoutState, GraphNode } from "../../src/types";
+import type { CanvasLayoutState, GraphEdge, GraphNode } from "../../src/types";
 
 describe("canvas store layout modes", () => {
   afterEach(() => {
@@ -14,9 +14,23 @@ describe("canvas store layout modes", () => {
   });
 
   it("preserves a previously stored layout mode when restoring a graph", () => {
-    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, activeMode: "runtime" });
+    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, activeMode: "technology" });
 
-    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("runtime");
+    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("technology");
+  });
+
+  it("retains orphaned manual edges when restoring a v5 Canvas", () => {
+    const orphanedEdges: GraphEdge[] = [{
+      id: "orphan",
+      source: "manual-node",
+      target: "removed-node",
+      relation: "calls",
+      origin: "manual"
+    }];
+
+    useCanvasStore.getState().setGraph([moduleNode], [], [], manualLayout, orphanedEdges);
+
+    expect(useCanvasStore.getState().orphanedEdges).toEqual(orphanedEdges);
   });
 });
 

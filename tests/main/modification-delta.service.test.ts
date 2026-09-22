@@ -112,7 +112,7 @@ describe("modification delta service", () => {
     const path = join(projectPath, ".flowweave", "canvas", "main.canvas.json");
     await writeFile(path, `${JSON.stringify(legacyCanvas, null, 2)}\n`, "utf8");
 
-    await expect(readModificationDelta(projectPath, "")).rejects.toThrow("must be v4. Re-scan the project");
+    await expect(readModificationDelta(projectPath, "")).rejects.toThrow("must be v5. Re-scan the project");
   });
 
   it("absorbs newly generated modules on a new scan without clearing pending user edits", async () => {
@@ -179,7 +179,7 @@ function baselinePath(projectPath: string): string {
 
 function canvasFixture(projectPath: string, patch: Partial<GraphNode> = {}): CodeflowCanvas {
   return {
-    version: 4,
+    version: 5,
     id: "main",
     title: "Main Canvas",
     projectPath,

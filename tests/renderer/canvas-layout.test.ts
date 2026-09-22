@@ -151,10 +151,10 @@ describe("canvas layout and tracing", () => {
     const nodes = [accountApi, accountView, billing].map(createFlowNode);
 
     expect(nodeFunctionalModule(accountApi)).toBe("account");
-    expect(nodeGroupKey(accountView, "functional")).toBe("functional:account");
+    expect(nodeGroupKey(accountView, "domain")).toBe("domain:account");
     expect(nodeFunctionalModule(billing)).toBe("billing");
 
-    const layout = await layoutCanvasNodesWithEngine(nodes, [], "functional", deterministicLayout);
+    const layout = await layoutCanvasNodesWithEngine(nodes, [], "domain", deterministicLayout);
     const positions = new Map(layout.map((item) => [item.id, item.position.x]));
     expect(positions.get("account-api")).toBe(positions.get("account-view"));
     expect(positions.get("account-api")).not.toBe(positions.get("billing"));

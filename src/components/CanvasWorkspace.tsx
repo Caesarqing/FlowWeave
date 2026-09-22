@@ -19,9 +19,9 @@ import { HologridScene } from "./HologridScene";
 import { ModuleNode } from "./nodes/ModuleNode";
 import { RequirementNode } from "./nodes/RequirementNode";
 import { TaskNode } from "./nodes/TaskNode";
-import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
+import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, projectCollapsedFlowGraph, type FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
-import type { ArchitectureLayer, CanvasLayoutMode, CanvasLayoutState, GraphEdgeRelation, GraphViewMode, TechnologyStack } from "../types";
+import type { ArchitectureLayer, CanvasLayoutMode, CanvasLayoutState, GraphEdge, GraphEdgeRelation, GraphViewMode, TechnologyStack } from "../types";
 import {
   layoutCanvasNodes,
   nodeGroupKey,
@@ -51,7 +51,7 @@ type ControlledFlowCanvasProps = {
   onEdgesChange: (changes: EdgeChange[]) => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
   onPaneClick: () => void;
-  onSelectEdge: (edgeId: string) => void;
+  onSelectEdge: (edge: GraphEdge) => void;
   onSelectNode: (nodeId: string) => void;
   onRestoreManualLayout: () => void;
   onSetCollapsedGroups: (groups: string[]) => void;
@@ -81,7 +81,7 @@ export function CanvasWorkspace({
   onOpenProject: () => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
   onPaneClick: () => void;
-  onSelectEdge: (edgeId: string) => void;
+  onSelectEdge: (edge: GraphEdge) => void;
   onSelectNode: (nodeId: string) => void;
   onRestoreManualLayout: () => void;
   onSetCollapsedGroups: (groups: string[]) => void;
@@ -195,7 +195,7 @@ function ControlledFlowCanvas({
         }
       };
     });
-    return decorateFlowGraph(projectedNodes, projectedEdges);
+    return { nodes: projectedNodes, edges: projectedEdges };
   }, [canvasLayout.autoLayouts, edges, layoutMode, nodes, projection]);
   const projectedNodes = projectedFlowGraph.nodes;
   const projectedEdges = projectedFlowGraph.edges;
@@ -211,39 +211,36 @@ function ControlledFlowCanvas({
     () => new Set(filterCanvasNodes(projectedNodes, { role: roleFilter, runtimeTags, domain: "all" }).map((node) => node.id)),
     [projectedNodes, roleFilter, runtimeTags]
   );
-  const collapsedVisibleNodeIds = useMemo(() => {
-    if (layoutMode === "dependency" || canvasLayout.collapsedGroups.length === 0) {
-      return filterVisibleNodeIds;
-    }
-    const representatives = new Map<string, string>();
-    for (const node of projectedNodes.filter((item) => filterVisibleNodeIds.has(item.id)).sort((left, right) => left.id.localeCompare(right.id))) {
-      const group = nodeGroupKey(node.data, layoutMode);
-      if (!representatives.has(group)) representatives.set(group, node.id);
-    }
-    return new Set(projectedNodes
-      .filter((node) => {
-        if (!filterVisibleNodeIds.has(node.id)) return false;
-        const group = nodeGroupKey(node.data, layoutMode);
-        return !canvasLayout.collapsedGroups.includes(group) || representatives.get(group) === node.id;
-      })
-      .map((node) => node.id));
-  }, [canvasLayout.collapsedGroups, filterVisibleNodeIds, layoutMode, projectedNodes]);
+  const collapsedGraph = useMemo(
+    () => projectCollapsedFlowGraph(
+      projectedNodes.filter((node) => filterVisibleNodeIds.has(node.id)),
+      projectedEdges.filter((edge) => filterVisibleNodeIds.has(edge.source) && filterVisibleNodeIds.has(edge.target)),
+      layoutMode,
+      canvasLayout.collapsedGroups
+    ),
+    [canvasLayout.collapsedGroups, filterVisibleNodeIds, layoutMode, projectedEdges, projectedNodes]
+  );
+  const collapsedVisibleNodeIds = useMemo(() => new Set(collapsedGraph.nodes.map((node) => node.id)), [collapsedGraph.nodes]);
+  const decoratedCollapsedGraph = useMemo(
+    () => decorateFlowGraph(collapsedGraph.nodes, collapsedGraph.edges),
+    [collapsedGraph]
+  );
   const filteredEdges = useMemo(
-    () => projectedEdges.filter((edge) => {
+    () => decoratedCollapsedGraph.edges.filter((edge) => {
       const relation = (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on";
       return (relationFilter === "all" || relation === relationFilter) &&
         collapsedVisibleNodeIds.has(edge.source) &&
         collapsedVisibleNodeIds.has(edge.target) &&
         (!tracedNodeIds || (tracedNodeIds.has(edge.source) && tracedNodeIds.has(edge.target)));
     }),
-    [projectedEdges, relationFilter, collapsedVisibleNodeIds, tracedNodeIds]
+    [decoratedCollapsedGraph.edges, relationFilter, collapsedVisibleNodeIds, tracedNodeIds]
   );
   const visibleNodes = useMemo(
-    () => projectedNodes.map((node) => ({
+    () => decoratedCollapsedGraph.nodes.map((node) => ({
       ...node,
       hidden: !collapsedVisibleNodeIds.has(node.id) || Boolean(tracedNodeIds && !tracedNodeIds.has(node.id))
     })),
-    [projectedNodes, collapsedVisibleNodeIds, tracedNodeIds]
+    [decoratedCollapsedGraph.nodes, collapsedVisibleNodeIds, tracedNodeIds]
   );
   const localizedEdges = useMemo(
     () => localizeCanvasEdgeLabels(filteredEdges, t),
@@ -383,6 +380,14 @@ function ControlledFlowCanvas({
         </div>
       </div>
       <div className="canvas-flow-stage">
+        {layoutMode === "execution" ? (
+          <div className="canvas-execution-summary" role="status">
+            <span>{t("canvas.executionInference")}</span>
+            <span>{t("canvas.executionCoverage", { connected: projection.diagnostics.connectedExecutableModuleCount, total: projection.diagnostics.executableModuleCount })}</span>
+            <span>{t("canvas.isolatedModules", { count: projection.diagnostics.isolatedModuleIds.length })}</span>
+            <span>{t("canvas.unresolvedEvents", { count: projection.diagnostics.unresolvedEventCount })}</span>
+          </div>
+        ) : null}
         {filterResult.state === "no-matches" ? (
           <div className="canvas-filter-empty" role="status">
             <span>{t("canvas.filterEmpty")}</span>
@@ -412,7 +417,7 @@ function ControlledFlowCanvas({
           nodeTypes={nodeTypes as NodeTypes}
           nodesDraggable
           onConnect={onConnect}
-          onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
+          onEdgeClick={(_, edge) => onSelectEdge(graphEdgeFromFlow(edge))}
           onEdgesChange={onEdgesChange}
           onNodesChange={onNodesChange}
           onNodeClick={(_, node) => {
@@ -444,9 +449,4 @@ export function localizeCanvasEdgeLabels(edges: Edge[], t: (key: string) => stri
   });
 }
 
-function graphViewMode(mode: CanvasLayoutMode): GraphViewMode {
-  if (mode === "role") return "architecture";
-  if (mode === "runtime") return "technology";
-  if (mode === "functional") return "domain";
-  return mode;
-}
+function graphViewMode(mode: CanvasLayoutMode): GraphViewMode { return mode; }

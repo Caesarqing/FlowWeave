@@ -95,9 +95,10 @@ export function useAppController({
     () =>
       JSON.stringify({
         modules: flow.modules,
-        relations: flow.graphRelations
+        relations: flow.graphRelations,
+        orphanedEdges: flow.orphanedEdges
       }),
-    [flow.modules, flow.graphRelations]
+    [flow.modules, flow.graphRelations, flow.orphanedEdges]
   );
   const agentConnection = useAgentConnection(projectId, projectPath);
   useCanvasPersistence(
@@ -108,7 +109,8 @@ export function useAppController({
     canvasSnapshot,
     flow.modules,
     flow.graphRelations,
-    flow.canvasLayout
+    flow.canvasLayout,
+    flow.orphanedEdges
   );
   const { applySelectedRunArtifact, openGitReviewFromRun, openSelectedAgentInbox, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
@@ -195,7 +197,7 @@ export function useAppController({
 
   function buildCurrentCanvas(): import("../types").CodeflowCanvas {
     return {
-      version: 4,
+      version: 5,
       id: "main",
       title: "Main Canvas",
       projectPath,
@@ -204,7 +206,8 @@ export function useAppController({
       artifactState: "current",
       layout: flow.canvasLayout,
       nodes: flow.modules,
-      edges: flow.graphRelations
+      edges: flow.graphRelations,
+      orphanedEdges: flow.orphanedEdges
     };
   }
 

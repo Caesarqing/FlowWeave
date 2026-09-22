@@ -4,6 +4,7 @@ import type { ConnectionHandleSlot } from "../../types";
 import { cn } from "../../utils/classnames";
 import type { FlowWeaveNode } from "../../utils/graph-converters";
 import { useI18n } from "../../utils/i18n";
+import { localizedArchitectureCategory } from "../../utils/module-text";
 
 export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
   const { t } = useI18n();
@@ -24,7 +25,7 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
     >
       <ConnectionHandles handles={targetHandles} position={Position.Left} selectedEdgeId={data.selectedEdgeId} type="target" />
       <div className="node-meta-line">
-        <span>{data.category ?? t(`canvasNodeKind.${data.kind}`)}</span>
+        <span>{localizedArchitectureCategory(data.category, data.nodeType, t)}</span>
         <strong>{t(`risk.${data.risk}`)}</strong>
       </div>
       <h3>{data.title}</h3>

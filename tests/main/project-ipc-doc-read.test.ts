@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readOptionalProjectTextFile, requireCanvasV4, requireProjectWorkspaceSession } from "../../src/main/ipc/project.ipc";
+import { readOptionalProjectTextFile, requireCanvasV5, requireProjectWorkspaceSession } from "../../src/main/ipc/project.ipc";
 
 describe("project ipc document reads", () => {
   it("returns undefined for missing FlowWeave docs files", async () => {
@@ -48,11 +48,11 @@ describe("project ipc document reads", () => {
     })).toThrow("lastPageByProject");
   });
 
-  it("accepts Canvas v4 and rejects Canvas v3 at the IPC boundary", () => {
-    const canvas = { version: 4, nodes: [], edges: [] };
+  it("accepts Canvas v5 and rejects Canvas v4 at the IPC boundary", () => {
+    const canvas = { version: 5, nodes: [], edges: [] };
 
-    expect(requireCanvasV4("project:save-canvas", canvas)).toBe(canvas);
-    expect(() => requireCanvasV4("project:save-canvas", { ...canvas, version: 3 }))
-      .toThrow("current v4 Canvas. Re-scan the project");
+    expect(requireCanvasV5("project:save-canvas", canvas)).toBe(canvas);
+    expect(() => requireCanvasV5("project:save-canvas", { ...canvas, version: 4 }))
+      .toThrow("current v5 Canvas. Re-scan the project");
   });
 });

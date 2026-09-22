@@ -73,7 +73,7 @@ export type ModuleAssessment = {
 };
 export type TechnologyStack = "frontend" | "backend" | "mobile" | "data" | "infrastructure" | "shared" | "unknown";
 export type ArchitectureLayer = "presentation" | "api" | "domain" | "data" | "integration" | "infrastructure" | "test" | "unknown";
-export type CanvasLayoutMode = "execution" | "dependency" | "role" | "runtime" | "domain" | "technology" | "architecture" | "functional";
+export type CanvasLayoutMode = "execution" | "dependency" | "architecture" | "technology" | "domain";
 export type CanvasClassification = {
   role: ArchitectureLayer;
   runtimeTags: TechnologyStack[];
@@ -207,6 +207,7 @@ export type GraphNode = {
   technologyTags?: TechnologyStack[];
   architectureLayer?: ArchitectureLayer;
   classification?: CanvasClassification;
+  origin?: "generated" | "manual";
 };
 
 export type GraphEdge = {
@@ -216,6 +217,10 @@ export type GraphEdge = {
   relation: GraphEdgeRelation;
   guidanceNote?: string;
   evidence?: ArchitectureEvidence[];
+  origin?: "generated" | "manual";
+  aggregatedEdgeIds?: string[];
+  confidence?: "confirmed" | "inferred";
+  edgeClass?: GraphEdgeClass;
 };
 
 export type NormalizedModule = {
@@ -444,7 +449,7 @@ export type ScanDelta = {
 };
 
 export type CodeflowCanvas = {
-  version: 4;
+  version: 5;
   generatorVersion?: string;
   inputFingerprint?: string;
   id: string;
@@ -456,6 +461,7 @@ export type CodeflowCanvas = {
   layout?: CanvasLayoutState;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  orphanedEdges?: GraphEdge[];
 };
 
 export type ProjectArtifactState = "current" | "stale" | "missing" | "failed";

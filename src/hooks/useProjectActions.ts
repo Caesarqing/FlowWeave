@@ -47,7 +47,9 @@ export function useProjectActions({
     nodes: GraphNode[],
     edges: GraphEdge[],
     files: ProjectFileNode[],
-    layout?: import("../types").CanvasLayoutState
+    layout?: import("../types").CanvasLayoutState,
+    orphanedEdges?: GraphEdge[],
+    preserveCurrentCanvas?: boolean
   ) => void;
   setIsProjectLoading: (value: boolean) => void;
   setLastRunStatus: (value: string) => void;
@@ -110,7 +112,7 @@ export function useProjectActions({
       architectureReviewRef.current = event.status;
       setArchitectureReview(event.status);
       if (event.status.state === "reviewed" && event.graph) {
-        replaceProjectGraph(event.graph.nodes, event.graph.edges, projectFiles);
+        replaceProjectGraph(event.graph.nodes, event.graph.edges, projectFiles, undefined, undefined, true);
         setArtifactStatuses((current) => current ? { ...current, architecture: "current" } : current);
       }
     });
@@ -150,7 +152,7 @@ export function useProjectActions({
         : "local-ready"
     );
     setSequenceReview(result.sequenceReview);
-    replaceProjectGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout);
+    replaceProjectGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout, persistedCanvas?.orphanedEdges);
 
     const truncateNote = result.project.summary.truncated
       ? t("status.projectTruncated", { count: result.project.summary.displayedEntries ?? maxRenderedTreeRows })
@@ -281,7 +283,7 @@ export function useProjectActions({
       }
       setLocalGenerationStatus(result.localGenerationStatus);
       if (shouldApplyLocalArchitectureResult(result.review, architectureReviewRef.current)) {
-        replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles);
+        replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles, undefined, undefined, true);
       }
       setArchitectureReview((current) => {
         const next = mergeArchitectureReviewResult(current, result.review);

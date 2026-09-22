@@ -16,13 +16,14 @@ describe("task-generator.service", () => {
   it("creates a canvas artifact from FlowWeave modules", () => {
     const canvas = createCanvasArtifact("/tmp/project", graphNodes, graphEdges, "scan-1");
 
-    expect(canvas.version).toBe(4);
+    expect(canvas.version).toBe(5);
     expect(canvas.artifactState).toBe("current");
     expect(canvas.generatorVersion).toBe("1.0.0");
     expect(canvas.inputFingerprint).toBe("scan-1");
     expect(canvas.layout?.activeMode).toBe("execution");
     expect(canvas.nodes).toHaveLength(graphNodes.length);
     expect(canvas.edges.some((edge) => edge.source === "user-api" && edge.target === "tests")).toBe(true);
+    expect(canvas.nodes.every((node) => node.origin === "generated")).toBe(true);
   });
 
   it("creates task markdown with module guidance, relations, and acceptance criteria", () => {

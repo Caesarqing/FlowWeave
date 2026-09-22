@@ -223,7 +223,7 @@ async function createProject() {
 
 function createCanvas(projectPath: string, title: string): CodeflowCanvas {
   return {
-    version: 4,
+    version: 5,
     id: "main",
     title: "Main Canvas",
     projectPath,

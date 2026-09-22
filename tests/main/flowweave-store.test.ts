@@ -21,15 +21,26 @@ describe("flowweave-store", () => {
     expect(JSON.parse(await readFile(join(root, ".flowweave", "project.json"), "utf8")).scanFingerprint).toBe("scan-1");
   });
 
-  it("rebuilds Canvas when scanning the project", async () => {
+  it("discards every legacy Canvas field when scanning the project rebuilds v5", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-store-corrupt-canvas-"));
     const canvasPath = join(root, ".flowweave", "canvas", "main.canvas.json");
     await mkdir(join(root, ".flowweave", "canvas"), { recursive: true });
-    await writeFile(canvasPath, "{invalid-json", "utf8");
+    await writeFile(canvasPath, JSON.stringify({
+      version: 4,
+      id: "legacy",
+      nodes: [{ id: "legacy-note", origin: "manual" }],
+      edges: [{ id: "legacy-edge", source: "legacy-note", target: "gone", origin: "manual" }],
+      layout: { activeMode: "role", manualPositions: { "legacy-note": { x: 1, y: 2 } }, autoLayouts: {}, collapsedGroups: [] }
+    }), "utf8");
 
     await writeFlowWeaveProject(root, projectFixture(root), graphNodes, graphEdges, "scan-2");
 
-    expect(JSON.parse(await readFile(canvasPath, "utf8")).version).toBe(4);
+    const canvas = JSON.parse(await readFile(canvasPath, "utf8"));
+    expect(canvas.version).toBe(5);
+    expect(canvas.nodes).toEqual(graphNodes.map((node) => expect.objectContaining({ id: node.id, origin: "generated" })));
+    expect(canvas.nodes.map((node: { id: string }) => node.id)).not.toContain("legacy-note");
+    expect(canvas.edges.map((edge: { id: string }) => edge.id)).not.toContain("legacy-edge");
+    expect(canvas.orphanedEdges).toEqual([]);
     expect(JSON.parse(await readFile(join(root, ".flowweave", "project.json"), "utf8")).scanFingerprint).toBe("scan-2");
   });
 });

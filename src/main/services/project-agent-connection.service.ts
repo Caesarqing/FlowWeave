@@ -307,7 +307,7 @@ async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifac
 
 function currentCanvasArtifact(value: unknown, filePath: string): ArtifactReadResult<CodeflowCanvas> {
   if (value === undefined) return {};
-  if (!isRecord(value) || value.version !== 4) {
+  if (!isRecord(value) || value.version !== 5) {
     return {
       warning: `Canvas artifact at ${filePath} uses an unsupported schema and was omitted from Agent context. Re-scan the project to rebuild it.`
     };

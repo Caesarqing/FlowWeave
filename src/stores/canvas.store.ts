@@ -5,13 +5,14 @@ import { createFlowEdge, createFlowNode, type FlowWeaveNode } from "../utils/gra
 
 type CanvasState = {
   canvasLayout: CanvasLayoutState;
+  orphanedEdges: GraphEdge[];
   modules: GraphNode[];
   edges: Edge[];
   nodes: FlowWeaveNode[];
   projectFiles: ProjectFileNode[];
   expandedPaths: Set<string>;
   selectedNodeId: string;
-  setGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[], layout?: CanvasLayoutState) => void;
+  setGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[], layout?: CanvasLayoutState, orphanedEdges?: GraphEdge[]) => void;
   setEdges: (updater: Edge[] | ((edges: Edge[]) => Edge[])) => void;
   setNodes: (updater: FlowWeaveNode[] | ((nodes: FlowWeaveNode[]) => FlowWeaveNode[])) => void;
   setSelectedNodeId: (selectedNodeId: string) => void;
@@ -25,13 +26,14 @@ type CanvasState = {
 
 export const useCanvasStore = create<CanvasState>((set) => ({
   canvasLayout: emptyLayout(),
+  orphanedEdges: [],
   modules: [],
   edges: [],
   nodes: [],
   projectFiles: [],
   expandedPaths: new Set(),
   selectedNodeId: "",
-  setGraph: (modules, edges, files, layout) => set({
+  setGraph: (modules, edges, files, layout, orphanedEdges) => set({
     modules,
     edges: edges.map(createFlowEdge),
     nodes: modules.map(createFlowNode),
@@ -42,6 +44,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       autoLayouts: {},
       collapsedGroups: []
     },
+    orphanedEdges: orphanedEdges ?? [],
     expandedPaths: new Set(),
     selectedNodeId: modules[0]?.id ?? ""
   }),

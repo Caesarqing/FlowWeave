@@ -13,7 +13,7 @@ export function createCanvasArtifact(
   scanFingerprint: string
 ): CodeflowCanvas {
   return {
-    version: 4,
+    version: 5,
     generatorVersion: GENERATOR_VERSION,
     inputFingerprint: scanFingerprint,
     id: "main",
@@ -28,8 +28,9 @@ export function createCanvasArtifact(
       autoLayouts: {},
       collapsedGroups: []
     },
-    nodes: modules,
-    edges: edges ?? createDefaultEdges(modules)
+    nodes: modules.map((module) => ({ ...module, origin: "generated" })),
+    edges: (edges ?? createDefaultEdges(modules)).map((edge) => ({ ...edge, origin: "generated" })),
+    orphanedEdges: []
   };
 }
 

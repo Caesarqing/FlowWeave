@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { CodeflowCanvas, GraphEdge, GraphNode } from "../../types";
 import { createCanvasArtifact, createTaskArtifact, createTaskMarkdown } from "../services/task-generator.service";
+import { reconcileGeneratedCanvas } from "../services/canvas-migration.service";
 import { FLOWWEAVE_DIR } from "./flowweave-paths";
 import type { CodeflowProject, CodeflowWriteResult, ProjectFileNode } from "./schemas";
 
@@ -33,9 +34,12 @@ async function writeProjectArtifacts(
     mkdir(contextDir, { recursive: true })
   ]);
 
-  const nextCanvas: CodeflowCanvas = createCanvasArtifact(rootPath, modules, edges, scanFingerprint);
+  const nextCanvas: CodeflowCanvas = reconcileGeneratedCanvas(
+    createCanvasArtifact(rootPath, modules, edges, scanFingerprint),
+    await readExistingCanvas(join(canvasDir, "main.canvas.json"))
+  );
   const task = createTaskArtifact(modules, edges, scanFingerprint);
-  const updates = [
+  const updates: Array<{ path: string; content: string; validate?: (content: string) => void }> = [
     {
       path: join(flowweaveRoot, "project.json"),
       content: jsonText({
@@ -50,7 +54,11 @@ async function writeProjectArtifacts(
     { path: join(tasksDir, "current.task.json"), content: jsonText(task) },
     { path: join(contextDir, "file-tree.md"), content: createFileTreeMarkdown(project.files) }
   ];
-  updates.splice(1, 0, { path: join(canvasDir, "main.canvas.json"), content: jsonText(nextCanvas) });
+  updates.splice(1, 0, {
+    path: join(canvasDir, "main.canvas.json"),
+    content: jsonText(nextCanvas),
+    validate: validateCanvasV5Text
+  });
 
   await writeBatchAtomic(updates);
   await removeHistoricalTasks(tasksDir);
@@ -64,7 +72,21 @@ async function writeProjectArtifacts(
   };
 }
 
-async function writeBatchAtomic(updates: Array<{ path: string; content: string }>) {
+async function readExistingCanvas(path: string): Promise<CodeflowCanvas | undefined> {
+  try {
+    const canvas = JSON.parse(await readFile(path, "utf8")) as Partial<CodeflowCanvas> & { version?: unknown };
+    const version = (canvas as { version?: unknown }).version;
+    if (version === 1 || version === 2 || version === 3 || version === 4) return undefined;
+    if (canvas.version === 5 && Array.isArray(canvas.nodes) && Array.isArray(canvas.edges)) return canvas as CodeflowCanvas;
+    throw new Error(`FlowWeave Canvas is not a valid v5 artifact and was preserved: ${path}`);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
+    if (error instanceof Error && error.message.startsWith("FlowWeave Canvas is not a valid v5 artifact")) throw error;
+    throw new Error(`FlowWeave Canvas is unreadable and was preserved: ${path}`, { cause: error });
+  }
+}
+
+async function writeBatchAtomic(updates: Array<{ path: string; content: string; validate?: (content: string) => void }>) {
   const temporary = updates.map((update) => ({
     ...update,
     temporaryPath: join(dirname(update.path), `.${basename(update.path)}.${randomUUID()}.tmp`),
@@ -73,7 +95,11 @@ async function writeBatchAtomic(updates: Array<{ path: string; content: string }
     backedUp: false
   }));
   try {
-    await Promise.all(temporary.map((update) => writeFile(update.temporaryPath, update.content, "utf8")));
+    await Promise.all(temporary.map(async (update) => {
+      await writeFile(update.temporaryPath, update.content, "utf8");
+      const persisted = await readFile(update.temporaryPath, "utf8");
+      update.validate?.(persisted);
+    }));
     for (const update of temporary) {
       if (await pathExists(update.path)) {
         await rename(update.path, update.backupPath);
@@ -113,6 +139,13 @@ async function removeHistoricalTasks(tasksDir: string) {
 
 function jsonText(value: unknown) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function validateCanvasV5Text(content: string) {
+  const canvas = JSON.parse(content) as Partial<CodeflowCanvas>;
+  if (canvas.version !== 5 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
+    throw new Error("Generated Canvas must be a valid v5 artifact before replacement.");
+  }
 }
 
 function createFileTreeMarkdown(nodes: ProjectFileNode[]) {
