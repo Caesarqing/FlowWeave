@@ -901,11 +901,17 @@ async function prepareLegacyProjectData(
           moved.add(move.sourcePath);
         }
         committed = true;
-        await verifyMigrationTargets(result);
         result.cleanupPaths = await Promise.all(moves.map(async (move) => ({
           path: move.backupPath,
           contentHash: await calculateMigrationDirectoryHash(move.backupPath)
         })));
+        try {
+          await verifyMigrationTargets(result);
+        } catch (error) {
+          result.status = "cleanup-failed";
+          result.message = `Migrated target verification failed after isolation: ${formatError(error)}`;
+          return;
+        }
         for (const cleanup of result.cleanupPaths) {
           try {
             await rm(cleanup.path, { recursive: true });
