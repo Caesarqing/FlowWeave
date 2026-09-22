@@ -190,6 +190,3 @@ function isExplicitPath(candidate: string, platform: NodeJS.Platform): boolean {
     ? win32.isAbsolute(candidate) || candidate.includes("\\") || candidate.includes("/")
     : isAbsolute(candidate) || candidate.includes("/");
 }
-
-export const resolveAgentCommand = resolveToolCommand;
-export type ResolvedAgentCommand = ResolvedToolCommand;

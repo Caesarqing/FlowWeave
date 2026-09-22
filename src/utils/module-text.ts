@@ -2,22 +2,6 @@ import type { ArchitectureModuleCategory, GraphNode } from "../types";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
-const generatedSubtitles = new Set([
-  "Request entry and orchestration",
-  "Data model and persistence",
-  "Testing and regression validation",
-  "Backend business module",
-  "请求入口与编排",
-  "数据模型与持久化",
-  "测试与回归验证",
-  "后端业务模块"
-]);
-
-export function localizedModuleSubtitle(node: GraphNode, t: Translate): string {
-  if (!generatedSubtitles.has(node.subtitle)) return node.subtitle;
-  return t(`module.generatedSubtitle.${node.nodeType}`);
-}
-
 export function localizedModuleDescription(node: GraphNode, t: Translate): string {
   if (
     node.description.includes("模块由项目扫描生成") ||

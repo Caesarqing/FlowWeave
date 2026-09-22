@@ -351,10 +351,6 @@ export function buildGuidanceMarkdown(projectLabel: string, nodes: GraphNode[], 
   return buildLegacyCanvasGuidance(buildModificationContext({ projectLabel, nodes, edges }), t);
 }
 
-export function buildTaskJson(projectLabel: string, nodes: GraphNode[], edges: GraphEdge[], t?: Translate) {
-  return buildLegacyCanvasTaskJson(buildModificationContext({ projectLabel, nodes, edges }), t);
-}
-
 export function buildSequenceGuidanceMarkdown(projectLabel: string, bundle: SequenceDiagramBundle) {
   return buildLegacySequenceGuidance(buildModificationContext({ projectLabel, nodes: [], edges: [], sequenceBundle: bundle }));
 }

@@ -102,10 +102,6 @@ export async function getChangedFiles(projectPath: string): Promise<ChangedFile[
     .filter((file): file is ChangedFile => Boolean(file));
 }
 
-export async function importPullRequestDiff(_projectPath: string, _prUrl: string): Promise<string> {
-  throw new Error("GitHub PR diff import is not implemented in this local-only build.");
-}
-
 type GitContext = {
   repoRoot: string;
   pathspec: string;

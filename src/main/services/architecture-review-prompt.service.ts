@@ -273,7 +273,6 @@ function renderPrompt(
   evidence: ArchitectureReviewPromptEvidence[]
 ): string {
   const moduleIndexes = new Map(modules.map((module, index) => [module.id, index]));
-  const relationshipIndexes = new Map(relationships.map((relationship, index) => [relationship.id, index]));
   const categories = createStringDictionary(modules.map((module) => module.category));
   const roles = createStringDictionary(modules.map((module) => module.role));
   const relations = createStringDictionary(relationships.map((relationship) => relationship.relation));

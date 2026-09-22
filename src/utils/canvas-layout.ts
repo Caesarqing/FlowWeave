@@ -131,7 +131,6 @@ async function layoutExecutionNodesWithEngine(
   }
   const componentEdges = projectComponentEdges(executionEdges, componentByNodeId);
   const componentDepths = longestPathDepths(components, componentEdges);
-  const componentById = new Map(components.map((component) => [component.id, component]));
   const componentNodes = components.map((component) => {
     const members = component.nodeIds.map((id) => nodeById.get(id)).filter((node): node is FlowWeaveNode => Boolean(node));
     const height = component.cycleGroupId

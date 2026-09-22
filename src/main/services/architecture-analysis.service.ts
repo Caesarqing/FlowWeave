@@ -20,7 +20,6 @@ import type {
   ProjectStructureFacts,
   RuntimeAgentId,
   SemanticRelation,
-  StructureSymbol,
   TechnologyStack,
   ToolRunResult,
 } from "../../types";
@@ -33,7 +32,6 @@ import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { parseArchitectureReviewResponse } from "./structured-output.service";
 import { assessModules } from "../../utils/module-assessment";
 import {
-  adoptArchitectureReview,
   createArchitectureInputFingerprint,
   enhanceLocalArchitecture,
   startArchitectureReview,
@@ -520,29 +518,6 @@ function withLocalArchitectureMetadata(
   };
 }
 
-function failedArchitectureResult(
-  agentId: RuntimeAgentId,
-  code: "agent-failed" | "invalid-output" | "quality-rejected",
-  message: string,
-  runIds: string[],
-  firstFailure?: string,
-  retryFailure?: string
-): Extract<ArchitectureAnalysisResult, { outcome: "failed" }> {
-  return {
-    outcome: "failed",
-    localGenerationStatus: "failed",
-    error: {
-      code,
-      message,
-      agentId,
-      runId: runIds.at(-1),
-      attemptRunIds: runIds,
-      firstFailure,
-      retryFailure
-    }
-  };
-}
-
 function collectStdout(events: Array<{ type: string; content?: string }>) {
   return events.filter((event) => event.type === "stdout").map((event) => event.content ?? "").join("\n");
 }
@@ -745,35 +720,6 @@ function applyModuleIds(files: FileInsight[], modules: ArchitectureModule[]) {
   const moduleByFile = new Map<string, string>();
   modules.forEach((module) => module.files.forEach((file) => moduleByFile.set(file, module.id)));
   return files.map((file) => ({ ...file, moduleId: moduleByFile.get(file.path), role: file.role ?? fileRoleFromInsight(file, modules.find((module) => module.id === moduleByFile.get(file.path))?.category) }));
-}
-
-function fallbackCategoryWithRelations(
-  files: FileInsight[],
-  facts: ProjectStructureFacts
-): ArchitectureModuleCategory {
-  const paths = new Set(files.map((file) => file.path));
-  const httpRelations = (facts.relations ?? []).filter((relation) => relation.kind === "http");
-  if (httpRelations.some((relation) => relation.targetFile && paths.has(relation.targetFile))) {
-    return "api-boundary";
-  }
-  if (
-    httpRelations.some((relation) => relation.sourceFile && paths.has(relation.sourceFile)) &&
-    files.some((file) => /(^|\/)(app|index|main|page|view|screen)[^/]*\.(tsx?|jsx?|vue)$/i.test(file.path))
-  ) {
-    return "api-boundary";
-  }
-  return fallbackCategory(files);
-}
-
-function fallbackCategory(files: FileInsight[]): ArchitectureModuleCategory {
-  const text = files.map((file) => `${file.path} ${file.imports.join(" ")} ${file.externalCalls.map((call) => call.kind).join(" ")}`).join("\n");
-  if (/test|spec|__tests__/i.test(text)) return "test-surface";
-  if (/controller|route|router|api|endpoint/i.test(text)) return "api-boundary";
-  if (/repository|database|prisma|schema|migration|sql|mongoose|sequelize|knex|db\b/i.test(text)) return "data-access";
-  if (/https?:|fetch|axios|requests|external|webhook|client/i.test(text)) return "external-integration";
-  if (/worker|job|queue|cron|schedule|consumer/i.test(text)) return "job-worker";
-  if (/util|helper|shared|common|constants|config/i.test(text)) return "shared-utility";
-  return "domain-service";
 }
 
 function architectureRelationFromSemantic(kind: import("../../types").SemanticRelation["kind"]): GraphEdgeRelation {

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, BuiltInAgentId, CustomAgentId, CustomAgentInput, RuntimeAgentId, ToolAdapter } from "../../types";
+import type { AgentCapability, AgentDefinition, AgentId, AgentProtocol, CustomAgentId, CustomAgentInput, RuntimeAgentId, ToolAdapter } from "../../types";
 import { ClaudeCodeAdapter } from "../agents/claude-code.adapter";
 import { CodexLocalAdapter } from "../agents/codex-local.adapter";
 import { CursorAdapter } from "../agents/cursor.adapter";
@@ -262,16 +262,6 @@ export function createAdapterFromDefinition(definition: AgentDefinition): ToolAd
   return new CustomCliAdapter(definition);
 }
 
-export function isBuiltInAgentId(agentId: RuntimeAgentId): agentId is BuiltInAgentId {
-  return (
-    agentId === "claude-code" ||
-    agentId === "claude-desktop" ||
-    agentId === "codex-local" ||
-    agentId === "codex-desktop" ||
-    agentId === "gemini-cli" ||
-    agentId === "cursor"
-  );
-}
 
 export function isCustomAgentId(agentId: string): agentId is CustomAgentId {
   return agentId.startsWith("custom:");

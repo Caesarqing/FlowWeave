@@ -135,13 +135,6 @@ export function buildSequenceFlowNodes(diagram: SequenceDiagram): SequenceFlowNo
   return nodes;
 }
 
-export function getSequenceFlowBounds(diagram: SequenceDiagram) {
-  return {
-    width: Math.max(860, diagram.participants.length * LANE_WIDTH + 160),
-    height: Math.max(620, MESSAGE_START_Y + diagram.messages.length * MESSAGE_GAP_Y + LIFELINE_PADDING_BOTTOM)
-  };
-}
-
 function participantAccent(index: number) {
   const palette = ["#42f5a7", "#fb923c", "#60a5fa", "#8b5cf6", "#fbbf24", "#f472b6", "#2dd4bf", "#e879f9"];
   return palette[index % palette.length];

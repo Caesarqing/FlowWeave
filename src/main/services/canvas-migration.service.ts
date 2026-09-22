@@ -1,4 +1,4 @@
-import type { CodeflowCanvas, GraphEdge, GraphNode } from "../../types";
+import type { CodeflowCanvas, GraphEdge } from "../../types";
 
 export function reconcileGeneratedCanvas(generated: CodeflowCanvas, existing: CodeflowCanvas | undefined): CodeflowCanvas {
   if (!existing || existing.version !== 5) return generated;

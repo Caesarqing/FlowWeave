@@ -26,10 +26,3 @@ export type {
   ToolRunResult,
   ToolRunStatus
 };
-
-export type AgentId = ToolId;
-export type AgentRunStatus = ToolRunStatus;
-export type AgentRunEvent = ToolRunEvent;
-export type AgentRunRequest = ToolRunRequest;
-export type AgentRunResult = ToolRunResult;
-export type AgentAdapter = ToolAdapter;

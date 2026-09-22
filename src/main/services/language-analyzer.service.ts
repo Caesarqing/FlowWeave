@@ -46,10 +46,6 @@ export async function analyzeSourceFile(
   return analyzer.analyze(filePath, content, projectFiles);
 }
 
-export function listLanguageAnalyzers(): Array<{ id: string }> {
-  return analyzers.map((analyzer) => ({ id: analyzer.id }));
-}
-
 function createTypeScriptAnalyzer(): LanguageAnalyzer {
   return {
     id: "typescript-ast",

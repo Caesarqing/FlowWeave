@@ -41,10 +41,6 @@ export function finishOperation(operationId: string): void {
   operations.delete(operationId);
 }
 
-export function resetOperationsForTests(): void {
-  operations.clear();
-}
-
 function requireOperation(operationId: string): ActiveOperation {
   if (!/^operation-[a-f0-9-]{36}$/.test(operationId)) {
     throw new Error(`Invalid FlowWeave operation id: ${operationId}`);

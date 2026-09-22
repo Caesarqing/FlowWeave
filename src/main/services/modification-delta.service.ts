@@ -53,10 +53,6 @@ export async function acknowledgeModificationChanges(
   return acknowledged;
 }
 
-export function modificationBaselinePath(projectPath: string): string {
-  return baselinePath(projectPath);
-}
-
 async function readOrInitializeBaseline(
   projectPath: string,
   snapshot: ModificationSnapshot,

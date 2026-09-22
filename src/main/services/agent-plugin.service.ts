@@ -285,12 +285,6 @@ async function readInstalledManifest(manifestPath: string): Promise<AgentPluginM
   return parseAgentPluginManifest(value, manifestPath);
 }
 
-type ProjectPluginInstallation = {
-  status: AgentPluginStatus["status"];
-  installedVersion?: string;
-  message: string;
-};
-
 type NativePluginManifest = {
   name: string;
   version?: string;
@@ -677,10 +671,6 @@ function parseAgentPluginManifest(value: unknown, manifestPath: string): AgentPl
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === "string";
 }
 
 function buildCodexMarketplace() {

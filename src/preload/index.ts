@@ -153,8 +153,6 @@ const flowweaveApi = {
 
 contextBridge.exposeInMainWorld("flowweave", flowweaveApi);
 
-export type FlowWeaveApi = typeof flowweaveApi;
-
 async function invokeFlowWeave(channel: string, ...args: unknown[]): Promise<unknown> {
   try {
     return await electronIpcRenderer.invoke(channel, ...args);
