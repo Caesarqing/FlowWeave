@@ -30,6 +30,8 @@ import {
 } from "../utils/canvas-layout";
 import { filterCanvasNodes, getCanvasFilterResult } from "../utils/canvas-filters";
 import { projectGraphForView } from "../utils/graph-view-projection";
+import type { GraphProjectionDiagnostics } from "../utils/graph-view-projection";
+import { relationOptions, relationStyle } from "../utils/relation-styles";
 import { Button } from "./Button";
 
 const nodeTypes = {
@@ -41,6 +43,21 @@ const nodeTypes = {
   agentNode: AgentNode,
   diffNode: DiffNode
 };
+
+export type ExecutionCoverageSummary = {
+  percent: number;
+  hasLimitedEvidence: boolean;
+};
+
+export function executionCoverageSummary(diagnostics: GraphProjectionDiagnostics): ExecutionCoverageSummary {
+  const percent = diagnostics.executableModuleCount === 0
+    ? 100
+    : Math.round((diagnostics.connectedExecutableModuleCount / diagnostics.executableModuleCount) * 100);
+  return {
+    percent,
+    hasLimitedEvidence: percent < 100 || diagnostics.unresolvedEventCount > 0 || diagnostics.hiddenDependencyEdgeCount > 0
+  };
+}
 
 type ControlledFlowCanvasProps = {
   canvasLayout: CanvasLayoutState;
@@ -199,6 +216,7 @@ function ControlledFlowCanvas({
   }, [canvasLayout.autoLayouts, edges, layoutMode, nodes, projection]);
   const projectedNodes = projectedFlowGraph.nodes;
   const projectedEdges = projectedFlowGraph.edges;
+  const executionCoverage = executionCoverageSummary(projection.diagnostics);
   const tracedNodeIds = useMemo(
     () => focusedNodeId && traceDirection !== "off" ? traceNodeIds(focusedNodeId, projectedEdges, traceDirection) : undefined,
     [projectedEdges, focusedNodeId, traceDirection]
@@ -320,14 +338,31 @@ function ControlledFlowCanvas({
             </select>
           </label>
           {layoutMode === "execution" ? (
-            <label className="canvas-inferred-overlay-toggle">
-              <input
-                checked={includeInferredDependencyOverlay}
-                onChange={(event) => setIncludeInferredDependencyOverlay(event.target.checked)}
-                type="checkbox"
-              />
-              <span>{t("canvas.inferredDependencyOverlay")}</span>
-            </label>
+            <>
+              <label className="canvas-inferred-overlay-toggle">
+                <input
+                  checked={includeInferredDependencyOverlay}
+                  onChange={(event) => setIncludeInferredDependencyOverlay(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>{t("canvas.inferredDependencyOverlay")}</span>
+              </label>
+              <span className="canvas-execution-summary" role="status">
+                {t("canvas.executionCoverage", {
+                  connected: projection.diagnostics.connectedExecutableModuleCount,
+                  total: projection.diagnostics.executableModuleCount,
+                  percent: executionCoverage.percent
+                })}
+                {projection.diagnostics.isolatedModuleIds.length > 0 ? ` · ${t("canvas.isolatedExecutableModules", { count: projection.diagnostics.isolatedModuleIds.length })}` : ""}
+                {projection.diagnostics.unresolvedEventCount > 0 ? ` · ${t("canvas.unresolvedEvents", { count: projection.diagnostics.unresolvedEventCount })}` : ""}
+              </span>
+              <span className="canvas-execution-note">
+                {t("canvas.executionStaticInference")}
+                {executionCoverage.hasLimitedEvidence && projection.diagnostics.hiddenDependencyEdgeCount > 0 && !includeInferredDependencyOverlay
+                  ? ` ${t("canvas.executionEvidenceWarning", { count: projection.diagnostics.hiddenDependencyEdgeCount })}`
+                  : ""}
+              </span>
+            </>
           ) : null}
           <label>
             <span>{t("canvas.technologyFilter")}</span>
@@ -383,6 +418,17 @@ function ControlledFlowCanvas({
         </div>
       </div>
       <div className="canvas-flow-stage">
+        <details className="canvas-relation-legend">
+          <summary>{t("canvas.relationLegend")}</summary>
+          <div>
+            {relationOptions.map((relation) => (
+              <span key={relation}>
+                <i style={{ background: relationStyle[relation].color }} />
+                {t(`relation.${relation}Accent`)}
+              </span>
+            ))}
+          </div>
+        </details>
         {filterResult.state === "no-matches" ? (
           <div className="canvas-filter-empty" role="status">
             <span>{t("canvas.filterEmpty")}</span>

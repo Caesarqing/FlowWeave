@@ -40,6 +40,9 @@ describe("i18n translations", () => {
     expect(translate("en", "agent.protocolDesktop")).toBe("Desktop");
     expect(translate("en", "agent.capabilityArtifactAnalysis")).toBe("Artifact analysis");
     expect(translate("en", "module.manualSubtitle")).toBe("Manual module");
+    expect(translate("en", "module.evidenceSupported")).toBe("Source evidence available");
+    expect(translate("en", "canvas.executionStaticInference")).toContain("static inference");
+    expect(translate("en", "canvas.relationLegend")).toBe("Relation legend");
     expect(translate("en", "assessment.high")).toBe("high");
     expect(translate("en", "module.riskOverridePrompt")).toContain("overridden");
     expect(translate("en", "artifact.state.stale")).toBe("Outdated");
@@ -73,6 +76,9 @@ describe("i18n translations", () => {
     expect(translate("zh-CN", "agent.protocolDesktop")).toBe("桌面端");
     expect(translate("zh-CN", "agent.capabilityArtifactAnalysis")).toBe("产物分析");
     expect(translate("zh-CN", "module.manualSubtitle")).toBe("手动补充模块");
+    expect(translate("zh-CN", "module.evidenceSupported")).toBe("已有源代码依据");
+    expect(translate("zh-CN", "canvas.executionStaticInference")).toContain("静态推断");
+    expect(translate("zh-CN", "canvas.relationLegend")).toBe("关系图例");
     expect(translate("zh-CN", "assessment.high")).toBe("高");
     expect(translate("zh-CN", "module.riskOverridePrompt")).toContain("覆写");
     expect(translate("zh-CN", "artifact.state.stale")).toBe("已过期");

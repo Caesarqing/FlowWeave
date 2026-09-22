@@ -16,9 +16,33 @@ import { AgentGuidanceComposer } from "./AgentGuidanceComposer";
 const nodeTypeOptions: GraphNodeType[] = ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"];
 const riskOptions: AssessmentLevel[] = ["low", "medium", "high", "unknown"];
 
+export type ModuleDisplaySummary = {
+  entrySymbol: string | undefined;
+  upstreamCount: number;
+  downstreamCount: number;
+  evidenceStatus: "supported" | "missing";
+};
+
+export function buildModuleDisplaySummary(node: GraphNode, edges: GraphEdge[]): ModuleDisplaySummary {
+  const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+  const entrySymbol = node.symbols?.find((symbol) => symbol.exported)?.name ?? node.symbols?.[0]?.name;
+  return {
+    entrySymbol,
+    upstreamCount: relatedEdges.filter((edge) => edge.target === node.id).length,
+    downstreamCount: relatedEdges.filter((edge) => edge.source === node.id).length,
+    evidenceStatus: node.evidence?.length || relatedEdges.some((edge) => edge.evidence?.length) ? "supported" : "missing"
+  };
+}
+
+export function formatModuleRelation(edge: GraphEdge, modules: GraphNode[]): string {
+  const titleById = new Map(modules.map((module) => [module.id, module.title]));
+  return `${titleById.get(edge.source) ?? edge.source} -> ${titleById.get(edge.target) ?? edge.target}`;
+}
+
 export function ModulePanel({
   edges,
   guidanceOperation,
+  modules,
   node,
   onDeleteNode,
   onGuidanceChange,
@@ -29,6 +53,7 @@ export function ModulePanel({
 }: {
   edges: GraphEdge[];
   guidanceOperation: "save" | "send" | "";
+  modules: GraphNode[];
   node: GraphNode;
   onDeleteNode: (nodeId: string) => void;
   onGuidanceChange: (value: string) => void;
@@ -46,6 +71,7 @@ export function ModulePanel({
     relations: true
   });
   const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+  const moduleSummary = buildModuleDisplaySummary(node, edges);
   const fileTree = useMemo(() => buildModuleFileTree(node.files, node.fileRoles), [node.fileRoles, node.files]);
   const localizedDescription = localizedModuleDescription(node, t);
   const guidanceValue = editableModuleGuidance(node, t);
@@ -102,6 +128,14 @@ export function ModulePanel({
         <h2>{node.title}</h2>
         <p>{localizedDescription}</p>
         {localizedRole ? <p className="module-role">{localizedRole}</p> : null}
+        <div className="assessment-summary" aria-label={t("module.displaySummary")}>
+          <span>{t("module.entrySymbol", { symbol: moduleSummary.entrySymbol ?? t("module.noEntrySymbol") })}</span>
+          <span>{t("module.upstreamCount", { count: moduleSummary.upstreamCount })}</span>
+          <span>{t("module.downstreamCount", { count: moduleSummary.downstreamCount })}</span>
+          <span className={cn("confidence-chip", moduleSummary.evidenceStatus)}>
+            {t(`module.evidence${moduleSummary.evidenceStatus === "supported" ? "Supported" : "Missing"}`)}
+          </span>
+        </div>
         {node.assessment ? (
           <div className="assessment-summary">
             <span className="confidence-chip">
@@ -220,7 +254,7 @@ export function ModulePanel({
               <div className="relation-row" key={edge.id}>
                 <GitPullRequestArrow size={14} />
                 <span>
-                  {edge.source} <ChevronRight size={12} /> {edge.target}
+                  {formatModuleRelation(edge, modules)}
                 </span>
                 <strong>{t(`relation.${edge.relation}Accent`)}</strong>
                 {edge.guidanceNote ? <em>{edge.guidanceNote}</em> : null}
