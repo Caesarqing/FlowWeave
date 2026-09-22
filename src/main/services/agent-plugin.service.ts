@@ -1058,6 +1058,7 @@ async function planLegacyConnectorMigration(legacyPath: string, targetPath: stri
   const blockedPaths: string[] = [];
   for (const entry of entries) {
     const sourcePath = join(legacyPath, entry.name);
+    if (await isGeneratedLegacyConnectorArtifact(sourcePath, entry)) continue;
     if (!entry.isFile() || !entry.name.endsWith(".json")) {
       blockedPaths.push(sourcePath);
       continue;
@@ -1078,6 +1079,36 @@ async function planLegacyConnectorMigration(legacyPath: string, targetPath: stri
     migrationEntries.push({ sourcePath, targetPath: targetPathname, content, targetExists: existing !== undefined });
   }
   return { entries: migrationEntries, blockedPaths };
+}
+
+async function isGeneratedLegacyConnectorArtifact(
+  sourcePath: string,
+  entry: import("node:fs").Dirent
+): Promise<boolean> {
+  const generatedFiles = new Map([
+    ["context.md", "# FlowWeave Agent Context"],
+    ["context.json", '"version": 1'],
+    ["codex.md", "# Codex FlowWeave connector"],
+    ["claude.md", "# Claude FlowWeave connector"],
+    ["gemini.md", "# Gemini FlowWeave connector"],
+    ["cursor.md", "# Cursor FlowWeave connector"]
+  ]);
+  if (entry.isFile()) {
+    const marker = generatedFiles.get(entry.name);
+    return marker !== undefined && (await readFile(sourcePath, "utf8")).includes(marker);
+  }
+  if (!entry.isDirectory() || entry.name !== "skills") return false;
+  const hosts = await readdir(sourcePath, { withFileTypes: true });
+  if (hosts.length !== HOST_IDS.length || hosts.some((host) => !host.isDirectory() || !HOST_IDS.includes(host.name as AgentPluginHostId))) {
+    return false;
+  }
+  for (const host of hosts) {
+    const files = await readdir(join(sourcePath, host.name), { withFileTypes: true });
+    if (files.length !== 1 || !files[0].isFile() || files[0].name !== "SKILL.md") return false;
+    const content = await readFile(join(sourcePath, host.name, "SKILL.md"), "utf8");
+    if (!content.includes(`name: flowweave-${host.name}-connector`)) return false;
+  }
+  return true;
 }
 
 type BridgeMigrationRun = {
