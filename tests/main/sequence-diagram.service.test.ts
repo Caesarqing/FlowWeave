@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
 import {
+  SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS,
+  SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS,
+  SequenceDiagramPromptBudgetExceededError,
   buildSequenceDiagramRevisionPrompt,
   buildSequenceDiagramPrompt,
   generateSequenceDiagrams,
@@ -17,37 +20,252 @@ import { buildProjectStructureFacts } from "../../src/main/services/structure-ex
 import { installBuiltInAgentPlugin } from "../../src/main/services/agent-plugin.service";
 import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
-import type { CodeflowProject, SequenceDiagramBundle } from "../../src/types";
+import type { CodeflowProject, SequenceDiagram, SequenceDiagramBundle } from "../../src/types";
 
 describe("sequence-diagram.service", () => {
-  it("builds a prompt for architectural diagrams only", async () => {
-    const root = await createFixtureFiles();
-    const facts = await buildProjectStructureFacts(projectFixture(root));
-    const prompt = buildSequenceDiagramPrompt(facts);
+  it("builds a prompt for architectural diagrams only", () => {
+    const diagram = diagramJson([
+      {
+        id: "controller-service",
+        sequence: 1,
+        from: "frontend-app",
+        to: "api-gateway",
+        kind: "sync",
+        label: "POST /orders",
+        evidence: [{ filePath: "src/api/order.controller.ts", symbol: "OrderController", line: 42, detail: "Calls OrderService.createOrder." }]
+      }
+    ]) as SequenceDiagram;
+    const prompt = buildSequenceDiagramPrompt("sequence-fixture", diagram);
+    const input = JSON.parse(prompt.text.match(/Input: (.+)\n\nReturn shape:/)?.[1] ?? "{}") as {
+      evidence: Array<[string | undefined, string | undefined, number | null, string]>;
+    };
+    const schema = JSON.parse(prompt.text.match(/Return shape:\n(.+)\n\nCreate a detailed/s)?.[1] ?? "{}") as {
+      architectural?: { messages?: Array<{ evidence?: Array<{ line?: number }> }> };
+    };
 
-    expect(prompt).toContain("Architectural Sequence Diagram");
-    expect(prompt).toContain("Detailed Architectural Sequence Diagram");
-    expect(prompt).not.toContain("Detailed Design Sequence Diagram");
-    expect(prompt).not.toContain('"detailedDesign"');
-    expect(prompt).toContain("ProjectStructureFacts");
-    expect(prompt).toContain("src/api/order.controller.ts");
-    expect(prompt).toContain("end-to-end workflow");
-    expect(prompt).not.toContain("code-level call sequence");
-    expect(prompt).toContain("entry/user action");
-    expect(prompt).toContain("IPC/API boundary");
-    expect(prompt).toContain("Do not return detailedDesign");
-    expect(prompt).toContain("Prefer 6-14 participants and 8-24 messages");
-    expect(prompt).toContain("methodName");
-    expect(prompt).toContain("input");
-    expect(prompt).toContain("output");
-    expect(prompt).toContain("valid participant ids");
-    expect(prompt).toContain("Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems");
+    expect(prompt.text).toContain("Architectural Sequence Diagram");
+    expect(prompt.text).toContain("detailed architectural sequence");
+    expect(prompt.text).not.toContain("Detailed Design Sequence Diagram");
+    expect(prompt.text).not.toContain('"detailedDesign"');
+    expect(prompt.text).not.toContain("ProjectStructureFacts");
+    expect(prompt.text).toContain("src/api/order.controller.ts");
+    expect(prompt.text).toContain("end-to-end workflow");
+    expect(prompt.text).not.toContain("code-level call sequence");
+    expect(prompt.text).toContain("entry/user action");
+    expect(prompt.text).toContain("IPC/API boundary");
+    expect(prompt.text).toContain("do not return detailedDesign");
+    expect(prompt.text).toContain("Prefer 6-14 participants and 8-24 messages");
+    expect(prompt.text).toContain("methodName");
+    expect(prompt.text).toContain("input");
+    expect(prompt.text).toContain("output");
+    expect(prompt.text).toContain("valid participant ids");
+    expect(prompt.text).toContain("do not invent files, symbols, calls, endpoints, databases, queues or third-party systems");
+    expect(prompt.metrics.promptChars).toBeLessThanOrEqual(SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS);
+    expect(prompt.metrics.promptEvidenceCount).toBe(1);
+    expect(prompt.metrics.promptEvidenceOmittedCount).toBe(0);
+    expect(input.evidence[0][2]).toBe(42);
+    expect(schema.architectural?.messages?.[0]?.evidence?.[0]?.line).toBe(12);
+  });
+
+  it("reserves evidence for every supported message before filling the soft budget", () => {
+    const messages = Array.from({ length: 24 }, (_, index) => ({
+      id: `message-${index}`,
+      sequence: index + 1,
+      from: "frontend-app",
+      to: "api-gateway",
+      kind: "sync",
+      label: `call-${index}`,
+      evidence: [{ filePath: `src/file-${index}.ts`, symbol: `symbol${index}`, detail: `oversized-evidence-${index} ${"detail ".repeat(100)}` }]
+    }));
+    const diagram = diagramJson(messages) as SequenceDiagram;
+
+    const prompt = buildSequenceDiagramPrompt("sequence-fixture", diagram);
+    const input = JSON.parse(prompt.text.match(/Input: (.+)\n\nReturn shape:/)?.[1] ?? "{}") as {
+      messages: Array<unknown[]>;
+      evidence: unknown[];
+    };
+
+    expect(prompt.metrics.promptChars).toBeLessThanOrEqual(SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS);
+    expect(prompt.metrics.promptEvidenceCount).toBe(24);
+    expect(prompt.metrics.promptEvidenceOmittedCount).toBe(0);
+    expect(prompt.metrics.promptEvidenceTruncatedCount).toBe(24);
+    expect(input.messages).toHaveLength(24);
+    expect(input.messages.every((message) => Array.isArray(message.at(-1)) && (message.at(-1) as unknown[]).length > 0)).toBe(true);
+    expect(input.evidence).toHaveLength(24);
+    expect(prompt.text).toContain('"message-23"');
+    expect(prompt.text).toContain("fromParticipantIndex");
+  });
+
+  it("keeps every evidence-backed message when mandatory evidence exceeds the soft target", () => {
+    const messages = Array.from({ length: 40 }, (_, index) => ({
+      id: `supported-message-${index}`,
+      sequence: index + 1,
+      from: "frontend-app",
+      to: "api-gateway",
+      kind: "sync" as const,
+      label: `stage-${index}`,
+      description: `D${index}${"d".repeat(112)}`,
+      evidence: [{
+        filePath: `src/${index}.ts`,
+        symbol: `E${index}`,
+        detail: `E${index}${"e".repeat(60)}`
+      }]
+    }));
+    const diagram = diagramJson(messages) as SequenceDiagram;
+
+    const prompt = buildSequenceDiagramPrompt("sequence-fixture", diagram);
+    const input = JSON.parse(prompt.text.match(/Input: (.+)\n\nReturn shape:/)?.[1] ?? "{}") as {
+      messages: unknown[][];
+      evidence: unknown[];
+    };
+    const references = input.messages.map((message) => message.at(-1));
+
+    expect(prompt.metrics.promptChars).toBeGreaterThan(SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS);
+    expect(prompt.metrics.promptChars).toBeLessThanOrEqual(SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS);
+    expect(prompt.metrics.promptMessageCount).toBe(40);
+    expect(prompt.metrics.promptMessageOmittedCount).toBe(0);
+    expect(input.messages).toHaveLength(40);
+    expect(references.every((value) => Array.isArray(value) && value.length > 0)).toBe(true);
+    expect(references.flat().every((index) => typeof index === "number" && index >= 0 && index < input.evidence.length)).toBe(true);
+    const repeated = buildSequenceDiagramPrompt("sequence-fixture", diagram);
+    expect(repeated.text).toBe(prompt.text);
+    expect(repeated.metrics).toEqual(prompt.metrics);
+  });
+
+  it("reports mandatory message and evidence sizes when the hard budget is exceeded", () => {
+    const messages = Array.from({ length: 40 }, (_, index) => ({
+      id: `oversized-message-${index}`,
+      sequence: index + 1,
+      from: "frontend-app",
+      to: "api-gateway",
+      kind: "sync" as const,
+      label: `stage-${index}`,
+      description: "d".repeat(500),
+      evidence: [{ filePath: `src/${index}.ts`, symbol: `E${index}`, detail: "valid source evidence" }]
+    }));
+    const diagram = diagramJson(messages) as SequenceDiagram;
+    let thrown: unknown;
+
+    try {
+      buildSequenceDiagramPrompt("sequence-fixture", diagram);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SequenceDiagramPromptBudgetExceededError);
+    expect(thrown).toMatchObject({
+      code: "SEQUENCE_DIAGRAM_PROMPT_BUDGET_EXCEEDED",
+      actualChars: expect.any(Number),
+      diagnostics: {
+        participantCount: 2,
+        messageCount: 40,
+        mandatoryEvidenceCount: 40,
+        largestEvidenceContribution: {
+          chars: expect.any(Number),
+          filePath: expect.any(String)
+        }
+      }
+    });
+    if (!(thrown instanceof SequenceDiagramPromptBudgetExceededError)) {
+      throw new Error("Expected a sequence diagram prompt budget error.");
+    }
+    expect(thrown.actualChars).toBeGreaterThan(SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS);
+    expect(thrown.budgetChars).toBe(SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS);
+  });
+
+  it("reports the participant and message counts that are present in the compact prompt", () => {
+    const diagram = diagramJson([
+      {
+        id: "supported-message",
+        sequence: 1,
+        from: "frontend-app",
+        to: "api-gateway",
+        kind: "sync",
+        label: "supported",
+        evidence: [{ filePath: "src/supported.ts", symbol: "supported", detail: "Supported behavior." }]
+      },
+      {
+        id: "unsupported-message",
+        sequence: 2,
+        from: "frontend-app",
+        to: "api-gateway",
+        kind: "sync",
+        label: "unsupported"
+      }
+    ]) as SequenceDiagram;
+
+    const prompt = buildSequenceDiagramPrompt("sequence-fixture", diagram);
+    const input = JSON.parse(prompt.text.match(/Input: (.+)\n\nReturn shape:/)?.[1] ?? "{}") as {
+      participants: unknown[];
+      messages: unknown[][];
+    };
+
+    expect(prompt.metrics.promptParticipantCount).toBe(input.participants.length);
+    expect(prompt.metrics.promptMessageCount).toBe(input.messages.length);
+    expect(prompt.metrics.promptMessageOmittedCount + input.messages.length).toBe(diagram.messages.length);
+    expect(prompt.metrics.promptMessageCount).toBe(1);
+    expect(prompt.metrics.promptMessageOmittedCount).toBe(1);
+    expect(input.messages.map((message) => message[0])).toEqual(["supported-message"]);
+  });
+
+  it("builds deterministic prompts for forty messages with thirty unique evidence items each", () => {
+    const participants = Array.from({ length: 14 }, (_, index) => ({
+      id: `module-${index}`,
+      title: `Module ${index}`,
+      kind: "service" as const,
+      description: `Handles workflow stage ${index}.`,
+      filePath: `src/module-${index}.ts`,
+      symbol: `Module${index}`
+    }));
+    const messages = Array.from({ length: 40 }, (_, messageIndex) => ({
+      id: `message-${messageIndex}`,
+      sequence: messageIndex + 1,
+      from: participants[messageIndex % participants.length].id,
+      to: participants[(messageIndex + 1) % participants.length].id,
+      kind: "sync" as const,
+      label: `Run stage ${messageIndex}`,
+      description: `Routes stage ${messageIndex} through the next service.`,
+      evidence: Array.from({ length: 30 }, (_, evidenceIndex) => ({
+        filePath: `src/stages/${messageIndex}/evidence-${evidenceIndex}.ts`,
+        symbol: `stage${messageIndex}Evidence${evidenceIndex}`,
+        detail: `Evidence ${evidenceIndex} supports stage ${messageIndex}.`
+      }))
+    }));
+    const diagram = {
+      ...diagramJson(messages),
+      participants,
+      evidence: [{ filePath: "src/main.ts", symbol: "main", detail: "The entry point begins the workflow." }]
+    } as SequenceDiagram;
+
+    const first = buildSequenceDiagramPrompt("sequence-scale-fixture", diagram);
+    const second = buildSequenceDiagramPrompt("sequence-scale-fixture", diagram);
+    const parseInput = (text: string) => JSON.parse(text.match(/Input: (.+)\n\nReturn shape:/)?.[1] ?? "{}") as {
+      messages: unknown[][];
+      evidence: unknown[];
+    };
+    const input = parseInput(first.text);
+    const evidenceReferences = input.messages.map((message) => message.at(-1));
+
+    expect(first.metrics.promptChars).toBeLessThanOrEqual(SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS);
+    expect(first.metrics.promptMessageCount).toBe(input.messages.length);
+    expect(first.metrics.promptMessageOmittedCount + input.messages.length).toBe(diagram.messages.length);
+    expect(input.messages).toHaveLength(40);
+    expect(evidenceReferences.every((references) => Array.isArray(references) && references.length > 0)).toBe(true);
+    expect(evidenceReferences.flat().every((index) => typeof index === "number" && index >= 0 && index < input.evidence.length)).toBe(true);
+    expect(first.text).toBe(second.text);
+    expect(parseInput(first.text).evidence).toEqual(parseInput(second.text).evidence);
+    expect(first.metrics).toEqual(second.metrics);
+  }, 60_000);
+
+  it("fails explicitly when the sequence diagram core exceeds its hard budget", () => {
+    const diagram = { ...diagramJson([]), summary: "x".repeat(SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS) } as SequenceDiagram;
+
+    expect(() => buildSequenceDiagramPrompt("sequence-fixture", diagram)).toThrow(
+      /SEQUENCE_DIAGRAM_PROMPT_BUDGET_EXCEEDED: actualChars=\d+ budget=16000/
+    );
   });
 
   it("builds a revision prompt that preserves evidence and returns a complete diagram", async () => {
-    const root = await createFixtureFiles();
-    const project = projectFixture(root);
-    const facts = await buildProjectStructureFacts(project);
     const current = diagramJson([
       {
         id: "controller-service",
@@ -62,15 +280,21 @@ describe("sequence-diagram.service", () => {
         evidence: [{ filePath: "src/api/order.controller.ts", symbol: "OrderController", detail: "calls OrderService.createOrder" }]
       }
     ]);
-    const prompt = buildSequenceDiagramRevisionPrompt(current, "include validation before creating the order", facts);
+    current.participants = [
+      { id: "order-controller", title: "Order Controller", kind: "gateway", description: "Receives requests.", filePath: "src/api/order.controller.ts", symbol: "OrderController" },
+      { id: "order-service", title: "Order Service", kind: "service", description: "Creates orders.", filePath: "src/service/order.service.ts", symbol: "OrderService" }
+    ];
+    const prompt = buildSequenceDiagramRevisionPrompt(current, "include validation before creating the order");
 
-    expect(prompt).toContain("Preserve reliable existing evidence");
-    expect(prompt).toContain("Return the complete updated diagram object");
-    expect(prompt).toContain('Keep kind exactly "architectural"');
-    expect(prompt).toContain("Update participants and messages together");
-    expect(prompt).toContain("methodName");
-    expect(prompt).toContain("input");
-    expect(prompt).toContain("output");
+    expect(prompt.text).toContain("Preserve reliable existing evidence");
+    expect(prompt.text).toContain("Return the complete updated diagram object");
+    expect(prompt.text).toMatch(/keep kind exactly "architectural"/i);
+    expect(prompt.text).toContain("Update participants and messages together");
+    expect(prompt.text).toContain("methodName");
+    expect(prompt.text).toContain("input");
+    expect(prompt.text).toContain("output");
+    expect(prompt.metrics.promptChars).toBeLessThanOrEqual(SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS);
+    expect(prompt.text).not.toContain("ProjectStructureFacts");
   });
 
   it("parses sequence diagram JSON and filters invalid messages", async () => {
@@ -201,16 +425,19 @@ describe("sequence-diagram.service", () => {
     await expect(readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")).resolves.toContain('"source": "local"');
   });
 
-  it("publishes a review-failed event after the Agent repair attempt is rejected", async () => {
+  it("publishes a review-failed event after its single Agent response is rejected", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-review-failed-"));
     const root = await createFixtureFiles();
+    const invocationPath = join(configRoot, "invocations.txt");
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
     configureAgentRegistry(configRoot);
     await writeFile(
       scriptPath,
       [
+        "import { appendFileSync } from 'node:fs';",
         "process.stdin.resume();",
         "process.stdin.on('end', () => {",
+        `  appendFileSync(${JSON.stringify(invocationPath)}, 'x');`,
         "  console.log(JSON.stringify({ architectural: { kind: 'architectural', participants: [], messages: [] } }));",
         "});"
       ].join("\n"),
@@ -219,7 +446,8 @@ describe("sequence-diagram.service", () => {
     const agent = await saveCustomAgent({
       name: "Rejected Sequence Review Agent",
       command: process.execPath,
-      args: [scriptPath]
+      args: [scriptPath],
+      capabilities: ["artifact-analysis"]
     });
     const events: import("../../src/types").SequenceReviewEvent[] = [];
 
@@ -235,6 +463,7 @@ describe("sequence-diagram.service", () => {
       state: "review-failed",
       error: { message: expect.any(String) }
     });
+    expect(await readFile(invocationPath, "utf8")).toBe("x");
   });
 
   it("waits for Agent Inbox response.json before completing sequence review", async () => {

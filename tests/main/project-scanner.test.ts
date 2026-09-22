@@ -37,6 +37,20 @@ describe("project-scanner.service", () => {
     expect((await buildSemanticIndex(project)).index.files.map((file) => file.path)).toContain("a/b/c/d/e/f/g/h/i/j/deep.ts");
   });
 
+  it("uses each independent fixture directory's exact file count", async () => {
+    const fixtures = [
+      { root: await mkdtemp(join(tmpdir(), "flowweave-scan-scale-a-")), count: 257 },
+      { root: await mkdtemp(join(tmpdir(), "flowweave-scan-scale-b-")), count: 64 }
+    ];
+    await Promise.all(fixtures.flatMap(({ root, count }) => Array.from({ length: count }, (_, index) =>
+      writeFile(join(root, `fixture-${String(index).padStart(4, "0")}.txt`), `entry ${index}\n`, "utf8")
+    )));
+
+    const projects = await Promise.all(fixtures.map(({ root }) => scanProject(root)));
+
+    expect(projects.map((project) => project.summary.totalFiles)).toEqual([257, 64]);
+  });
+
   it("orders dot entries first, then large folders, then ordinary files", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-scan-order-"));
     await mkdir(join(root, ".config"), { recursive: true });

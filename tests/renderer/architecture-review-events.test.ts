@@ -42,6 +42,31 @@ describe("architecture review event filtering", () => {
     )).toBe(false);
   });
 
+  it("accepts a fast subsequent review after the previous review is reconciled", () => {
+    const previousReview: ArchitectureReviewStatus = {
+      state: "reviewed",
+      reviewId: "review-old",
+      startedAt: "2026-09-20T00:00:02.000Z"
+    };
+    const nextReview = reviewEvent("review-new", "scan-1", "reviewing", "2026-09-20T00:00:03.000Z");
+
+    expect(shouldApplyArchitectureReviewEvent(
+      nextReview,
+      "project-1",
+      "scan-1",
+      previousReview
+    )).toBe(true);
+
+    const completion = reviewEvent("review-new", "scan-1", "reviewed", "2026-09-20T00:00:03.000Z");
+    expect(shouldApplyArchitectureReviewEvent(
+      completion,
+      "project-1",
+      "scan-1",
+      nextReview.status
+    )).toBe(true);
+    expect(mergeArchitectureReviewResult(completion.status, nextReview.status)).toBe(completion.status);
+  });
+
   it("blocks only the same active review and local graph generation", () => {
     const reviewing: ArchitectureReviewStatus = {
       state: "reviewing",

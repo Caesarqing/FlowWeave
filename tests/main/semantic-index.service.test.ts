@@ -50,6 +50,34 @@ describe("semantic-index.service", () => {
     expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe("4.0.0");
   });
 
+  it("keeps cold caches isolated by project and preserves graph counts across warm reuse", async () => {
+    const firstRoot = await mkdtemp(join(tmpdir(), "flowweave-semantic-independent-a-"));
+    const secondRoot = await mkdtemp(join(tmpdir(), "flowweave-semantic-independent-b-"));
+    for (const root of [firstRoot, secondRoot]) await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(firstRoot, "src", "api.py"), "from .service import load\ndef api():\n    return load()\n", "utf8");
+    await writeFile(join(firstRoot, "src", "service.py"), "def load():\n    return 'first project'\n", "utf8");
+    await writeFile(join(secondRoot, "src", "api.py"), "from .service import load\ndef api():\n    return load()\n", "utf8");
+    await writeFile(join(secondRoot, "src", "service.py"), "def load():\n    return 'second project'\n", "utf8");
+    const firstProject = await scanProject(firstRoot);
+    const secondProject = await scanProject(secondRoot);
+
+    const firstCold = await buildSemanticIndex(firstProject);
+    const secondCold = await buildSemanticIndex(secondProject);
+    const firstHash = firstCold.index.files.find((file) => file.path === "src/service.py")?.contentHash;
+    const secondHash = secondCold.index.files.find((file) => file.path === "src/service.py")?.contentHash;
+    let lastWarm = firstCold;
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      lastWarm = await buildSemanticIndex(firstProject);
+      expect(lastWarm.delta.unchanged).toEqual(["src/api.py", "src/service.py"]);
+    }
+
+    expect(firstCold.delta.added).toEqual(["src/api.py", "src/service.py"]);
+    expect(secondCold.delta.added).toEqual(["src/api.py", "src/service.py"]);
+    expect(firstHash).not.toBe(secondHash);
+    expect(lastWarm.index.files).toHaveLength(firstCold.index.files.length);
+    expect(lastWarm.index.relations).toHaveLength(firstCold.index.relations.length);
+  });
+
   it("reports modified and deleted files and removes deleted cache entries", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-semantic-delta-"));
     await writeFile(join(root, "main.ts"), "export const value = 1;\n", "utf8");

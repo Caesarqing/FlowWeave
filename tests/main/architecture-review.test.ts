@@ -1,17 +1,37 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   compareArchitectureMaps,
   createArchitectureInputFingerprint,
   adoptArchitectureReview,
   isArchitectureReviewActive,
+  markArchitectureReviewFailedIfCurrent,
   readArchitectureReviewStatus,
   startArchitectureReview,
   writeArchitectureReviewStatus
 } from "../../src/main/services/architecture-review.service";
-import type { ArchitectureMap } from "../../src/types";
+import type { ArchitectureMap, ArtifactGenerationMetadata, ArchitectureReviewStatus } from "../../src/types";
+
+const architectureStatusWriteFault = vi.hoisted(() => ({
+  path: "",
+  failuresRemaining: 0
+}));
+
+vi.mock("../../src/main/storage/artifact-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/main/storage/artifact-store")>();
+  return {
+    ...actual,
+    writeJsonAtomic: async (path: string, value: unknown) => {
+      if (path === architectureStatusWriteFault.path && architectureStatusWriteFault.failuresRemaining > 0) {
+        architectureStatusWriteFault.failuresRemaining -= 1;
+        throw new Error(`Injected architecture status write failure for ${path}.`);
+      }
+      return actual.writeJsonAtomic(path, value);
+    }
+  };
+});
 
 describe("architecture-review.service", () => {
   it("summarizes added, removed, and modified modules and relationships", () => {
@@ -570,6 +590,182 @@ describe("architecture-review.service", () => {
       runId: "run-1"
     });
   });
+
+  it.each([
+    { name: "reviewing", storedState: "reviewing" as const, source: "agent" as const, metadata: {}, expectedState: "reviewed" as const },
+    { name: "review-failed", storedState: "review-failed" as const, source: "agent" as const, metadata: {}, expectedState: "reviewed" as const },
+    { name: "reviewed", storedState: "reviewed" as const, source: "agent" as const, metadata: {}, expectedState: "reviewed" as const },
+    { name: "local map", storedState: "reviewing" as const, source: "local" as const, metadata: {}, expectedState: "reviewing" as const },
+    { name: "different review", storedState: "reviewing" as const, source: "agent" as const, metadata: { reviewId: "review-old" }, expectedState: "reviewing" as const },
+    { name: "missing review id", storedState: "reviewing" as const, source: "agent" as const, metadata: { reviewId: undefined }, expectedState: "reviewing" as const },
+    { name: "missing run id", storedState: "reviewing" as const, source: "agent" as const, metadata: { runId: undefined }, expectedState: "reviewing" as const },
+    { name: "missing agent id", storedState: "reviewing" as const, source: "agent" as const, metadata: { agentId: undefined }, expectedState: "reviewing" as const }
+  ])("derives effective state from artifact identity when stored state is $name", async ({ storedState, source, metadata, expectedState }) => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-effective-state-"));
+    const flowweaveRoot = join(root, ".flowweave");
+    await mkdir(flowweaveRoot, { recursive: true });
+    await writeFile(
+      join(flowweaveRoot, "architecture-map.json"),
+      `${JSON.stringify(reviewArtifact(source, metadata))}\n`,
+      "utf8"
+    );
+    await writeArchitectureReviewStatus(root, reviewStatus(storedState));
+
+    const status = await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "input-1" });
+
+    expect(status.state).toBe(expectedState);
+    if (expectedState === "reviewed") {
+      expect(status).toMatchObject({
+        projectId: "project-1",
+        artifactTarget: "architecture-map",
+        startedAt: "2026-06-25T00:00:00.000Z",
+        completedAt: "2026-06-25T00:00:00.000Z"
+      });
+      if (storedState === "reviewed") {
+        expect(status.diff).toEqual({
+          modules: { added: 1, removed: 0, modified: 0 },
+          relationships: { added: 0, removed: 0, modified: 0 }
+        });
+      } else {
+        expect(status.diff).toBeUndefined();
+      }
+      expect(status.error).toBeUndefined();
+    }
+  });
+
+  it("keeps a different stored fingerprint stale", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-effective-stale-"));
+    await writeArchitectureReviewStatus(root, {
+      ...reviewStatus("reviewing"),
+      scanFingerprint: "scan-old",
+      inputFingerprint: "input-old"
+    });
+
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "input-1" })).toMatchObject({
+      state: "stale",
+      reviewId: "review-1"
+    });
+  });
+
+  it("does not mark a review failed when its matching Agent map is already persisted", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-already-persisted-"));
+    const flowweaveRoot = join(root, ".flowweave");
+    await mkdir(flowweaveRoot, { recursive: true });
+    await writeFile(join(flowweaveRoot, "architecture-map.json"), JSON.stringify(reviewArtifact("agent", {})), "utf8");
+    await writeArchitectureReviewStatus(root, reviewStatus("reviewing"));
+
+    const failed = await markArchitectureReviewFailedIfCurrent(
+      root,
+      reviewIdentity(),
+      { code: "persistence-failed", message: "late failure" }
+    );
+
+    expect(failed).toBe(false);
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "input-1" })).toMatchObject({
+      state: "reviewed",
+      reviewId: "review-1",
+      runId: "run-1"
+    });
+  });
+
+  it.each([1, 2])("preserves a valid Agent map when %i architecture status writes fail", async (failures) => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-status-write-failure-"));
+    const flowweaveRoot = join(root, ".flowweave");
+    await mkdir(flowweaveRoot, { recursive: true });
+    const local = {
+      ...architectureMap([], []),
+      metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
+    };
+    const agentMap = reviewArtifact("agent", {});
+    await writeFile(join(flowweaveRoot, "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
+    await writeFile(join(flowweaveRoot, "architecture-local.json"), JSON.stringify(local), "utf8");
+    await writeArchitectureReviewStatus(root, reviewStatus("reviewing"));
+
+    const statusPath = join(flowweaveRoot, "architecture-review.json");
+    const adoption = await adoptArchitectureReview({
+      ...reviewIdentity(),
+      projectPath: root,
+      runId: "run-1",
+      architectureMap: agentMap,
+      localArchitecture: local,
+      persist: async (map) => {
+        await writeFile(join(flowweaveRoot, "architecture-map.json"), `${JSON.stringify(map)}\n`, "utf8");
+        architectureStatusWriteFault.path = statusPath;
+        architectureStatusWriteFault.failuresRemaining = failures;
+      }
+    });
+
+    expect(adoption).toMatchObject({ status: "applied", stateRecovered: true, architectureMap: { source: "agent" } });
+    if (failures === 2) {
+      expect(adoption).toMatchObject({ warning: expect.stringContaining(root) });
+      expect(adoption).toMatchObject({ warning: expect.stringContaining("review-1") });
+      expect(adoption).toMatchObject({ warning: expect.stringContaining("run-1") });
+      expect(adoption).toMatchObject({ warning: expect.stringContaining("Injected architecture status write failure") });
+    } else {
+      expect(adoption).not.toHaveProperty("warning");
+    }
+    expect(await readArchitectureReviewStatus(root, { scanFingerprint: "scan-1", inputFingerprint: "input-1" })).toMatchObject({
+      state: "reviewed",
+      reviewId: "review-1",
+      runId: "run-1"
+    });
+  });
+
+  it("keeps a persisted recovery warning when background completion reuses the imported map", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-reused-recovery-warning-"));
+    const flowweaveRoot = join(root, ".flowweave");
+    await mkdir(flowweaveRoot, { recursive: true });
+    const local = {
+      ...architectureMap([], []),
+      rootPath: root,
+      metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
+    };
+    const agentMap = reviewArtifact("agent", {});
+    const adoptionEvents: Array<{ outcome: string; message: string }> = [];
+    const warning = "firstStatusWriteError=first retryStatusWriteError=second";
+
+    await writeFile(join(flowweaveRoot, "architecture-map.json"), JSON.stringify(agentMap), "utf8");
+    await writeArchitectureReviewStatus(root, {
+      ...reviewIdentity(),
+      state: "reviewed",
+      runId: "run-1",
+      startedAt: "2026-06-25T00:00:00.000Z",
+      completedAt: "2026-06-25T00:00:01.000Z"
+    });
+
+    const status = await startArchitectureReview({
+      ...reviewIdentity(),
+      projectPath: root,
+      reviewId: "review-1",
+      localArchitecture: local,
+      startedAt: "2026-06-25T00:00:00.000Z",
+      persistLocal: async () => undefined,
+      run: async (onRunId) => {
+        await onRunId("run-1");
+        return {
+          outcome: "reviewed",
+          runId: "run-1",
+          architectureMap: agentMap,
+          stateRecovered: true,
+          warning
+        };
+      },
+      persist: async () => undefined,
+      toGraph: () => ({ nodes: [], edges: [] }),
+      onEvent: () => undefined,
+      onAdoption: async (_runId, outcome, message) => adoptionEvents.push({ outcome, message })
+    });
+
+    expect(status.state).toBe("reviewing");
+    await waitFor(() => adoptionEvents.length > 0);
+
+    expect(adoptionEvents).toHaveLength(1);
+    expect(adoptionEvents[0]).toMatchObject({
+      outcome: "applied",
+      message: expect.stringContaining("Review state was recovered")
+    });
+    expect(adoptionEvents[0].message).toContain(warning);
+  });
 });
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -636,5 +832,54 @@ function architectureRelationship(
     relation: "depends_on",
     description,
     evidence: []
+  };
+}
+
+function reviewIdentity() {
+  return {
+    projectId: "project-1",
+    artifactTarget: "architecture-map" as const,
+    scanFingerprint: "scan-1",
+    inputFingerprint: "input-1",
+    agentId: "mock" as const,
+    reviewId: "review-1"
+  };
+}
+
+function reviewStatus(state: ArchitectureReviewStatus["state"]): ArchitectureReviewStatus {
+  return {
+    ...reviewIdentity(),
+    state,
+    runId: "run-1",
+    startedAt: "2026-06-25T00:00:00.000Z",
+    ...(state === "reviewed" ? {
+      diff: {
+        modules: { added: 1, removed: 0, modified: 0 },
+        relationships: { added: 0, removed: 0, modified: 0 }
+      }
+    } : {}),
+    ...(state === "review-failed" ? { error: { code: "persistence-failed" as const, message: "old failure" } } : {})
+  };
+}
+
+function reviewArtifact(
+  source: "agent" | "local",
+  metadataOverrides: Partial<ArtifactGenerationMetadata>
+): ArchitectureMap {
+  return {
+    ...architectureMap([], []),
+    source,
+    metadata: {
+      source,
+      agentId: source === "agent" ? "mock" : undefined,
+      runId: source === "agent" ? "run-1" : undefined,
+      reviewId: source === "agent" ? "review-1" : undefined,
+      generatedAt: "2026-06-25T00:00:01.000Z",
+      scanFingerprint: "scan-1",
+      inputFingerprint: "input-1",
+      fileCoverage: 1,
+      evidenceCoverage: 1,
+      ...metadataOverrides
+    }
   };
 }

@@ -7,44 +7,61 @@ import {
   analyzeArchitecture,
   architectureMapToGraph,
   buildArchitectureInputFingerprint,
-  buildArchitecturePrompt,
   enhanceLocalArchitecture,
-  parseArchitectureJson,
   readArchitectureMap
 } from "../../src/main/services/architecture-analysis.service";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
 import { adoptArtifactRun } from "../../src/main/services/artifact-run-adoption.service";
 import { writeArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
-import { listRunSummaries } from "../../src/main/services/run-log.service";
-import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
+import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
 import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
+import {
+  buildArchitectureReviewPrompt,
+  createArchitectureReviewPromptInput
+} from "../../src/main/services/architecture-review-prompt.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
-import type { CodeflowProject } from "../../src/types";
+import type { ArchitectureReviewResponse, CodeflowProject } from "../../src/types";
 import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("architecture-analysis.service", () => {
   it("keeps local modules and relationships when applying Agent wording", () => {
     const local = architectureFixtureMap("local");
-    const agent = {
-      ...architectureFixtureMap("agent"),
+    const agent: ArchitectureReviewResponse = {
+      architectureStyle: "reviewed service architecture",
       modules: [{
-        ...architectureFixtureMap("agent").modules[0],
+        moduleId: "user-api",
         title: "Reviewed User API",
-        description: "Agent-enhanced wording."
+        description: "Agent-enhanced wording.",
+        assessmentNotes: "The boundary is inferred from the controller."
       }],
-      relationships: []
+      findings: [{
+        code: "thin-boundary",
+        severity: "warning",
+        moduleIds: ["user-api"],
+        message: "The API boundary has limited validation evidence.",
+        evidenceIds: ["evidence-api"]
+      }]
     };
+    const before = structuredClone(local);
 
     const enhanced = enhanceLocalArchitecture(local, agent);
 
     expect(enhanced.modules).toHaveLength(2);
     expect(enhanced.modules[0]).toMatchObject({
       title: "Reviewed User API",
-      files: ["src/api/user.controller.ts"]
+      description: "Agent-enhanced wording.",
+      assessmentNotes: "The boundary is inferred from the controller.",
+      files: ["src/api/user.controller.ts"],
+      evidence: local.modules[0].evidence,
+      fileRoles: local.modules[0].fileRoles
     });
     expect(enhanced.relationships).toEqual(local.relationships);
+    expect(enhanced.reviewFindings).toEqual(agent.findings);
+    expect(enhanced.architectureStyle).toBe(agent.architectureStyle);
+    expect(architectureMapToGraph(enhanced).edges).toEqual(architectureMapToGraph(local).edges);
+    expect(local).toEqual(before);
   });
 
   it("keeps every semantic relationship as evidence on stable module edges", () => {
@@ -107,6 +124,37 @@ describe("architecture-analysis.service", () => {
     expect(result.architectureMap.modules.flatMap((module) => module.files)).toHaveLength(moduleCount);
   });
 
+  it("persists the local graph when the review prompt exceeds its budget", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-over-budget-review-"));
+    await Promise.all(Array.from({ length: 240 }, async (_, index) => {
+      const modulePath = join(root, "src", "features", `feature-${index}`);
+      await mkdir(modulePath, { recursive: true });
+      await writeFile(join(modulePath, "index.ts"), `export const feature${index} = () => true;\n`, "utf8");
+    }));
+
+    const project = await scanProject(root);
+    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: project.scanFingerprint }), "utf8");
+    const projectId = await registerProject(root);
+    const events: import("../../src/types").ArchitectureReviewEvent[] = [];
+
+    const result = await analyzeArchitecture(project, "mock", {
+      projectId,
+      onArchitectureReview: (event) => events.push(event)
+    });
+
+    expect(result.outcome).toBe("generated");
+    if (result.outcome !== "generated") throw new Error("Expected the local graph to be generated.");
+    await waitForReviewEvent(events, "review-failed");
+    expect(events.at(-1)?.status).toMatchObject({
+      state: "review-failed",
+      error: { code: "agent-failed", message: expect.stringContaining("ARCHITECTURE_PROMPT_BUDGET_EXCEEDED") }
+    });
+    expect((await readArchitectureMap(root))?.source).toBe("local");
+    const local = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")) as import("../../src/types").ArchitectureMap;
+    expect(local.modules).toHaveLength(240);
+  });
+
   it("groups files by functional responsibility instead of the top-level source scope", async () => {
     const root = await createModuleClusteringFiles();
     const project = await scanProject(root);
@@ -143,119 +191,9 @@ describe("architecture-analysis.service", () => {
     ]));
   });
 
-  it("builds an architecture prompt from structure facts", async () => {
-    const root = await createFixtureFiles();
-    const facts = await buildProjectStructureFacts(projectFixture(root));
-    const prompt = buildArchitecturePrompt(facts);
-
-    expect(prompt).toContain("functional architecture module map");
-    expect(prompt).toContain("ProjectStructureFacts");
-    expect(prompt).toContain("src/api/user.controller.ts");
-    expect(prompt).toContain("Use only the supplied ProjectStructureFacts");
-    expect(prompt).toContain("human-readable explanation");
-    expect(prompt).toContain("fileRoles");
-    expect(prompt).toContain("function and purpose");
-    expect(prompt).toContain("important folders and files");
-    expect(prompt).toContain("workflow");
-    expect(prompt).toContain("Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems");
-  });
-
-  it("parses agent JSON into canvas graph with symbols and evidence", async () => {
-    const root = await createFixtureFiles();
-    const project = projectFixture(root);
-    const facts = await buildProjectStructureFacts(project);
-    const map = parseArchitectureJson(
-      JSON.stringify({
-        architectureStyle: "layered service",
-        modules: [
-          {
-            id: "user-api",
-            title: "User API",
-            category: "api-boundary",
-            role: "Receives user requests.",
-            description: "HTTP boundary for user flows.",
-            files: ["src/api/user.controller.ts"],
-            fileRoles: [
-              { path: "src/api", role: "Groups request handlers." },
-              { path: "src/api/user.controller.ts", role: "Routes user requests." }
-            ],
-            symbols: [{ name: "loadUser", kind: "function", filePath: "src/api/user.controller.ts", role: "request handler" }],
-            evidence: [{ filePath: "src/api/user.controller.ts", symbol: "loadUser", detail: "exports handler" }],
-            risk: "normal",
-            confidence: 0.9
-          },
-          {
-            id: "user-service",
-            title: "User Service",
-            category: "domain-service",
-            role: "Coordinates user logic.",
-            description: "Business logic for user flows.",
-            files: ["src/service/user.service.ts"],
-            fileRoles: [{ path: "src/service/user.service.ts", role: "Business service." }],
-            symbols: [{ name: "UserService", kind: "class", filePath: "src/service/user.service.ts", role: "service" }],
-            evidence: [{ filePath: "src/service/user.service.ts", symbol: "UserService", detail: "class declaration" }],
-            risk: "normal"
-          }
-        ],
-        relationships: [
-          {
-            source: "user-api",
-            target: "user-service",
-            relation: "calls",
-            description: "Controller calls service.",
-            evidence: [{ filePath: "src/api/user.controller.ts", detail: "imports service" }]
-          }
-        ]
-      }),
-      project,
-      facts
-    );
-
-    expect(map?.modules[0].symbols[0].name).toBe("loadUser");
-    expect(map?.modules[0].fileRoles).toEqual(expect.arrayContaining([
-      { path: "src/api", role: "Groups request handlers." },
-      { path: "src/api/user.controller.ts", role: "Routes user requests." }
-    ]));
-    expect(map?.modules[0].risk).toBe("unknown");
-    expect(map?.modules[0].confidence).toBeUndefined();
-    const graph = architectureMapToGraph(map!);
-    expect(graph.nodes[0]).toMatchObject({ id: "user-api", nodeType: "api", category: "api-boundary" });
-    expect(graph.edges[0]).toMatchObject({
-      relation: "depends_on",
-      guidanceNote: expect.stringContaining("imports ../service/user.service")
-    });
-  });
-
-  it("parses provider-wrapped and fenced architecture JSON", async () => {
-    const root = await createFixtureFiles();
-    const project = projectFixture(root);
-    const facts = await buildProjectStructureFacts(project);
-    const content = JSON.stringify({
-      modules: [{
-        id: "user-api",
-        title: "User API",
-        category: "api-boundary",
-        role: "Receives user requests.",
-        description: "HTTP boundary.",
-        files: ["src/api/user.controller.ts"],
-        fileRoles: [],
-        symbols: [],
-        evidence: [{ filePath: "src/api/user.controller.ts", detail: "handler" }],
-        risk: "normal"
-      }],
-      relationships: []
-    });
-
-    expect(parseArchitectureJson(JSON.stringify({ type: "result", result: `\`\`\`json\n${content}\n\`\`\`` }), project, facts)?.modules)
-      .toHaveLength(1);
-  });
-
   it("persists validated mock architecture artifacts", async () => {
     const root = await createFixtureFiles();
     const project = projectFixture(root);
-    const facts = await buildProjectStructureFacts(project);
-
-    expect(parseArchitectureJson("not json", project, facts)).toBeUndefined();
 
     const result = await analyzeArchitecture(project, "mock");
     await waitForArchitectureSource(root, "agent");
@@ -372,41 +310,14 @@ describe("architecture-analysis.service", () => {
         "  const requestPath = input.match(/Read the request JSON at: (.+)/)?.[1];",
         "  if (!requestPath) throw new Error('Missing Agent Inbox request path.');",
         "  const request = JSON.parse(await readFile(requestPath, 'utf8'));",
+        "  const schema = request.prompt.slice(request.prompt.indexOf('Review response schema:'));",
+        "  if (request.prompt.length > 12000 || request.prompt.includes('ProjectStructureFacts') || schema.includes('relationships') || schema.includes('fileRoles')) throw new Error('Review prompt exceeded the bounded response contract.');",
+        "  const moduleText = request.prompt.match(/\\nM:(\\[[^\\n]*\\])\\nC:/)?.[1];",
+        "  if (!moduleText) throw new Error('Missing bounded local graph in review prompt.');",
+        "  const modules = JSON.parse(moduleText);",
         "  const content = {",
-        "    architectureStyle: 'layered service',",
-        "    modules: [",
-        "      {",
-        "        id: 'user-api',",
-        "        title: 'User API',",
-        "        category: 'api-boundary',",
-        "        role: 'Receives user requests.',",
-        "        description: 'Reviewed HTTP boundary.',",
-        "        files: ['src/api/user.controller.ts'],",
-        "        fileRoles: [{ path: 'src/api/user.controller.ts', role: 'Routes requests.' }],",
-        "        symbols: [{ name: 'loadUser', kind: 'function', filePath: 'src/api/user.controller.ts', role: 'handler' }],",
-        "        evidence: [{ filePath: 'src/api/user.controller.ts', symbol: 'loadUser', detail: 'exports handler' }],",
-        "        risk: 'normal'",
-        "      },",
-        "      {",
-        "        id: 'user-service',",
-        "        title: 'User Service',",
-        "        category: 'domain-service',",
-        "        role: 'Coordinates user logic.',",
-        "        description: 'Reviewed domain service.',",
-        "        files: ['src/service/user.service.ts'],",
-        "        fileRoles: [{ path: 'src/service/user.service.ts', role: 'Business service.' }],",
-        "        symbols: [{ name: 'UserService', kind: 'class', filePath: 'src/service/user.service.ts', role: 'service' }],",
-        "        evidence: [{ filePath: 'src/service/user.service.ts', symbol: 'UserService', detail: 'class declaration' }],",
-        "        risk: 'normal'",
-        "      }",
-        "    ],",
-        "    relationships: [{",
-        "      source: 'user-api',",
-        "      target: 'user-service',",
-        "      relation: 'calls',",
-        "      description: 'API calls service.',",
-        "      evidence: [{ filePath: 'src/api/user.controller.ts', detail: 'imports service' }]",
-        "    }]",
+        "    modules: modules.map((module) => ({ moduleId: module[0], title: `Reviewed ${module[1]}` })),",
+        "    findings: []",
         "  };",
         "  await mkdir(dirname(request.responsePath), { recursive: true });",
         "  await writeFile(request.responsePath, JSON.stringify({",
@@ -455,6 +366,68 @@ describe("architecture-analysis.service", () => {
       status: "applied",
       message: "Run completed and applied to module graph."
     });
+  });
+
+  it("adopts a stable-ID response through the manual artifact path", async () => {
+    const root = await createFixtureFiles();
+    const project = await scanProject(root);
+    const scanFingerprint = project.scanFingerprint ?? "";
+    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint }), "utf8");
+    const { index } = await buildSemanticIndex(project);
+    const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
+    const local = {
+      ...architectureFixtureMap("local"),
+      version: 2 as const,
+      rootPath: root,
+      metadata: {
+        source: "local" as const,
+        scanFingerprint,
+        inputFingerprint,
+        fileCoverage: 1,
+        evidenceCoverage: 1
+      }
+    };
+    await writeFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), JSON.stringify(local), "utf8");
+    const prompt = buildArchitectureReviewPrompt(createArchitectureReviewPromptInput(local, index));
+    const projectId = await registerProject(root);
+    const reviewId = "review-manual-adoption";
+    await writeArchitectureReviewStatus(root, {
+      state: "reviewing",
+      projectId,
+      artifactTarget: "architecture-map",
+      reviewId,
+      scanFingerprint,
+      inputFingerprint,
+      agentId: "mock",
+      startedAt: "2026-09-20T00:00:00.000Z"
+    });
+
+    const adoption = await adoptArtifactRun(root, {
+      id: "run-manual-adoption",
+      projectId,
+      toolId: "mock",
+      status: "completed",
+      projectPath: root,
+      startedAt: "2026-09-20T00:00:00.000Z",
+      completedAt: "2026-09-20T00:01:00.000Z",
+      events: [],
+      executionMode: "plan",
+      purpose: "artifact-analysis",
+      artifactTarget: "architecture-map",
+      scanFingerprint,
+      inputFingerprint,
+      reviewId
+    }, JSON.stringify({
+      modules: [{ moduleId: "user-api", title: "Manually reviewed API" }],
+      findings: []
+    }), "manual");
+
+    expect(prompt.moduleIds).toContain("user-api");
+    expect(adoption.status).toBe("applied");
+    const reviewed = await readArchitectureMap(root);
+    expect(reviewed?.modules.map((module) => module.id)).toEqual(local.modules.map((module) => module.id));
+    expect(reviewed?.modules[0]).toMatchObject({ title: "Manually reviewed API", files: local.modules[0].files });
+    expect(reviewed?.relationships).toEqual(local.relationships);
   });
 
   it("marks completed artifact runs stale when the scan fingerprint changed", async () => {
@@ -552,7 +525,7 @@ describe("architecture-analysis.service", () => {
     expect(await readArchitectureMap(root)).toBeUndefined();
   });
 
-  it("retries invalid Agent output once and publishes a review failure", async () => {
+  it("rejects invalid Agent output after one run and publishes a review failure", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-architecture-invalid-"));
     const root = await createFixtureFiles();
     const scriptPath = join(configRoot, "invalid-review-agent.mjs");
@@ -604,10 +577,15 @@ describe("architecture-analysis.service", () => {
       state: "review-failed",
       error: {
         code: "invalid-output",
-        message: expect.stringContaining("after one repair attempt")
+        message: expect.stringContaining("Missing architecture review JSON.")
       }
     });
-    expect(await listRunSummaries(root)).toHaveLength(2);
+    const runs = await listRunSummaries(root);
+    expect(runs).toHaveLength(1);
+    const run = await readRunArtifact(root, runs[0].id);
+    expect(run.prompt).toContain("Local module graph and representative evidence");
+    expect(run.prompt.length).toBeLessThanOrEqual(12_000);
+    expect(run.prompt).not.toContain("invalid architecture output");
     expect((await readArchitectureMap(root))?.source).toBe("local");
   });
 
@@ -796,36 +774,7 @@ function architectureFixtureMap(source: "agent" | "local"): import("../../src/ty
 function validArchitectureJson() {
   return JSON.stringify({
     architectureStyle: "layered service",
-    modules: [
-      {
-        id: "user-api",
-        title: "User API",
-        category: "api-boundary",
-        role: "Receives user requests.",
-        description: "Reviewed HTTP boundary.",
-        files: ["src/api/user.controller.ts"],
-        fileRoles: [{ path: "src/api/user.controller.ts", role: "Routes requests." }],
-        symbols: [{ name: "loadUser", kind: "function", filePath: "src/api/user.controller.ts", role: "handler" }],
-        evidence: [{ filePath: "src/api/user.controller.ts", symbol: "loadUser", detail: "exports handler" }]
-      },
-      {
-        id: "user-service",
-        title: "User Service",
-        category: "domain-service",
-        role: "Coordinates user logic.",
-        description: "Reviewed domain service.",
-        files: ["src/service/user.service.ts"],
-        fileRoles: [{ path: "src/service/user.service.ts", role: "Business service." }],
-        symbols: [{ name: "UserService", kind: "class", filePath: "src/service/user.service.ts", role: "service" }],
-        evidence: [{ filePath: "src/service/user.service.ts", symbol: "UserService", detail: "class declaration" }]
-      }
-    ],
-    relationships: [{
-      source: "user-api",
-      target: "user-service",
-      relation: "calls",
-      description: "API calls service.",
-      evidence: [{ filePath: "src/api/user.controller.ts", detail: "imports service" }]
-    }]
+    modules: [],
+    findings: []
   });
 }

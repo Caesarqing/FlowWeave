@@ -5,6 +5,7 @@ import type {
   ArchitectureMap,
   ArchitectureReviewError,
   ArchitectureReviewEvent,
+  ArchitectureReviewResponse,
   ArchitectureReviewStatus,
   RuntimeAgentId
 } from "../../types";
@@ -39,6 +40,8 @@ export type ArchitectureReviewRunResult =
       outcome: "reviewed";
       architectureMap: ArchitectureMap;
       runId: string;
+      stateRecovered?: boolean;
+      warning?: string;
     }
   | {
       outcome: "failed";
@@ -74,26 +77,33 @@ export type AdoptArchitectureReviewInput = ArchitectureReviewKey & {
 };
 
 export type ArchitectureReviewAdoption =
-  | { status: "applied" | "reused"; architectureMap: ArchitectureMap }
+  | {
+      status: "applied" | "reused";
+      architectureMap: ArchitectureMap;
+      stateRecovered?: boolean;
+      warning?: string;
+    }
   | { status: "stale"; message: string }
   | { status: "rejected"; message: string };
 
-export function enhanceLocalArchitecture(local: ArchitectureMap, agent: ArchitectureMap): ArchitectureMap {
-  const agentByFiles = new Map(agent.modules.map((module) => [moduleFilesKey(module), module]));
+export function enhanceLocalArchitecture(
+  local: ArchitectureMap,
+  review: ArchitectureReviewResponse
+): ArchitectureMap {
+  const reviewByModuleId = new Map(review.modules.map((module) => [module.moduleId, module]));
   return {
     ...local,
     source: "agent",
-    architectureStyle: agent.architectureStyle ?? local.architectureStyle,
+    architectureStyle: review.architectureStyle ?? local.architectureStyle,
+    reviewFindings: review.findings,
     modules: local.modules.map((module) => {
-      const review = agentByFiles.get(moduleFilesKey(module));
-      return review ? {
+      const enhancement = reviewByModuleId.get(module.id);
+      return enhancement ? {
         ...module,
-        title: review.title,
-        role: review.role,
-        description: review.description,
-        fileRoles: review.fileRoles,
-        symbols: review.symbols,
-        evidence: review.evidence
+        title: enhancement.title ?? module.title,
+        role: enhancement.role ?? module.role,
+        description: enhancement.description ?? module.description,
+        assessmentNotes: enhancement.assessmentNotes ?? module.assessmentNotes
       } : module;
     }),
     relationships: local.relationships
@@ -133,7 +143,19 @@ export async function withArchitectureArtifactLock<T>(
 export async function startArchitectureReview(input: StartArchitectureReviewInput): Promise<ArchitectureReviewStatus> {
   const start = await withArchitectureArtifactLock(input.projectPath, async () => {
     const stored = await readStoredArchitectureReviewStatus(input.projectPath);
-    if (stored?.state === "reviewing" && isSameReviewKey(stored, input)) {
+    const effective = await readArchitectureReviewStatusUnlocked(input.projectPath, input);
+    if (
+      stored &&
+      stored.state !== "reviewed" &&
+      effective.state === "reviewed" &&
+      effective.reviewId === input.reviewId &&
+      effective.runId !== undefined &&
+      effective.agentId === input.agentId &&
+      isSameReviewKey(stored, input)
+    ) {
+      return { status: effective, shouldStart: false };
+    }
+    if (effective.state === "reviewing" && stored?.state === "reviewing" && isSameReviewKey(stored, input)) {
       const existingId = stored.reviewId;
       if (!existingId) return { status: stored, shouldStart: false };
       if (input.resume === true && !activeReviewIds.has(existingId)) {
@@ -186,11 +208,19 @@ export async function adoptArchitectureReview(
   input: AdoptArchitectureReviewInput
 ): Promise<ArchitectureReviewAdoption> {
   return withArchitectureArtifactLock(input.projectPath, async () => {
-    const current = await readStoredArchitectureReviewStatus(input.projectPath);
-    if (!current || !isCurrentReview(current, input)) {
+    const stored = await readStoredArchitectureReviewStatus(input.projectPath);
+    const current = await readArchitectureReviewStatusUnlocked(input.projectPath, input);
+    if (!stored || !isCurrentReview(stored, input)) {
       return { status: "stale", message: "Run completed but not applied because a newer review is active." };
     }
-    if (current.state === "reviewed" && current.runId === input.runId) {
+    if (
+      current.state === "reviewed" &&
+      current.reviewId === input.reviewId &&
+      current.runId === input.runId &&
+      current.agentId === input.agentId &&
+      current.scanFingerprint === input.scanFingerprint &&
+      current.inputFingerprint === input.inputFingerprint
+    ) {
       return { status: "reused", architectureMap: input.architectureMap };
     }
     if (current.state !== "reviewing") {
@@ -224,8 +254,9 @@ export async function adoptArchitectureReview(
     if (invalid) return { status: "rejected", message: invalid };
 
     const localArchitecture = localArtifact;
+    const review = architectureReviewResponseFromMap(input.architectureMap);
     const architectureMap = {
-      ...enhanceLocalArchitecture(localArchitecture, input.architectureMap),
+      ...enhanceLocalArchitecture(localArchitecture, review),
       generatedAt: input.architectureMap.generatedAt,
       metadata: input.architectureMap.metadata
     };
@@ -240,8 +271,24 @@ export async function adoptArchitectureReview(
       completedAt: architectureMap.generatedAt,
       diff: compareArchitectureMaps(localArchitecture, architectureMap)
     };
-    await writeArchitectureReviewStatusUnlocked(input.projectPath, reviewed);
-    return { status: "applied", architectureMap };
+    try {
+      await writeArchitectureReviewStatusUnlocked(input.projectPath, reviewed);
+      return { status: "applied", architectureMap };
+    } catch (statusWriteError) {
+      const persistedArchitecture = await readJsonArtifact(join(input.projectPath, FLOWWEAVE_DIR, ARCHITECTURE_MAP_FILENAME));
+      if (!hasMatchingCompletedArchitectureArtifact(persistedArchitecture, input)) throw statusWriteError;
+      try {
+        await writeArchitectureReviewStatusUnlocked(input.projectPath, reviewed);
+        return { status: "applied", architectureMap, stateRecovered: true };
+      } catch (retryError) {
+        return {
+          status: "applied",
+          architectureMap,
+          stateRecovered: true,
+          warning: architectureStatusPersistenceWarning(input, statusWriteError, retryError)
+        };
+      }
+    }
   });
 }
 
@@ -251,15 +298,16 @@ export async function markArchitectureReviewFailedIfCurrent(
   error: ArchitectureReviewError
 ): Promise<boolean> {
   return withArchitectureArtifactLock(projectPath, async () => {
-    const current = await readStoredArchitectureReviewStatus(projectPath);
-    if (!current || !isCurrentReview(current, identity) || current.state !== "reviewing") return false;
+    const stored = await readStoredArchitectureReviewStatus(projectPath);
+    const current = await readArchitectureReviewStatusUnlocked(projectPath, identity);
+    if (!stored || !isCurrentReview(stored, identity) || current.state !== "reviewing") return false;
     await writeArchitectureReviewStatusUnlocked(projectPath, {
       ...reviewKey(identity),
       state: "review-failed",
       reviewId: identity.reviewId,
       agentId: identity.agentId,
-      runId: identity.runId ?? current.runId,
-      startedAt: current.startedAt,
+      runId: identity.runId ?? stored.runId,
+      startedAt: stored.startedAt,
       completedAt: new Date().toISOString(),
       error
     });
@@ -376,7 +424,14 @@ async function completeArchitectureReview(
       return;
     }
 
-    await input.onAdoption?.(result.runId, "applied", "Run completed and applied to module graph.");
+    const stateRecovered = adoption.stateRecovered ?? result.stateRecovered;
+    const warning = adoption.warning ?? result.warning;
+    const adoptionMessage = stateRecovered
+      ? warning
+        ? `Run completed and applied to module graph. Review state was recovered from the persisted architecture map. ${warning}`
+        : "Run completed and applied to module graph. Review state was recovered from the persisted architecture map."
+      : "Run completed and applied to module graph.";
+    await input.onAdoption?.(result.runId, "applied", adoptionMessage);
     const reviewed = await readArchitectureReviewStatus(input.projectPath, input);
     input.onEvent({
       ...reviewEvent(input.projectId, input.reviewId, input.scanFingerprint, reviewed),
@@ -459,18 +514,56 @@ async function readArchitectureReviewStatusUnlocked(
   projectPath: string,
   fingerprints: Pick<ArchitectureReviewKey, "scanFingerprint" | "inputFingerprint">
 ): Promise<ArchitectureReviewStatus> {
-  const value = await readStoredArchitectureReviewStatus(projectPath);
-  if (!value || !value.scanFingerprint || !value.inputFingerprint) {
-    return deriveReviewStatusFromArchitecture(projectPath, fingerprints);
+  const stored = await readStoredArchitectureReviewStatus(projectPath);
+  const architectureArtifact = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, ARCHITECTURE_MAP_FILENAME));
+  const derived = deriveReviewStatusFromArchitecture(architectureArtifact, fingerprints);
+  const hasCompleteIdentity = hasCompleteAgentReviewIdentity(architectureArtifact, fingerprints);
+  return resolveEffectiveArchitectureReviewStatus(stored, derived, fingerprints, hasCompleteIdentity);
+}
+
+function resolveEffectiveArchitectureReviewStatus(
+  stored: ArchitectureReviewStatus | undefined,
+  derived: ArchitectureReviewStatus,
+  fingerprints: Pick<ArchitectureReviewKey, "scanFingerprint" | "inputFingerprint">,
+  hasCompleteAgentIdentity: boolean
+): ArchitectureReviewStatus {
+  if (!stored?.scanFingerprint || !stored.inputFingerprint) return derived;
+  if (stored.scanFingerprint !== fingerprints.scanFingerprint || stored.inputFingerprint !== fingerprints.inputFingerprint) {
+    return { ...stored, state: "stale" };
   }
-  const derived = await deriveReviewStatusFromArchitecture(projectPath, fingerprints);
-  if (value.scanFingerprint !== fingerprints.scanFingerprint || value.inputFingerprint !== fingerprints.inputFingerprint) {
-    return { ...value, state: "stale" };
+  if (
+    derived.state === "reviewed" &&
+    hasCompleteAgentIdentity &&
+    isSameCompletedReview(derived, stored)
+  ) {
+    return {
+      ...stored,
+      ...derived,
+      projectId: stored.projectId,
+      artifactTarget: stored.artifactTarget,
+      startedAt: stored.startedAt,
+      diff: stored.state === "reviewed" ? stored.diff : undefined,
+      message: undefined,
+      error: undefined
+    };
   }
-  if (value.state === "local" || value.state === "reviewed") {
-    if (derived.state !== value.state) return derived;
-  }
-  return value;
+  if (stored.state === "local") return derived.state === "local" ? stored : derived;
+  if (stored.state === "reviewed") return derived;
+  return stored;
+}
+
+function isSameCompletedReview(
+  derived: ArchitectureReviewStatus,
+  stored: ArchitectureReviewStatus
+): boolean {
+  return derived.reviewId !== undefined && stored.reviewId !== undefined &&
+    derived.runId !== undefined && stored.runId !== undefined &&
+    derived.agentId !== undefined && stored.agentId !== undefined &&
+    derived.reviewId === stored.reviewId &&
+    derived.runId === stored.runId &&
+    derived.agentId === stored.agentId &&
+    derived.scanFingerprint === stored.scanFingerprint &&
+    derived.inputFingerprint === stored.inputFingerprint;
 }
 
 async function readStoredArchitectureReviewStatus(projectPath: string): Promise<ArchitectureReviewStatus | undefined> {
@@ -485,11 +578,10 @@ async function writeArchitectureReviewStatusUnlocked(
   await writeJsonAtomic(reviewStatePath(projectPath), status);
 }
 
-async function deriveReviewStatusFromArchitecture(
-  projectPath: string,
+function deriveReviewStatusFromArchitecture(
+  value: unknown,
   fingerprints: Pick<ArchitectureReviewKey, "scanFingerprint" | "inputFingerprint">
-): Promise<ArchitectureReviewStatus> {
-  const value = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, ARCHITECTURE_MAP_FILENAME));
+): ArchitectureReviewStatus {
   if (typeof value !== "object" || value === null) {
     return { state: "missing", ...fingerprints };
   }
@@ -516,10 +608,49 @@ async function deriveReviewStatusFromArchitecture(
       ? metadata.agentId as RuntimeAgentId
       : undefined,
     runId: metadata && "runId" in metadata && typeof metadata.runId === "string" ? metadata.runId : undefined,
-    completedAt: metadata && "generatedAt" in metadata && typeof metadata.generatedAt === "string"
-      ? metadata.generatedAt
+    completedAt: "generatedAt" in value && typeof value.generatedAt === "string"
+      ? value.generatedAt
       : undefined
   };
+}
+
+function hasCompleteAgentReviewIdentity(
+  value: unknown,
+  fingerprints: Pick<ArchitectureReviewKey, "scanFingerprint" | "inputFingerprint">
+): boolean {
+  if (!isArchitectureMap(value) || value.source !== "agent") return false;
+  const metadata = value.metadata;
+  return metadata?.source === "agent" &&
+    metadata.scanFingerprint === fingerprints.scanFingerprint &&
+    metadata.inputFingerprint === fingerprints.inputFingerprint &&
+    typeof metadata.reviewId === "string" && metadata.reviewId.length > 0 &&
+    typeof metadata.runId === "string" && metadata.runId.length > 0 &&
+    typeof metadata.agentId === "string" && metadata.agentId.length > 0;
+}
+
+function hasMatchingCompletedArchitectureArtifact(
+  value: unknown,
+  input: AdoptArchitectureReviewInput
+): boolean {
+  if (!hasCompleteAgentReviewIdentity(value, input) || !isArchitectureMap(value)) return false;
+  const metadata = value.metadata;
+  return metadata?.reviewId === input.reviewId &&
+    metadata.runId === input.runId &&
+    metadata.agentId === input.agentId;
+}
+
+function architectureStatusPersistenceWarning(
+  input: AdoptArchitectureReviewInput,
+  statusWriteError: unknown,
+  retryError: unknown
+): string {
+  return `projectPath=${input.projectPath} reviewId=${input.reviewId} runId=${input.runId} ` +
+    `firstStatusWriteError=${errorMessage(statusWriteError)} retryStatusWriteError=${errorMessage(retryError)}. ` +
+    "The reviewed state will be derived from the persisted Agent architecture map.";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function artifactInputFingerprint(value: unknown): string | undefined {
@@ -554,6 +685,16 @@ function reviewStatePath(projectPath: string): string {
   return join(projectPath, FLOWWEAVE_DIR, REVIEW_STATE_FILENAME);
 }
 
-function moduleFilesKey(module: ArchitectureMap["modules"][number]): string {
-  return [...module.files].sort().join(String.fromCharCode(0));
+function architectureReviewResponseFromMap(architectureMap: ArchitectureMap): ArchitectureReviewResponse {
+  return {
+    architectureStyle: architectureMap.architectureStyle,
+    modules: architectureMap.modules.map((module) => ({
+      moduleId: module.id,
+      title: module.title,
+      role: module.role,
+      description: module.description,
+      assessmentNotes: module.assessmentNotes
+    })),
+    findings: architectureMap.reviewFindings ?? []
+  };
 }

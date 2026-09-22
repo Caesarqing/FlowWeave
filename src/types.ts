@@ -587,6 +587,29 @@ export type ArchitectureModule = {
   risk: GraphRisk;
   confidence?: number;
   assessment?: ModuleAssessment;
+  assessmentNotes?: string;
+};
+
+export type ArchitectureReviewModuleEnhancement = {
+  moduleId: string;
+  title?: string;
+  role?: string;
+  description?: string;
+  assessmentNotes?: string;
+};
+
+export type ArchitectureReviewFinding = {
+  code: string;
+  severity: "warning" | "error";
+  moduleIds: string[];
+  message: string;
+  evidenceIds: string[];
+};
+
+export type ArchitectureReviewResponse = {
+  architectureStyle?: string;
+  modules: ArchitectureReviewModuleEnhancement[];
+  findings: ArchitectureReviewFinding[];
 };
 
 export type ArchitectureRelationship = {
@@ -615,6 +638,7 @@ export type ArchitectureMap = {
   metadata?: ArtifactGenerationMetadata;
   architectureStyle?: string;
   modules: ArchitectureModule[];
+  reviewFindings?: ArchitectureReviewFinding[];
   moduleDiagnostics?: ModuleClusteringDiagnostic[];
   relationships: ArchitectureRelationship[];
   files: FileInsight[];
@@ -728,6 +752,8 @@ export type ArtifactAdoption = {
   status: ArtifactAdoptionStatus;
   message: string;
   appliedAt?: string;
+  stateRecovered?: boolean;
+  warning?: string;
 };
 export type AsyncOperationStatus = "idle" | "running" | "succeeded" | "failed";
 export type AsyncOperationState = { status: AsyncOperationStatus; error?: string };

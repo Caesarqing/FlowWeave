@@ -21,11 +21,9 @@ import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { readArchitectureMap } from "./architecture-analysis.service";
 import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
-import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
-import { buildAgentPrompt, buildModificationContext } from "../../utils/export-artifacts";
 import { writeModificationDocs } from "./modification-doc.service";
 import {
   startSequenceReview,
@@ -36,10 +34,70 @@ import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
 import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
-const MAX_PROMPT_FILES = 70;
-const MAX_SYMBOLS_PER_FILE = 8;
-const REPRESENTATIVE_FILE_LIMIT = 35;
+export const SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS = 12_000;
+export const SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS = 16_000;
+const SEQUENCE_PROMPT_EVIDENCE_DETAIL_MAX_CHARS = 160;
 const sequenceFlights = new Map<string, Promise<SequenceDiagramGenerationResult>>();
+
+export type SequenceDiagramPrompt = {
+  text: string;
+  metrics: {
+    promptChars: number;
+    promptCoreChars: number;
+    promptEvidenceChars: number;
+    promptEvidenceCount: number;
+    promptEvidenceOmittedCount: number;
+    promptEvidenceTruncatedCount: number;
+    promptParticipantCount: number;
+    promptMessageCount: number;
+    promptMessageOmittedCount: number;
+  };
+};
+
+type SequencePromptContext = {
+  evidence: ArchitectureEvidence[];
+  messageEvidenceIndexes: number[][];
+  supportedMessageIndexes: number[];
+  omittedMessageCount: number;
+  diagramEvidenceIndexes: number[];
+};
+
+type CompactSequencePromptRender = {
+  text: string;
+  participantCount: number;
+  messageCount: number;
+};
+
+type SequencePromptBudgetDiagnostics = {
+  participantCount: number;
+  messageCount: number;
+  mandatoryEvidenceCount: number;
+  largestEvidenceContribution: {
+    chars: number;
+    filePath: string | undefined;
+    symbol: string | undefined;
+  } | null;
+};
+
+export class SequenceDiagramPromptBudgetExceededError extends Error {
+  readonly code = "SEQUENCE_DIAGRAM_PROMPT_BUDGET_EXCEEDED";
+  readonly actualChars: number;
+  readonly budgetChars = SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS;
+  readonly diagnostics: SequencePromptBudgetDiagnostics;
+
+  constructor(actualChars: number, diagnostics: SequencePromptBudgetDiagnostics) {
+    const largestEvidence = diagnostics.largestEvidenceContribution;
+    const largestEvidenceText = largestEvidence
+      ? ` largestEvidenceChars=${largestEvidence.chars} largestEvidencePath=${largestEvidence.filePath ?? "unknown"}`
+      : " largestEvidenceChars=0";
+    super(
+      `SEQUENCE_DIAGRAM_PROMPT_BUDGET_EXCEEDED: actualChars=${actualChars} budget=${SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS} participants=${diagnostics.participantCount} messages=${diagnostics.messageCount} mandatoryEvidence=${diagnostics.mandatoryEvidenceCount}${largestEvidenceText}`
+    );
+    this.name = "SequenceDiagramPromptBudgetExceededError";
+    this.actualChars = actualChars;
+    this.diagnostics = diagnostics;
+  }
+}
 
 export async function generateSequenceDiagrams(
   project: CodeflowProject,
@@ -62,11 +120,9 @@ async function generateSequenceDiagramsOnce(
 ): Promise<SequenceDiagramGenerationResult> {
   const { index } = await buildSemanticIndex(project, { onProgress: options?.onProgress });
   const facts = semanticIndexToStructureFacts(project, index);
-  const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const storedArchitecture = await readArchitectureMap(project.rootPath);
   const architectureMap = storedArchitecture;
   const inputFingerprint = await readCurrentProjectScanFingerprint(project.rootPath);
-  const prompt = buildSequenceDiagramPrompt(representativeFacts, architectureMap);
   const localBundleBase = createLocalSequenceBundle(project, facts, architectureMap, "local");
   const localQuality = validateSequenceBundle(localBundleBase, facts);
   const localBundle = withLocalSequenceMetadata(localBundleBase, inputFingerprint, localQuality);
@@ -79,10 +135,10 @@ async function generateSequenceDiagramsOnce(
   });
 
   if (agentId === "mock") {
-    const inferred = createLocalSequenceBundle(project, representativeFacts, architectureMap, "agent");
+    const inferred = createLocalSequenceBundle(project, facts, architectureMap, "agent");
     const parsed = parseSequenceDiagramBundleJson(mockSequenceBundleJson(inferred), project, facts, architectureMap);
     if (!parsed) return failedSequenceResult(agentId, "invalid-output", "Mock agent returned invalid sequence diagram JSON.", []);
-    const quality = validateSequenceBundle(parsed, representativeFacts);
+    const quality = validateSequenceBundle(parsed, facts);
     if (!quality.valid) return failedSequenceResult(agentId, "quality-rejected", quality.reasons.join("; "), []);
     const bundle = withSequenceMetadata(parsed, agentId, "mock", inputFingerprint, quality);
     await writeSequenceDiagramBundle(project.rootPath, bundle, undefined);
@@ -110,17 +166,19 @@ async function generateSequenceDiagramsOnce(
     localBundle: publishedBundle,
     startedAt: publishedBundle.generatedAt,
     persist: (bundle) => writeSequenceDiagramBundle(project.rootPath, bundle, undefined),
-    run: (onRunId) => runSequenceReview(
-      project,
-      agentId,
-      prompt,
-      facts,
-      representativeFacts,
-      architectureMap,
-      inputFingerprint,
-      reviewId,
-      onRunId
-    ),
+    run: (onRunId) => {
+      const prompt = buildSequenceDiagramPrompt(project.projectName, localBundleBase.architectural);
+      return runSequenceReview(
+        project,
+        agentId,
+        prompt.text,
+        facts,
+        architectureMap,
+        inputFingerprint,
+        reviewId,
+        onRunId
+      );
+    },
     onEvent: options?.onSequenceReview ?? (() => undefined)
   });
   return { bundle: publishedBundle, outcome: "generated", review };
@@ -132,22 +190,10 @@ export async function reviseSequenceDiagram(
   instruction: string,
   options?: AnalysisGenerationOptions
 ): Promise<SequenceDiagramBundle> {
-  await buildSemanticIndex(project, { onProgress: options?.onProgress });
   const current = await readSequenceDiagrams(project.rootPath);
   if (!current) throw new Error("No trusted sequence diagram exists to revise.");
   const currentDiagram = current.architectural;
-  const prompt = buildAgentPrompt(
-    buildModificationContext({
-      projectLabel: project.projectName,
-      projectPath: project.rootPath,
-      nodes: [],
-      edges: [],
-      sequenceBundle: current,
-      sequenceInstruction: instruction
-    }),
-    "sequence-revision",
-    "plan"
-  );
+  const prompt = buildSequenceDiagramRevisionPrompt(currentDiagram, instruction);
   options?.onProgress?.({
     stage: "analyzing",
     completed: 0,
@@ -166,7 +212,7 @@ export async function reviseSequenceDiagram(
   const result = await startToolPlan({
     projectId: await registerProject(project.rootPath),
     toolId: agentId,
-    prompt,
+    prompt: prompt.text,
     executionMode: "plan",
     purpose: "artifact-analysis",
     artifactTarget: "sequence-revision",
@@ -196,115 +242,241 @@ export async function readSequenceDiagrams(projectPath: string): Promise<Sequenc
   return bundle;
 }
 
-export function buildSequenceDiagramPrompt(facts: ProjectStructureFacts, architectureMap?: ArchitectureMap) {
-  return `You are FlowWeave's sequence diagram analyst. Return only JSON.
-
-Goal:
-Create one detailed architectural project sequence diagram from the code structure and architecture map so a user can understand the real end-to-end workflow across system modules.
-
-Project: ${facts.projectName}
-Languages: ${JSON.stringify(facts.languages)}
-
-ArchitectureMap:
-${JSON.stringify(compactArchitectureMap(architectureMap), null, 2)}
-
-ProjectStructureFacts:
-${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
-
-Analysis priorities:
-- Use only the supplied ArchitectureMap and ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
-- Generate a Detailed Architectural Sequence Diagram: keep kind exactly "architectural" while making the architecture flow detailed and complete.
-- Cover the main architecture modules and important relationships when evidence exists: entry/user action, UI or desktop shell, IPC/API boundary, service orchestration, domain work, data access, external integrations, asynchronous events or workers, and return/response paths.
-- Use macro participants such as actor, frontend/component, desktop shell, IPC/API boundary, service, data store, external system, and worker. Do not create a class-level or method-level detailed-design diagram.
-- Order messages by the real execution flow: entry/request, validation or orchestration, domain work, data access, external calls or events, return/response.
-- Fill methodName, input, output, and evidence whenever the facts provide calls, symbols, imports, exports, or externalCalls.
-- When the code facts are incomplete, label the detail as inferred from imports/calls/file role instead of presenting it as certain.
-
-Return this exact JSON shape:
-{
-  "architectural": {
-    "id": "architectural-sequence",
-    "title": "Architectural Sequence Diagram",
-    "kind": "architectural",
-    "summary": "macro collaboration across system components",
-    "participants": [{
-      "id": "stable-kebab-id",
-      "title": "Frontend App|Gateway|Order Service|Payment Gateway",
-      "kind": "actor|component|service|gateway|database|external|controller|class|interface|repository|worker|utility",
-      "description": "one sentence role",
-      "filePath": "optional source path",
-      "symbol": "optional source symbol"
-    }],
-    "messages": [{
-      "id": "stable-kebab-id",
-      "sequence": 1,
-      "from": "participant-id",
-      "to": "participant-id",
-      "kind": "sync|async|return|event|external",
-      "label": "request, response, event, or integration call",
-      "description": "what happens",
-      "methodName": "optional method or endpoint",
-      "input": "important input parameters",
-      "output": "important return value",
-      "evidence": [{"filePath": "path", "symbol": "optional", "detail": "specific evidence"}]
-    }],
-    "evidence": [{"filePath": "path", "symbol": "optional", "detail": "why this diagram is credible"}]
-  }
-}
-
-Rules:
-- The architectural diagram uses macro participants: frontend app, gateway, services, databases, workers, and third-party systems.
-- Do not return detailedDesign, a second diagram, or any diagram whose kind is "detailed-design".
-- Every message must reference valid participant ids from its diagram.
-- Prefer 6-14 participants and 8-24 messages when the supplied evidence supports that level of detail.
-- Return valid JSON only.`;
+export function buildSequenceDiagramPrompt(projectName: string, diagram: SequenceDiagram): SequenceDiagramPrompt {
+  return buildCompactSequencePrompt(projectName, diagram, undefined);
 }
 
 export function buildSequenceDiagramRevisionPrompt(
   currentDiagram: SequenceDiagram,
-  instruction: string,
-  facts: ProjectStructureFacts,
-  architectureMap?: ArchitectureMap
-) {
-  return `You are FlowWeave's sequence diagram editor. Return only JSON.
-
-Goal:
-Revise the current ${currentDiagram.kind} sequence diagram according to the user instruction. Return the complete updated diagram object, not a patch.
-
-User instruction:
-${instruction}
-
-Current diagram:
-${JSON.stringify(currentDiagram, null, 2)}
-
-ArchitectureMap:
-${JSON.stringify(compactArchitectureMap(architectureMap), null, 2)}
-
-ProjectStructureFacts:
-${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
-
-Revision priorities:
-- Preserve reliable existing evidence and participant mappings unless the user instruction or code facts require a change.
-- Update participants and messages together when the requested change affects components, classes, methods, inputs, outputs, or ordering.
-- Keep the workflow truthful to the supplied ArchitectureMap and ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
-- Keep message order aligned with the real execution flow and fill methodName, input, output, and evidence for changed method calls when possible.
-
-Return this exact JSON shape:
-{
-  "id": "stable-diagram-id",
-  "title": "Diagram title",
-  "kind": "architectural",
-  "summary": "updated summary",
-  "participants": [],
-  "messages": [],
-  "evidence": []
+  instruction: string
+): SequenceDiagramPrompt {
+  return buildCompactSequencePrompt(undefined, currentDiagram, instruction);
 }
 
-Rules:
-- Keep kind exactly "architectural".
-- Every message must reference existing participant ids.
-- Preserve useful evidence and add code evidence for changed method calls when possible.
-- Return valid JSON only.`;
+function buildCompactSequencePrompt(
+  projectName: string | undefined,
+  diagram: SequenceDiagram,
+  instruction: string | undefined
+): SequenceDiagramPrompt {
+  const context = prepareSequencePromptContext(diagram);
+  const coreContext: SequencePromptContext = {
+    ...context,
+    supportedMessageIndexes: [],
+    omittedMessageCount: diagram.messages.length
+  };
+  const coreText = renderCompactSequencePrompt(
+    projectName,
+    { ...diagram, messages: [] },
+    instruction,
+    coreContext,
+    new Set()
+  ).text;
+
+  const mandatoryEvidence = new Set<number>();
+  for (const messageIndex of context.supportedMessageIndexes) {
+    const firstEvidenceIndex = context.messageEvidenceIndexes[messageIndex][0];
+    if (firstEvidenceIndex !== undefined) mandatoryEvidence.add(firstEvidenceIndex);
+  }
+
+  const mandatoryRender = renderCompactSequencePrompt(projectName, diagram, instruction, context, mandatoryEvidence);
+  if (mandatoryRender.text.length > SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS) {
+    throw new SequenceDiagramPromptBudgetExceededError(
+      mandatoryRender.text.length,
+      sequencePromptBudgetDiagnostics(diagram, context, mandatoryEvidence)
+    );
+  }
+
+  const selectedEvidence = new Set(mandatoryEvidence);
+  let rendered = mandatoryRender;
+  if (mandatoryRender.text.length <= SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS) {
+    for (let index = 0; index < context.evidence.length; index += 1) {
+      if (selectedEvidence.has(index)) continue;
+      selectedEvidence.add(index);
+      const candidate = renderCompactSequencePrompt(projectName, diagram, instruction, context, selectedEvidence);
+      if (candidate.text.length <= SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS) {
+        rendered = candidate;
+      } else {
+        selectedEvidence.delete(index);
+      }
+    }
+  }
+
+  if (rendered.text.length > SEQUENCE_DIAGRAM_PROMPT_MAX_CHARS) {
+    throw new SequenceDiagramPromptBudgetExceededError(
+      rendered.text.length,
+      sequencePromptBudgetDiagnostics(diagram, context, mandatoryEvidence)
+    );
+  }
+  if (rendered.messageCount !== context.supportedMessageIndexes.length) {
+    throw new Error(
+      `SEQUENCE_DIAGRAM_PROMPT_MESSAGE_LOSS: expected=${context.supportedMessageIndexes.length} actual=${rendered.messageCount}`
+    );
+  }
+  return {
+    text: rendered.text,
+    metrics: {
+      promptChars: rendered.text.length,
+      promptCoreChars: coreText.length,
+      promptEvidenceChars: rendered.text.length - coreText.length,
+      promptEvidenceCount: selectedEvidence.size,
+      promptEvidenceOmittedCount: context.evidence.length - selectedEvidence.size,
+      promptEvidenceTruncatedCount: [...selectedEvidence].filter((index) => context.evidence[index].detail.length > SEQUENCE_PROMPT_EVIDENCE_DETAIL_MAX_CHARS).length,
+      promptParticipantCount: rendered.participantCount,
+      promptMessageCount: rendered.messageCount,
+      promptMessageOmittedCount: context.omittedMessageCount
+    }
+  };
+}
+
+function prepareSequencePromptContext(diagram: SequenceDiagram): SequencePromptContext {
+  const evidence: ArchitectureEvidence[] = [];
+  const sourceIndexByKey = new Map<string, number>();
+  const indexesForEvidence = (items: ArchitectureEvidence[] | undefined): number[] => (items ?? []).map((item) => {
+    const key = sequenceEvidenceKey(item);
+    const existingIndex = sourceIndexByKey.get(key);
+    if (existingIndex !== undefined) return existingIndex;
+    const sourceIndex = evidence.length;
+    evidence.push(item);
+    sourceIndexByKey.set(key, sourceIndex);
+    return sourceIndex;
+  });
+  const messageEvidenceIndexes = diagram.messages.map((message) => indexesForEvidence(message.evidence));
+  const supportedMessageIndexes = messageEvidenceIndexes.flatMap((indexes, index) => indexes.length > 0 ? [index] : []);
+  const diagramEvidenceIndexes = indexesForEvidence(diagram.evidence);
+  return {
+    evidence,
+    messageEvidenceIndexes,
+    supportedMessageIndexes,
+    omittedMessageCount: diagram.messages.length - supportedMessageIndexes.length,
+    diagramEvidenceIndexes
+  };
+}
+
+function sequencePromptBudgetDiagnostics(
+  diagram: SequenceDiagram,
+  context: SequencePromptContext,
+  mandatoryEvidence: Set<number>
+): SequencePromptBudgetDiagnostics {
+  let largestEvidenceContribution: SequencePromptBudgetDiagnostics["largestEvidenceContribution"] = null;
+  for (const index of mandatoryEvidence) {
+    const item = context.evidence[index];
+    if (!item) {
+      throw new Error(`SEQUENCE_DIAGRAM_PROMPT_EVIDENCE_CONTEXT_MISSING: index=${index}`);
+    }
+    const chars = JSON.stringify([
+      item.filePath,
+      item.symbol,
+      item.line ?? null,
+      truncateEvidenceDetail(item.detail)
+    ]).length;
+    if (largestEvidenceContribution && largestEvidenceContribution.chars >= chars) continue;
+    largestEvidenceContribution = {
+      chars,
+      filePath: item.filePath,
+      symbol: item.symbol
+    };
+  }
+  return {
+    participantCount: diagram.participants.length,
+    messageCount: context.supportedMessageIndexes.length,
+    mandatoryEvidenceCount: mandatoryEvidence.size,
+    largestEvidenceContribution
+  };
+}
+
+function sequenceEvidenceKey(evidence: ArchitectureEvidence): string {
+  return JSON.stringify([
+    evidence.filePath ?? null,
+    evidence.symbol ?? null,
+    evidence.line ?? null,
+    evidence.eventId ?? null,
+    evidence.detail
+  ]);
+}
+
+function renderCompactSequencePrompt(
+  projectName: string | undefined,
+  diagram: SequenceDiagram,
+  instruction: string | undefined,
+  context: SequencePromptContext,
+  selectedEvidence: Set<number>
+): CompactSequencePromptRender {
+  const participantIndexes = new Map(diagram.participants.map((participant, index) => [participant.id, index]));
+  const evidenceIndexes = selectedEvidenceOutputIndexes([...selectedEvidence]);
+  const referenceIndexes = (sourceIndexes: number[]) => sourceIndexes.flatMap((sourceIndex) => {
+    const outputIndex = evidenceIndexes.get(sourceIndex);
+    return outputIndex === undefined ? [] : [outputIndex];
+  });
+  const messages = context.supportedMessageIndexes.map((messageIndex) => {
+    const item = diagram.messages[messageIndex];
+    if (!item) {
+      throw new Error(`SEQUENCE_DIAGRAM_PROMPT_MESSAGE_CONTEXT_MISSING: index=${messageIndex}`);
+    }
+    const evidenceReferences = referenceIndexes(context.messageEvidenceIndexes[messageIndex]);
+    if (evidenceReferences.length === 0) {
+      throw new Error(`SEQUENCE_DIAGRAM_PROMPT_EVIDENCE_MISSING: messageId=${item.id} sequence=${item.sequence}`);
+    }
+    return [
+      item.id,
+      item.sequence,
+      participantIndexes.get(item.from),
+      participantIndexes.get(item.to),
+      item.kind,
+      item.label,
+      item.description,
+      item.methodName,
+      item.input,
+      item.output,
+      evidenceReferences
+    ];
+  });
+  const input = {
+    diagram: [diagram.id, diagram.title, diagram.kind, diagram.summary],
+    participants: diagram.participants.map((item) => [item.id, item.title, item.kind, item.description, item.filePath, item.symbol]),
+    messages,
+    diagramEvidence: referenceIndexes(context.diagramEvidenceIndexes),
+    evidence: [...selectedEvidence].map((index) => {
+      const item = context.evidence[index];
+      return [item.filePath, item.symbol, item.line ?? null, truncateEvidenceDetail(item.detail)];
+    })
+  };
+  const diagramSchema = {
+    id: "architectural-sequence",
+    title: "Architectural Sequence Diagram",
+    kind: "architectural",
+    summary: "macro collaboration across system components",
+    participants: [{ id: "stable-kebab-id", title: "Service", kind: "service", description: "role", filePath: "path", symbol: "name" }],
+    messages: [{ id: "stable-kebab-id", sequence: 1, from: "participant-id", to: "participant-id", kind: "sync", label: "call", description: "behavior", methodName: "optional", input: "optional", output: "optional", evidence: [{ filePath: "path", symbol: "optional", line: 12, detail: "evidence row text" }] }],
+    evidence: [{ filePath: "path", symbol: "optional", line: 12, detail: "evidence row text" }]
+  };
+  const schema = instruction === undefined ? {
+    architectural: diagramSchema
+  } : diagramSchema;
+  const text = [
+    instruction === undefined
+      ? `Create one detailed architectural sequence diagram for ${projectName}. Return only {"architectural":diagram}.`
+      : `Revise this complete architectural diagram as instructed. Return the complete updated diagram object, not a patch.\nInstruction: ${instruction}`,
+    "Input tuples: diagram=[id,title,kind,summary]; participants=[id,title,kind,description,filePath,symbol]; messages=[id,sequence,fromParticipantIndex,toParticipantIndex,kind,label,description,methodName,input,output,evidenceIndexes]; evidence=[filePath,symbol,lineOrNull,detail]. Copy evidence objects from evidence rows into message.evidence or diagram.evidence by index.",
+    `Input: ${JSON.stringify(input)}`,
+    "Return shape:",
+    JSON.stringify(schema),
+    "Create a detailed architectural sequence for the real end-to-end workflow. Use only supplied participants, messages and evidence; do not invent files, symbols, calls, endpoints, databases, queues or third-party systems. Cover entry/user action, UI, desktop shell, IPC/API boundary, services, data access, integrations, events/workers and return paths when present. Use macro-level participants, preserve execution order and valid participant ids; keep kind exactly \"architectural\" and do not return detailedDesign. Prefer 6-14 participants and 8-24 messages when supported. Fill methodName, input and output when supplied. Return valid JSON only.",
+    instruction === undefined ? "" : "Preserve reliable existing evidence. Update participants and messages together when the instruction changes components, calls or order."
+  ].join("\n\n");
+  return {
+    text,
+    participantCount: input.participants.length,
+    messageCount: input.messages.length
+  };
+}
+
+function selectedEvidenceOutputIndexes(selectedSourceIndexes: number[]): Map<number, number> {
+  return new Map(selectedSourceIndexes.map((sourceIndex, outputIndex) => [sourceIndex, outputIndex]));
+}
+
+function truncateEvidenceDetail(detail: string): string {
+  if (detail.length <= SEQUENCE_PROMPT_EVIDENCE_DETAIL_MAX_CHARS) return detail;
+  return `${detail.slice(0, SEQUENCE_PROMPT_EVIDENCE_DETAIL_MAX_CHARS - 1)}…`;
 }
 
 export function parseSequenceDiagramBundleJson(
@@ -539,7 +711,6 @@ async function runSequenceReview(
   agentId: RuntimeAgentId,
   prompt: string,
   facts: ProjectStructureFacts,
-  representativeFacts: ProjectStructureFacts,
   architectureMap: ArchitectureMap | undefined,
   inputFingerprint: string,
   reviewId: string,
@@ -570,7 +741,7 @@ async function runSequenceReview(
   }
   const output = firstRun.outputText ?? collectStdout(firstRun.events);
   const parsed = parseSequenceDiagramBundleJson(output, project, facts, architectureMap);
-  const quality = parsed ? validateSequenceBundle(parsed, representativeFacts) : undefined;
+  const quality = parsed ? validateSequenceBundle(parsed, facts) : undefined;
   if (parsed && quality?.valid) {
     const bundle = withSequenceMetadata(parsed, agentId, firstRun.id, inputFingerprint, quality);
     const { updateRunArtifactAdoption } = await import("./run-log.service");
@@ -582,60 +753,19 @@ async function runSequenceReview(
     return { outcome: "reviewed", bundle, runId: firstRun.id };
   }
 
-  const firstFailure = parsed ? quality?.reasons.join("; ") ?? "Sequence quality validation failed." : "Agent returned invalid sequence diagram JSON.";
-  const retry = await startToolPlan({
-    projectId,
-    toolId: agentId,
-    prompt: buildSequenceRepairPrompt(prompt, output, firstFailure),
-    executionMode: "plan",
-    purpose: "artifact-analysis",
-    artifactTarget: "sequence-diagrams",
-    scanFingerprint: inputFingerprint,
-    reviewId
-  });
-  await onRunId(retry.id);
-  const retryRun = await waitForSequenceRun(project.rootPath, retry);
-  if (retryRun.status !== "completed") {
-    return {
-      outcome: "failed",
-      runId: retryRun.id,
-      error: {
-        code: "agent-failed",
-        message: retryRun.stderr ?? retryRun.summary ?? "Agent sequence diagram repair failed."
-      }
-    };
-  }
-  const retryOutput = retryRun.outputText ?? collectStdout(retryRun.events);
-  const retryParsed = parseSequenceDiagramBundleJson(retryOutput, project, facts, architectureMap);
-  const retryQuality = retryParsed ? validateSequenceBundle(retryParsed, representativeFacts) : undefined;
-  if (!retryParsed) {
-    return {
-      outcome: "failed",
-      runId: retryRun.id,
-      error: {
-        code: "invalid-output",
-        message: "Agent returned invalid sequence diagram JSON after repair."
-      }
-    };
-  }
-  if (!retryQuality?.valid) {
-    return {
-      outcome: "failed",
-      runId: retryRun.id,
-      error: {
-        code: "quality-rejected",
-        message: retryQuality?.reasons.join("; ") ?? "Sequence quality validation failed after repair."
-      }
-    };
-  }
-  const bundle = withSequenceMetadata(retryParsed, agentId, retryRun.id, inputFingerprint, retryQuality);
-  const { updateRunArtifactAdoption } = await import("./run-log.service");
-  await updateRunArtifactAdoption(project.rootPath, retryRun.id, {
-    status: "applied",
-    message: "Run completed and applied to sequence diagrams.",
-    appliedAt: bundle.generatedAt
-  });
-  return { outcome: "reviewed", bundle, runId: retryRun.id };
+  return {
+    outcome: "failed",
+    runId: firstRun.id,
+    error: parsed
+      ? {
+          code: "quality-rejected",
+          message: quality?.reasons.join("; ") ?? "Sequence quality validation failed."
+        }
+      : {
+          code: "invalid-output",
+          message: "Agent returned invalid sequence diagram JSON."
+        }
+  };
 }
 
 async function waitForSequenceRun(
@@ -757,16 +887,6 @@ function failedSequenceError(
   } as const;
 }
 
-function buildSequenceRepairPrompt(originalPrompt: string, output: string, failure: string) {
-  return `${originalPrompt}
-
-The previous response failed validation: ${failure}
-Return one corrected JSON object only. Do not include Markdown fences or explanatory text.
-
-Previous response:
-${output.slice(0, 40_000)}`;
-}
-
 export async function writeSequenceDiagramBundle(
   projectPath: string,
   bundle: SequenceDiagramBundle,
@@ -791,54 +911,6 @@ async function writeLocalSequenceDiagramBundle(projectPath: string, bundle: Sequ
 function parseFirstJsonObject(output: string): unknown {
   const extracted = extractStructuredJson(output);
   return "value" in extracted ? extracted.value : undefined;
-}
-
-function compactFactsForPrompt(facts: ProjectStructureFacts) {
-  return {
-    ...facts,
-    files: facts.files.slice(0, MAX_PROMPT_FILES).map((file) => ({
-      path: file.path,
-      language: file.language,
-      imports: file.imports.slice(0, 12),
-      exports: file.exports.slice(0, 10),
-      symbols: file.symbols.slice(0, MAX_SYMBOLS_PER_FILE).map((symbol) => ({
-        name: symbol.name,
-        kind: symbol.kind,
-        exported: symbol.exported
-      })),
-      calls: file.calls.slice(0, 10),
-      externalCalls: file.externalCalls.slice(0, 6),
-      moduleId: file.moduleId,
-      role: file.role
-    })),
-    relations: facts.relations?.slice(0, 100)
-  };
-}
-
-function compactArchitectureMap(map?: ArchitectureMap) {
-  if (!map) return undefined;
-  return {
-    architectureStyle: map.architectureStyle,
-    modules: map.modules.slice(0, 20).map((module) => ({
-      id: module.id,
-      title: module.title,
-      category: module.category,
-      role: module.role,
-      files: module.files.slice(0, 6),
-      symbols: module.symbols.slice(0, 6).map((symbol) => ({
-        name: symbol.name,
-        kind: symbol.kind,
-        filePath: symbol.filePath
-      }))
-    })),
-    relationships: map.relationships.slice(0, 50).map((relationship) => ({
-      source: relationship.source,
-      target: relationship.target,
-      relation: relationship.relation,
-      description: relationship.description,
-      evidence: relationship.evidence.slice(0, 2)
-    }))
-  };
 }
 
 function mockSequenceBundleJson(bundle: SequenceDiagramBundle) {

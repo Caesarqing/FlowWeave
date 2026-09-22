@@ -10,6 +10,7 @@ import type {
   ArchitectureModule,
   ArchitectureModuleCategory,
   ArchitectureRelationship,
+  ArchitectureReviewResponse,
   CodeflowProject,
   FileInsight,
   GraphEdge,
@@ -26,11 +27,10 @@ import type {
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
-import { selectRepresentativeStructureFacts } from "./structure-extractor.service";
 import { buildSemanticIndex, moduleClusteringRelations, semanticIndexToStructureFacts } from "./semantic-index.service";
 import { clusterArchitectureModules } from "./module-clustering.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
-import { extractStructuredJson } from "./structured-output.service";
+import { parseArchitectureReviewResponse } from "./structured-output.service";
 import { assessModules } from "../../utils/module-assessment";
 import {
   adoptArchitectureReview,
@@ -40,15 +40,17 @@ import {
   type ArchitectureReviewRunResult
 } from "./architecture-review.service";
 export { enhanceLocalArchitecture } from "./architecture-review.service";
+import {
+  buildArchitectureReviewPrompt,
+  createArchitectureReviewPromptInput,
+  type ArchitectureReviewPrompt
+} from "./architecture-review-prompt.service";
 import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
 import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
-const MAX_PROMPT_FILES = 80;
-const MAX_PROMPT_SYMBOLS_PER_FILE = 8;
-const REPRESENTATIVE_FILE_LIMIT = 40;
 const MODULE_CLUSTERING_CONFIG_VERSION = "2";
 const ARCHITECTURE_GENERATOR_VERSION = "1";
-const ARCHITECTURE_REVIEW_CONTRACT_VERSION = "1";
+const ARCHITECTURE_REVIEW_CONTRACT_VERSION = "2";
 
 export async function analyzeArchitecture(
   project: CodeflowProject,
@@ -73,10 +75,8 @@ async function analyzeArchitectureOnce(
   const facts = semanticIndexToStructureFacts(project, index);
   const clusteringRelations = moduleClusteringRelations(index);
   const previousModules = await readPreviousLocalModules(project.rootPath);
-  const representativeFacts = { ...facts, files: selectRepresentativeStructureFacts(facts, REPRESENTATIVE_FILE_LIMIT) };
   const scanFingerprint = project.scanFingerprint ?? await readCurrentProjectScanFingerprint(project.rootPath);
   const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
-  const prompt = buildArchitecturePrompt(representativeFacts);
   const localArchitectureBase = createLocalArchitectureMap(project, facts, "local", previousModules, clusteringRelations);
   const localQuality = validateArchitectureMap(localArchitectureBase, facts);
   const localArchitecture = assessArchitectureMap(
@@ -84,6 +84,7 @@ async function analyzeArchitectureOnce(
     index,
     inputFingerprint
   );
+  const promptInput = createArchitectureReviewPromptInput(localArchitecture, index);
   options?.onProgress?.({
     stage: "analyzing",
     completed: 0,
@@ -93,45 +94,48 @@ async function analyzeArchitectureOnce(
   });
   const projectId = options?.projectId ?? await registerProject(project.rootPath);
   const reviewId = options?.resumeArchitectureReview?.reviewId ?? `review-${randomUUID()}`;
-  const run = toolId === "mock"
-    ? async (onRunId: (runId: string) => Promise<void>): Promise<ArchitectureReviewRunResult> => {
-        await onRunId("mock");
-        const parsed = parseArchitectureJson(mockArchitectureJson(localArchitecture), project, facts);
-        if (!parsed) return reviewFailure(toolId, "invalid-output", "Mock agent returned invalid architecture JSON.", "mock");
-        const quality = validateArchitectureMap(parsed, facts);
-        if (!quality.valid) return reviewFailure(toolId, "quality-rejected", quality.reasons.join("; "), "mock");
-        return {
-          outcome: "reviewed",
-          runId: "mock",
-          architectureMap: assessArchitectureMap(
-            withArchitectureMetadata(
-              enhanceLocalArchitecture(localArchitecture, parsed),
-              toolId,
-              "mock",
-              scanFingerprint,
-              inputFingerprint,
-              reviewId,
-              quality
-            ),
-            index,
-            inputFingerprint
-          )
-        };
-      }
-    : (onRunId: (runId: string) => Promise<void>) => runArchitectureReview(
-        project,
-        toolId,
-        prompt,
-        facts,
-        representativeFacts,
-        localArchitecture,
-        index,
-        scanFingerprint,
-        inputFingerprint,
-        reviewId,
-        onRunId,
-        options?.resumeArchitectureReview?.runId
-      );
+  const run = async (onRunId: (runId: string) => Promise<void>): Promise<ArchitectureReviewRunResult> => {
+    let prompt: ArchitectureReviewPrompt;
+    try {
+      prompt = buildArchitectureReviewPrompt(promptInput);
+    } catch (error) {
+      return reviewFailure(toolId, "agent-failed", formatError(error), undefined);
+    }
+    if (toolId === "mock") {
+      await onRunId("mock");
+      const parsed = parseArchitectureReviewResponse(mockArchitectureJson(prompt), prompt);
+      return {
+        outcome: "reviewed",
+        runId: "mock",
+        architectureMap: assessArchitectureMap(
+          withArchitectureMetadata(
+            enhanceLocalArchitecture(localArchitecture, parsed),
+            toolId,
+            "mock",
+            scanFingerprint,
+            inputFingerprint,
+            reviewId,
+            localQuality
+          ),
+          index,
+          inputFingerprint
+        )
+      };
+    }
+    return runArchitectureReview(
+      project,
+      toolId,
+      prompt,
+      localArchitecture,
+      localQuality,
+      index,
+      scanFingerprint,
+      inputFingerprint,
+      reviewId,
+      onRunId,
+      options?.resumeArchitectureReview?.runId
+    );
+  };
   const review = await startArchitectureReview({
     projectId,
     artifactTarget: "architecture-map",
@@ -186,90 +190,6 @@ async function readPreviousLocalModules(projectPath: string): Promise<Architectu
   return value.modules as ArchitectureModule[];
 }
 
-export function buildArchitecturePrompt(facts: ProjectStructureFacts) {
-  return `You are FlowWeave's architecture analyst. Return only JSON.
-
-Goal:
-Create a functional architecture module map for a visual Canvas that helps a user understand the real code structure and workflow of this project. Nodes must represent feature/architecture modules, not individual files or folders.
-
-Project: ${facts.projectName}
-Languages: ${JSON.stringify(facts.languages)}
-
-ProjectStructureFacts:
-${JSON.stringify(compactFactsForPrompt(facts), null, 2)}
-
-Analysis priorities:
-- Use only the supplied ProjectStructureFacts. Do not invent files, symbols, calls, endpoints, databases, queues, or third-party systems.
-- Explain the project as a human-readable explanation for someone trying to understand how the code works.
-- Identify real entry points, core business/domain modules, data access, external integrations, background workers, shared utilities, and test surfaces from paths, imports, exports, symbols, calls, and externalCalls.
-- Describe the practical workflow: how a request, job, event, or command enters the system, which modules process it, where state is read or written, and where external systems are touched.
-- Prefer concrete code evidence over broad guesses. When evidence is partial, say that the detail is inferred from imports, calls, externalCalls, symbols, or file roles.
-
-Return this exact JSON shape:
-{
-  "architectureStyle": "short architecture style, e.g. layered service, desktop app, MVC, event-driven",
-  "modules": [{
-    "id": "stable-kebab-id",
-    "title": "Human module title",
-    "category": "api-boundary|domain-service|data-access|external-integration|job-worker|shared-utility|test-surface|unknown",
-    "role": "one sentence role",
-    "description": "one concise paragraph that explains this module's function and purpose in the project",
-    "files": ["path"],
-    "fileRoles": [{"path": "path", "role": "short purpose for this file or folder"}],
-    "symbols": [{"name": "symbol", "kind": "function|class|method|export|variable", "filePath": "path", "role": "why it matters"}],
-    "evidence": [{"filePath": "path", "symbol": "optional", "detail": "import/function/call evidence"}],
-    "assessmentNotes": "optional explanation of uncertainty or change impact; FlowWeave calculates final risk and confidence locally"
-  }],
-  "relationships": [{
-    "source": "module-id",
-    "target": "module-id",
-    "relation": "depends_on|calls|reads_writes|external_api|publishes_event|subscribes_event|tests",
-    "description": "how these modules connect",
-    "evidence": [{"filePath": "path", "symbol": "optional", "detail": "specific connection evidence"}]
-  }]
-}
-
-Rules:
-- Prefer 5-12 functional architecture modules for medium projects.
-- Merge files by responsibility: API boundaries, domain services, data access, external integrations, workers, utilities, tests.
-- Do not create one node per file.
-- Every module must include concrete files and at least one evidence item when possible.
-- For fileRoles, include short explanations for important folders and files. Folder paths such as "src/services" are allowed when several files share a responsibility.
-- File and folder roles must describe functional purpose, such as request handling, orchestration, validation, persistence, integration, configuration, or tests. Do not only list symbols.
-- For symbols, choose key functions, classes, methods, or exports that explain how the module works; include a role that tells the user why the symbol matters.
-- Every relationship must explain how modules connect using imports, calls, symbols, or external call hints.
-- Relationship descriptions should describe real workflow collaboration, e.g. API boundary calls domain service, service reads/writes data access, service calls external integration, worker consumes queue work, or tests cover a target module.
-- Use only relation and category enum values shown above.`;
-}
-
-export function parseArchitectureJson(output: string, project: CodeflowProject, facts: ProjectStructureFacts): ArchitectureMap | undefined {
-  const extracted = extractStructuredJson(output, "modules");
-  if (!("value" in extracted)) return undefined;
-  try {
-    const parsed = extracted.value as Partial<ArchitectureMap>;
-    if (!Array.isArray(parsed.modules) || parsed.modules.length === 0) return undefined;
-    const fileSet = new Set(facts.files.map((file) => file.path));
-    const modules = parsed.modules.map((module, index) => normalizeModule(module, facts, fileSet, index)).filter((module): module is ArchitectureModule => Boolean(module));
-    if (modules.length === 0) return undefined;
-    const relationships = inferFallbackRelationships(modules, facts);
-
-    return {
-      version: 1,
-      projectName: project.projectName,
-      rootPath: project.rootPath,
-      generatedAt: new Date().toISOString(),
-      source: "agent",
-      architectureStyle: stringOrUndefined(parsed.architectureStyle),
-      modules,
-      relationships,
-      files: applyModuleIds(facts.files, modules),
-      symbols: modules.flatMap((module) => module.symbols)
-    };
-  } catch {
-    return undefined;
-  }
-}
-
 export function architectureMapToResult(
   architectureMap: ArchitectureMap,
   review: import("../../types").ArchitectureReviewStatus,
@@ -294,10 +214,9 @@ async function writeLocalArchitectureArtifacts(projectPath: string, architecture
 async function runArchitectureReview(
   project: CodeflowProject,
   toolId: RuntimeAgentId,
-  prompt: string,
-  facts: ProjectStructureFacts,
-  representativeFacts: ProjectStructureFacts,
+  prompt: ArchitectureReviewPrompt,
   localArchitecture: ArchitectureMap,
+  localQuality: { fileCoverage: number; evidenceCoverage: number },
   index: import("../../types").SemanticIndex,
   scanFingerprint: string,
   inputFingerprint: string,
@@ -312,7 +231,7 @@ async function runArchitectureReview(
       : await startToolPlan({
           projectId,
           toolId,
-          prompt,
+          prompt: prompt.text,
           executionMode: "plan",
           purpose: "artifact-analysis",
           artifactTarget: "architecture-map",
@@ -326,67 +245,33 @@ async function runArchitectureReview(
       return reviewFailure(toolId, "agent-failed", firstRun.failure?.message ?? firstRun.summary ?? "Agent review did not complete.", firstRun.id);
     }
     const firstOutput = firstRun.outputText ?? collectStdout(firstRun.events);
-    const firstParsed = parseArchitectureJson(firstOutput, project, facts);
-    const firstQuality = firstParsed ? validateArchitectureMap(firstParsed, representativeFacts) : undefined;
-    if (firstParsed && firstQuality?.valid) {
-      const architectureMap = assessArchitectureMap(
-        withArchitectureMetadata(
-          enhanceLocalArchitecture(localArchitecture, firstParsed),
-          toolId,
-          firstRun.id,
-          scanFingerprint,
-          inputFingerprint,
-          reviewId,
-          firstQuality
-        ),
-        index,
-        inputFingerprint
-      );
-      return { outcome: "reviewed", architectureMap, runId: firstRun.id };
+    let response: ArchitectureReviewResponse;
+    try {
+      response = parseArchitectureReviewResponse(firstOutput, prompt);
+    } catch (error) {
+      return reviewFailure(toolId, "invalid-output", formatError(error), firstRun.id);
     }
 
-    const firstFailure = firstParsed
-      ? firstQuality?.reasons.join("; ") ?? "Architecture quality validation failed."
-      : "Agent returned invalid architecture JSON.";
-    const retryStarted = await startToolPlan({
-      projectId,
-      toolId,
-      prompt: buildArchitectureRepairPrompt(prompt, firstOutput, firstFailure),
-      executionMode: "plan",
-      purpose: "artifact-analysis",
-      artifactTarget: "architecture-map",
-      scanFingerprint,
-      inputFingerprint,
-      reviewId
-    });
-    await onRunId(retryStarted.id);
-    const retry = await waitForArchitectureRun(project.rootPath, retryStarted);
-    if (retry.status !== "completed") {
-      return reviewFailure(toolId, "agent-failed", retry.failure?.message ?? retry.summary ?? "Agent repair review did not complete.", retry.id);
-    }
-    const retryOutput = retry.outputText ?? collectStdout(retry.events);
-    const retryParsed = parseArchitectureJson(retryOutput, project, facts);
-    const retryQuality = retryParsed ? validateArchitectureMap(retryParsed, representativeFacts) : undefined;
-    if (!retryParsed) {
-      return reviewFailure(toolId, "invalid-output", "Agent returned invalid architecture JSON after one repair attempt.", retry.id);
-    }
-    if (!retryQuality?.valid) {
-      return reviewFailure(toolId, "quality-rejected", retryQuality?.reasons.join("; ") ?? "Architecture quality validation failed.", retry.id);
-    }
     const architectureMap = assessArchitectureMap(
       withArchitectureMetadata(
-        enhanceLocalArchitecture(localArchitecture, retryParsed),
+        enhanceLocalArchitecture(localArchitecture, response),
         toolId,
-        retry.id,
+        firstRun.id,
         scanFingerprint,
         inputFingerprint,
         reviewId,
-        retryQuality
+        localQuality
       ),
       index,
       inputFingerprint
     );
-    return { outcome: "reviewed", architectureMap, runId: retry.id };
+    return {
+      outcome: "reviewed",
+      architectureMap,
+      runId: firstRun.id,
+      stateRecovered: firstRun.artifactAdoption?.stateRecovered,
+      warning: firstRun.artifactAdoption?.warning
+    };
   } catch (error) {
     return reviewFailure(toolId, "agent-failed", formatError(error), undefined);
   }
@@ -657,16 +542,6 @@ function failedArchitectureResult(
   };
 }
 
-function buildArchitectureRepairPrompt(originalPrompt: string, output: string, failure: string): string {
-  return `${originalPrompt}
-
-The previous response failed validation: ${failure}
-Return one corrected JSON object only. Do not include Markdown fences or explanatory text.
-
-Previous response:
-${output.slice(0, 40_000)}`;
-}
-
 function collectStdout(events: Array<{ type: string; content?: string }>) {
   return events.filter((event) => event.type === "stdout").map((event) => event.content ?? "").join("\n");
 }
@@ -849,55 +724,16 @@ function evidenceKey(item: ArchitectureEvidence): string {
   return `${item.filePath ?? ""}:${item.symbol ?? ""}:${item.line ?? ""}:${item.detail}`;
 }
 
-function normalizeModule(module: Partial<ArchitectureModule>, facts: ProjectStructureFacts, fileSet: Set<string>, index: number): ArchitectureModule | undefined {
-  const id = safeId(module.id ?? module.title ?? `module-${index + 1}`);
-  const files = (module.files ?? []).filter((file) => fileSet.has(file));
-  if (!id || files.length === 0) return undefined;
-  const category = isCategory(module.category) ? module.category : fallbackCategory(facts.files.filter((file) => files.includes(file.path)));
-  const symbols = normalizeSymbols(module.symbols ?? [], files);
-  return {
-    id,
-    title: module.title?.trim() || titleFromId(id),
-    category,
-    nodeType: nodeTypeFromCategory(category),
-    role: module.role?.trim() || fallbackRole(category, facts.files.filter((file) => files.includes(file.path))),
-    description: module.description?.trim() || fallbackModuleDescription(titleFromId(id), category, facts.files.filter((file) => files.includes(file.path))),
-    files,
-    fileRoles: normalizeFileRoles(module.fileRoles, files, facts.files, category),
-    symbols,
-    evidence: normalizeEvidence(module.evidence, files),
-    risk: "unknown",
-    confidence: undefined,
-    assessment: undefined
-  };
-}
-
-function compactFactsForPrompt(facts: ProjectStructureFacts) {
-  return {
-    ...facts,
-    files: facts.files.slice(0, MAX_PROMPT_FILES).map((file) => ({
-      path: file.path,
-      language: file.language,
-      imports: file.imports.slice(0, 16),
-      exports: file.exports.slice(0, 12),
-      symbols: file.symbols.slice(0, MAX_PROMPT_SYMBOLS_PER_FILE).map((symbol) => ({
-        name: symbol.name,
-        kind: symbol.kind,
-        exported: symbol.exported
-      })),
-      calls: file.calls.slice(0, 12),
-      externalCalls: file.externalCalls.slice(0, 8)
-    })),
-    relations: facts.relations?.slice(0, 120)
-  };
-}
-
-function mockArchitectureJson(map: ArchitectureMap) {
+function mockArchitectureJson(prompt: ArchitectureReviewPrompt) {
   return JSON.stringify(
     {
-      architectureStyle: map.architectureStyle,
-      modules: map.modules,
-      relationships: map.relationships
+      modules: prompt.modules.map((module) => ({
+        moduleId: module.id,
+        title: module.title,
+        role: module.role,
+        description: module.description
+      })),
+      findings: []
     },
     null,
     2
@@ -1102,15 +938,6 @@ function fileRoleFromInsight(file: FileInsight, category?: ArchitectureModuleCat
   return `Supports the ${categoryName} responsibility in this project.`;
 }
 
-function folderPathsForFiles(files: string[]) {
-  return [...new Set(files.flatMap((file) => folderPathsForFile(file)))];
-}
-
-function folderPathsForFile(filePath: string) {
-  const parts = filePath.split("/").filter(Boolean);
-  return parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
-}
-
 function commonDirectory(files: string[]) {
   const folders = files.map((file) => file.split("/").filter(Boolean).slice(0, -1));
   if (folders.length === 0) return undefined;
@@ -1131,61 +958,9 @@ function evidenceFromInsight(file: FileInsight) {
   return "File path and language contributed to module classification.";
 }
 
-function normalizeSymbols(symbols: StructureSymbol[], files: string[]) {
-  return symbols.filter((symbol) => files.includes(symbol.filePath)).slice(0, 80);
-}
-
-function normalizeFileRoles(
-  fileRoles: ArchitectureModule["fileRoles"] | undefined,
-  files: string[],
-  factsFiles: FileInsight[],
-  category: ArchitectureModuleCategory
-) {
-  const allowedPaths = new Set([...files, ...folderPathsForFiles(files)]);
-  const roles = (fileRoles ?? [])
-    .map((item) => ({ path: item.path.trim(), role: item.role.trim() }))
-    .filter((item) => item.path && item.role && allowedPaths.has(item.path));
-  const roleByPath = new Map(roles.map((item) => [item.path, item.role]));
-  const fileInsights = factsFiles.filter((file) => files.includes(file.path));
-  const generatedRoles = fallbackFileRoles(fileInsights, category).filter((item) => !roleByPath.has(item.path));
-  return [...roles, ...generatedRoles];
-}
-
-function normalizeEvidence(evidence: ArchitectureModule["evidence"] | undefined, files: string[]) {
-  return (evidence ?? [])
-    .filter((item) => !item.filePath || files.length === 0 || files.includes(item.filePath))
-    .map((item) => ({
-      filePath: item.filePath,
-      symbol: item.symbol,
-      line: Number.isInteger(item.line) ? item.line : undefined,
-      detail: item.detail || "Architecture evidence"
-    }))
-    .slice(0, 30);
-}
-
-function titleFromId(id: string) {
-  return id
-    .split(/[-_/]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function safeId(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "module";
-}
-
-function isCategory(value: unknown): value is ArchitectureModuleCategory {
-  return (
-    value === "api-boundary" ||
-    value === "domain-service" ||
-    value === "data-access" ||
-    value === "external-integration" ||
-    value === "job-worker" ||
-    value === "shared-utility" ||
-    value === "test-surface" ||
-    value === "unknown"
-  );
+function folderPathsForFile(filePath: string) {
+  const parts = filePath.split("/").filter(Boolean);
+  return parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"));
 }
 
 export function assessArchitectureMap(
@@ -1208,8 +983,4 @@ export function assessArchitectureMap(
       } : module;
     })
   };
-}
-
-function stringOrUndefined(value: unknown) {
-  return typeof value === "string" && value.trim() ? value : undefined;
 }
