@@ -188,6 +188,25 @@ describe("agent-plugin.service", () => {
     expect(summary.completedAt).toBe("2026-09-20T00:00:00.000Z");
     expect(summary.files).toHaveLength(2);
     await expect(readFile(bridgeRun, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    const flowweaveEntries = await readdir(join(projectPath, ".flowweave"));
+    expect(flowweaveEntries.some((entry) => entry.includes("agent-bridge.flowweave-migration-"))).toBe(false);
+  });
+
+  it("records and deletes abandoned legacy bridge runs with no response or completion", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-plugin-project-"));
+    const bridgeRun = join(projectPath, ".flowweave", "agent-bridge", "abandoned-run");
+    const summaryPath = join(projectPath, ".flowweave", "runs", "abandoned-run", "legacy-summary.json");
+    await mkdir(bridgeRun, { recursive: true });
+    await writeFile(join(bridgeRun, "request.json"), "{\"kind\":\"review\"}\n", "utf8");
+    await writeFile(join(bridgeRun, "prompt.md"), "Review the module graph.\n", "utf8");
+    await writeFile(join(bridgeRun, "instructions.md"), "Return a structured response.\n", "utf8");
+
+    await installBuiltInAgentPlugin(projectPath);
+
+    const summary = JSON.parse(await readFile(summaryPath, "utf8")) as { status: string; files: unknown[] };
+    expect(summary.status).toBe("abandoned");
+    expect(summary.files).toHaveLength(3);
+    await expect(readFile(bridgeRun, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("blocks legacy cleanup without moving manifests when a target conflicts or a response is pending", async () => {

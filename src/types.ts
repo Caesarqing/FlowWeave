@@ -1065,7 +1065,7 @@ export type AgentPluginHostCheck = {
   message: string;
 };
 export type AgentPluginMigrationResult = {
-  status: "not-run" | "completed" | "blocked" | "failed";
+  status: "not-run" | "completed" | "blocked" | "cleanup-failed";
   completedAt?: string;
   migratedFiles?: Array<{
     sourcePath: string;
@@ -1075,6 +1075,11 @@ export type AgentPluginMigrationResult = {
   migratedRuns?: Array<{
     sourcePath: string;
     targetPath: string;
+    contentHash: string;
+    disposition: "completed" | "abandoned";
+  }>;
+  cleanupPaths?: Array<{
+    path: string;
     contentHash: string;
   }>;
   message?: string;
