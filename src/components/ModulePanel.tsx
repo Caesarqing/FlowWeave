@@ -38,6 +38,11 @@ export function relationDisplayTitle(edge: GraphEdge, titles: Map<string, string
 const nodeTypeOptions: GraphNodeType[] = ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"];
 const riskOptions: AssessmentLevel[] = ["low", "medium", "high", "unknown"];
 
+export function formatModuleRelation(edge: GraphEdge, modules: GraphNode[]): string {
+  const titleById = new Map(modules.map((module) => [module.id, module.title]));
+  return `${titleById.get(edge.source) ?? edge.source} -> ${titleById.get(edge.target) ?? edge.target}`;
+}
+
 export function ModulePanel({
   edges,
   modules,

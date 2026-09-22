@@ -4,6 +4,21 @@ import type { GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
 import { useI18n } from "../utils/i18n";
 import { relationOptions, relationStyle } from "../utils/relation-styles";
 
+export type ConnectionDisplayDetails = {
+  confidence: "confirmed" | "inferred";
+  representativeEvidence: NonNullable<GraphEdge["evidence"]>[number] | undefined;
+  additionalEvidenceCount: number;
+};
+
+export function buildConnectionDisplayDetails(edge: GraphEdge): ConnectionDisplayDetails {
+  const evidence = edge.evidence ?? [];
+  return {
+    confidence: edge.relation === "depends_on" || evidence.length === 0 ? "inferred" : "confirmed",
+    representativeEvidence: evidence[0],
+    additionalEvidenceCount: Math.max(0, evidence.length - 1)
+  };
+}
+
 export function ConnectionPanel({
   defaultRelation,
   mode,
@@ -34,6 +49,7 @@ export function ConnectionPanel({
   const [guidanceNote, setGuidanceNote] = useState("");
   const sourceNode = useMemo(() => modules.find((node) => node.id === selectedEdge?.source), [modules, selectedEdge?.source]);
   const targetNode = useMemo(() => modules.find((node) => node.id === selectedEdge?.target), [modules, selectedEdge?.target]);
+  const selectedEdgeDetails = selectedEdge ? buildConnectionDisplayDetails(selectedEdge) : undefined;
 
   useEffect(() => {
     if (mode !== "create") return;
@@ -102,6 +118,11 @@ export function ConnectionPanel({
             <p>{t("connection.confidence", { value: t(`connection.confidence.${selectedEdge.confidence ?? "confirmed"}`) })}</p>
           </section>
           <section className="module-card connection-form">
+            <div className="connection-endpoints">
+              <span><strong>{t("connection.directionLabel")}</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)} {"->"} {moduleOptionLabel(targetNode, selectedEdge.target)}</span>
+              <span><strong>{t("connection.relationType")}</strong>{t(`relation.${selectedEdge.relation}`)}</span>
+              <span><strong>{t("connection.confidenceLabel")}</strong>{t(`connection.confidence.${selectedEdgeDetails?.confidence ?? "inferred"}`)}</span>
+            </div>
             <label>
               {t("connection.source")}
               <NodeSelect modules={modules} value={selectedEdge.source} onChange={(nextSource) => updateSource(selectedEdge, nextSource)} />
@@ -132,14 +153,13 @@ export function ConnectionPanel({
               <span><strong>{t("connection.target")}</strong>{moduleOptionLabel(targetNode, selectedEdge.target)}</span>
             </div>
             <div className="connection-evidence">
-              <strong>{t("connection.evidence")}</strong>
-              {selectedEdge.evidence?.length ? (
-                selectedEdge.evidence.map((item, index) => (
-                  <article key={`${item.filePath ?? "unknown"}-${item.symbol ?? "unknown"}-${index}`}>
-                    <code>{evidenceLocation(item.filePath, item.symbol, item.line)}</code>
-                    <span>{item.detail}</span>
-                  </article>
-                ))
+              <strong>{t("connection.representativeEvidence")}</strong>
+              {selectedEdgeDetails?.representativeEvidence ? (
+                <article>
+                  <code>{evidenceLocation(selectedEdgeDetails.representativeEvidence.filePath, selectedEdgeDetails.representativeEvidence.symbol, selectedEdgeDetails.representativeEvidence.line)}</code>
+                  <span>{selectedEdgeDetails.representativeEvidence.detail}</span>
+                  {selectedEdgeDetails.additionalEvidenceCount > 0 ? <small>{t("connection.additionalEvidence", { count: selectedEdgeDetails.additionalEvidenceCount })}</small> : null}
+                </article>
               ) : (
                 <small>{t("connection.noEvidence")}</small>
               )}

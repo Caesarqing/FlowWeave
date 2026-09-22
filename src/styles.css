@@ -4542,6 +4542,58 @@ button:disabled {
   flex: 0 0 auto;
 }
 
+.canvas-execution-summary,
+.canvas-execution-note {
+  max-width: 280px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.canvas-execution-note {
+  color: var(--dim);
+}
+
+.canvas-relation-legend {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  max-width: 260px;
+  padding: 7px 9px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.canvas-relation-legend summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.canvas-relation-legend > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  margin-top: 7px;
+}
+
+.canvas-relation-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-relation-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 .workspace-layout:not(.left-panel-collapsed) .canvas-view-tools,
 .workspace-layout:not(.right-panel-collapsed) .canvas-view-tools {
   padding-inline: 5px;
