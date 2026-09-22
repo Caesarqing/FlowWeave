@@ -38,6 +38,7 @@ export function useFlowWeaveState() {
   const applyAutoLayout = useCanvasStore((state) => state.applyAutoLayout);
   const restoreManualLayout = useCanvasStore((state) => state.restoreManualLayout);
   const setCollapsedGroups = useCanvasStore((state) => state.setCollapsedGroups);
+  const adoptReviewedGraph = useCanvasStore((state) => state.adoptReviewedGraph);
   const graphRelations = useMemo(() => edges.map(graphEdgeFromFlow), [edges]);
   const decoratedGraph = useMemo(() => decorateFlowGraph(nodes, edges, selectedEdgeId), [edges, nodes, selectedEdgeId]);
   const selectedEdge = useMemo(() => {
@@ -47,40 +48,30 @@ export function useFlowWeaveState() {
   }, [edges, selectedEdgeId, selectedProjectedEdge]);
   const selectedNode = modules.find((node) => node.id === selectedNodeId) ?? modules[0];
 
-  function replaceProjectGraph(
+  function loadInitialStaticGraph(
     nextModules: GraphNode[],
     nextEdges: GraphEdge[],
     nextFiles: ProjectFileNode[],
     layout?: CanvasLayoutState,
-    nextOrphanedEdges?: GraphEdge[],
-    preserveCurrentCanvas?: boolean
+    nextOrphanedEdges?: GraphEdge[]
   ) {
-    if (!preserveCurrentCanvas) {
-      setGraph(nextModules, nextEdges, nextFiles, layout, nextOrphanedEdges);
-      return;
-    }
-    const current = useCanvasStore.getState();
-    const previousById = new Map(current.modules.map((node) => [node.id, node]));
-    const generatedNodeIds = new Set(nextModules.map((node) => node.id));
-    const reconciledNodes = [
-      ...nextModules.map((node) => {
-        const previous = previousById.get(node.id);
-        return previous ? { ...node, guidanceDraft: previous.guidanceDraft, assessment: previous.assessment } : node;
-      }),
-      ...current.modules.filter((node) => node.origin === "manual" && !generatedNodeIds.has(node.id))
-    ];
-    const nodeIds = new Set(reconciledNodes.map((node) => node.id));
-    const manualEdges = current.edges.map(graphEdgeFromFlow).filter((edge) => edge.origin === "manual");
-    const validManualEdges = manualEdges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
-    const orphanedEdges = [
-      ...current.orphanedEdges,
-      ...manualEdges.filter((edge) => !nodeIds.has(edge.source) || !nodeIds.has(edge.target))
-    ];
-    setGraph(reconciledNodes, [...nextEdges, ...validManualEdges], nextFiles, current.canvasLayout, orphanedEdges);
+    setGraph(nextModules, nextEdges, nextFiles, layout, nextOrphanedEdges);
   }
 
-  function handleAutoLayout(mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) {
-    applyAutoLayout(mode, positions);
+  function adoptReviewedProjectGraph(
+    nextModules: GraphNode[],
+    nextEdges: GraphEdge[],
+    nextFiles: ProjectFileNode[]
+  ): boolean {
+    return adoptReviewedGraph(nextModules, nextEdges, nextFiles);
+  }
+
+  function handleAutoLayout(
+    mode: CanvasLayoutMode,
+    positions: Record<string, { x: number; y: number }>,
+    topologyFingerprint: string
+  ) {
+    applyAutoLayout(mode, positions, topologyFingerprint);
   }
 
   function handleCanvasNodesChange(changes: NodeChange<FlowWeaveNode>[]) {
@@ -259,7 +250,8 @@ export function useFlowWeaveState() {
     openConnectionCreator,
     orphanedEdges,
     projectFiles,
-    replaceProjectGraph,
+    adoptReviewedProjectGraph,
+    loadInitialStaticGraph,
     restoreManualLayout,
     selectEdge,
     selectedEdge,

@@ -22,7 +22,8 @@ export function useProjectActions({
   scanFingerprint,
   architectureReview,
   localGenerationStatus,
-  replaceProjectGraph,
+  loadInitialStaticGraph,
+  adoptReviewedProjectGraph,
   setIsProjectLoading,
   setLastRunStatus,
   setProjectLabel,
@@ -43,14 +44,14 @@ export function useProjectActions({
   scanFingerprint: string;
   architectureReview: ArchitectureReviewStatus;
   localGenerationStatus: LocalGenerationStatus;
-  replaceProjectGraph: (
+  loadInitialStaticGraph: (
     nodes: GraphNode[],
     edges: GraphEdge[],
     files: ProjectFileNode[],
     layout?: import("../types").CanvasLayoutState,
-    orphanedEdges?: GraphEdge[],
-    preserveCurrentCanvas?: boolean
+    orphanedEdges?: GraphEdge[]
   ) => void;
+  adoptReviewedProjectGraph: (nodes: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[]) => boolean;
   setIsProjectLoading: (value: boolean) => void;
   setLastRunStatus: (value: string) => void;
   setProjectLabel: (value: string) => void;
@@ -109,17 +110,18 @@ export function useProjectActions({
     if (!window.flowweave) return undefined;
     return window.flowweave.onArchitectureReview((event) => {
       if (!shouldApplyArchitectureReviewEvent(event, projectId, scanFingerprint, architectureReviewRef.current)) return;
-      architectureReviewRef.current = event.status;
-      setArchitectureReview(event.status);
-      if (event.status.state === "reviewed" && event.graph) {
-        replaceProjectGraph(event.graph.nodes, event.graph.edges, projectFiles, undefined, undefined, true);
+      if (isReviewedGraphAdoptionEvent(event)) {
+        const adopted = adoptReviewedProjectGraph(event.graph.nodes, event.graph.edges, projectFiles);
+        if (!adopted) return;
         setArtifactStatuses((current) => current ? { ...current, architecture: "current" } : current);
       }
+      architectureReviewRef.current = event.status;
+      setArchitectureReview(event.status);
     });
   }, [
     projectId,
     projectFiles,
-    replaceProjectGraph,
+    adoptReviewedProjectGraph,
     scanFingerprint,
     setArchitectureReview,
     setArtifactStatuses,
@@ -152,7 +154,7 @@ export function useProjectActions({
         : "local-ready"
     );
     setSequenceReview(result.sequenceReview);
-    replaceProjectGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout, persistedCanvas?.orphanedEdges);
+    loadInitialStaticGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout, persistedCanvas?.orphanedEdges);
 
     const truncateNote = result.project.summary.truncated
       ? t("status.projectTruncated", { count: result.project.summary.displayedEntries ?? maxRenderedTreeRows })
@@ -282,9 +284,6 @@ export function useProjectActions({
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
       setLocalGenerationStatus(result.localGenerationStatus);
-      if (shouldApplyLocalArchitectureResult(result.review, architectureReviewRef.current)) {
-        replaceProjectGraph(result.graph.nodes, result.graph.edges, projectFiles, undefined, undefined, true);
-      }
       setArchitectureReview((current) => {
         const next = mergeArchitectureReviewResult(current, result.review);
         architectureReviewRef.current = next;
@@ -359,6 +358,14 @@ export function shouldApplyArchitectureReviewEvent(
   if (event.status.state !== "reviewing") return false;
   if (!current.startedAt || !event.status.startedAt) return false;
   return Date.parse(event.status.startedAt) > Date.parse(current.startedAt);
+}
+
+export function isReviewedGraphAdoptionEvent(
+  event: ArchitectureReviewEvent
+): event is ArchitectureReviewEvent & { graph: { nodes: GraphNode[]; edges: GraphEdge[] } } {
+  return event.status.state === "reviewed" &&
+    event.presentationPhase === "reviewed" &&
+    event.graph !== undefined;
 }
 
 function formatErrorMessage(error: unknown) {

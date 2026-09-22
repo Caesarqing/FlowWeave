@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 import type { ElkNode } from "elkjs/lib/elk-api";
 import {
+  autoLayoutIsCurrent,
+  canvasTopologyFingerprint,
   layoutCanvasNodesWithEngine,
   nodeArchitectureLayer,
   nodeClassification,
@@ -16,6 +18,22 @@ import { createFlowNode } from "../../src/utils/graph-converters";
 import type { GraphNode } from "../../src/types";
 
 describe("canvas layout and tracing", () => {
+  it("invalidates a cached layout when the graph topology changes", () => {
+    const nodes = [createFlowNode(node("api", [])), createFlowNode(node("service", []))];
+    const edges: Edge[] = [{ id: "api-service", source: "api", target: "service" }];
+    const fingerprint = canvasTopologyFingerprint(nodes, edges);
+    const layout = {
+      activeMode: "execution" as const,
+      manualPositions: {},
+      autoLayouts: { execution: { api: { x: 0, y: 0 }, service: { x: 400, y: 0 } } },
+      autoLayoutTopologyFingerprints: { execution: fingerprint },
+      collapsedGroups: []
+    };
+
+    expect(autoLayoutIsCurrent(layout, "execution", fingerprint)).toBe(true);
+    expect(autoLayoutIsCurrent(layout, "execution", canvasTopologyFingerprint(nodes, []))).toBe(false);
+  });
+
   it("keeps React Flow controlled by application state without a duplicate store sync loop", () => {
     const source = readFileSync(new URL("../../src/components/CanvasWorkspace.tsx", import.meta.url), "utf8");
 

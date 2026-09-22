@@ -24,6 +24,8 @@ import { useI18n } from "../utils/i18n";
 import type { ArchitectureLayer, CanvasLayoutMode, CanvasLayoutState, GraphEdge, GraphEdgeRelation, GraphViewMode, TechnologyStack } from "../types";
 import {
   layoutCanvasNodes,
+  autoLayoutIsCurrent,
+  canvasTopologyFingerprint,
   nodeGroupKey,
   traceNodeIds,
   type TraceDirection
@@ -63,7 +65,11 @@ type ControlledFlowCanvasProps = {
   canvasLayout: CanvasLayoutState;
   edges: Edge[];
   nodes: FlowWeaveNode[];
-  onApplyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) => void;
+  onApplyAutoLayout: (
+    mode: CanvasLayoutMode,
+    positions: Record<string, { x: number; y: number }>,
+    topologyFingerprint: string
+  ) => void;
   onConnect: (connection: Connection) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
@@ -93,7 +99,11 @@ export function CanvasWorkspace({
   edges: Edge[];
   nodes: FlowWeaveNode[];
   onConnect: (connection: Connection) => void;
-  onApplyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) => void;
+  onApplyAutoLayout: (
+    mode: CanvasLayoutMode,
+    positions: Record<string, { x: number; y: number }>,
+    topologyFingerprint: string
+  ) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onOpenProject: () => void;
   onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
@@ -260,6 +270,10 @@ function ControlledFlowCanvas({
     })),
     [decoratedCollapsedGraph.nodes, collapsedVisibleNodeIds, tracedNodeIds]
   );
+  const visibleTopologyFingerprint = useMemo(
+    () => canvasTopologyFingerprint(visibleNodes.filter((node) => !node.hidden), filteredEdges),
+    [filteredEdges, visibleNodes]
+  );
   const localizedEdges = useMemo(
     () => localizeCanvasEdgeLabels(filteredEdges, t),
     [filteredEdges, t]
@@ -272,7 +286,8 @@ function ControlledFlowCanvas({
       const layout = await layoutCanvasNodes(nodesToLayout, filteredEdges, layoutMode);
       onApplyAutoLayout(
         layoutMode,
-        Object.fromEntries(layout.map((node) => [node.id, node.position]))
+        Object.fromEntries(layout.map((node) => [node.id, node.position])),
+        visibleTopologyFingerprint
       );
     } catch (error) {
       setLayoutError(error instanceof Error ? error.message : String(error));
@@ -281,7 +296,11 @@ function ControlledFlowCanvas({
     }
   }
   useEffect(() => {
-    if (layoutMode !== "execution" || canvasLayout.activeMode !== "execution" || canvasLayout.autoLayouts.execution) return;
+    if (
+      layoutMode !== "execution" ||
+      canvasLayout.activeMode !== "execution" ||
+      autoLayoutIsCurrent(canvasLayout, "execution", visibleTopologyFingerprint)
+    ) return;
     let active = true;
     const nodesToLayout = visibleNodes.filter((node) => !node.hidden);
     setIsLayoutRunning(true);
@@ -289,7 +308,11 @@ function ControlledFlowCanvas({
     void layoutCanvasNodes(nodesToLayout, filteredEdges, "execution")
       .then((layout) => {
         if (active) {
-          onApplyAutoLayout("execution", Object.fromEntries(layout.map((node) => [node.id, node.position])));
+          onApplyAutoLayout(
+            "execution",
+            Object.fromEntries(layout.map((node) => [node.id, node.position])),
+            visibleTopologyFingerprint
+          );
         }
       })
       .catch((error: unknown) => {
@@ -299,7 +322,7 @@ function ControlledFlowCanvas({
         if (active) setIsLayoutRunning(false);
       });
     return () => { active = false; };
-  }, [canvasLayout.activeMode, canvasLayout.autoLayouts.execution, filteredEdges, layoutMode, onApplyAutoLayout, visibleNodes]);
+  }, [canvasLayout, filteredEdges, layoutMode, onApplyAutoLayout, visibleNodes, visibleTopologyFingerprint]);
   function toggleGroupCollapse() {
     if (layoutMode === "dependency") return;
     const groups = [...new Set(nodes

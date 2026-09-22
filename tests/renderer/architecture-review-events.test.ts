@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isArchitectureUpdateDisabled,
   mergeArchitectureReviewResult,
+  isReviewedGraphAdoptionEvent,
   shouldApplyLocalArchitectureResult,
   shouldApplyArchitectureReviewEvent
 } from "../../src/hooks/useProjectActions";
@@ -100,6 +101,14 @@ describe("architecture review event filtering", () => {
 
     expect(shouldApplyLocalArchitectureResult(result, reviewed)).toBe(false);
     expect(shouldApplyLocalArchitectureResult(result, failed)).toBe(true);
+  });
+
+  it("adopts only a mechanically reviewed graph in the reviewed presentation phase", () => {
+    const localEvent = { ...reviewEvent("review-1", "scan-1", "reviewed"), presentationPhase: "local-static" as const };
+    const reviewedEvent = { ...reviewEvent("review-1", "scan-1", "reviewed"), presentationPhase: "reviewed" as const, graph: { nodes: [], edges: [] } };
+
+    expect(isReviewedGraphAdoptionEvent(localEvent)).toBe(false);
+    expect(isReviewedGraphAdoptionEvent(reviewedEvent)).toBe(true);
   });
 });
 

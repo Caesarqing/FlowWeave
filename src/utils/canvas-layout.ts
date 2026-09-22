@@ -3,7 +3,7 @@ import ELK from "elkjs/lib/elk-api.js";
 import elkWorkerUrl from "elkjs/lib/elk-worker.min.js?url";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import type { FlowWeaveNode } from "./graph-converters";
-import type { ArchitectureLayer, CanvasClassification, CanvasLayoutMode, GraphNode, TechnologyStack } from "../types";
+import type { ArchitectureLayer, CanvasClassification, CanvasLayoutMode, CanvasLayoutState, GraphNode, TechnologyStack } from "../types";
 
 let elk: InstanceType<typeof ELK> | undefined;
 const NODE_WIDTH = 280;
@@ -11,6 +11,23 @@ const NODE_HEIGHT = 150;
 
 export type TraceDirection = "all" | "upstream" | "downstream";
 export type { CanvasLayoutMode } from "../types";
+
+export function canvasTopologyFingerprint(nodes: FlowWeaveNode[], edges: Edge[]): string {
+  const nodeIds = nodes.map((node) => node.id).sort();
+  const edgeKeys = edges
+    .map((edge) => `${edge.source}\u0000${edge.target}\u0000${String(edge.data?.relation ?? "depends_on")}`)
+    .sort();
+  return JSON.stringify({ nodeIds, edgeKeys });
+}
+
+export function autoLayoutIsCurrent(
+  layout: CanvasLayoutState,
+  mode: CanvasLayoutMode,
+  topologyFingerprint: string
+): boolean {
+  return Boolean(layout.autoLayouts[mode]) &&
+    layout.autoLayoutTopologyFingerprints?.[mode] === topologyFingerprint;
+}
 
 export async function layoutCanvasNodes(
   nodes: FlowWeaveNode[],

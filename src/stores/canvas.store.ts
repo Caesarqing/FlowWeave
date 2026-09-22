@@ -1,7 +1,7 @@
 import type { Edge, NodeChange } from "@xyflow/react";
 import { create } from "zustand";
 import type { CanvasLayoutMode, CanvasLayoutState, GraphEdge, GraphNode, ProjectFileNode } from "../types";
-import { createFlowEdge, createFlowNode, type FlowWeaveNode } from "../utils/graph-converters";
+import { createFlowEdge, createFlowNode, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 
 type CanvasState = {
   canvasLayout: CanvasLayoutState;
@@ -13,6 +13,7 @@ type CanvasState = {
   expandedPaths: Set<string>;
   selectedNodeId: string;
   setGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[], layout?: CanvasLayoutState, orphanedEdges?: GraphEdge[]) => void;
+  adoptReviewedGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[]) => boolean;
   setEdges: (updater: Edge[] | ((edges: Edge[]) => Edge[])) => void;
   setNodes: (updater: FlowWeaveNode[] | ((nodes: FlowWeaveNode[]) => FlowWeaveNode[])) => void;
   setSelectedNodeId: (selectedNodeId: string) => void;
@@ -48,6 +49,38 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     expandedPaths: new Set(),
     selectedNodeId: modules[0]?.id ?? ""
   }),
+  adoptReviewedGraph: (modules, edges, files) => {
+    let adopted = false;
+    set((state) => {
+      const currentGeneratedModules = state.modules.filter((module) => module.origin !== "manual");
+      const currentGeneratedEdges = state.edges
+        .map(graphEdgeFromFlow)
+        .filter((edge) => edge.origin !== "manual");
+      if (!sameTopology(currentGeneratedModules, currentGeneratedEdges, modules, edges)) return state;
+
+      const positions = new Map(state.nodes.map((node) => [node.id, node.position]));
+      const reviewedModules = modules.map((module) => {
+        const position = positions.get(module.id);
+        return position ? { ...module, x: position.x, y: position.y } : module;
+      });
+      const manualModules = state.modules.filter((module) => module.origin === "manual");
+      const manualEdges = state.edges.map(graphEdgeFromFlow).filter((edge) => edge.origin === "manual");
+      const nextModules = [...reviewedModules, ...manualModules];
+      const nextEdges = [...edges, ...manualEdges];
+      const nextSelectedNodeId = nextModules.some((module) => module.id === state.selectedNodeId)
+        ? state.selectedNodeId
+        : nextModules[0]?.id ?? "";
+      adopted = true;
+      return {
+        modules: nextModules,
+        edges: nextEdges.map(createFlowEdge),
+        nodes: nextModules.map(createFlowNode),
+        projectFiles: files,
+        selectedNodeId: nextSelectedNodeId
+      };
+    });
+    return adopted;
+  },
   setEdges: (updater) => set((state) => ({ edges: typeof updater === "function" ? updater(state.edges) : updater })),
   setNodes: (updater) => set((state) => ({ nodes: typeof updater === "function" ? updater(state.nodes) : updater })),
   setSelectedNodeId: (selectedNodeId) => set({ selectedNodeId }),
@@ -124,4 +157,18 @@ function emptyLayout(): CanvasLayoutState {
     autoLayouts: {},
     collapsedGroups: []
   };
+}
+
+function sameTopology(
+  currentModules: GraphNode[],
+  currentEdges: GraphEdge[],
+  reviewedModules: GraphNode[],
+  reviewedEdges: GraphEdge[]
+): boolean {
+  const moduleIds = (modules: GraphNode[]) => modules.map((module) => module.id).sort();
+  const edgeKeys = (edges: GraphEdge[]) => edges
+    .map((edge) => `${edge.source}\u0000${edge.target}\u0000${edge.relation}`)
+    .sort();
+  return JSON.stringify(moduleIds(currentModules)) === JSON.stringify(moduleIds(reviewedModules)) &&
+    JSON.stringify(edgeKeys(currentEdges)) === JSON.stringify(edgeKeys(reviewedEdges));
 }
