@@ -19,7 +19,7 @@ type CanvasState = {
   togglePath: (path: string) => void;
   updateModule: (nodeId: string, update: (node: GraphNode) => GraphNode) => void;
   syncNodePositions: (changes: NodeChange<FlowWeaveNode>[]) => void;
-  applyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>) => void;
+  applyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>, topologyFingerprint?: string) => void;
   restoreManualLayout: () => void;
   setCollapsedGroups: (groups: string[]) => void;
 };
@@ -86,13 +86,16 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       }
     };
   }),
-  applyAutoLayout: (mode, positions) => set((state) => ({
+  applyAutoLayout: (mode, positions, topologyFingerprint) => set((state) => ({
     modules: state.modules.map((module) => positions[module.id] ? { ...module, ...positions[module.id] } : module),
     nodes: state.nodes.map((node) => positions[node.id] ? { ...node, position: positions[node.id] } : node),
     canvasLayout: {
       ...state.canvasLayout,
       activeMode: mode,
-      autoLayouts: { ...state.canvasLayout.autoLayouts, [mode]: positions }
+      autoLayouts: { ...state.canvasLayout.autoLayouts, [mode]: positions },
+      autoLayoutTopologyFingerprints: topologyFingerprint
+        ? { ...state.canvasLayout.autoLayoutTopologyFingerprints, [mode]: topologyFingerprint }
+        : state.canvasLayout.autoLayoutTopologyFingerprints
     }
   })),
   restoreManualLayout: () => set((state) => ({

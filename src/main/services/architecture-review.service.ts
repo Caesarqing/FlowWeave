@@ -461,7 +461,13 @@ function reviewEvent(
   scanFingerprint: string,
   status: ArchitectureReviewStatus
 ): ArchitectureReviewEvent {
-  return { projectId, reviewId, scanFingerprint, status };
+  return {
+    projectId,
+    reviewId,
+    scanFingerprint,
+    status,
+    presentationPhase: status.state === "reviewed" ? "reviewed" : "local-static"
+  };
 }
 
 function reviewKey(input: ArchitectureReviewKey): ArchitectureReviewKey {

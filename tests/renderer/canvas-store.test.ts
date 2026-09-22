@@ -13,6 +13,14 @@ describe("canvas store layout modes", () => {
     expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("execution");
   });
 
+  it("records the topology fingerprint that produced an automatic layout", () => {
+    useCanvasStore.getState().setGraph([moduleNode], [], []);
+
+    useCanvasStore.getState().applyAutoLayout("execution", { module: { x: 80, y: 120 } }, "topology-a");
+
+    expect(useCanvasStore.getState().canvasLayout.autoLayoutTopologyFingerprints).toEqual({ execution: "topology-a" });
+  });
+
   it("preserves a previously stored layout mode when restoring a graph", () => {
     useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, activeMode: "technology" });
 

@@ -200,6 +200,7 @@ export function architectureMapToResult(
     localGenerationStatus: "local-ready",
     architectureMap,
     graph: architectureMapToGraph(architectureMap),
+    presentationPhase: architectureMap.source === "local" ? "local-static" : "reviewed",
     review,
     runId
   };

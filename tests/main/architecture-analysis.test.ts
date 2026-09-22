@@ -6,6 +6,7 @@ import {
   aggregateArchitectureRelationships,
   analyzeArchitecture,
   architectureMapToGraph,
+  architectureMapToResult,
   buildArchitectureInputFingerprint,
   enhanceLocalArchitecture,
   readArchitectureMap
@@ -26,6 +27,14 @@ import type { ArchitectureReviewResponse, CodeflowProject } from "../../src/type
 import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("architecture-analysis.service", () => {
+  it("marks only the local analysis result as a static presentation", () => {
+    const localResult = architectureMapToResult(architectureFixtureMap("local"), { state: "reviewing" });
+    const reviewedResult = architectureMapToResult(architectureFixtureMap("agent"), { state: "reviewed" });
+
+    expect(localResult.presentationPhase).toBe("local-static");
+    expect(reviewedResult.presentationPhase).toBe("reviewed");
+  });
+
   it("keeps local modules and relationships when applying Agent wording", () => {
     const local = architectureFixtureMap("local");
     const agent: ArchitectureReviewResponse = {

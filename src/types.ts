@@ -84,8 +84,10 @@ export type CanvasLayoutState = {
   activeMode: "manual" | CanvasLayoutMode;
   manualPositions: Record<string, CanvasPosition>;
   autoLayouts: Partial<Record<CanvasLayoutMode, Record<string, CanvasPosition>>>;
+  autoLayoutTopologyFingerprints?: Partial<Record<CanvasLayoutMode, string>>;
   collapsedGroups: string[];
 };
+export type GraphPresentationPhase = "local-static" | "reviewed";
 export type GraphEdgeRelation = "depends_on" | "calls" | "reads_writes" | "external_api" | "publishes_event" | "subscribes_event" | "tests";
 export type GraphViewMode = "execution" | "dependency" | "architecture" | "technology" | "domain";
 export type GraphEdgeClass = "runtime" | "data" | "external" | "event" | "dependency" | "test";
@@ -523,6 +525,7 @@ export type ArchitectureReviewEvent = {
   reviewId: string;
   scanFingerprint: string;
   status: ArchitectureReviewStatus;
+  presentationPhase?: GraphPresentationPhase;
   architectureMap?: ArchitectureMap;
   graph?: {
     nodes: GraphNode[];
@@ -1269,6 +1272,7 @@ export type ArchitectureAnalysisResult =
       localGenerationStatus: "local-ready";
       architectureMap: ArchitectureMap;
       graph: { nodes: GraphNode[]; edges: GraphEdge[] };
+      presentationPhase: GraphPresentationPhase;
       review: ArchitectureReviewStatus;
       runId?: string;
       warning?: AnalysisFailure;
