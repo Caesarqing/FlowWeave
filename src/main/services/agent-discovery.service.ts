@@ -5,7 +5,7 @@ import { resolveProjectPath } from "./project-registry.service";
 import { createAdapterFromDefinition, getAgentAdapter, getAgentRegistryRoot, listAgentDefinitions, registerDiscoveredAgentDefinitions } from "./agent-registry.service";
 
 const MANIFEST_DIRECTORY = ["agents", "connectors"];
-const PROJECT_MANIFEST_DIRECTORY = [".flowweave", "agent-connectors"];
+const PROJECT_MANIFEST_DIRECTORY = [".flowweave", "agents", "connectors"];
 const DETECTION_CONCURRENCY = 4;
 
 export type DiscoverAgentDefinitionsOptions = {
@@ -57,7 +57,7 @@ async function readManifestDefinitions(directory: string, source: AgentDiscovery
     const content = await readFile(path, "utf8").catch((error: unknown) => {
       throw new Error(`Unable to read Agent connector manifest ${path}: ${errorMessage(error)}`);
     });
-    definitions.push({ definition: parseManifest(content, path), source });
+    definitions.push({ definition: parseAgentManifest(content, path), source });
   }
   return definitions;
 }
@@ -76,7 +76,7 @@ function mergeDefinitions(
   return [...definitions.values()];
 }
 
-function parseManifest(content: string, path: string): AgentDefinition {
+export function parseAgentManifest(content: string, path: string): AgentDefinition {
   let value: unknown;
   try {
     value = JSON.parse(content);

@@ -24,12 +24,20 @@ describe("project Agent connection", () => {
     expect(status.state).toBe("ready");
     expect(status.platforms).toEqual(["codex", "claude", "gemini", "cursor"]);
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), ".flowweave/project.json");
-    await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "You may modify project files");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Agent Inbox Protocol v2");
     const context = await readFile(join(projectPath, ".flowweave", "agent-context.md"), "utf8");
     expect(context).toContain("responsePath");
     expect(context).not.toMatch(/(?<!agent-)response\.json/);
     expect(context).not.toMatch(/(?<!agent-)request\.json/);
+    expect(context.length).toBeLessThan(4_000);
+    expect(context).toContain(`Project root: ${projectPath}`);
+    expect(context).toContain("Scan fingerprint: fixture-scan-fingerprint");
+    expect(context).toContain(".flowweave/project.json (schema v1)");
+    expect(context).toContain(".flowweave/canvas/main.canvas.json (schema v4)");
+    expect(context).not.toContain("## Canvas Modules");
+    expect(context).not.toContain("## Canvas Relationships");
+    expect(context).not.toContain("## File Tree");
+    expect(context).not.toContain("API Module");
     await expectFileToContain(join(projectPath, "AGENTS.md"), "<!-- flowweave:start -->");
     await expectFileToContain(join(projectPath, "AGENTS.md"), "protocolVersion");
     await expectFileToContain(join(projectPath, "AGENTS.md"), "agent-response.json");
@@ -130,20 +138,43 @@ describe("project Agent connection", () => {
     await expect(fileExists(join(projectPath, ".flowweave", "agent-context.md"))).resolves.toBe(false);
   });
 
-  it("reports stale artifacts and refreshes the context when enabled", async () => {
+  it("does not refresh the context when an artifact only changes generatedAt", async () => {
     const projectPath = await createProject();
     await enableProjectAgentConnection(projectPath);
     const canvasPath = join(projectPath, ".flowweave", "canvas", "main.canvas.json");
-    const canvas = createCanvas(projectPath, "Updated Module");
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    const contextPath = join(projectPath, ".flowweave", "agent-context.md");
+    const originalContext = await readFile(contextPath, "utf8");
+    const canvas = createCanvas(projectPath, "API Module");
+    canvas.generatedAt = "2030-01-01T00:00:00.000Z";
     await writeJson(canvasPath, canvas);
+
+    expect((await getProjectAgentConnection(projectPath)).state).toBe("ready");
+    await expect(readFile(contextPath, "utf8")).resolves.toBe(originalContext);
+  });
+
+  it("requires refresh when the scan fingerprint, protocol, or managed block changes", async () => {
+    const projectPath = await createProject();
+    await enableProjectAgentConnection(projectPath);
+    const projectArtifactPath = join(projectPath, ".flowweave", "project.json");
+    const projectArtifact = JSON.parse(await readFile(projectArtifactPath, "utf8")) as CodeflowProject;
+    projectArtifact.scanFingerprint = "changed-scan-fingerprint";
+    await writeJson(projectArtifactPath, projectArtifact);
 
     expect((await getProjectAgentConnection(projectPath)).state).toBe("needs-refresh");
 
-    await refreshProjectAgentConnectionIfEnabled(projectPath);
+    await refreshProjectAgentConnection(projectPath);
+    const contextPath = join(projectPath, ".flowweave", "agent-context.md");
+    const context = await readFile(contextPath, "utf8");
+    await writeFile(contextPath, context.replace("Agent Inbox Protocol v2", "Agent Inbox Protocol v1"), "utf8");
 
-    expect((await getProjectAgentConnection(projectPath)).state).toBe("ready");
-    await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Updated Module");
+    expect((await getProjectAgentConnection(projectPath)).state).toBe("needs-refresh");
+
+    await refreshProjectAgentConnection(projectPath);
+    const agentsPath = join(projectPath, "AGENTS.md");
+    const agents = await readFile(agentsPath, "utf8");
+    await writeFile(agentsPath, agents.replace("verify behavior against source code", "trust the generated context"), "utf8");
+
+    expect((await getProjectAgentConnection(projectPath)).state).toBe("needs-refresh");
   });
 
   it("reports context with an old project root as needing refresh", async () => {
@@ -170,7 +201,8 @@ describe("project Agent connection", () => {
 
     expect(refreshed.state).toBe("ready");
     await expectFileToContain(contextPath, `Project root: ${projectPath}`);
-    await expectFileToContain(contextPath, "uses an unsupported schema and was omitted from Agent context");
+    await expectFileToContain(contextPath, ".flowweave/canvas/main.canvas.json (schema v1)");
+    await expectFileToContain(contextPath, ".flowweave/sequence-diagrams.json (schema v1)");
     await expect(readFile(canvasPath, "utf8")).resolves.toBe(legacyCanvas);
     await expect(readFile(sequencePath, "utf8")).resolves.toBe(legacySequence);
   });
@@ -212,7 +244,8 @@ async function createProject() {
       totalFolders: 1,
       languages: { TypeScript: 2 }
     },
-    files: []
+    files: [],
+    scanFingerprint: "fixture-scan-fingerprint"
   };
   await writeJson(join(projectPath, ".flowweave", "project.json"), project);
   await writeJson(join(projectPath, ".flowweave", "canvas", "main.canvas.json"), createCanvas(projectPath, "API Module"));

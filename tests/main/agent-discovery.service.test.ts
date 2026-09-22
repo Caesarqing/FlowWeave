@@ -43,7 +43,7 @@ describe('agent-discovery.service', () => {
     const root = await mkdtemp(join(tmpdir(), 'flowweave-agent-discovery-'));
     const projectPath = join(root, 'project');
     const userManifestRoot = join(root, 'agents', 'connectors');
-    const projectManifestRoot = join(projectPath, '.flowweave', 'agent-connectors');
+    const projectManifestRoot = join(projectPath, '.flowweave', 'agents', 'connectors');
     await mkdir(userManifestRoot, { recursive: true });
     await mkdir(projectManifestRoot, { recursive: true });
     await writeFile(join(userManifestRoot, 'reviewer.json'), JSON.stringify(manifest({
@@ -80,6 +80,25 @@ describe('agent-discovery.service', () => {
       userDataPath: root,
       detectDefinition: async () => detection(true)
     })).rejects.toThrow('Unsupported Agent protocol');
+  });
+
+  it('does not discover manifests remaining in the legacy connector directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'flowweave-agent-discovery-'));
+    const projectPath = join(root, 'project');
+    const legacyManifestRoot = join(projectPath, '.flowweave', 'agent-connectors');
+    await mkdir(legacyManifestRoot, { recursive: true });
+    await writeFile(join(legacyManifestRoot, 'reviewer.json'), JSON.stringify(manifest({
+      id: 'custom:reviewer', name: 'Legacy reviewer', command: 'legacy-reviewer'
+    })), 'utf8');
+
+    const results = await discoverAgentDefinitions({
+      builtinDefinitions: [builtin],
+      projectPath,
+      userDataPath: root,
+      detectDefinition: async () => detection(true)
+    });
+
+    expect(results.map((result) => result.definition.id)).toEqual(['codex-local']);
   });
 
   it.each([

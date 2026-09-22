@@ -7,9 +7,9 @@ description: Process the active FlowWeave Agent Inbox v2 request when the user a
 
 Use this skill only when FlowWeave provides a run-specific `.flowweave/runs/<run-id>/agent-request.json` path.
 
-1. Read `.flowweave/agent-context.md`.
-2. Read the exact run-specific `.flowweave/runs/<run-id>/agent-request.json` path provided by FlowWeave.
-3. Verify that `request.projectPath` is the current project and do not access another project.
+1. Read the exact run-specific `.flowweave/runs/<run-id>/agent-request.json` path provided by FlowWeave.
+2. Verify that `request.projectPath` is the current project and do not access another project.
+3. Read `.flowweave/agent-context.md`, then read only the artifacts explicitly needed by the request.
 4. Follow `executionMode`:
    - `plan`: inspect only; do not modify project source files.
    - `execute`: modify only files inside the current project and run relevant verification.
