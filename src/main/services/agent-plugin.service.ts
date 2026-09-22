@@ -1336,7 +1336,19 @@ function readRecentMigrationResult(content: string | undefined, statePath: strin
   if (content === undefined) return { status: "not-run" };
   const state = parseJsonRecord(content, "FlowWeave plugin state", statePath);
   const result = state.recentMigrationResult;
-  if (!isRecord(result) || !["not-run", "completed", "blocked", "cleanup-failed"].includes(String(result.status))) {
+  if (!isRecord(result)) {
+    throw new Error(`Invalid recent migration result in FlowWeave plugin state at ${statePath}.`);
+  }
+  if (result.status === "failed") {
+    return {
+      ...result,
+      status: "cleanup-failed",
+      message: typeof result.message === "string"
+        ? result.message
+        : "A legacy FlowWeave migration failed before cleanup state was recorded."
+    } as AgentPluginMigrationResult;
+  }
+  if (!["not-run", "completed", "blocked", "cleanup-failed"].includes(String(result.status))) {
     throw new Error(`Invalid recent migration result in FlowWeave plugin state at ${statePath}.`);
   }
   return result as AgentPluginMigrationResult;
