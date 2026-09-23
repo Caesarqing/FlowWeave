@@ -28,6 +28,9 @@ export async function runCliAgentInbox(
     stdin: buildAgentInboxInstruction(options.request.projectPath, options.request.id),
     lastMessagePath: options.lastMessagePath
   }, onEvent);
+  if (processResult.terminationReason === "timed-out") {
+    return { ...processResult, projectId: options.request.projectId };
+  }
   const response = await readAgentInboxResponseForRun(options.request.projectPath, options.request.id, {
     ...processResult,
     projectId: options.request.projectId

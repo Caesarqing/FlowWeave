@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -42,6 +42,16 @@ describe("flowweave-store", () => {
     expect(canvas.edges.map((edge: { id: string }) => edge.id)).not.toContain("legacy-edge");
     expect(canvas.orphanedEdges).toEqual([]);
     expect(JSON.parse(await readFile(join(root, ".flowweave", "project.json"), "utf8")).scanFingerprint).toBe("scan-2");
+  });
+
+  it("rejects a linked FlowWeave root instead of writing artifacts outside the project", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-store-linked-root-"));
+    const outside = await mkdtemp(join(tmpdir(), "flowweave-store-linked-outside-"));
+    await symlink(outside, join(root, ".flowweave"), "dir");
+
+    await expect(writeFlowWeaveProject(root, projectFixture(root), graphNodes, graphEdges, "scan-link"))
+      .rejects.toThrow("symbolic link");
+    await expect(readdir(outside)).resolves.toEqual([]);
   });
 });
 

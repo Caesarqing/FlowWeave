@@ -11,6 +11,7 @@ import type {
   CodeflowCanvas,
   CustomAgentInput,
   GitDiffResult,
+  GitRollbackPreview,
   GitStatus,
   FlowWeaveProjectOpenResult,
   FlowWeaveErrorData,
@@ -104,16 +105,18 @@ const flowweaveApi = {
   gitDiff: (projectId: string, checkpointId?: string) =>
     ipcRenderer.invoke(GIT_CHANNELS.diff, projectId, checkpointId) as Promise<GitDiffResult>,
   gitCheckpoint: (projectId: string) => ipcRenderer.invoke(GIT_CHANNELS.checkpoint, projectId) as Promise<string>,
-  gitRollback: (projectId: string, checkpointId: string) =>
-    ipcRenderer.invoke(GIT_CHANNELS.rollback, projectId, checkpointId) as Promise<void>,
-  analyzeArchitectureWithAgent: (projectId: string, agentId: AgentId | "mock") =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.analyzeArchitectureWithAgent, projectId, agentId) as Promise<ArchitectureAnalysisResult>,
+  gitRollbackPreview: (projectId: string, checkpointId: string) =>
+    ipcRenderer.invoke(GIT_CHANNELS.rollbackPreview, projectId, checkpointId) as Promise<GitRollbackPreview>,
+  gitRollback: (projectId: string, checkpointId: string, previewId: string) =>
+    ipcRenderer.invoke(GIT_CHANNELS.rollback, projectId, checkpointId, previewId) as Promise<void>,
+  analyzeArchitectureWithAgent: (projectId: string, agentId: AgentId | "mock", timeoutMs?: number) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.analyzeArchitectureWithAgent, projectId, agentId, timeoutMs) as Promise<ArchitectureAnalysisResult>,
   readArchitectureMap: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readArchitectureMap, projectId) as Promise<ArchitectureMap | undefined>,
-  generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock") =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId) as Promise<SequenceDiagramGenerationResult>,
-  reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction) as Promise<SequenceDiagramBundle>,
+  generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock", timeoutMs?: number) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId, timeoutMs) as Promise<SequenceDiagramGenerationResult>,
+  reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string, timeoutMs?: number) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction, timeoutMs) as Promise<SequenceDiagramBundle>,
   readSequenceDiagrams: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readSequenceDiagrams, projectId) as Promise<SequenceDiagramBundle | undefined>,
   readProjectFile: (projectId: string, filePath: string) =>

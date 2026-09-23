@@ -8,6 +8,29 @@ afterEach(() => {
 });
 
 describe("preference storage failures", () => {
+  it("persists plan and execute timeouts with the approved defaults and range", async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value)
+      },
+      dispatchEvent: () => true
+    });
+    const { usePreferencesStore } = await import("../../src/stores/preferences.store");
+
+    expect(usePreferencesStore.getState().agentPlanTimeoutMinutes).toBe(20);
+    expect(usePreferencesStore.getState().agentExecuteTimeoutMinutes).toBe(60);
+    usePreferencesStore.getState().setAgentPlanTimeoutMinutes(35);
+    usePreferencesStore.getState().setAgentExecuteTimeoutMinutes(90);
+    usePreferencesStore.getState().setAgentPlanTimeoutMinutes(0);
+
+    expect(usePreferencesStore.getState().agentPlanTimeoutMinutes).toBe(35);
+    expect(usePreferencesStore.getState().agentExecuteTimeoutMinutes).toBe(90);
+    expect(values.get("flowweave.agentPlanTimeoutMinutes")).toBe("35");
+    expect(values.get("flowweave.agentExecuteTimeoutMinutes")).toBe("90");
+  });
+
   it("reports a structured error and keeps the previous state when persistence fails", async () => {
     const events: Event[] = [];
     const windowStub = {

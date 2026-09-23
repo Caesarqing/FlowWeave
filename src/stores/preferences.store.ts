@@ -16,6 +16,8 @@ const LOCALE_KEY = "flowweave.locale";
 const DEFAULT_RELATION_KEY = "flowweave.defaultRelation";
 const REDUCED_MOTION_KEY = "flowweave.reducedMotion";
 const SCAN_CONCURRENCY_KEY = "flowweave.scanConcurrency";
+const AGENT_PLAN_TIMEOUT_KEY = "flowweave.agentPlanTimeoutMinutes";
+const AGENT_EXECUTE_TIMEOUT_KEY = "flowweave.agentExecuteTimeoutMinutes";
 const ONBOARDING_SEEN_KEY = "flowweave.onboardingSeen";
 const WORKSPACE_PANELS_KEY = "flowweave.workspacePanels";
 export const PREFERENCE_STORAGE_ERROR_EVENT = "flowweave-preference-storage-error";
@@ -35,6 +37,8 @@ type PreferencesState = {
   locale: LocaleId;
   reducedMotion: boolean;
   scanConcurrency: number;
+  agentPlanTimeoutMinutes: number;
+  agentExecuteTimeoutMinutes: number;
   onboardingSeen: boolean;
   theme: UiThemeId;
   utilityPanel?: UtilityPanel;
@@ -43,6 +47,8 @@ type PreferencesState = {
   setLocale: (locale: LocaleId) => void;
   setReducedMotion: (value: boolean) => void;
   setScanConcurrency: (value: number) => void;
+  setAgentPlanTimeoutMinutes: (value: number) => void;
+  setAgentExecuteTimeoutMinutes: (value: number) => void;
   completeOnboarding: () => void;
   setTheme: (theme: UiThemeId) => void;
   setUtilityPanel: (panel?: UtilityPanel) => void;
@@ -54,6 +60,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   locale: readEnumValue(LOCALE_KEY, localeOptions, DEFAULT_LOCALE),
   reducedMotion: readStoredValue<"true" | "false">(REDUCED_MOTION_KEY, "false") === "true",
   scanConcurrency: readStoredInteger(SCAN_CONCURRENCY_KEY, 32, 1, 128),
+  agentPlanTimeoutMinutes: readStoredInteger(AGENT_PLAN_TIMEOUT_KEY, 20, 1, 120),
+  agentExecuteTimeoutMinutes: readStoredInteger(AGENT_EXECUTE_TIMEOUT_KEY, 60, 1, 120),
   onboardingSeen: readStoredValue<"true" | "false">(ONBOARDING_SEEN_KEY, "false") === "true",
   theme: readEnumValue(THEME_KEY, themeOptions, "dark"),
   workspacePanels: readWorkspacePanels(),
@@ -72,6 +80,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setScanConcurrency: (scanConcurrency) => {
     if (!writeStoredValue(SCAN_CONCURRENCY_KEY, String(scanConcurrency))) return;
     set({ scanConcurrency });
+  },
+  setAgentPlanTimeoutMinutes: (agentPlanTimeoutMinutes) => {
+    if (!Number.isInteger(agentPlanTimeoutMinutes) || agentPlanTimeoutMinutes < 1 || agentPlanTimeoutMinutes > 120) return;
+    if (!writeStoredValue(AGENT_PLAN_TIMEOUT_KEY, String(agentPlanTimeoutMinutes))) return;
+    set({ agentPlanTimeoutMinutes });
+  },
+  setAgentExecuteTimeoutMinutes: (agentExecuteTimeoutMinutes) => {
+    if (!Number.isInteger(agentExecuteTimeoutMinutes) || agentExecuteTimeoutMinutes < 1 || agentExecuteTimeoutMinutes > 120) return;
+    if (!writeStoredValue(AGENT_EXECUTE_TIMEOUT_KEY, String(agentExecuteTimeoutMinutes))) return;
+    set({ agentExecuteTimeoutMinutes });
   },
   completeOnboarding: () => {
     if (!writeStoredValue(ONBOARDING_SEEN_KEY, "true")) return;

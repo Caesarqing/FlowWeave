@@ -131,7 +131,8 @@ async function analyzeArchitectureOnce(
       inputFingerprint,
       reviewId,
       onRunId,
-      options?.resumeArchitectureReview?.runId
+      options?.resumeArchitectureReview?.runId,
+      options?.timeoutMs
     );
   };
   const review = await startArchitectureReview({
@@ -221,7 +222,8 @@ async function runArchitectureReview(
   inputFingerprint: string,
   reviewId: string,
   onRunId: (runId: string) => Promise<void>,
-  resumeRunId: string | undefined
+  resumeRunId: string | undefined,
+  timeoutMs: number | undefined
 ): Promise<ArchitectureReviewRunResult> {
   try {
     const projectId = await registerProject(project.rootPath);
@@ -234,6 +236,7 @@ async function runArchitectureReview(
           executionMode: "plan",
           purpose: "artifact-analysis",
           artifactTarget: "architecture-map",
+          timeoutMs,
           scanFingerprint,
           inputFingerprint,
           reviewId

@@ -176,7 +176,8 @@ async function generateSequenceDiagramsOnce(
         architectureMap,
         inputFingerprint,
         reviewId,
-        onRunId
+        onRunId,
+        options?.timeoutMs
       );
     },
     onEvent: options?.onSequenceReview ?? (() => undefined)
@@ -216,7 +217,8 @@ export async function reviseSequenceDiagram(
     executionMode: "plan",
     purpose: "artifact-analysis",
     artifactTarget: "sequence-revision",
-    scanFingerprint: current.metadata?.inputFingerprint
+    scanFingerprint: current.metadata?.inputFingerprint,
+    timeoutMs: options?.timeoutMs
   });
   if (result.status !== "completed") {
     throw new Error(result.stderr ?? result.summary ?? "Agent sequence diagram revision failed");
@@ -714,7 +716,8 @@ async function runSequenceReview(
   architectureMap: ArchitectureMap | undefined,
   inputFingerprint: string,
   reviewId: string,
-  onRunId: (runId: string) => Promise<void>
+  onRunId: (runId: string) => Promise<void>,
+  timeoutMs: number | undefined
 ): Promise<SequenceReviewRunResult> {
   const projectId = await registerProject(project.rootPath);
   const result = await startToolPlan({
@@ -725,7 +728,8 @@ async function runSequenceReview(
     purpose: "artifact-analysis",
     artifactTarget: "sequence-diagrams",
     scanFingerprint: inputFingerprint,
-    reviewId
+    reviewId,
+    timeoutMs
   });
   await onRunId(result.id);
   const firstRun = await waitForSequenceRun(project.rootPath, result);

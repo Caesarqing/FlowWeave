@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { useProjectStore } from "../stores/project.store";
+import { usePreferencesStore } from "../stores/preferences.store";
 
 export type SequenceDiagramState = {
   bundle?: SequenceDiagramBundle;
@@ -56,6 +57,7 @@ export function useSequenceDiagramState({
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
   const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
   const sequenceReview = useProjectStore((state) => state.sequenceReview);
+  const agentPlanTimeoutMinutes = usePreferencesStore((state) => state.agentPlanTimeoutMinutes);
   const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
   const [bundle, setBundle] = useState<SequenceDiagramBundle | undefined>();
   const [selectedMessageId, setSelectedMessageId] = useState("");
@@ -158,7 +160,7 @@ export function useSequenceDiagramState({
     setIsBusy(true);
     setStatus(t("sequence.generatingWith", { agent: runAgentId }));
     try {
-      const result = await window.flowweave.generateSequenceDiagrams(projectId, runAgentId);
+      const result = await window.flowweave.generateSequenceDiagrams(projectId, runAgentId, agentPlanTimeoutMinutes * 60 * 1000);
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);
       }
@@ -194,7 +196,12 @@ export function useSequenceDiagramState({
     setStatus(t("sequence.revising", { kind: t("structure.architectural") }));
     try {
       const sent = await persistInstruction();
-      const nextBundle = await window.flowweave.reviseSequenceDiagram(projectId, selectedAgentId, instruction.trim());
+      const nextBundle = await window.flowweave.reviseSequenceDiagram(
+        projectId,
+        selectedAgentId,
+        instruction.trim(),
+        agentPlanTimeoutMinutes * 60 * 1000
+      );
       await window.flowweave.acknowledgeModificationChanges(projectId, sent.snapshot, { kind: "sequence" });
       await window.flowweave.saveModificationDocs(projectId, instruction.trim());
       setBundle(nextBundle);

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { cp, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import type {
   AgentPluginHostCheck,
@@ -11,6 +11,7 @@ import type {
   AgentPluginStatusCheck,
   AgentPluginCheckCode
 } from "../../types";
+import { assertSafeProjectWritePath, writeProjectTextAtomic } from "../storage/project-write-guard";
 import { parseAgentManifest } from "./agent-discovery.service";
 
 const BUILT_IN_PLUGIN_DIR = "flowweave-plugin";
@@ -107,6 +108,16 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
     existingPlugin = await pathExists(pluginRoot);
     existingLegacyPlugin = await pathExists(legacyPluginPath);
     if (existingLegacyPlugin) await assertLegacyPluginIsFlowWeave(legacyPluginPath);
+    await Promise.all([
+      pluginRoot,
+      statePath,
+      stagingPath,
+      backupPath,
+      legacyPluginPath,
+      legacyBackupPath,
+      codexMarketplace.filePath,
+      claudeMarketplace.filePath
+    ].map((path) => assertSafeProjectWritePath(projectPath, path)));
   } catch (error) {
     throw pluginInstallationError(phase, sourceRoot, pluginRoot, "all", error, []);
   }
@@ -122,6 +133,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
   const marketplaceWrites: MarketplacePlan[] = [];
   try {
     const sourceHash = await calculatePluginContentHash(sourceRoot);
+    await assertSafeProjectWritePath(projectPath, stagingPath);
     await mkdir(dirname(pluginRoot), { recursive: true });
     await cp(sourceRoot, stagingPath, {
       recursive: true,
@@ -138,17 +150,20 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
 
     phase = "replace-plugin-directory";
     if (existingPlugin) {
+      await assertSafeProjectWritePath(projectPath, pluginRoot);
       await rename(pluginRoot, backupPath);
       canonicalPluginBackedUp = true;
     }
+    await assertSafeProjectWritePath(projectPath, stagingPath);
+    await assertSafeProjectWritePath(projectPath, pluginRoot);
     await rename(stagingPath, pluginRoot);
     stagedPluginActivated = true;
 
     phase = "update-codex-marketplace";
-    await writeTextAtomic(codexMarketplace.filePath, codexMarketplace.nextContent);
+    await writeTextAtomic(projectPath, codexMarketplace.filePath, codexMarketplace.nextContent);
     marketplaceWrites.push(codexMarketplace);
     phase = "update-claude-marketplace";
-    await writeTextAtomic(claudeMarketplace.filePath, claudeMarketplace.nextContent);
+    await writeTextAtomic(projectPath, claudeMarketplace.filePath, claudeMarketplace.nextContent);
     marketplaceWrites.push(claudeMarketplace);
 
     phase = "verify-installed-plugin";
@@ -158,6 +173,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
     }
     phase = "remove-legacy-plugin-copy";
     if (existingLegacyPlugin) {
+      await assertSafeProjectWritePath(projectPath, legacyPluginPath);
       await rename(legacyPluginPath, legacyBackupPath);
       legacyPluginBackedUp = true;
     }
@@ -189,7 +205,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
       hostChecks,
       recentMigrationResult
     };
-    await writeTextAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
+    await writeTextAtomic(projectPath, statePath, `${JSON.stringify(state, null, 2)}\n`);
     stateWriteAttempted = true;
     installedStatuses = await getBuiltInAgentPluginStatuses(projectPath);
     const failedInstallCheck = findFailedPluginInstallationCheck(installedStatuses);
@@ -201,6 +217,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
   } catch (error) {
     const migrationRollbackErrors = legacyMigration ? await legacyMigration.rollback() : [];
     const rollbackErrors = await rollbackPluginInstall({
+      projectPath,
       pluginRoot,
       backupPath,
       stagingPath,
@@ -223,6 +240,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
   if (!installedStatuses) throw new Error(`FlowWeave plugin installation completed without host status results at ${pluginRoot}.`);
   if (canonicalPluginBackedUp) {
     try {
+      await assertSafeProjectWritePath(projectPath, backupPath);
       await rm(backupPath, { recursive: true });
     } catch (error) {
       throw new Error(`FlowWeave plugin installed at ${pluginRoot}, but removing its backup failed at ${backupPath}: ${formatError(error)}`);
@@ -230,6 +248,7 @@ export async function installBuiltInAgentPlugin(projectPath: string): Promise<Ag
   }
   if (legacyPluginBackedUp) {
     try {
+      await assertSafeProjectWritePath(projectPath, legacyBackupPath);
       await rm(legacyBackupPath, { recursive: true });
     } catch (error) {
       throw new Error(`FlowWeave plugin installed at ${pluginRoot}, but removing its verified legacy copy backup failed at ${legacyBackupPath}: ${formatError(error)}`);
@@ -751,6 +770,7 @@ function isFlowWeavePluginEntry(value: unknown): boolean {
 }
 
 type PluginRollbackInput = {
+  projectPath: string;
   pluginRoot: string;
   backupPath: string;
   stagingPath: string;
@@ -880,7 +900,7 @@ async function prepareLegacyProjectData(
     async stage(): Promise<void> {
       for (const write of writes) {
         if (write.targetExists) continue;
-        await writeTextAtomic(write.targetPath, write.content);
+        await writeTextAtomic(projectPath, write.targetPath, write.content);
         createdTargets.add(write.targetPath);
       }
     },
@@ -1373,20 +1393,21 @@ async function rollbackPluginInstall(input: PluginRollbackInput): Promise<string
   const errors: string[] = [];
   for (const marketplace of [...input.marketplaceWrites].reverse()) {
     try {
-      await restoreFile(marketplace.filePath, marketplace.previousContent);
+      await restoreFile(input.projectPath, marketplace.filePath, marketplace.previousContent);
     } catch (error) {
       errors.push(`${marketplace.label} at ${marketplace.filePath}: ${formatError(error)}`);
     }
   }
   if (input.stateWriteAttempted) {
     try {
-      await restoreFile(input.statePath, input.previousStateContent);
+      await restoreFile(input.projectPath, input.statePath, input.previousStateContent);
     } catch (error) {
       errors.push(`plugin state at ${input.statePath}: ${formatError(error)}`);
     }
   }
   if (input.stagedPluginActivated) {
     try {
+      await assertSafeProjectWritePath(input.projectPath, input.pluginRoot);
       await rm(input.pluginRoot, { recursive: true, force: true });
     } catch (error) {
       errors.push(`new plugin at ${input.pluginRoot}: ${formatError(error)}`);
@@ -1394,6 +1415,8 @@ async function rollbackPluginInstall(input: PluginRollbackInput): Promise<string
   }
   if (input.canonicalPluginBackedUp) {
     try {
+      await assertSafeProjectWritePath(input.projectPath, input.backupPath);
+      await assertSafeProjectWritePath(input.projectPath, input.pluginRoot);
       if (await pathExists(input.backupPath)) await rename(input.backupPath, input.pluginRoot);
     } catch (error) {
       errors.push(`plugin backup at ${input.backupPath}: ${formatError(error)}`);
@@ -1401,12 +1424,15 @@ async function rollbackPluginInstall(input: PluginRollbackInput): Promise<string
   }
   if (input.legacyPluginBackedUp) {
     try {
+      await assertSafeProjectWritePath(input.projectPath, input.legacyBackupPath);
+      await assertSafeProjectWritePath(input.projectPath, input.legacyPluginPath);
       if (await pathExists(input.legacyBackupPath)) await rename(input.legacyBackupPath, input.legacyPluginPath);
     } catch (error) {
       errors.push(`legacy plugin backup at ${input.legacyBackupPath}: ${formatError(error)}`);
     }
   }
   try {
+    await assertSafeProjectWritePath(input.projectPath, input.stagingPath);
     await rm(input.stagingPath, { recursive: true, force: true });
   } catch (error) {
     errors.push(`staging directory at ${input.stagingPath}: ${formatError(error)}`);
@@ -1414,12 +1440,13 @@ async function rollbackPluginInstall(input: PluginRollbackInput): Promise<string
   return errors;
 }
 
-async function restoreFile(filePath: string, content: string | undefined): Promise<void> {
+async function restoreFile(projectPath: string, filePath: string, content: string | undefined): Promise<void> {
+  await assertSafeProjectWritePath(projectPath, filePath);
   if (content === undefined) {
     await rm(filePath, { force: true });
     return;
   }
-  await writeTextAtomic(filePath, content);
+  await writeTextAtomic(projectPath, filePath, content);
 }
 
 async function readOptionalText(filePath: string): Promise<string | undefined> {
@@ -1445,23 +1472,8 @@ function parseJsonRecord(content: string, label: string, filePath: string): Reco
   return value;
 }
 
-async function writeTextAtomic(filePath: string, content: string): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  const temporaryPath = join(dirname(filePath), `.${basename(filePath)}.${randomUUID()}.tmp`);
-  try {
-    await writeFile(temporaryPath, content, { encoding: "utf8", flag: "wx" });
-    await rename(temporaryPath, filePath);
-  } catch (error) {
-    let cleanupError: string | undefined;
-    try {
-      await rm(temporaryPath, { force: true });
-    } catch (removeError) {
-      cleanupError = formatError(removeError);
-    }
-    throw new Error(
-      `Atomic write failed at ${filePath}: ${formatError(error)}${cleanupError ? `; temporary file cleanup failed: ${cleanupError}` : ""}`
-    );
-  }
+async function writeTextAtomic(projectPath: string, filePath: string, content: string): Promise<void> {
+  await writeProjectTextAtomic(projectPath, filePath, content);
 }
 
 function pluginInstallationError(

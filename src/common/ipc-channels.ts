@@ -52,5 +52,6 @@ export const GIT_CHANNELS = {
   status: "git:status",
   diff: "git:diff",
   checkpoint: "git:checkpoint",
+  rollbackPreview: "git:rollback-preview",
   rollback: "git:rollback"
 } as const;

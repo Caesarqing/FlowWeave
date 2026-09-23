@@ -7,7 +7,7 @@ import { resolveProjectFile, resolveProjectPath } from "../services/project-regi
 import { getAgentInboxRunDir } from "../services/agent-inbox.service";
 import { getBuiltInAgentPluginStatuses, installBuiltInAgentPlugin, resolveAgentPluginInstructionPath } from "../services/agent-plugin.service";
 import { discoverAgents } from "../services/agent-discovery.service";
-import { requireBoolean, requireBoundedString, requireEnum, requireObject, requireString, requireStringArray } from "./ipc-validation";
+import { requireBoolean, requireBoundedString, requireEnum, requireInteger, requireObject, requireString, requireStringArray } from "./ipc-validation";
 import { handleIpc } from "./ipc-handler";
 
 export function registerAgentIpc() {
@@ -96,6 +96,9 @@ export function registerAgentIpc() {
       model: options.model === undefined
         ? undefined
         : requireBoundedString(TOOL_CHANNELS.runPlan, options.model, "model", 200),
+      timeoutMs: options.timeoutMs === undefined
+        ? undefined
+        : requireInteger(TOOL_CHANNELS.runPlan, options.timeoutMs, "timeoutMs", 60_000, 120 * 60 * 1000),
       confirmedExecute: options.executionMode === "execute"
         ? requireBoolean(TOOL_CHANNELS.runPlan, options.confirmedExecute, "confirmedExecute")
         : false

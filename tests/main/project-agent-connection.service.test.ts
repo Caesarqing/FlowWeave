@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -14,6 +14,17 @@ import {
 } from "../../src/main/services/project-agent-connection.service";
 
 describe("project Agent connection", () => {
+  it("rejects linked project instruction files before writing connection artifacts", async () => {
+    const projectPath = await createProject();
+    const outsidePath = join(await mkdtemp(join(tmpdir(), "flowweave-agent-link-")), "instructions.md");
+    await writeFile(outsidePath, "preserve these instructions", "utf8");
+    await symlink(outsidePath, join(projectPath, "AGENTS.md"));
+
+    await expect(enableProjectAgentConnection(projectPath)).rejects.toThrow("symbolic link");
+    await expect(readFile(outsidePath, "utf8")).resolves.toBe("preserve these instructions");
+    await expect(stat(join(projectPath, ".flowweave", "agent-context.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("starts with confirmation required and generates all project-native entries", async () => {
     const projectPath = await createProject();
 

@@ -75,6 +75,8 @@ export function useProjectActions({
 }) {
   const { t } = useI18n();
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
+  const agentPlanTimeoutMinutes = usePreferencesStore((state) => state.agentPlanTimeoutMinutes);
+  const agentPlanTimeoutMs = agentPlanTimeoutMinutes * 60 * 1000;
   const [operation, setOperation] = useState<AnalysisOperation | null>(null);
   const acceptsNewProjectScan = useRef(false);
   const architectureReviewRef = useRef(architectureReview);
@@ -181,7 +183,8 @@ export function useProjectActions({
     setProjectStatus(t("status.openingPicker"));
     try {
       const result = await window.flowweave.openProject({
-        concurrency: scanConcurrency
+        concurrency: scanConcurrency,
+        agentPlanTimeoutMs
       });
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
@@ -213,7 +216,8 @@ export function useProjectActions({
     setProjectStatus(t("status.rescanning"));
     try {
       const result = await window.flowweave.restoreRegisteredProject(projectToRestoreId, {
-        concurrency: scanConcurrency
+        concurrency: scanConcurrency,
+        agentPlanTimeoutMs
       });
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
@@ -249,7 +253,8 @@ export function useProjectActions({
     setProjectStatus(t("status.rescanning"));
     try {
       const result = await window.flowweave.scanProject(projectId, {
-        concurrency: scanConcurrency
+        concurrency: scanConcurrency,
+        agentPlanTimeoutMs
       });
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
@@ -278,7 +283,7 @@ export function useProjectActions({
     setIsProjectLoading(true);
     setProjectStatus(t("status.generatingGraph"));
     try {
-      const result = await window.flowweave.analyzeArchitectureWithAgent(projectId, agentId);
+      const result = await window.flowweave.analyzeArchitectureWithAgent(projectId, agentId, agentPlanTimeoutMs);
       if (!requestGuard.isCurrent(requestId)) return;
       if (result.outcome === "failed") {
         throw new Error(`${result.error.agentId} run ${result.error.runId ?? "unknown"}: ${result.error.message}`);

@@ -235,6 +235,50 @@ describe("agent-execution.service", () => {
     expect(maxActive).toBe(3);
     expect(results.every((result) => result.status === "completed")).toBe(true);
   });
+
+  it("uses one total timeout across transient failures and retry delays", async () => {
+    let calls = 0;
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Timed retry",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => {
+        calls += 1;
+        return result(runRequest, "failed", "ConnectionRefused");
+      }
+    };
+
+    const execution = await executeAgentWithPolicy(adapter, request("plan"), {
+      retryCount: 2,
+      retryDelayMs: 100,
+      timeoutMs: 50
+    });
+
+    expect(calls).toBe(1);
+    expect(execution.status).toBe("failed");
+    expect(execution.terminationReason).toBe("timed-out");
+    expect(execution.failure?.code).toBe("timeout");
+  });
+
+  it("applies the plan and execute default timeout to each Agent request", async () => {
+    const observedTimeouts: number[] = [];
+    const adapter: ToolAdapter = {
+      id: "mock",
+      name: "Default timeout",
+      kind: "mock",
+      detect: async () => ({ toolId: "mock", available: true, method: "mock" }),
+      runPlan: async (runRequest) => {
+        observedTimeouts.push(runRequest.timeoutMs ?? 0);
+        return result(runRequest, "completed", "ok");
+      }
+    };
+
+    await executeAgentWithPolicy(adapter, request("plan"));
+    await executeAgentWithPolicy(adapter, request("execute"));
+
+    expect(observedTimeouts).toEqual([20 * 60 * 1000, 60 * 60 * 1000]);
+  });
 });
 
 function policy() {

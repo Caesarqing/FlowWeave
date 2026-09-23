@@ -1988,6 +1988,56 @@ button:disabled {
   font-weight: 700;
 }
 
+.rollback-preview-dialog {
+  display: grid;
+  gap: 12px;
+}
+
+.rollback-preview-dialog h1,
+.rollback-preview-dialog p {
+  margin: 0;
+}
+
+.rollback-preview-section {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.rollback-preview-section ul {
+  display: grid;
+  gap: 4px;
+  max-height: 140px;
+  margin: 0;
+  padding-left: 18px;
+  overflow: auto;
+}
+
+.rollback-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.git-unpreviewable-list {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.git-unpreviewable-list p {
+  margin: 0;
+}
+
 .error-center {
   position: fixed;
   z-index: 1100;

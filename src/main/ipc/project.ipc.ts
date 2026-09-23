@@ -56,6 +56,7 @@ import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { writeFlowWeaveProject } from "../storage/flowweave-store";
 import { writeJsonAtomic } from "../storage/artifact-store";
+import { assertSafeProjectWritePath, writeProjectTextAtomic } from "../storage/project-write-guard";
 import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString, requireStringArray } from "./ipc-validation";
 import { finishOperation, startOperation, updateOperation } from "../services/operation.service";
 import { exportDiagnostics, recordDiagnostic } from "../services/diagnostic.service";
@@ -103,29 +104,32 @@ export function registerProjectIpc() {
       requireScanOptions(PROJECT_CHANNELS.scanProject, options)
     ));
 
-  handleIpc(PROJECT_CHANNELS.analyzeArchitectureWithAgent, (event, projectId: unknown, agentId: unknown) =>
+  handleIpc(PROJECT_CHANNELS.analyzeArchitectureWithAgent, (event, projectId: unknown, agentId: unknown, timeoutMs: unknown) =>
     analyzeArchitectureForProject(
       requireString(PROJECT_CHANNELS.analyzeArchitectureWithAgent, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.analyzeArchitectureWithAgent, agentId),
-      event.sender
+      event.sender,
+      requireOptionalAgentTimeout(PROJECT_CHANNELS.analyzeArchitectureWithAgent, timeoutMs)
     ));
 
   handleIpc(PROJECT_CHANNELS.readArchitectureMap, (_event, projectId: unknown) =>
     readArchitectureMap(resolveProjectPath(requireString(PROJECT_CHANNELS.readArchitectureMap, projectId, "projectId"))));
 
-  handleIpc(PROJECT_CHANNELS.generateSequenceDiagrams, (event, projectId: unknown, agentId: unknown) =>
+  handleIpc(PROJECT_CHANNELS.generateSequenceDiagrams, (event, projectId: unknown, agentId: unknown, timeoutMs: unknown) =>
     generateSequenceDiagramsForProject(
       requireString(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.generateSequenceDiagrams, agentId),
-      event.sender
+      event.sender,
+      requireOptionalAgentTimeout(PROJECT_CHANNELS.generateSequenceDiagrams, timeoutMs)
     ));
 
-  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown) =>
+  handleIpc(PROJECT_CHANNELS.reviseSequenceDiagram, (event, projectId: unknown, agentId: unknown, instruction: unknown, timeoutMs: unknown) =>
     reviseSequenceDiagramForProject(
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, "projectId"),
       requireRuntimeAgentId(PROJECT_CHANNELS.reviseSequenceDiagram, agentId),
       requireString(PROJECT_CHANNELS.reviseSequenceDiagram, instruction, "instruction"),
-      event.sender
+      event.sender,
+      requireOptionalAgentTimeout(PROJECT_CHANNELS.reviseSequenceDiagram, timeoutMs)
     ));
 
   handleIpc(PROJECT_CHANNELS.readSequenceDiagrams, (_event, projectId: unknown) =>
@@ -146,9 +150,8 @@ export function registerProjectIpc() {
     const projectPath = resolveProjectPath(requireString(PROJECT_CHANNELS.saveDoc, projectId, "projectId"));
     const safeDocId = requireSafeId(PROJECT_CHANNELS.saveDoc, docId, "docId");
     const docsDir = join(projectPath, FLOWWEAVE_DIR, "docs");
-    await mkdir(docsDir, { recursive: true });
     const docPath = join(docsDir, `${safeDocId}.md`);
-    await writeFile(docPath, requireString(PROJECT_CHANNELS.saveDoc, content, "content"), "utf8");
+    await writeProjectTextAtomic(projectPath, docPath, requireString(PROJECT_CHANNELS.saveDoc, content, "content"));
     return docPath;
   });
 
@@ -218,7 +221,9 @@ export function registerProjectIpc() {
       if (saveOptions.allowStaleNoop === true) return canvasPath;
       throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Canvas scan fingerprint is stale.`);
     }
+    await assertSafeProjectWritePath(projectPath, canvasPath);
     await mkdir(join(projectPath, FLOWWEAVE_DIR, "canvas"), { recursive: true });
+    await assertSafeProjectWritePath(projectPath, canvasPath);
     const temporaryPath = `${canvasPath}.${randomUUID()}.tmp`;
     try {
       await writeFile(temporaryPath, `${JSON.stringify({ ...value, projectPath }, null, 2)}\n`, "utf8");
@@ -254,13 +259,15 @@ export function registerProjectIpc() {
 async function analyzeArchitectureForProject(
   projectId: string,
   agentId: RuntimeAgentId,
-  sender: WebContents
+  sender: WebContents,
+  timeoutMs: number | undefined
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("architecture-analysis", "Preparing architecture analysis.", sender, async (onProgress) => {
     const result = await analyzeArchitecture(await scanProjectWithCurrentProjectArtifact(projectPath), agentId, {
       onProgress,
       projectId,
+      timeoutMs,
       onArchitectureReview: (reviewEvent) => sendArchitectureReview(sender, reviewEvent)
     });
     if (result.outcome === "failed") throw new Error(result.error.message);
@@ -271,13 +278,15 @@ async function analyzeArchitectureForProject(
 async function generateSequenceDiagramsForProject(
   projectId: string,
   agentId: RuntimeAgentId,
-  sender: WebContents
+  sender: WebContents,
+  timeoutMs: number | undefined
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram analysis.", sender, async (onProgress) => {
     const result = await generateSequenceDiagrams(await scanProjectWithCurrentProjectArtifact(projectPath), agentId, {
       onProgress,
       projectId,
+      timeoutMs,
       onSequenceReview: (reviewEvent) => sendSequenceReview(sender, reviewEvent)
     });
     if (result.outcome === "failed") throw new Error(result.error.message);
@@ -305,11 +314,12 @@ async function reviseSequenceDiagramForProject(
   projectId: string,
   agentId: RuntimeAgentId,
   instruction: string,
-  sender: WebContents
+  sender: WebContents,
+  timeoutMs: number | undefined
 ) {
   const projectPath = resolveProjectPath(projectId);
   return runTrackedAnalysis("sequence-analysis", "Preparing sequence diagram revision.", sender, async (onProgress) => {
-    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { onProgress });
+    return reviseSequenceDiagram(await scanProject(projectPath), agentId, instruction, { onProgress, timeoutMs });
   }, projectId, projectPath);
 }
 
@@ -365,6 +375,7 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     ) {
       const resumed = await analyzeArchitecture(project, architectureReview.agentId, {
         projectId,
+        timeoutMs: options.agentPlanTimeoutMs,
         resumeArchitectureReview: architectureReview,
         onArchitectureReview: (reviewEvent) => sendArchitectureReview(sender, reviewEvent)
       });
@@ -385,6 +396,7 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     ) {
       const resumed = await generateSequenceDiagrams(project, sequenceReview.agentId, {
         projectId,
+        timeoutMs: options.agentPlanTimeoutMs,
         resumeSequenceReview: sequenceReview,
         onSequenceReview: (reviewEvent) => sendSequenceReview(sender, reviewEvent)
       });
@@ -445,8 +457,17 @@ function sendSequenceReview(sender: WebContents, event: SequenceReviewEvent): vo
 function requireScanOptions(channel: string, value: unknown): ProjectScanOptions {
   const options = requireObject(channel, value, "options");
   return {
-    concurrency: requireInteger(channel, options.concurrency, "concurrency", 1, 128)
+    concurrency: requireInteger(channel, options.concurrency, "concurrency", 1, 128),
+    agentPlanTimeoutMs: options.agentPlanTimeoutMs === undefined
+      ? undefined
+      : requireInteger(channel, options.agentPlanTimeoutMs, "agentPlanTimeoutMs", 60_000, 120 * 60 * 1000)
   };
+}
+
+function requireOptionalAgentTimeout(channel: string, value: unknown): number | undefined {
+  return value === undefined
+    ? undefined
+    : requireInteger(channel, value, "timeoutMs", 60_000, 120 * 60 * 1000);
 }
 
 async function runTrackedAnalysis<T>(

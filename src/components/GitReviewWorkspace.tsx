@@ -1,12 +1,21 @@
 import { useState } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { useGitStore } from "../stores/git.store";
+import { usePreferencesStore } from "../stores/preferences.store";
 import { useRunsStore } from "../stores/runs.store";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { Button } from "./Button";
 import { RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
+import type { GitRollbackPreview } from "../types";
+
+const unpreviewableReasonKeys: Record<string, string> = {
+  "Binary or non-UTF-8 file.": "git.unpreviewable.binary",
+  "File exceeds the 1 MiB preview limit.": "git.unpreviewable.large",
+  "Untracked files exceed the 10 MiB total preview limit.": "git.unpreviewable.total",
+  "Not a regular file.": "git.unpreviewable.special"
+};
 
 export function GitReviewWorkspace({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -15,7 +24,11 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
   const activeRun = useRunsStore((state) => state.selectedRunArtifact?.summary);
   const setDiff = useGitStore((state) => state.setDiff);
   const setCheckpointId = useGitStore((state) => state.setCheckpointId);
+  const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
+  const agentPlanTimeoutMinutes = usePreferencesStore((state) => state.agentPlanTimeoutMinutes);
   const [status, setStatus] = useState(() => t("git.status"));
+  const [rollbackPreview, setRollbackPreview] = useState<GitRollbackPreview>();
+  const [rollbackPending, setRollbackPending] = useState(false);
 
   async function refreshDiff() {
     if (!window.flowweave || !projectId) {
@@ -41,17 +54,35 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
-  async function rollback() {
+  async function prepareRollback() {
     if (!window.flowweave || !projectId || !checkpointId) {
       setStatus(t("git.needCheckpoint"));
       return;
     }
     try {
-      await window.flowweave.gitRollback(projectId, checkpointId);
-      setStatus(t("git.rollbackDone", { id: checkpointId }));
-      await refreshDiff();
+      setRollbackPreview(await window.flowweave.gitRollbackPreview(projectId, checkpointId));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function confirmRollback() {
+    if (!window.flowweave || !projectId || !rollbackPreview || rollbackPending) return;
+    setRollbackPending(true);
+    try {
+      await window.flowweave.gitRollback(projectId, rollbackPreview.checkpointId, rollbackPreview.previewId);
+      setRollbackPreview(undefined);
+      setStatus(t("git.rollbackDone", { id: rollbackPreview.checkpointId }));
+      await window.flowweave.scanProject(projectId, {
+        concurrency: scanConcurrency,
+        agentPlanTimeoutMs: agentPlanTimeoutMinutes * 60 * 1000
+      });
+      await refreshDiff();
+    } catch (error) {
+      setRollbackPreview(undefined);
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRollbackPending(false);
     }
   }
 
@@ -75,16 +106,25 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
             </div>
           ))}
         </div>
+        {diff?.unpreviewableFiles.length ? (
+          <div className="git-unpreviewable-list">
+            <strong>{t("git.unpreviewableTitle")}</strong>
+            {diff.unpreviewableFiles.map((file) => (
+              <p key={file.path}><code>{file.path}</code> · {t(unpreviewableReasonKeys[file.reason] ?? "git.unpreviewable.special")}</p>
+            ))}
+          </div>
+        ) : null}
     </section>
   );
 
   return (
+    <>
     <WorkspaceLayout
       actions={(
         <>
           <Button icon={<RefreshCw size={14} />} variant="secondary" onClick={() => void refreshDiff()}>{t("git.refresh")}</Button>
           <Button icon={<ShieldCheck size={14} />} variant="secondary" onClick={() => void createCheckpoint()}>{t("git.createCheckpoint")}</Button>
-          <Button disabled={!checkpointId} icon={<RotateCcw size={14} />} variant="danger" onClick={() => void rollback()}>{t("git.rollback")}</Button>
+          <Button disabled={!checkpointId} icon={<RotateCcw size={14} />} variant="danger" onClick={() => void prepareRollback()}>{t("git.rollback")}</Button>
         </>
       )}
       className="workspace-page git-workspace"
@@ -98,5 +138,31 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
         <DiffViewer patch={diff?.patch ?? ""} />
       </section>
     </WorkspaceLayout>
+    {rollbackPreview ? (
+      <div className="onboarding-backdrop" role="presentation">
+        <section className="onboarding-dialog rollback-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="rollback-preview-title">
+          <h1 id="rollback-preview-title">{t("git.rollbackPreviewTitle")}</h1>
+          <p>{t("git.rollbackPreviewExpires", { time: new Date(rollbackPreview.expiresAt).toLocaleTimeString() })}</p>
+          <div className="rollback-preview-section">
+            <strong>{t("git.rollbackTracked", { count: rollbackPreview.trackedFilesToRestore.length })}</strong>
+            <ul>{rollbackPreview.trackedFilesToRestore.map((path) => <li key={path}><code>{path}</code></li>)}</ul>
+          </div>
+          <div className="rollback-preview-section">
+            <strong>{t("git.rollbackUntracked", { count: rollbackPreview.untrackedFilesToDelete.length })}</strong>
+            <ul>{rollbackPreview.untrackedFilesToDelete.map((path) => <li key={path}><code>{path}</code></li>)}</ul>
+          </div>
+          <div className="rollback-preview-section">
+            <strong>{t("git.rollbackCheckpointFiles", { count: rollbackPreview.checkpointUntrackedFilesToRestore.length })}</strong>
+            <ul>{rollbackPreview.checkpointUntrackedFilesToRestore.map((path) => <li key={path}><code>{path}</code></li>)}</ul>
+          </div>
+          <p>{t("git.rollbackPreserved", { paths: rollbackPreview.preservedPaths.join(", ") })}</p>
+          <div className="rollback-preview-actions">
+            <Button disabled={rollbackPending} variant="secondary" onClick={() => setRollbackPreview(undefined)}>{t("git.cancel")}</Button>
+            <Button disabled={rollbackPending} variant="danger" icon={<RotateCcw size={14} />} onClick={() => void confirmRollback()}>{t("git.confirmRollback")}</Button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   );
 }

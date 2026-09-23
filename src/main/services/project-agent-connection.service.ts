@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type {
   CodeflowProject,
@@ -8,6 +8,7 @@ import type {
   ProjectAgentPlatform
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { assertSafeProjectWritePath, writeProjectTextAtomic } from "../storage/project-write-guard";
 import { buildAgentProtocolContextInstructions } from "./agent-protocol.service";
 
 const FLOWWEAVE_BLOCK_START = "<!-- flowweave:start -->";
@@ -147,9 +148,14 @@ export async function disableProjectAgentConnection(projectPath: string): Promis
   const platforms = existingConfig?.platforms ?? DEFAULT_PLATFORMS;
 
   const plannedUpdates = await planManagedBlockRemoval(platformEntries(projectPath, platforms));
+  await Promise.all([
+    ...plannedUpdates.map((update) => assertSafeProjectWritePath(projectPath, update.filePath)),
+    assertSafeProjectWritePath(projectPath, paths.contextPath),
+    assertSafeProjectWritePath(projectPath, paths.configPath)
+  ]);
   for (const update of plannedUpdates) {
     if (update.content.trim()) {
-      await writeTextAtomic(update.filePath, update.content);
+      await writeProjectTextAtomic(projectPath, update.filePath, update.content);
     } else {
       await rm(update.filePath, { force: true });
     }
@@ -162,7 +168,7 @@ export async function disableProjectAgentConnection(projectPath: string): Promis
     platforms,
     updatedAt: new Date().toISOString()
   };
-  await writeJsonAtomic(paths.configPath, config);
+  await writeProjectTextAtomic(projectPath, paths.configPath, `${JSON.stringify(config, null, 2)}\n`);
   return createStatus(projectPath, config, "disabled", "External Agent connection is disabled for this project.", []);
 }
 
@@ -180,9 +186,14 @@ async function writeProjectAgentConnection(
   const context = buildAgentContext(contextInput);
   const plannedUpdates = await planManagedBlockUpsert(platformEntries(projectPath, platformsToWrite), contextInput.managedBlock);
 
-  await writeTextAtomic(paths.contextPath, context);
+  await Promise.all([
+    ...plannedUpdates.map((update) => assertSafeProjectWritePath(projectPath, update.filePath)),
+    assertSafeProjectWritePath(projectPath, paths.contextPath),
+    assertSafeProjectWritePath(projectPath, paths.configPath)
+  ]);
+  await writeProjectTextAtomic(projectPath, paths.contextPath, context);
   for (const update of plannedUpdates) {
-    await writeTextAtomic(update.filePath, update.content);
+    await writeProjectTextAtomic(projectPath, update.filePath, update.content);
   }
 
   const config: ProjectAgentConnectionConfig = {
@@ -192,7 +203,7 @@ async function writeProjectAgentConnection(
     updatedAt: new Date().toISOString(),
     contextFingerprint: contextInput.contextFingerprint
   };
-  await writeJsonAtomic(paths.configPath, config);
+  await writeProjectTextAtomic(projectPath, paths.configPath, `${JSON.stringify(config, null, 2)}\n`);
   const connectionIssue = await findConnectionFileIssue(contextInput, platformsToWrite);
   if (connectionIssue) {
     throw new Error(`FlowWeave Agent connection verification failed: ${connectionIssue.message}`);
@@ -526,23 +537,6 @@ async function readOptionalText(filePath: string) {
   } catch (error) {
     if (isMissingFileError(error)) return undefined;
     throw new Error(`Reading "${filePath}" failed: ${formatError(error)}`);
-  }
-}
-
-async function writeJsonAtomic(filePath: string, value: unknown) {
-  await writeTextAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-async function writeTextAtomic(filePath: string, content: string) {
-  const parentPath = dirname(filePath);
-  await mkdir(parentPath, { recursive: true });
-  const temporaryPath = join(parentPath, `.${basename(filePath)}.${randomUUID()}.tmp`);
-  try {
-    await writeFile(temporaryPath, content, "utf8");
-    await rename(temporaryPath, filePath);
-  } catch (error) {
-    await rm(temporaryPath, { force: true });
-    throw new Error(`Writing FlowWeave Agent connection file "${filePath}" failed: ${formatError(error)}`);
   }
 }
 

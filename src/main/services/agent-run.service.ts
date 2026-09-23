@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { AgentDefinition, AgentReadinessResult, AgentId, ArtifactRunTarget, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunResult } from "../../types";
+import type { AgentDefinition, AgentReadinessResult, AgentId, ArtifactRunTarget, CustomAgentInput, ExecutionMode, RuntimeAgentId, ToolAdapter, ToolDetectionResult, ToolId, ToolOpenResult, ToolRunPurpose, ToolRunRequest, ToolRunResult } from "../../types";
 import { deleteCustomAgent, getAgentAdapter, listAgentDefinitions, saveCustomAgent } from "./agent-registry.service";
 import { createCheckpoint } from "./git.service";
 import { prepareRunPaths, serializeAgentEvents, writeRunResult } from "./run-log.service";
@@ -15,6 +15,7 @@ export type StartToolPlanOptions = {
   projectId: string;
   toolId: RuntimeAgentId;
   prompt: string;
+  timeoutMs?: number;
   guidancePath?: string;
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
@@ -66,11 +67,12 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     return failed;
   }
   const checkpointId = executionMode === "execute" ? await createCheckpoint(projectPath) : undefined;
-  const result = await executeAgentWithPolicy(adapter, {
+  const runRequest: ToolRunRequest = {
     id: runId,
     projectId: options.projectId,
     projectPath,
     prompt,
+    timeoutMs: options.timeoutMs,
     guidancePath: options.guidancePath,
     executionMode,
     purpose: options.purpose,
@@ -79,7 +81,9 @@ export async function startToolPlan(options: StartToolPlanOptions): Promise<Star
     inputFingerprint: options.inputFingerprint,
     reviewId: options.reviewId,
     model: options.model
-  });
+  };
+  const executionPolicy = options.timeoutMs === undefined ? undefined : { timeoutMs: options.timeoutMs };
+  const result = await executeAgentWithPolicy(adapter, runRequest, executionPolicy);
 
   const logText = serializeAgentEvents(result.events);
   const planText = await resolvePlanText(result, logText);

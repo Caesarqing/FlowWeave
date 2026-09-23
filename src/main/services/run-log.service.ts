@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { ExecutionMode, RuntimeAgentId, ToolRunArtifact, ToolRunEvent, ToolRunPurpose, ToolRunResult, ToolRunStatus, ToolRunSummary } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { writeJsonAtomic, writeTextAtomic } from "../storage/artifact-store";
@@ -7,6 +7,8 @@ import { adoptArtifactRun } from "./artifact-run-adoption.service";
 import { markArchitectureReviewFailedIfCurrent } from "./architecture-review.service";
 import { writeSequenceReviewStatus } from "./sequence-review.service";
 import { readAgentInboxResponseForRun } from "./agent-inbox.service";
+
+const runLocks = new Map<string, Promise<void>>();
 
 export type RunPaths = {
   runDir: string;
@@ -65,32 +67,35 @@ export async function listRunSummaries(projectPath: string): Promise<ToolRunSumm
 
 export async function readRunArtifact(projectPath: string, runId: string): Promise<ToolRunArtifact> {
   assertSafeRunId(runId);
-  const summary = await readRunSummary(projectPath, runId);
-  if (!summary) {
-    throw new Error(`FlowWeave run not found: ${runId}`);
-  }
+  return withRunLock(projectPath, runId, async () => {
+    const summary = await readRunSummaryUnlocked(projectPath, runId);
+    if (!summary) {
+      throw new Error(`FlowWeave run not found: ${runId}`);
+    }
 
-  const runDir = getRunDir(projectPath, runId);
-  const [prompt, plan, log, result] = await Promise.all([
-    readFixedRunFile(runDir, "prompt.md"),
-    readFixedRunFile(runDir, "plan.md"),
-    readFixedRunFile(runDir, "agent.log"),
-    readFixedRunFile(runDir, "result.json")
-  ]);
+    const runDir = getRunDir(projectPath, runId);
+    const [prompt, plan, log, result] = await Promise.all([
+      readFixedRunFile(runDir, "prompt.md"),
+      readFixedRunFile(runDir, "plan.md"),
+      readFixedRunFile(runDir, "agent.log"),
+      readFixedRunFile(runDir, "result.json")
+    ]);
 
-  return { summary, prompt, plan, log, result };
+    return { summary, prompt, plan, log, result };
+  });
 }
 
 export async function applyRunArtifact(projectPath: string, runId: string): Promise<ToolRunSummary> {
   assertSafeRunId(runId);
-  const runDir = getRunDir(projectPath, runId);
-  const resultText = await readFixedRunFile(runDir, "result.json");
-  if (!resultText.trim()) throw new Error(`FlowWeave run not found: ${runId}`);
-  const result = JSON.parse(resultText) as Partial<ToolRunResult>;
-  const output = await readFixedRunFile(runDir, "plan.md");
-  const adoption = await adoptArtifactRun(projectPath, result, output, "manual");
-  const updated = { ...result, artifactAdoption: adoption };
-  await writeJsonAtomic(join(runDir, "result.json"), updated);
+  await withRunLock(projectPath, runId, async () => {
+    const runDir = getRunDir(projectPath, runId);
+    const resultText = await readFixedRunFile(runDir, "result.json");
+    if (!resultText.trim()) throw new Error(`FlowWeave run not found: ${runId}`);
+    const result = JSON.parse(resultText) as Partial<ToolRunResult>;
+    const output = await readFixedRunFile(runDir, "plan.md");
+    const adoption = await adoptArtifactRun(projectPath, result, output, "manual");
+    await writeJsonAtomic(join(runDir, "result.json"), { ...result, artifactAdoption: adoption });
+  });
   const summary = await readRunSummary(projectPath, runId);
   if (!summary) throw new Error(`FlowWeave run not found after applying artifact: ${runId}`);
   return summary;
@@ -102,63 +107,34 @@ export async function updateRunArtifactAdoption(
   artifactAdoption: NonNullable<ToolRunResult["artifactAdoption"]>
 ): Promise<void> {
   assertSafeRunId(runId);
-  const runDir = getRunDir(projectPath, runId);
-  const resultText = await readFixedRunFile(runDir, "result.json");
-  if (!resultText.trim()) return;
-  const result = JSON.parse(resultText) as Partial<ToolRunResult>;
-  await writeJsonAtomic(join(runDir, "result.json"), { ...result, artifactAdoption });
+  await withRunLock(projectPath, runId, async () => {
+    const runDir = getRunDir(projectPath, runId);
+    const resultText = await readFixedRunFile(runDir, "result.json");
+    if (!resultText.trim()) return;
+    const result = JSON.parse(resultText) as Partial<ToolRunResult>;
+    await writeJsonAtomic(join(runDir, "result.json"), { ...result, artifactAdoption });
+  });
 }
 
 async function readRunSummary(projectPath: string, runId: string): Promise<ToolRunSummary | undefined> {
   assertSafeRunId(runId);
-  const resultText = await readFixedRunFile(getRunDir(projectPath, runId), "result.json").catch(() => "");
-  if (!resultText.trim()) return undefined;
+  return withRunLock(projectPath, runId, () => readRunSummaryUnlocked(projectPath, runId));
+}
 
+async function readRunSummaryUnlocked(projectPath: string, runId: string): Promise<ToolRunSummary | undefined> {
   try {
-    let result = JSON.parse(resultText) as Partial<ToolRunResult>;
-    if (result.status === "pending") {
-      try {
-        result = await importPendingAgentInboxRun(projectPath, runId, result);
-      } catch (error) {
-        const completedAt = new Date().toISOString();
-        const artifactAdoption = rejectedAdoptionForFailedImport(result, formatError(error));
-        result = {
-          ...result,
-          status: "failed",
-          completedAt,
-          exitCode: 1,
-          summary: `Agent Inbox response rejected: ${formatError(error)}`,
-          artifactAdoption
-        };
-        await reconcileImportedArtifactReview(projectPath, runId, result, artifactAdoption);
-        await writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), result);
-      }
-    }
-    return {
-      id: result.id ?? runId,
-      toolId: isRuntimeAgentId(result.toolId) ? result.toolId : "mock",
-      status: isToolRunStatus(result.status) ? result.status : "failed",
-      executionMode: isExecutionMode(result.executionMode) ? result.executionMode : "plan",
-      purpose: isPurpose(result.purpose) ? result.purpose : "implementation-plan",
-      startedAt: result.startedAt ?? "",
-      completedAt: result.completedAt ?? result.startedAt ?? "",
-      summary: result.summary,
-      promptPath: result.promptPath,
-      planPath: result.planPath,
-      logPath: result.logPath,
-      resultPath: result.resultPath,
-      checkpointId: result.checkpointId,
-      artifactTarget: result.artifactTarget,
-      scanFingerprint: result.scanFingerprint,
-      inputFingerprint: result.inputFingerprint,
-      reviewId: result.reviewId,
-      artifactAdoption: result.artifactAdoption,
-      agentReadiness: result.agentReadiness,
-      failure: result.failure
-    };
+    const result = await refreshPendingAgentInboxRunUnlocked(projectPath, runId);
+    return result ? toRunSummary(runId, result) : undefined;
   } catch {
     return undefined;
   }
+}
+
+export async function expirePendingAgentInboxRun(projectPath: string, runId: string): Promise<void> {
+  assertSafeRunId(runId);
+  await withRunLock(projectPath, runId, async () => {
+    await refreshPendingAgentInboxRunUnlocked(projectPath, runId);
+  });
 }
 
 export async function importPendingAgentInboxRun(
@@ -166,8 +142,68 @@ export async function importPendingAgentInboxRun(
   runId: string,
   result: Partial<ToolRunResult>
 ): Promise<Partial<ToolRunResult>> {
-  const response = await readAgentInboxResponseForRun(projectPath, runId, result);
-  if (!response) return result;
+  assertSafeRunId(runId);
+  return withRunLock(projectPath, runId, async () => {
+    const updated = await refreshPendingAgentInboxRunUnlocked(projectPath, runId);
+    return updated ?? result;
+  });
+}
+
+async function refreshPendingAgentInboxRunUnlocked(
+  projectPath: string,
+  runId: string
+): Promise<Partial<ToolRunResult> | undefined> {
+  const runDir = getRunDir(projectPath, runId);
+  const resultText = await readFixedRunFile(runDir, "result.json");
+  if (!resultText.trim()) return undefined;
+  const result = JSON.parse(resultText) as Partial<ToolRunResult>;
+  if (result.status !== "pending") return result;
+
+  let response;
+  try {
+    response = await readAgentInboxResponseForRun(projectPath, runId, result);
+  } catch (error) {
+    return rejectPendingAgentInboxRun(projectPath, runId, result, error);
+  }
+  const deadline = pendingRunDeadline(result);
+  const responseIsLate = Boolean(response && deadline !== undefined && Date.parse(response.completedAt) > deadline);
+  if (response && !responseIsLate) {
+    return importAgentInboxResponse(projectPath, runId, result, response);
+  }
+  if (!responseIsLate && (deadline === undefined || Date.now() <= deadline)) return result;
+
+  const timeoutResult = createTimedOutRunResult(runId, result);
+  const artifactAdoption = rejectedAdoptionForFailedImport(timeoutResult, timeoutResult.summary ?? "Agent Inbox run timed out.");
+  const timedOut = { ...timeoutResult, artifactAdoption };
+  await reconcileImportedArtifactReview(projectPath, runId, timedOut, artifactAdoption);
+
+  const latestResultText = await readFixedRunFile(runDir, "result.json");
+  const latestResult = latestResultText.trim()
+    ? JSON.parse(latestResultText) as Partial<ToolRunResult>
+    : undefined;
+  if (latestResult && latestResult.status !== "pending") return latestResult;
+
+  // A response can be published while review state is being reconciled. Recheck
+  // it immediately before committing timeout so a valid on-time response wins arbitration.
+  let latestResponse;
+  try {
+    latestResponse = await readAgentInboxResponseForRun(projectPath, runId, result);
+  } catch (error) {
+    return rejectPendingAgentInboxRun(projectPath, runId, result, error);
+  }
+  if (latestResponse && deadline !== undefined && Date.parse(latestResponse.completedAt) <= deadline) {
+    return importAgentInboxResponse(projectPath, runId, result, latestResponse);
+  }
+  await writeJsonAtomic(join(runDir, "result.json"), timedOut);
+  return timedOut;
+}
+
+async function importAgentInboxResponse(
+  projectPath: string,
+  runId: string,
+  result: Partial<ToolRunResult>,
+  response: Awaited<ReturnType<typeof readAgentInboxResponseForRun>> & {}
+): Promise<Partial<ToolRunResult>> {
   const completedAt = response.completedAt ?? new Date().toISOString();
   if (Number.isNaN(Date.parse(completedAt))) {
     throw new Error(`Agent Inbox response completedAt is invalid for run ${runId}.`);
@@ -192,6 +228,94 @@ export async function importPendingAgentInboxRun(
     writeJsonAtomic(join(runDir, "result.json"), { ...updated, artifactAdoption: adoption })
   ]);
   return { ...updated, artifactAdoption: adoption };
+}
+
+async function rejectPendingAgentInboxRun(
+  projectPath: string,
+  runId: string,
+  result: Partial<ToolRunResult>,
+  error: unknown
+): Promise<Partial<ToolRunResult>> {
+  const completedAt = new Date().toISOString();
+  const message = formatError(error);
+  const artifactAdoption = rejectedAdoptionForFailedImport(result, message);
+  const rejected: Partial<ToolRunResult> = {
+    ...result,
+    status: "failed",
+    completedAt,
+    exitCode: 1,
+    summary: `Agent Inbox response rejected: ${message}`,
+    artifactAdoption
+  };
+  await reconcileImportedArtifactReview(projectPath, runId, rejected, artifactAdoption);
+  await writeJsonAtomic(join(getRunDir(projectPath, runId), "result.json"), rejected);
+  return rejected;
+}
+
+function createTimedOutRunResult(runId: string, result: Partial<ToolRunResult>): Partial<ToolRunResult> {
+  const message = `Agent Inbox run ${runId} exceeded its ${result.timeoutMs} ms timeout.`;
+  return {
+    ...result,
+    status: "failed",
+    completedAt: new Date().toISOString(),
+    exitCode: 1,
+    summary: message,
+    failure: {
+      code: "timeout",
+      message,
+      transient: false,
+      source: "error",
+      suggestedActions: ["Increase the timeout in Settings or review the Agent output before retrying."]
+    },
+    terminationReason: "timed-out"
+  };
+}
+
+function pendingRunDeadline(result: Partial<ToolRunResult>): number | undefined {
+  if (!Number.isFinite(result.timeoutMs) || !result.startedAt) return undefined;
+  const startedAt = Date.parse(result.startedAt);
+  if (Number.isNaN(startedAt)) return undefined;
+  return startedAt + Number(result.timeoutMs);
+}
+
+function toRunSummary(runId: string, result: Partial<ToolRunResult>): ToolRunSummary {
+  return {
+    id: result.id ?? runId,
+    toolId: isRuntimeAgentId(result.toolId) ? result.toolId : "mock",
+    status: isToolRunStatus(result.status) ? result.status : "failed",
+    executionMode: isExecutionMode(result.executionMode) ? result.executionMode : "plan",
+    purpose: isPurpose(result.purpose) ? result.purpose : "implementation-plan",
+    startedAt: result.startedAt ?? "",
+    completedAt: result.completedAt ?? result.startedAt ?? "",
+    summary: result.summary,
+    promptPath: result.promptPath,
+    planPath: result.planPath,
+    logPath: result.logPath,
+    resultPath: result.resultPath,
+    checkpointId: result.checkpointId,
+    artifactTarget: result.artifactTarget,
+    scanFingerprint: result.scanFingerprint,
+    inputFingerprint: result.inputFingerprint,
+    reviewId: result.reviewId,
+    artifactAdoption: result.artifactAdoption,
+    agentReadiness: result.agentReadiness,
+    failure: result.failure
+  };
+}
+
+async function withRunLock<T>(projectPath: string, runId: string, action: () => Promise<T>): Promise<T> {
+  const key = `${resolve(projectPath)}\0${runId}`;
+  const previous = runLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolveLock) => { release = resolveLock; });
+  runLocks.set(key, current);
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+    if (runLocks.get(key) === current) runLocks.delete(key);
+  }
 }
 
 function rejectedAdoptionForFailedImport(

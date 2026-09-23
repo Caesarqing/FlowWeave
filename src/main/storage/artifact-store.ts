@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
+import { writeProjectTextAtomic } from "./project-write-guard";
 
 export async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
   await writeTextAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export async function writeTextAtomic(path: string, content: string): Promise<void> {
+  const projectRoot = projectRootForFlowWeavePath(path);
+  if (projectRoot) {
+    await writeProjectTextAtomic(projectRoot, path, content);
+    return;
+  }
   await mkdir(dirname(path), { recursive: true });
   const temporaryPath = `${path}.${randomUUID()}.tmp`;
   try {
@@ -16,6 +22,13 @@ export async function writeTextAtomic(path: string, content: string): Promise<vo
     await rm(temporaryPath, { force: true });
     throw error;
   }
+}
+
+function projectRootForFlowWeavePath(path: string): string | undefined {
+  const segments = resolve(path).split(sep);
+  const index = segments.lastIndexOf(".flowweave");
+  if (index < 1) return undefined;
+  return segments.slice(0, index).join(sep) || join(sep);
 }
 
 export async function readJsonArtifact(path: string): Promise<unknown | undefined> {

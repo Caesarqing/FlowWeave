@@ -329,6 +329,7 @@ export type ProjectScanSummary = {
 
 export type ProjectScanOptions = {
   concurrency: number;
+  agentPlanTimeoutMs?: number;
 };
 
 export type CodeflowProject = {
@@ -807,6 +808,7 @@ export type FlowWeaveErrorData = {
 };
 
 export type AnalysisGenerationOptions = {
+  timeoutMs?: number;
   onProgress?: (progress: AnalysisProgressUpdate) => void;
   projectId?: string;
   onArchitectureReview?: (event: ArchitectureReviewEvent) => void;
@@ -1122,6 +1124,7 @@ export type ToolRunRequest = {
   projectId: string;
   projectPath: string;
   prompt: string;
+  timeoutMs?: number;
   guidancePath?: string;
   executionMode: ExecutionMode;
   purpose: ToolRunPurpose;
@@ -1138,9 +1141,10 @@ export type ToolRunRequest = {
 export type AgentRunPolicy = {
   retryCount: number;
   retryDelayMs: number;
+  timeoutMs: number;
 };
 
-export type ToolRunTerminationReason = "completed" | "failed";
+export type ToolRunTerminationReason = "completed" | "failed" | "timed-out";
 export type ToolRunFailureCode =
   | "authentication"
   | "connection"
@@ -1148,6 +1152,7 @@ export type ToolRunFailureCode =
   | "rate-limit"
   | "provider"
   | "invalid-output"
+  | "timeout"
   | "process";
 export type ToolRunOutputSource = "stdout" | "stderr" | "error" | "last-message";
 export type ToolRunFailure = {
@@ -1190,6 +1195,7 @@ export type ToolRunResult = {
   checkpointId?: string;
   attempts?: number;
   durationMs?: number;
+  timeoutMs?: number;
   outputTruncated?: boolean;
   terminationReason?: ToolRunTerminationReason;
 };
@@ -1256,10 +1262,21 @@ export type GitDiffResult = {
   isRepo: boolean;
   patch: string;
   changedFiles: ChangedFile[];
+  unpreviewableFiles: Array<{ path: string; reason: string }>;
   safety: {
     level: SafetyLevel;
     warnings: SafetyWarning[];
   };
+};
+
+export type GitRollbackPreview = {
+  previewId: string;
+  checkpointId: string;
+  trackedFilesToRestore: string[];
+  untrackedFilesToDelete: string[];
+  checkpointUntrackedFilesToRestore: string[];
+  preservedPaths: string[];
+  expiresAt: string;
 };
 
 export type ApiMap = {
@@ -1329,6 +1346,7 @@ export type FlowWeaveApi = {
     reviewId?: string;
     model?: string;
     confirmedExecute?: boolean;
+    timeoutMs?: number;
   }): Promise<ToolRunResult>;
   listToolRuns(projectId: string): Promise<ToolRunSummary[]>;
   readToolRun(projectId: string, runId: string): Promise<ToolRunArtifact>;
@@ -1342,11 +1360,12 @@ export type FlowWeaveApi = {
   gitStatus(projectId: string): Promise<GitStatus>;
   gitDiff(projectId: string, checkpointId?: string): Promise<GitDiffResult>;
   gitCheckpoint(projectId: string): Promise<string>;
-  gitRollback(projectId: string, checkpointId: string): Promise<void>;
-  analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId): Promise<ArchitectureAnalysisResult>;
+  gitRollbackPreview(projectId: string, checkpointId: string): Promise<GitRollbackPreview>;
+  gitRollback(projectId: string, checkpointId: string, previewId: string): Promise<void>;
+  analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId, timeoutMs?: number): Promise<ArchitectureAnalysisResult>;
   readArchitectureMap(projectId: string): Promise<ArchitectureMap | undefined>;
-  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId): Promise<SequenceDiagramGenerationResult>;
-  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string): Promise<SequenceDiagramBundle>;
+  generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId, timeoutMs?: number): Promise<SequenceDiagramGenerationResult>;
+  reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string, timeoutMs?: number): Promise<SequenceDiagramBundle>;
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectId: string, filePath: string): Promise<string | undefined>;
   saveFlowWeaveDoc(projectId: string, docId: string, content: string): Promise<string>;

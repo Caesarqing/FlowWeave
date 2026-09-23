@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import type { CodeflowCanvas, GraphEdge, GraphNode } from "../../types";
 import { createCanvasArtifact, createTaskArtifact, createTaskMarkdown } from "../services/task-generator.service";
 import { reconcileGeneratedCanvas } from "../services/canvas-migration.service";
+import { assertSafeProjectWritePath } from "./project-write-guard";
 import { FLOWWEAVE_DIR } from "./flowweave-paths";
 import type { CodeflowProject, CodeflowWriteResult, ProjectFileNode } from "./schemas";
 
@@ -28,6 +29,7 @@ async function writeProjectArtifacts(
   const canvasDir = join(flowweaveRoot, "canvas");
   const tasksDir = join(flowweaveRoot, "tasks");
   const contextDir = join(flowweaveRoot, "context");
+  await assertSafeProjectWritePath(rootPath, flowweaveRoot);
   await Promise.all([
     mkdir(canvasDir, { recursive: true }),
     mkdir(tasksDir, { recursive: true }),
@@ -60,7 +62,7 @@ async function writeProjectArtifacts(
     validate: validateCanvasV5Text
   });
 
-  await writeBatchAtomic(updates);
+  await writeBatchAtomic(rootPath, updates);
   await removeHistoricalTasks(tasksDir);
 
   return {
@@ -86,7 +88,11 @@ async function readExistingCanvas(path: string): Promise<CodeflowCanvas | undefi
   }
 }
 
-async function writeBatchAtomic(updates: Array<{ path: string; content: string; validate?: (content: string) => void }>) {
+async function writeBatchAtomic(
+  projectRoot: string,
+  updates: Array<{ path: string; content: string; validate?: (content: string) => void }>
+) {
+  await Promise.all(updates.map((update) => assertSafeProjectWritePath(projectRoot, update.path)));
   const temporary = updates.map((update) => ({
     ...update,
     temporaryPath: join(dirname(update.path), `.${basename(update.path)}.${randomUUID()}.tmp`),
@@ -101,6 +107,7 @@ async function writeBatchAtomic(updates: Array<{ path: string; content: string; 
       update.validate?.(persisted);
     }));
     for (const update of temporary) {
+      await assertSafeProjectWritePath(projectRoot, update.path);
       if (await pathExists(update.path)) {
         await rename(update.path, update.backupPath);
         update.backedUp = true;

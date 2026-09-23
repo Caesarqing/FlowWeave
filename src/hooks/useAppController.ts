@@ -12,6 +12,7 @@ import { useAgentStore } from "../stores/agents.store";
 import { useNavigationStore } from "../stores/navigation.store";
 import { useProjectStore } from "../stores/project.store";
 import { useRunsStore } from "../stores/runs.store";
+import { usePreferencesStore } from "../stores/preferences.store";
 import { useFlowWeaveState } from "./useFlowWeaveState";
 import { useModuleActions } from "./useModuleActions";
 import { useProjectActions } from "./useProjectActions";
@@ -52,6 +53,8 @@ export function useAppController({
   const agents = useAgentStore((state) => state.agents);
   const selectedAgentId = useAgentStore((state) => state.selectedAgentId);
   const executionMode = useAgentStore((state) => state.executionMode);
+  const agentPlanTimeoutMinutes = usePreferencesStore((state) => state.agentPlanTimeoutMinutes);
+  const agentExecuteTimeoutMinutes = usePreferencesStore((state) => state.agentExecuteTimeoutMinutes);
   const toolStatuses = useAgentStore((state) => state.toolStatuses);
   const pluginStatuses = useAgentStore((state) => state.pluginStatuses);
   const lastRunStatus = useAgentStore((state) => state.lastRunStatus);
@@ -372,6 +375,7 @@ export function useAppController({
         executionMode,
         confirmedExecute: executionMode === "execute",
         purpose: "implementation-plan",
+        timeoutMs: (executionMode === "execute" ? agentExecuteTimeoutMinutes : agentPlanTimeoutMinutes) * 60 * 1000,
         prompt
       });
 

@@ -3,11 +3,13 @@ import { extractProviderOutputText } from "./structured-output.service";
 
 const DEFAULT_PLAN_POLICY: AgentRunPolicy = {
   retryCount: 2,
-  retryDelayMs: 1_000
+  retryDelayMs: 1_000,
+  timeoutMs: 20 * 60 * 1000
 };
 const DEFAULT_EXECUTE_POLICY: AgentRunPolicy = {
   retryCount: 0,
-  retryDelayMs: 0
+  retryDelayMs: 0,
+  timeoutMs: 60 * 60 * 1000
 };
 
 export async function executeAgentWithPolicy(
@@ -25,12 +27,16 @@ async function executeAttempts(
   policy: AgentRunPolicy
 ): Promise<ToolRunResult> {
   let lastResult: ToolRunResult | undefined;
+  const startedAt = new Date().toISOString();
+  const deadline = Date.now() + policy.timeoutMs;
   const retryEvents: ToolRunResult["events"] = [];
   for (let attempt = 1; attempt <= policy.retryCount + 1; attempt += 1) {
-    const adapterResult = await adapter.runPlan(request);
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return timeoutResult(adapter.id, request, startedAt, policy.timeoutMs, attempt - 1, retryEvents);
+    const adapterResult = await adapter.runPlan({ ...request, timeoutMs: remainingMs });
     const result = normalizeAgentResult(adapterResult);
-    lastResult = { ...result, attempts: attempt, events: [...retryEvents, ...result.events] };
-    if (result.status === "completed" || !isTransientFailure(result) || attempt > policy.retryCount) {
+    lastResult = { ...result, timeoutMs: policy.timeoutMs, attempts: attempt, events: [...retryEvents, ...result.events] };
+    if (result.terminationReason === "timed-out" || result.status === "completed" || !isTransientFailure(result) || attempt > policy.retryCount) {
       return lastResult;
     }
     retryEvents.push({
@@ -39,7 +45,13 @@ async function executeAttempts(
       timestamp: new Date().toISOString(),
       message: `Retrying transient Agent failure after attempt ${attempt}.`
     });
-    await delay(retryDelay(policy.retryDelayMs, attempt));
+    const nextDelayMs = retryDelay(policy.retryDelayMs, attempt);
+    const timeRemaining = deadline - Date.now();
+    if (nextDelayMs >= timeRemaining) {
+      await delay(Math.max(0, timeRemaining));
+      return timeoutResult(adapter.id, request, startedAt, policy.timeoutMs, attempt, retryEvents);
+    }
+    await delay(nextDelayMs);
   }
   if (!lastResult) throw new Error(`Agent execution did not produce a result: ${adapter.id}`);
   return lastResult;
@@ -51,7 +63,49 @@ function resolvePolicy(request: ToolRunRequest, policy: Partial<AgentRunPolicy> 
   if (!Number.isInteger(resolved.retryCount) || resolved.retryCount < 0 || resolved.retryCount > 3) {
     throw new Error(`Agent retry count must be between 0 and 3: ${resolved.retryCount}`);
   }
+  if (!Number.isInteger(resolved.timeoutMs) || resolved.timeoutMs < 1 || resolved.timeoutMs > 120 * 60 * 1000) {
+    throw new Error(`Agent timeout must be between 1 and 120 minutes: ${resolved.timeoutMs} ms`);
+  }
   return resolved;
+}
+
+function timeoutResult(
+  toolId: ToolAdapter["id"],
+  request: ToolRunRequest,
+  startedAt: string,
+  timeoutMs: number,
+  attempts: number,
+  retryEvents: ToolRunResult["events"]
+): ToolRunResult {
+  const completedAt = new Date().toISOString();
+  const message = "Agent run exceeded its total timeout, including retry delays.";
+  return {
+    id: request.id,
+    toolId,
+    status: "failed",
+    projectPath: request.projectPath,
+    startedAt,
+    completedAt,
+    executionMode: request.executionMode,
+    purpose: request.purpose,
+    attempts,
+    durationMs: Date.now() - Date.parse(startedAt),
+    timeoutMs,
+    terminationReason: "timed-out",
+    summary: message,
+    failure: {
+      code: "timeout",
+      message,
+      transient: false,
+      source: "error",
+      suggestedActions: ["Increase the timeout in Settings or review the Agent output before retrying."]
+    },
+    events: [
+      ...retryEvents,
+      { type: "error", message, timestamp: completedAt },
+      { type: "status", status: "failed", timestamp: completedAt }
+    ]
+  };
 }
 
 function isTransientFailure(result: ToolRunResult): boolean {
@@ -75,8 +129,17 @@ export function normalizeAgentResult(result: ToolRunResult): ToolRunResult {
   const outputText = result.outputText?.trim()
     ? result.outputText
     : preferred ? extractProviderOutputText(preferred.text) : "";
-  const failure = result.status === "failed"
-    ? classifyFailure(result, outputs)
+  const failure = result.terminationReason === "timed-out"
+    ? result.failure ?? {
+        code: "timeout" as const,
+        message: result.summary ?? "Agent process timed out.",
+        transient: false,
+        source: "error" as const,
+        exitCode: result.exitCode,
+        suggestedActions: ["Increase the timeout in Settings or review the Agent output before retrying."]
+      }
+    : result.status === "failed"
+      ? classifyFailure(result, outputs)
     : undefined;
   return {
     ...result,
