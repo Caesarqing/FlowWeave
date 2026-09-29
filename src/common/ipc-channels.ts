@@ -2,6 +2,7 @@ export const PROJECT_CHANNELS = {
   openProject: "project:open",
   listRegisteredProjects: "project:list-registered",
   restoreRegisteredProject: "project:restore-registered",
+  readRegisteredProject: "project:read-registered",
   readWorkspaceSession: "project:read-workspace-session",
   saveWorkspaceSession: "project:save-workspace-session",
   scanProject: "project:scan",

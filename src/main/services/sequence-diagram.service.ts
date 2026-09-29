@@ -18,10 +18,12 @@ import type {
   ToolRunResult
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { readArchitectureMap } from "./architecture-analysis.service";
+import { readArchitectureMap, loadAnalysisGeneration } from "./architecture-analysis.service";
+import { assertArtifactGeneration, readCommittedGeneration } from "./project-generation.service";
+import { withArchitectureArtifactLock } from "./architecture-review.service";
 import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
-import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
+import { semanticIndexToStructureFacts } from "./semantic-index.service";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { writeModificationDocs } from "./modification-doc.service";
@@ -31,7 +33,6 @@ import {
   type SequenceReviewRunResult
 } from "./sequence-review.service";
 import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
-import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
 export const SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS = 12_000;
@@ -118,12 +119,20 @@ async function generateSequenceDiagramsOnce(
   agentId: RuntimeAgentId,
   options: AnalysisGenerationOptions | undefined
 ): Promise<SequenceDiagramGenerationResult> {
-  const { index } = await buildSemanticIndex(project, { onProgress: options?.onProgress });
-  const facts = semanticIndexToStructureFacts(project, index);
-  const storedArchitecture = await readArchitectureMap(project.rootPath);
-  const architectureMap = storedArchitecture;
-  const inputFingerprint = await readCurrentProjectScanFingerprint(project.rootPath);
-  const localBundleBase = createLocalSequenceBundle(project, facts, architectureMap, "local");
+  const committed = await loadAnalysisGeneration(project, options?.onProgress);
+  const { index } = committed;
+  const facts = semanticIndexToStructureFacts(committed.project, index);
+  const architectureMap = await withArchitectureArtifactLock(project.rootPath, async () => {
+    const generation = await readCommittedGeneration(project.rootPath);
+    if (generation?.requestId !== committed.generation.requestId || generation.inputFingerprint !== committed.generation.inputFingerprint) {
+      throw new Error(`Sequence analysis generation changed: project ${project.rootPath}, expected ${committed.generation.requestId}, actual ${generation?.requestId ?? "missing"}`);
+    }
+    const current = await readArchitectureMap(project.rootPath);
+    if (current) await assertArtifactGeneration(project.rootPath, "architecture-map.json", current);
+    return current;
+  });
+  const inputFingerprint = committed.project.scanFingerprint!;
+  const localBundleBase = { ...createLocalSequenceBundle(committed.project, facts, architectureMap, "local"), generation: committed.generation };
   const localQuality = validateSequenceBundle(localBundleBase, facts);
   const localBundle = withLocalSequenceMetadata(localBundleBase, inputFingerprint, localQuality);
   options?.onProgress?.({
@@ -135,15 +144,16 @@ async function generateSequenceDiagramsOnce(
   });
 
   if (agentId === "mock") {
-    const inferred = createLocalSequenceBundle(project, facts, architectureMap, "agent");
-    const parsed = parseSequenceDiagramBundleJson(mockSequenceBundleJson(inferred), project, facts, architectureMap);
+    const inferred = { ...createLocalSequenceBundle(committed.project, facts, architectureMap, "agent"), generation: committed.generation };
+    const parsed = parseSequenceDiagramBundleJson(mockSequenceBundleJson(inferred), committed.project, facts, architectureMap);
     if (!parsed) return failedSequenceResult(agentId, "invalid-output", "Mock agent returned invalid sequence diagram JSON.", []);
     const quality = validateSequenceBundle(parsed, facts);
     if (!quality.valid) return failedSequenceResult(agentId, "quality-rejected", quality.reasons.join("; "), []);
-    const bundle = withSequenceMetadata(parsed, agentId, "mock", inputFingerprint, quality);
+    const bundle = withSequenceMetadata({ ...parsed, generation: committed.generation }, agentId, "mock", inputFingerprint, quality);
     await writeSequenceDiagramBundle(project.rootPath, bundle, undefined);
     const review = {
       state: "reviewed",
+      generation: committed.generation,
       reviewId: `sequence-review-${randomUUID()}`,
       scanFingerprint: inputFingerprint,
       agentId,
@@ -162,6 +172,7 @@ async function generateSequenceDiagramsOnce(
     projectPath: project.rootPath,
     reviewId,
     scanFingerprint: inputFingerprint,
+    generation: committed.generation,
     agentId,
     localBundle: publishedBundle,
     startedAt: publishedBundle.generatedAt,
@@ -169,12 +180,13 @@ async function generateSequenceDiagramsOnce(
     run: (onRunId) => {
       const prompt = buildSequenceDiagramPrompt(project.projectName, localBundleBase.architectural);
       return runSequenceReview(
-        project,
+        committed.project,
         agentId,
         prompt.text,
         facts,
         architectureMap,
         inputFingerprint,
+        committed.generation,
         reviewId,
         onRunId,
         options?.timeoutMs
@@ -587,6 +599,7 @@ function normalizeMessages(messages: SequenceDiagram["messages"] | undefined, pa
 function normalizeEvidence(evidence: ArchitectureEvidence[] | undefined) {
   return (evidence ?? [])
     .map((item) => ({
+      relationId: stringOrUndefined(item.relationId), range: item.range, declarationRange: item.declarationRange, bindingBasis: item.bindingBasis,
       filePath: stringOrUndefined(item.filePath),
       symbol: stringOrUndefined(item.symbol),
       line: Number.isInteger(item.line) ? item.line : undefined,
@@ -626,6 +639,8 @@ function createLocalArchitecturalDiagram(facts: ProjectStructureFacts, architect
         symbol: module.symbols[0]?.name
       }))
     : fallbackFileParticipants(facts.files.slice(0, 6));
+  const relatedResources = (architectureMap?.resources ?? []).filter((resource) => architectureMap?.relationships.some((relationship) => (relationship.source === resource.id && participants.some((participant) => participant.id === relationship.target)) || (relationship.target === resource.id && participants.some((participant) => participant.id === relationship.source)))).slice(0, 16 - participants.length);
+  participants.push(...relatedResources.map((resource): SequenceParticipant => ({ id: resource.id, title: resource.title, kind: resource.kind === "database" ? "database" : "external", description: resource.detail, filePath: resource.evidence[0]?.filePath })));
   const participantIds = new Set(participants.map((participant) => participant.id));
   const relationships = architectureMap?.relationships ?? [];
   const relationshipMessages = relationships
@@ -661,7 +676,7 @@ function createLocalArchitecturalDiagram(facts: ProjectStructureFacts, architect
     id: "architectural-sequence",
     title: "Architectural Sequence Diagram",
     kind: "architectural",
-    summary: "Macro collaboration inferred from architecture modules and relationships.",
+    summary: "Static architecture references, ordered for presentation. Runtime execution order is not observed.",
     participants,
     messages: messages.length > 0 ? messages : fallbackMessages(participants),
     evidence: architectureMap?.relationships.slice(0, 6).flatMap((relationship) => relationship.evidence) ?? []
@@ -715,6 +730,7 @@ async function runSequenceReview(
   facts: ProjectStructureFacts,
   architectureMap: ArchitectureMap | undefined,
   inputFingerprint: string,
+  generation: import("../../types").GenerationIdentity,
   reviewId: string,
   onRunId: (runId: string) => Promise<void>,
   timeoutMs: number | undefined
@@ -747,7 +763,7 @@ async function runSequenceReview(
   const parsed = parseSequenceDiagramBundleJson(output, project, facts, architectureMap);
   const quality = parsed ? validateSequenceBundle(parsed, facts) : undefined;
   if (parsed && quality?.valid) {
-    const bundle = withSequenceMetadata(parsed, agentId, firstRun.id, inputFingerprint, quality);
+    const bundle = withSequenceMetadata({ ...parsed, generation }, agentId, firstRun.id, inputFingerprint, quality);
     const { updateRunArtifactAdoption } = await import("./run-log.service");
     await updateRunArtifactAdoption(project.rootPath, firstRun.id, {
       status: "applied",
@@ -899,9 +915,21 @@ export async function writeSequenceDiagramBundle(
   if (bundle.version !== 2) {
     throw new Error("FlowWeave sequence diagram writes require a v2 bundle.");
   }
-  await readSequenceDiagrams(projectPath);
   const root = join(projectPath, FLOWWEAVE_DIR);
-  await writeJsonAtomic(join(root, SEQUENCE_DIAGRAM_FILE), bundle);
+  await withArchitectureArtifactLock(projectPath, async () => {
+    const canvasPath = join(root, "canvas", "main.canvas.json");
+    const canvas = await readJsonArtifact(canvasPath) as { version?: number } | undefined;
+    if (canvas?.version === 5) throw new Error(`Legacy Canvas v5 is read-only; re-scan successfully before writing sequence diagrams: ${canvasPath}`);
+    const generation = await readCommittedGeneration(projectPath);
+    if (generation) {
+      if (bundle.generation?.requestId !== generation.requestId || bundle.generation.inputFingerprint !== generation.inputFingerprint) {
+        throw new Error(`Sequence diagram generation mismatch: project ${projectPath}, expected ${generation.requestId}, actual ${bundle.generation?.requestId ?? "missing"}`);
+      }
+      await assertArtifactGeneration(projectPath, SEQUENCE_DIAGRAM_FILE, bundle);
+    }
+    await readSequenceDiagrams(projectPath);
+    await writeJsonAtomic(join(root, SEQUENCE_DIAGRAM_FILE), bundle);
+  });
   await writeModificationDocs(projectPath, { sequence: bundle, sequenceInstruction });
 }
 

@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, FileCode2, Folder, GitPullRequestArrow, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { AssessmentLevel, GraphEdge, GraphNode, GraphNodeType } from "../types";
+import { nodeConnectionExplanation } from "../utils/graph-view-projection";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
@@ -53,7 +54,8 @@ export function ModulePanel({
   onModuleChange,
   onSaveGuidance,
   onSendGuidance,
-  sendGuidanceDisabled
+  sendGuidanceDisabled,
+  readOnly
 }: {
   edges: GraphEdge[];
   modules: GraphNode[];
@@ -65,6 +67,7 @@ export function ModulePanel({
   onSaveGuidance: () => void;
   onSendGuidance: () => void;
   sendGuidanceDisabled: boolean;
+  readOnly: boolean;
 }) {
   const { t } = useI18n();
   const [openSections, setOpenSections] = useState({
@@ -72,7 +75,8 @@ export function ModulePanel({
     symbols: false,
     evidence: false,
     assessment: true,
-    relations: true
+    relations: true,
+    diagnostics: true
   });
   const relatedEdges = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
   const displaySummary = buildModuleDisplaySummary(node, edges);
@@ -153,7 +157,7 @@ export function ModulePanel({
 
       <section className="module-card module-edit-card">
         <h3>{t("module.change")}</h3>
-        <div className="module-edit-form">
+        <fieldset className="module-edit-form" disabled={readOnly}>
           <label>
             {t("module.title")}
             <input value={node.title} onChange={(event) => onModuleChange(node.id, { title: event.target.value })} />
@@ -199,8 +203,8 @@ export function ModulePanel({
             {t("module.fileList")}
             <textarea value={node.files.join("\n")} onChange={(event) => updateFiles(event.target.value)} />
           </label>
-        </div>
-        <button className="ghost-button danger-button sequence-wide-button" type="button" onClick={deleteNode}>
+        </fieldset>
+        <button className="ghost-button danger-button sequence-wide-button" disabled={readOnly} type="button" onClick={deleteNode}>
           <Trash2 size={15} />
           {t("module.delete")}
         </button>
@@ -264,10 +268,23 @@ export function ModulePanel({
               </div>
             ))
           ) : (
-            <p>{t("module.noConnections")}</p>
+            <p>{t(`canvas.nodeConnections.${nodeConnectionExplanation(node, edges) ?? "none"}`)}</p>
           )}
         </div>
       </CollapsibleCard>
+
+      {node.relationDiagnostics?.length ? (
+        <CollapsibleCard isOpen={openSections.diagnostics} title={t("canvas.relationshipDiagnostics")} onToggle={() => toggleSection("diagnostics")}>
+          <div className="detail-list">
+            {node.relationDiagnostics.map((diagnostic, index) => <div className="detail-row" key={`${diagnostic.relationId ?? diagnostic.code}:${index}`}>
+              <strong>{diagnostic.message}</strong>
+              <code>{diagnostic.filePath}{diagnostic.range ? `:${diagnostic.range.start.line}:${diagnostic.range.start.column}` : ""}</code>
+              {diagnostic.candidates?.length ? <small>{t("canvas.relationshipCandidates")}: {diagnostic.candidates.join(" · ")}</small> : null}
+              {diagnostic.relationId ? <small>{diagnostic.relationId}</small> : null}
+            </div>)}
+          </div>
+        </CollapsibleCard>
+      ) : null}
 
       <CollapsibleCard isOpen={openSections.evidence} title={t("module.evidence")} onToggle={() => toggleSection("evidence")}>
         {node.evidence && node.evidence.length > 0 ? (
@@ -285,7 +302,7 @@ export function ModulePanel({
       </CollapsibleCard>
 
       <AgentGuidanceComposer
-        disabled={false}
+        disabled={readOnly}
         isSaving={guidanceOperation === "save"}
         isSending={guidanceOperation === "send"}
         placeholder={t("module.guidancePlaceholder")}

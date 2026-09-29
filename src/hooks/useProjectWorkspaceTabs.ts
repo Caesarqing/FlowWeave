@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FlowWeaveProjectOpenResult, ProjectWorkspaceSession, RegisteredProject } from '../types';
+import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectWorkspaceSession, RegisteredProject } from '../types';
 import { closeProjectTab, addProjectTab } from '../utils/project-tabs';
 import {
   captureProjectWorkspaceState,
@@ -20,6 +20,8 @@ const EMPTY_SESSION: ProjectWorkspaceSession = {
   lastPageByProject: {},
   contextsByProject: {}
 };
+
+type CommittedProjectOpenResult = Extract<FlowWeaveProjectOpenResult, { graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>;
 
 export function useProjectWorkspaceTabs() {
   const [isReady, setIsReady] = useState(false);
@@ -172,7 +174,7 @@ export function useProjectWorkspaceTabs() {
     captureActiveWorkspace();
   }
 
-  function handleProjectOpened(result: Exclude<FlowWeaveProjectOpenResult, { canceled: true }>) {
+  function handleProjectOpened(result: CommittedProjectOpenResult) {
     const current = sessionRef.current;
     const projectId = result.projectId;
     const isAlreadyOpen = current.openProjectIds.includes(projectId);

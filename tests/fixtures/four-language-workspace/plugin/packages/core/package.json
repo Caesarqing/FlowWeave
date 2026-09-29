@@ -1,0 +1,1 @@
+{"name":"@fixture/core","type":"module","exports":{".":{"types":"./dist/index.d.ts","default":"./dist/index.js"},"./service":{"types":"./dist/service.d.ts","default":"./dist/service.js"}}}

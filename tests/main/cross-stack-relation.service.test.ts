@@ -3,7 +3,7 @@ import { buildCrossStackHttpRelations } from "../../src/main/services/cross-stac
 import type { SemanticHttpEndpoint } from "../../src/types";
 
 describe("cross-stack-relation.service", () => {
-  it("matches frontend requests to backend routes by method and normalized path", () => {
+  it("matches frontend requests to backend routes by proven service identity, method and normalized path", () => {
     const endpoints: SemanticHttpEndpoint[] = [
       endpoint("request", "src/api.ts", "GET", "/api/users/${id}"),
       endpoint("route", "server/users.ts", "GET", "/api/users/:id")
@@ -17,6 +17,14 @@ describe("cross-stack-relation.service", () => {
         confidence: "confirmed"
       })
     ]);
+  });
+
+  it("does not link equal paths across different or unproven services", () => {
+    const request = endpoint("request", "client.ts", "GET", "/users");
+    const route = endpoint("route", "server.ts", "GET", "/users");
+    expect(buildCrossStackHttpRelations([{ ...request, serviceId: "service:other" }, route])).toEqual([]);
+    expect(buildCrossStackHttpRelations([{ ...request, serviceId: undefined }, { ...route, serviceId: undefined }])).toEqual([]);
+    expect(buildCrossStackHttpRelations([request, route, { ...route, id: "duplicate", filePath: "duplicate.ts" }])).toEqual([]);
   });
 
   it("does not match routes with different methods", () => {
@@ -42,6 +50,7 @@ function endpoint(
     method,
     path,
     normalizedPath: "",
+    serviceId: "service:users",
     confidence: "confirmed"
   };
 }

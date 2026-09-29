@@ -38,6 +38,27 @@ export type GraphProjectionOptions = {
   includeInferredDependencyOverlay: boolean;
 };
 
+export function chooseInitialGraphView(_edges: GraphEdge[]): GraphViewMode {
+  return "architecture";
+}
+
+export function chooseInitialCollapsedGroups(nodes: GraphNode[]): string[] {
+  const sourcePaths = nodes.filter((node) => !node.resource && node.origin !== "manual").map((node) => node.groupPath ?? []).filter((path) => path.length > 0);
+  const topGroups = [...new Set(sourcePaths.map((path) => path[0].id))].sort();
+  if (topGroups.length > 1) return topGroups;
+  const paths = nodes.filter((node) => node.origin !== "manual").map((node) => node.groupPath ?? []);
+  return [...new Set(paths.flatMap((path) => path[1] ? [path[1].id] : []))].sort();
+}
+
+export function nodeConnectionExplanation(node: GraphNode, edges: GraphEdge[]): "dependency" | "internal" | "unresolved" | "external" | "none" | undefined {
+  const related = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
+  if (related.length > 0) return related.every((edge) => edge.relation === "depends_on") ? "dependency" : undefined;
+  if (node.relationSummary?.internalRelations) return "internal";
+  if (node.relationSummary?.unresolvedRelations) return "unresolved";
+  if (node.relationSummary?.externalRelations) return "external";
+  return "none";
+}
+
 const EXECUTION_RELATIONS = new Set<GraphEdge["relation"]>([
   "calls",
   "reads_writes",
@@ -56,7 +77,8 @@ export function projectGraphForView(
   const eventBoundaries = new Map<string, ProjectedGraphNode>();
   const projectedNodes: ProjectedGraphNode[] = [...nodes];
   const projectedEdges: ProjectedGraphEdge[] = [];
-  const executionEdges = edges.filter((edge) => EXECUTION_RELATIONS.has(edge.relation));
+  const executionEdges = edges.filter((edge) => EXECUTION_RELATIONS.has(edge.relation) &&
+    nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test");
   const inferredOverlayEdges = mode === "execution" && options.includeInferredDependencyOverlay
     ? edges.filter((edge) => edge.relation === "depends_on")
     : [];
@@ -72,7 +94,8 @@ export function projectGraphForView(
   }
 
   for (const edge of visibleEdges) {
-    if (edge.relation === "publishes_event" || edge.relation === "subscribes_event") {
+    if ((edge.relation === "publishes_event" || edge.relation === "subscribes_event") &&
+      nodeById.get(edge.source)?.resource?.kind !== "event" && nodeById.get(edge.target)?.resource?.kind !== "event") {
       const eventId = edge.evidence?.map((item) => item.eventId?.trim()).find(Boolean);
       const boundaryKey = eventId ? `event-boundary:${eventId}` : `unresolved-event:${edge.id}`;
       if (!eventId) unresolvedEventCount += 1;
@@ -92,9 +115,10 @@ export function projectGraphForView(
     projectedEdges.push(projectEdge(edge, edge.source, edge.target));
   }
 
-  const executableNodes = nodes.filter((node) => node.kind === "module" && node.nodeType !== "test");
+  const executableNodes = nodes.filter((node) => node.kind === "module" && !node.resource && node.nodeType !== "test");
   const connectedIds = new Set(projectedEdges
-    .filter((edge) => edge.participatesInLayering)
+    .filter((edge) => edge.participatesInLayering &&
+      nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test")
     .flatMap((edge) => [edge.source, edge.target])
     .filter((id) => nodeById.has(id)));
   const isolatedModuleIds = executableNodes
@@ -123,7 +147,7 @@ function projectEdge(edge: GraphEdge, source: string, target: string): Projected
     source,
     target,
     edgeClass,
-    confidence: edge.relation === "depends_on" || !edge.evidence?.length ? "inferred" : "confirmed",
+    confidence: edge.confidence ?? "inferred",
     participatesInLayering: edgeClass !== "dependency" && edgeClass !== "test",
     sourceEdgeIds: [edge.id],
     evidenceIds: (edge.evidence ?? []).map(evidenceId)

@@ -3,10 +3,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { graphEdges, graphNodes } from "./graph.fixture";
-import { writeFlowWeaveProject } from "../../src/main/storage/flowweave-store";
+import { writeBatchAtomic, writeFlowWeaveProject } from "../../src/main/storage/flowweave-store";
 import type { CodeflowProject } from "../../src/types";
 
 describe("flowweave-store", () => {
+  it("preserves the entire old batch when an artifact target is a directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-store-invalid-batch-"));
+    const artifact = join(root, "valid.json");
+    const directory = join(root, "invalid.json");
+    await writeFile(artifact, "old valid artifact", "utf8");
+    await mkdir(directory);
+    await writeFile(join(directory, "user-data.txt"), "retained user data", "utf8");
+
+    await expect(writeBatchAtomic(root, [
+      { path: artifact, content: "new artifact" },
+      { path: directory, content: "invalid replacement" }
+    ])).rejects.toThrow("not a regular file");
+    expect(await readFile(artifact, "utf8")).toBe("old valid artifact");
+    expect(await readFile(join(directory, "user-data.txt"), "utf8")).toBe("retained user data");
+    expect((await readdir(root)).sort()).toEqual(["invalid.json", "valid.json"]);
+  });
+
   it("writes fixed current task artifacts and removes stale task snapshots", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-store-"));
     const tasksPath = join(root, ".flowweave", "tasks");
@@ -21,7 +38,7 @@ describe("flowweave-store", () => {
     expect(JSON.parse(await readFile(join(root, ".flowweave", "project.json"), "utf8")).scanFingerprint).toBe("scan-1");
   });
 
-  it("discards every legacy Canvas field when scanning the project rebuilds v5", async () => {
+  it("discards unsupported older Canvas fields when scanning rebuilds v6", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-store-corrupt-canvas-"));
     const canvasPath = join(root, ".flowweave", "canvas", "main.canvas.json");
     await mkdir(join(root, ".flowweave", "canvas"), { recursive: true });
@@ -36,7 +53,7 @@ describe("flowweave-store", () => {
     await writeFlowWeaveProject(root, projectFixture(root), graphNodes, graphEdges, "scan-2");
 
     const canvas = JSON.parse(await readFile(canvasPath, "utf8"));
-    expect(canvas.version).toBe(5);
+    expect(canvas.version).toBe(6);
     expect(canvas.nodes).toEqual(graphNodes.map((node) => expect.objectContaining({ id: node.id, origin: "generated" })));
     expect(canvas.nodes.map((node: { id: string }) => node.id)).not.toContain("legacy-note");
     expect(canvas.edges.map((edge: { id: string }) => edge.id)).not.toContain("legacy-edge");

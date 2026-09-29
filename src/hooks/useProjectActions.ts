@@ -4,6 +4,7 @@ import type {
   ArchitectureReviewEvent,
   ArchitectureReviewStatus,
   FlowWeaveProjectOpenResult,
+  FlowWeaveStoredProject,
   GraphEdge,
   GraphNode,
   LocalGenerationStatus,
@@ -13,6 +14,7 @@ import type {
 } from "../types";
 import { useI18n } from "../utils/i18n";
 import { usePreferencesStore } from "../stores/preferences.store";
+import { useProjectStore } from "../stores/project.store";
 import { createAsyncRequestGuard } from "../utils/async-request-guard";
 
 export function useProjectActions({
@@ -30,11 +32,14 @@ export function useProjectActions({
   setProjectId,
   setProjectPath,
   setScanFingerprint,
+  setRelationDiagnostics,
   setArtifactStatuses,
   setArchitectureReview,
   setLocalGenerationStatus,
   setSequenceReview,
   setProjectStatus,
+  legacyCanvasReadOnly,
+  setLegacyCanvasReadOnly,
   onProjectOpenStarted,
   onProjectOpened
 }: {
@@ -49,15 +54,18 @@ export function useProjectActions({
     edges: GraphEdge[],
     files: ProjectFileNode[],
     layout?: import("../types").CanvasLayoutState,
-    orphanedEdges?: GraphEdge[]
+    orphanedEdges?: GraphEdge[],
+    metadata?: Pick<import("../types").CodeflowCanvas, "generation" | "groups" | "quality" | "orphanedNodeEdits">
   ) => void;
   adoptReviewedProjectGraph: (nodes: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[]) => boolean;
   setIsProjectLoading: (value: boolean) => void;
+  setLegacyCanvasReadOnly: (value: boolean) => void;
   setLastRunStatus: (value: string) => void;
   setProjectLabel: (value: string) => void;
   setProjectId: (value: string) => void;
   setProjectPath: (value: string) => void;
   setScanFingerprint: (value: string) => void;
+  setRelationDiagnostics: (value: import("../types").ArchitectureRelationDiagnostic[]) => void;
   setArtifactStatuses: (
     value: ProjectArtifactStatuses | ((current?: ProjectArtifactStatuses) => ProjectArtifactStatuses | undefined)
   ) => void;
@@ -71,7 +79,8 @@ export function useProjectActions({
   ) => void;
   setProjectStatus: (value: string) => void;
   onProjectOpenStarted?: () => void;
-  onProjectOpened?: (result: Exclude<FlowWeaveProjectOpenResult, { canceled: true }>) => void;
+  onProjectOpened?: (result: Extract<FlowWeaveProjectOpenResult, { graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>) => void;
+  legacyCanvasReadOnly: boolean;
 }) {
   const { t } = useI18n();
   const scanConcurrency = usePreferencesStore((state) => state.scanConcurrency);
@@ -111,6 +120,7 @@ export function useProjectActions({
   useEffect(() => {
     if (!window.flowweave) return undefined;
     return window.flowweave.onArchitectureReview((event) => {
+      if (legacyCanvasReadOnly) return;
       if (!shouldApplyArchitectureReviewEvent(event, projectId, scanFingerprint, architectureReviewRef.current)) return;
       if (isReviewedGraphAdoptionEvent(event)) {
         const adopted = adoptReviewedProjectGraph(event.graph.nodes, event.graph.edges, projectFiles);
@@ -122,6 +132,7 @@ export function useProjectActions({
     });
   }, [
     projectId,
+    legacyCanvasReadOnly,
     projectFiles,
     adoptReviewedProjectGraph,
     scanFingerprint,
@@ -138,15 +149,18 @@ export function useProjectActions({
       setLastRunStatus(t("status.cancelRead"));
       return;
     }
+    if (result.status === "superseded") return;
 
     const persistedCanvas = await window.flowweave?.readCanvas(result.projectId);
     if (!requestGuard.isCurrent(requestId)) return;
-    const inferredModules = persistedCanvas?.nodes ?? result.graph.nodes;
-    const inferredEdges = persistedCanvas?.edges ?? result.graph.edges;
+    const canvas = persistedCanvas?.canvas;
+    const inferredModules = canvas?.nodes ?? result.graph.nodes;
+    const inferredEdges = canvas?.edges ?? result.graph.edges;
     setProjectLabel(result.project.projectName);
     setProjectId(result.projectId);
     setProjectPath(result.project.rootPath);
     setScanFingerprint(result.scanFingerprint);
+    setRelationDiagnostics(result.relationDiagnostics);
     setArtifactStatuses(result.artifacts);
     architectureReviewRef.current = result.architectureReview;
     setArchitectureReview(result.architectureReview);
@@ -156,7 +170,8 @@ export function useProjectActions({
         : "local-ready"
     );
     setSequenceReview(result.sequenceReview);
-    loadInitialStaticGraph(inferredModules, inferredEdges, result.project.files, persistedCanvas?.layout, persistedCanvas?.orphanedEdges);
+    setLegacyCanvasReadOnly(persistedCanvas?.mode === "legacy-readonly");
+    loadInitialStaticGraph(inferredModules, inferredEdges, result.project.files, canvas?.layout, canvas?.orphanedEdges, canvas);
 
     const truncateNote = result.project.summary.truncated
       ? t("status.projectTruncated", { count: result.project.summary.displayedEntries ?? maxRenderedTreeRows })
@@ -165,6 +180,38 @@ export function useProjectActions({
     setProjectStatus(message);
     setLastRunStatus(message);
     onProjectOpened?.(result);
+  }
+
+  function applyStoredProject(stored: FlowWeaveStoredProject) {
+    const canvas = stored.canvas.canvas;
+    const readOnly = stored.canvas.mode === "legacy-readonly";
+    const modules = canvas.nodes;
+    setProjectLabel(stored.project.projectName);
+    setProjectId(stored.projectId);
+    setProjectPath(stored.project.rootPath);
+    setScanFingerprint(stored.scanFingerprint);
+    setRelationDiagnostics(stored.relationDiagnostics);
+    setArtifactStatuses(stored.artifacts);
+    architectureReviewRef.current = stored.architectureReview;
+    setArchitectureReview(stored.architectureReview);
+    setLocalGenerationStatus(
+      stored.architectureReview.state === "missing" || stored.architectureReview.state === "stale"
+        ? "idle"
+        : "local-ready"
+    );
+    setSequenceReview(stored.sequenceReview);
+    setLegacyCanvasReadOnly(readOnly);
+    loadInitialStaticGraph(
+      modules,
+      canvas.edges,
+      stored.project.files,
+      canvas.layout,
+      canvas.orphanedEdges,
+      canvas
+    );
+    const message = readOnly ? t("status.legacyCanvasReadOnly") : t("status.rescanning");
+    setProjectStatus(message);
+    setLastRunStatus(message);
   }
 
   async function openProject() {
@@ -215,6 +262,9 @@ export function useProjectActions({
     setIsProjectLoading(true);
     setProjectStatus(t("status.rescanning"));
     try {
+      const stored = await window.flowweave.readRegisteredProject(projectToRestoreId);
+      if (!requestGuard.isCurrent(requestId)) return;
+      if (stored) applyStoredProject(stored);
       const result = await window.flowweave.restoreRegisteredProject(projectToRestoreId, {
         concurrency: scanConcurrency,
         agentPlanTimeoutMs
@@ -222,7 +272,10 @@ export function useProjectActions({
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
       if (!requestGuard.isCurrent(requestId)) return;
-      const message = t("status.rescanFailed", { error: formatErrorMessage(error) });
+      const key = useProjectStore.getState().legacyCanvasReadOnly
+        ? "status.legacyCanvasRescanFailed"
+        : "status.rescanFailed";
+      const message = t(key, { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
@@ -259,7 +312,10 @@ export function useProjectActions({
       await applyProjectOpenResult(result, requestId);
     } catch (error) {
       if (!requestGuard.isCurrent(requestId)) return;
-      const message = t("status.rescanFailed", { error: formatErrorMessage(error) });
+      const key = useProjectStore.getState().legacyCanvasReadOnly
+        ? "status.legacyCanvasRescanFailed"
+        : "status.rescanFailed";
+      const message = t(key, { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);
     } finally {
@@ -276,7 +332,7 @@ export function useProjectActions({
       return;
     }
 
-    if (isArchitectureUpdateDisabled(localGenerationStatus, architectureReviewRef.current, agentId)) return;
+    if (legacyCanvasReadOnly || isArchitectureUpdateDisabled(localGenerationStatus, architectureReviewRef.current, agentId)) return;
 
     const requestId = requestGuard.begin();
     setLocalGenerationStatus("generating");
@@ -309,8 +365,11 @@ export function useProjectActions({
       setLastRunStatus(message);
     } catch (error) {
       if (!requestGuard.isCurrent(requestId)) return;
-      setLocalGenerationStatus("failed");
-      setArtifactStatuses((current) => current ? { ...current, architecture: "stale" } : current);
+      const staticArchitectureIsCurrent = useProjectStore.getState().artifactStatuses?.architecture === "current";
+      setLocalGenerationStatus(staticArchitectureIsCurrent ? "local-ready" : "failed");
+      if (!staticArchitectureIsCurrent) {
+        setArtifactStatuses((current) => current ? { ...current, architecture: "stale" } : current);
+      }
       const message = t("status.analysisFailed", { error: formatErrorMessage(error) });
       setProjectStatus(message);
       setLastRunStatus(message);

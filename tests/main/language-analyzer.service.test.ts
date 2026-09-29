@@ -28,10 +28,16 @@ const loadUser = async (id: string) => fetch(\`/api/users/\${id}\`)
     const result = await analyzeSourceFile(path, source, []);
 
     expect(result.analyzerId).toContain("tree-sitter-wasm");
-    expect(result.analysisDepth).toBe("semantic");
+    expect(result.analysisDepth).toBe("syntax");
     expect(result.insight.symbols).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: className }),
       expect.objectContaining({ name: functionName })
     ]));
   });
+  it("retains malformed source diagnostics with a parser range", async () => {
+    const result = await analyzeSourceFile("broken.py", "def broken(:\n    pass\n", []);
+    expect(result.analysisDepth).toBe("syntax");
+    expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code: "syntax-error", severity: "error", range: expect.any(Object) })]));
+  });
+
 });

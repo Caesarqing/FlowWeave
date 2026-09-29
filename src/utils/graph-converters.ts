@@ -1,13 +1,21 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import type { CanvasLayoutMode, ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
+import type { ArchitectureGroupReference, CanvasLayoutMode, ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
 import { cn } from "./classnames";
-import { nodeGroupKey } from "./canvas-layout";
+import { nodeGroupKey, traceNodeIds, type TraceDirection } from "./canvas-layout";
 import { relationStyle } from "./relation-styles";
 
 export const HANDLE_COLLAPSE_THRESHOLD = 6;
 
 export type FlowNodeData = GraphNode &
   Record<string, unknown> & {
+    syntheticKind?: "group" | "event-boundary" | "unresolved-event-boundary";
+    groupId?: string;
+    onExpandGroup?: () => void;
+    memberNodeIds?: string[];
+    memberModuleCount?: number;
+    memberResourceCount?: number;
+    internalEdgeIds?: string[];
+    connectionExplanation?: string;
     connectionHandles?: ConnectionHandleLayout;
     edgeConnected?: boolean;
     selectedEdgeId?: string;
@@ -39,7 +47,7 @@ export function createFlowEdge(edge: GraphEdge): Edge {
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed, color },
     style: { stroke: color },
-    data: { relation: edge.relation, guidanceNote: edge.guidanceNote, evidence: edge.evidence, origin: edge.origin, aggregatedEdgeIds: edge.aggregatedEdgeIds, confidence: edge.confidence, edgeClass: edge.edgeClass },
+    data: { ...edge },
     className: cn("relation-edge", edge.relation)
   };
 }
@@ -51,6 +59,10 @@ export function graphEdgeFromFlow(edge: Edge): GraphEdge {
     source: edge.source,
     target: edge.target,
     relation,
+    semanticKinds: edge.data?.semanticKinds as GraphEdge["semanticKinds"],
+    operations: edge.data?.operations as GraphEdge["operations"],
+    importUsages: edge.data?.importUsages as GraphEdge["importUsages"],
+    sourceRelationIds: edge.data?.sourceRelationIds as string[] | undefined,
     guidanceNote: edge.data?.guidanceNote as string | undefined,
     evidence: edge.data?.evidence as GraphEdge["evidence"],
     origin: edge.data?.origin as GraphEdge["origin"],
@@ -60,50 +72,132 @@ export function graphEdgeFromFlow(edge: Edge): GraphEdge {
   };
 }
 
+export { chooseInitialCollapsedGroups } from "./graph-view-projection";
+
+export function nodeDisplayGroups(node: GraphNode, mode: CanvasLayoutMode): ArchitectureGroupReference[] {
+  if (mode === "dependency" || node.origin === "manual" || "syntheticKind" in node) return [];
+  if (mode === "architecture" && node.groupPath?.length) return node.groupPath;
+  if (node.resource) return [];
+  const id = nodeGroupKey(node, mode);
+  return [{ id, title: id.slice(id.indexOf(":") + 1), rootPath: "" }];
+}
+
+export function expandedGroupsForNode(node: GraphNode, mode: CanvasLayoutMode, collapsedGroups: string[]): string[] {
+  const ancestors = new Set(nodeDisplayGroups(node, mode).map((group) => group.id));
+  return collapsedGroups.filter((id) => !ancestors.has(id));
+}
+
+export function expandedGroupsForGroup(nodes: GraphNode[], mode: CanvasLayoutMode, groupId: string, collapsedGroups: string[]): string[] {
+  const children = nodes.flatMap((node) => {
+    const path = nodeDisplayGroups(node, mode);
+    const index = path.findIndex((group) => group.id === groupId);
+    return index >= 0 && path[index + 1] ? [path[index + 1].id] : [];
+  });
+  return [...new Set([...collapsedGroups.filter((id) => id !== groupId), ...children])].sort();
+}
+
+export function traceDisplayNodeIds(
+  rootId: string,
+  sourceNodes: FlowWeaveNode[],
+  sourceEdges: Edge[],
+  displayNodes: FlowWeaveNode[],
+  mode: CanvasLayoutMode,
+  direction: TraceDirection
+): Set<string> {
+  const group = displayNodes.find((node) => node.id === rootId);
+  const roots = sourceNodes.some((node) => node.id === rootId) ? [rootId]
+    : group?.data.memberNodeIds ?? sourceNodes.filter((node) => nodeDisplayGroups(node.data, mode).some((reference) => `group:${reference.id}` === rootId)).map((node) => node.id);
+  const traced = new Set(roots.flatMap((id) => [...traceNodeIds(id, sourceEdges, direction)]));
+  return new Set(displayNodes.filter((node) => traced.has(node.id) || node.data.memberNodeIds?.some((id) => traced.has(id))).map((node) => node.id));
+}
+
 export function projectCollapsedFlowGraph(
   nodes: FlowWeaveNode[],
   edges: Edge[],
   mode: CanvasLayoutMode,
   collapsedGroups: string[]
 ): { nodes: FlowWeaveNode[]; edges: Edge[] } {
-  if (mode === "dependency" || collapsedGroups.length === 0) {
-    return { nodes: [...nodes], edges: [...edges] };
-  }
+  if (mode === "dependency" || collapsedGroups.length === 0) return { nodes: [...nodes], edges: [...edges] };
   const collapsed = new Set(collapsedGroups);
-  const representativeByGroup = new Map<string, string>();
-  for (const node of [...nodes].sort((left, right) => left.id.localeCompare(right.id))) {
-    const group = nodeGroupKey(node.data, mode);
-    if (collapsed.has(group) && !representativeByGroup.has(group)) representativeByGroup.set(group, node.id);
+  const groupByNodeId = new Map<string, ArchitectureGroupReference>();
+  const membersByGroupId = new Map<string, FlowWeaveNode[]>();
+  for (const node of nodes) {
+    const group = nodeDisplayGroups(node.data, mode).find((candidate) => collapsed.has(candidate.id));
+    if (!group) continue;
+    groupByNodeId.set(node.id, group);
+    membersByGroupId.set(group.id, [...(membersByGroupId.get(group.id) ?? []), node]);
   }
-  const projectedNodeId = (node: FlowWeaveNode): string => {
-    const group = nodeGroupKey(node.data, mode);
-    return collapsed.has(group) ? representativeByGroup.get(group) ?? node.id : node.id;
+  const projectedNodeId = (id: string): string => {
+    const group = groupByNodeId.get(id);
+    return group ? `group:${group.id}` : id;
   };
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const nodeIds = new Set(nodes.map((node) => node.id));
   const projectedEdges = new Map<string, Edge>();
+  const internalEdgesByGroupId = new Map<string, string[]>();
   for (const edge of edges) {
-    const sourceNode = nodesById.get(edge.source);
-    const targetNode = nodesById.get(edge.target);
-    if (!sourceNode || !targetNode) throw new Error(`Collapsed graph projection found unknown endpoint: edgeId=${edge.id} source=${edge.source} target=${edge.target}`);
-    const source = projectedNodeId(sourceNode);
-    const target = projectedNodeId(targetNode);
-    if (source === target) continue;
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) throw new Error(`Collapsed graph projection found unknown endpoint: edgeId=${edge.id} source=${edge.source} target=${edge.target}`);
+    const source = projectedNodeId(edge.source);
+    const target = projectedNodeId(edge.target);
+    if (source === target) {
+      const group = groupByNodeId.get(edge.source);
+      if (group) internalEdgesByGroupId.set(group.id, [...(internalEdgesByGroupId.get(group.id) ?? []), edge.id]);
+      else projectedEdges.set(edge.id, edge);
+      continue;
+    }
+    if (source === edge.source && target === edge.target) {
+      projectedEdges.set(edge.id, edge);
+      continue;
+    }
     const relation = (edge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on";
     const key = `${source}\u0000${target}\u0000${relation}`;
     const existing = projectedEdges.get(key);
-    const aggregatedEdgeIds = [...new Set([...(existing?.data?.aggregatedEdgeIds as string[] | undefined ?? []), edge.id])].sort();
-    const evidence = [...(existing?.data?.evidence as GraphEdge["evidence"] ?? []), ...(edge.data?.evidence as GraphEdge["evidence"] ?? [])];
     const { sourceHandle: _sourceHandle, targetHandle: _targetHandle, ...edgeWithoutHandles } = existing ?? edge;
+    const evidence = [...(existing?.data?.evidence as GraphEdge["evidence"] ?? []), ...(edge.data?.evidence as GraphEdge["evidence"] ?? [])];
+    const evidenceByKey = new Map(evidence.map((item) => [JSON.stringify(item), item]));
+    const union = (field: string): string[] => [...new Set([
+      ...(existing?.data?.[field] as string[] | undefined ?? []),
+      ...(edge.data?.[field] as string[] | undefined ?? [])
+    ])].sort();
+    const guidanceNotes = [...new Set([existing?.data?.guidanceNote, edge.data?.guidanceNote].filter((note): note is string => typeof note === "string" && note.length > 0))];
     projectedEdges.set(key, {
       ...edgeWithoutHandles,
       id: `aggregate:${source}:${target}:${relation}`,
       source,
       target,
-      data: { ...(existing?.data ?? edge.data ?? {}), relation, evidence, aggregatedEdgeIds }
+      data: {
+        ...(existing?.data ?? edge.data ?? {}), relation,
+        evidence: [...evidenceByKey.values()],
+        aggregatedEdgeIds: [...new Set([...union("aggregatedEdgeIds"), edge.id])].sort(),
+        sourceEdgeIds: [...new Set([...union("sourceEdgeIds"), edge.id])].sort(),
+        sourceRelationIds: union("sourceRelationIds"),
+        evidenceIds: union("evidenceIds"),
+        semanticKinds: union("semanticKinds"),
+        operations: union("operations"),
+        importUsages: union("importUsages"),
+        guidanceNote: guidanceNotes.join("\n") || undefined,
+        confidence: edge.data?.confidence === "confirmed" && (!existing || existing.data?.confidence === "confirmed") ? "confirmed" : "inferred"
+      }
     });
   }
+  const groupNodes = [...membersByGroupId.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([groupId, members]): FlowWeaveNode => {
+    const group = groupByNodeId.get(members[0].id)!;
+    const id = `group:${groupId}`;
+    return {
+      id, type: "groupNode", position: { ...members[0].position }, draggable: false, connectable: false, selected: members.some((node) => node.selected),
+      data: {
+        id, title: group.title, subtitle: group.rootPath, description: group.rootPath,
+        kind: "module", nodeType: "module", risk: "unknown", status: "mapped", guidanceDraft: "",
+        files: [...new Set(members.flatMap((node) => node.data.files))].sort(), x: members[0].position.x, y: members[0].position.y,
+        syntheticKind: "group", groupId, groupPath: members[0].data.groupPath,
+        memberNodeIds: members.map((node) => node.id).sort(),
+        memberModuleCount: members.filter((node) => node.data.kind === "module" && !node.data.resource).length,
+        memberResourceCount: members.filter((node) => node.data.resource).length,
+        internalEdgeIds: (internalEdgesByGroupId.get(groupId) ?? []).sort()
+      }
+    };
+  });
   return {
-    nodes: nodes.filter((node) => projectedNodeId(node) === node.id),
+    nodes: [...nodes.filter((node) => !groupByNodeId.has(node.id)), ...groupNodes],
     edges: [...projectedEdges.values()].sort((left, right) => left.id.localeCompare(right.id))
   };
 }

@@ -91,7 +91,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
       <div className="sequence-detail-stack">
         <SequenceDetails diagram={visibleDiagram} message={visibleMessage} participant={visibleParticipant} />
         <AgentGuidanceComposer
-          disabled={sequence.isBusy || !sequence.bundle}
+          disabled={sequence.readOnly || sequence.isBusy || !sequence.bundle}
           isSaving={sequence.guidanceOperation === "save"}
           isSending={sequence.guidanceOperation === "send"}
           placeholder={t("structure.instructionPlaceholder")}
@@ -114,7 +114,7 @@ export function StructureWorkspace({ sequence }: { sequence: SequenceDiagramStat
       actions={(
         <>
           <Button
-            disabled={sequence.isBusy}
+            disabled={sequence.readOnly || sequence.isBusy}
             icon={<RefreshCcw size={15} />}
             size="default"
             variant="primary"

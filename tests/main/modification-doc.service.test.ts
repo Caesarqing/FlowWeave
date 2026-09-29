@@ -41,17 +41,23 @@ describe("modification-doc.service", () => {
     expect(context.delta.sequenceInstruction).toBeUndefined();
   });
 
-  it("writes sequence docs when the optional canvas artifact is unreadable", async () => {
+  it("preserves an unreadable Canvas and rejects export without acknowledging it", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-corrupt-canvas-"));
     await mkdir(join(projectPath, ".flowweave", "canvas"), { recursive: true });
     await writeFile(join(projectPath, ".flowweave", "canvas", "main.canvas.json"), "{invalid-json", "utf8");
 
-    const paths = await writeModificationDocs(projectPath, {
+    await expect(writeModificationDocs(projectPath, {
       sequence: sequenceFixture(projectPath),
       sequenceInstruction: "Keep checkout as one diagram."
-    });
-    const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
+    })).rejects.toThrow("FlowWeave artifact is unreadable and was preserved:");
+    await expect(readFile(join(projectPath, ".flowweave", "canvas", "main.canvas.json"), "utf8")).resolves.toBe("{invalid-json");
+    await expect(readFile(join(projectPath, ".flowweave", "modification-baseline.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
 
+  it("exports sequence instructions when the Canvas artifact does not exist", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-no-canvas-"));
+    const paths = await writeModificationDocs(projectPath, { sequence: sequenceFixture(projectPath), sequenceInstruction: "Keep checkout as one diagram." });
+    const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
     expect(context.delta.modules.added).toEqual([]);
     expect(context.delta.sequenceInstruction).toBe("Keep checkout as one diagram.");
   });

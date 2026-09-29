@@ -2,13 +2,11 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import type { ArchitectureMap, ToolRunResult } from "../../src/types";
+import type { ToolRunResult } from "../../src/types";
 import { adoptArtifactRun } from "../../src/main/services/artifact-run-adoption.service";
-import { buildArchitectureInputFingerprint } from "../../src/main/services/architecture-analysis.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
-import { buildSemanticIndex, semanticIndexToStructureFacts } from "../../src/main/services/semantic-index.service";
+import { generateProject } from "../../src/main/services/project-generation.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
-import { selectRepresentativeStructureFacts } from "../../src/main/services/structure-extractor.service";
 import { writeSequenceReviewStatus } from "../../src/main/services/sequence-review.service";
 
 const architectureAdoptionState = vi.hoisted(() => ({ stateRecovered: false, warning: "" }));
@@ -29,24 +27,10 @@ vi.mock("../../src/main/services/architecture-review.service", async (importOrig
 describe("artifact-run-adoption.service", () => {
   it("preserves architecture state recovery warnings in the run adoption result", async () => {
     const root = await createProjectFixture();
-    const project = await scanProject(root);
-    if (!project.scanFingerprint) throw new Error("Project scan did not produce a scan fingerprint.");
-    const { index } = await buildSemanticIndex(project);
-    const inputFingerprint = buildArchitectureInputFingerprint(project.scanFingerprint, index);
-    const localArchitecture: ArchitectureMap = {
-      version: 2,
-      projectName: project.projectName,
-      rootPath: root,
-      generatedAt: "2026-09-21T00:00:00.000Z",
-      source: "local",
-      metadata: { source: "local", scanFingerprint: project.scanFingerprint, inputFingerprint },
-      modules: [],
-      relationships: [],
-      files: [],
-      symbols: []
-    };
-    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-    await writeFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), JSON.stringify(localArchitecture), "utf8");
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Project generation was superseded.");
+    const { project, localArchitecture } = generated;
+    const inputFingerprint = localArchitecture.metadata!.inputFingerprint;
 
     architectureAdoptionState.stateRecovered = true;
     architectureAdoptionState.warning = "firstStatusWriteError=first retryStatusWriteError=second";
@@ -75,13 +59,15 @@ describe("artifact-run-adoption.service", () => {
 
   it("surfaces an unreadable architecture map during sequence adoption", async () => {
     const root = await createProjectFixture();
-    const project = await scanProject(root);
-    if (!project.scanFingerprint) throw new Error("Project scan did not produce a scan fingerprint.");
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Project generation was superseded.");
+    const { project } = generated;
 
     const reviewId = "sequence-review-unreadable-map";
     const runId = "sequence-run-unreadable-map";
     await writeSequenceReviewStatus(root, {
       state: "reviewing",
+      generation: generated.generation,
       reviewId,
       scanFingerprint: project.scanFingerprint,
       agentId: "mock",
@@ -110,19 +96,16 @@ describe("artifact-run-adoption.service", () => {
 
   it("validates adopted sequence evidence against all scanned source files", async () => {
     const root = await createProjectFixture();
-    const project = await scanProject(root);
-    if (!project.scanFingerprint) throw new Error("Project scan did not produce a scan fingerprint.");
-
-    const { index } = await buildSemanticIndex(project);
-    const facts = semanticIndexToStructureFacts(project, index);
-    const representativeFacts = selectRepresentativeStructureFacts(facts, 40);
-    expect(facts.files.some((file) => file.path === "src/z-last.ts")).toBe(true);
-    expect(representativeFacts.some((file) => file.path === "src/z-last.ts")).toBe(false);
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Project generation was superseded.");
+    const { project } = generated;
+    expect(generated.index.files.some((file) => file.path === "src/z-last.ts")).toBe(true);
 
     const reviewId = "sequence-review-1";
     const runId = "sequence-run-1";
     await writeSequenceReviewStatus(root, {
       state: "reviewing",
+      generation: generated.generation,
       reviewId,
       scanFingerprint: project.scanFingerprint,
       agentId: "mock",

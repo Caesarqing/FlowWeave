@@ -118,13 +118,14 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
           onExport={app.onExport}
           onSendToTool={app.onSendToTool}
           projectLabel={app.projectLabel}
-          sendDisabled={!app.hasPendingModifications}
+          sendDisabled={app.legacyCanvasReadOnly || !app.hasPendingModifications}
         />
         <ProjectTabs
           activeProjectId={workspace.activeProjectId}
           activeProjectStatus={{
             architectureReview: app.architectureReview,
             isProjectLoading: app.canvas.isProjectLoading,
+            readOnly: app.legacyCanvasReadOnly,
             onRefreshProject: () => void app.canvas.onRefreshProject(),
             onUpdateArchitecture: () => void app.canvas.onAnalyzeProject(),
             onUpdateSequences: () => void app.sequence.generateDiagrams(),
@@ -167,6 +168,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
                 onUpdateEdgeGuidance={app.canvas.onUpdateEdgeGuidance}
                 onUpdateEdgeRelation={app.canvas.onUpdateEdgeRelation}
                 selectedEdge={app.canvas.selectedEdge}
+                readOnly={app.canvas.legacyCanvasReadOnly}
               />
             ) : app.canvas.selectedNode ? (
               <ModulePanel
@@ -180,13 +182,14 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
                 onSaveGuidance={app.canvas.onSaveGuidance}
                 onSendGuidance={app.canvas.onSendGuidance}
                 sendGuidanceDisabled={!app.canvas.hasPendingGuidance}
+                readOnly={app.canvas.legacyCanvasReadOnly}
               />
             ) : undefined}
             rightAttention={Boolean(app.canvas.selectedNode || app.canvas.connectionPanelMode)}
             actions={(
               <>
                 <Button
-                  disabled={app.canvas.isProjectLoading || architectureUpdateDisabled}
+                  disabled={app.canvas.isProjectLoading || app.canvas.legacyCanvasReadOnly || architectureUpdateDisabled}
                   icon={<BrainCircuit size={15} />}
                   label={architectureActionLabel}
                   size="default"
@@ -197,10 +200,10 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
                     {architectureActionLabel}
                   </span>
                 </Button>
-                <Button icon={<Plus size={15} />} label={t("canvas.addNode")} variant="secondary" onClick={app.canvas.onAddNode}>
+                <Button disabled={app.canvas.legacyCanvasReadOnly} icon={<Plus size={15} />} label={t("canvas.addNode")} variant="secondary" onClick={app.canvas.onAddNode}>
                   <span className="workspace-action-label">{t("canvas.addNode")}</span>
                 </Button>
-                <Button icon={<Link2 size={15} />} label={t("canvas.addConnection")} variant="secondary" onClick={app.canvas.onOpenConnectionCreator}>
+                <Button disabled={app.canvas.legacyCanvasReadOnly} icon={<Link2 size={15} />} label={t("canvas.addConnection")} variant="secondary" onClick={app.canvas.onOpenConnectionCreator}>
                   <span className="workspace-action-label">{t("canvas.addConnection")}</span>
                 </Button>
               </>
@@ -212,6 +215,10 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
               canvasLayout={app.canvas.canvasLayout}
               edges={app.canvas.edges}
               nodes={app.canvas.nodes}
+              relationDiagnostics={app.canvas.relationDiagnostics}
+              quality={app.canvas.quality}
+              readOnly={app.canvas.legacyCanvasReadOnly}
+              orphanedNodeEdits={app.canvas.orphanedNodeEdits}
               onConnect={app.canvas.onConnect}
               onApplyAutoLayout={app.canvas.onApplyAutoLayout}
               onEdgesChange={app.canvas.onEdgesChange}
@@ -222,6 +229,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
               onSelectEdge={app.canvas.onSelectEdge}
               onSelectNode={app.canvas.onSelectNode}
               onSetCollapsedGroups={app.canvas.onSetCollapsedGroups}
+              onSetViewMode={app.canvas.onSetViewMode}
             />
           </WorkspaceLayout>
         ) : app.activePage === "structure" ? (
@@ -237,6 +245,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
             executionMode={app.tools.executionMode}
             isDesktopBridgeAvailable={app.isDesktopBridgeAvailable}
             lastRunStatus={app.tools.lastRunStatus}
+            legacyCanvasReadOnly={app.legacyCanvasReadOnly}
             isRunsLoading={app.tools.isRunsLoading}
             onAnalyzeCurrentProject={app.tools.onAnalyzeCurrentProject}
             onApplyRunArtifact={app.tools.onApplyRunArtifact}

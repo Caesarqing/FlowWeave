@@ -1,6 +1,5 @@
 import { dialog, shell, type WebContents } from "electron";
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PROJECT_CHANNELS } from "../../common/ipc-channels";
 import type {
@@ -9,6 +8,9 @@ import type {
   ActivePage,
   ArchitectureReviewEvent,
   CodeflowCanvas,
+  CanvasReadResult,
+  CodeflowProject,
+  FlowWeaveStoredProject,
   ProjectArtifactState,
   ProjectArtifactStatuses,
   ProjectScanOptions,
@@ -20,12 +22,13 @@ import type {
 } from "../../types";
 import {
   analyzeArchitecture,
-  buildArchitectureInputFingerprint,
   readArchitectureMap
 } from "../services/architecture-analysis.service";
+import { generateProject, generateRegisteredProject, registerGenerationRequest, assertArtifactGeneration } from "../services/project-generation.service";
 import {
   isArchitectureReviewActive,
-  readArchitectureReviewStatus
+  readArchitectureReviewStatus,
+  withArchitectureArtifactLock
 } from "../services/architecture-review.service";
 import {
   isSequenceReviewActive,
@@ -49,13 +52,9 @@ import {
   saveProjectWorkspaceSession
 } from "../services/project-registry.service";
 import { scanProject } from "../services/project-scanner.service";
-import { buildSemanticIndex } from "../services/semantic-index.service";
-import { assessModules } from "../../utils/module-assessment";
 import { generateSequenceDiagrams, readSequenceDiagrams, reviseSequenceDiagram } from "../services/sequence-diagram.service";
-import { inferGraphFromProject } from "../services/task-generator.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { writeFlowWeaveProject } from "../storage/flowweave-store";
-import { writeJsonAtomic } from "../storage/artifact-store";
+import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { assertSafeProjectWritePath, writeProjectTextAtomic } from "../storage/project-write-guard";
 import { optionalTrimmedString, requireEnum, requireInteger, requireObject, requireSafeId, requireString, requireStringArray } from "./ipc-validation";
 import { finishOperation, startOperation, updateOperation } from "../services/operation.service";
@@ -70,6 +69,7 @@ import { readRunArtifact } from "../services/run-log.service";
 
 const TOOL_IDS = ["claude-code", "claude-desktop", "codex-local", "codex-desktop", "gemini-cli", "cursor", "mock"] as const;
 const WORKSPACE_PAGES: ActivePage[] = ["canvas", "structure", "docs", "git-review", "tools"];
+const latestScanRequests = new Map<string, string>();
 
 export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.openProject, async (event, options: unknown) => {
@@ -80,6 +80,8 @@ export function registerProjectIpc() {
   });
 
   handleIpc(PROJECT_CHANNELS.listRegisteredProjects, async () => listRegisteredProjects());
+  handleIpc(PROJECT_CHANNELS.readRegisteredProject, (_event, projectId: unknown) =>
+    readStoredProject(requireString(PROJECT_CHANNELS.readRegisteredProject, projectId, "projectId")));
 
   handleIpc(PROJECT_CHANNELS.restoreRegisteredProject, async (event, projectId: unknown, options: unknown) => {
     const safeProjectId = requireString(PROJECT_CHANNELS.restoreRegisteredProject, projectId, "projectId");
@@ -170,7 +172,7 @@ export function registerProjectIpc() {
   handleIpc(PROJECT_CHANNELS.readModificationDelta, (_event, projectId: unknown, sequenceInstruction: unknown, canvas: unknown) => {
     const value = canvas === undefined
       ? undefined
-      : requireCanvasV5(PROJECT_CHANNELS.readModificationDelta, canvas);
+      : requireCanvasV6(PROJECT_CHANNELS.readModificationDelta, canvas);
     return readModificationDelta(
       resolveProjectPath(requireString(PROJECT_CHANNELS.readModificationDelta, projectId, "projectId")),
       optionalTrimmedString(
@@ -190,22 +192,17 @@ export function registerProjectIpc() {
     ));
 
   handleIpc(PROJECT_CHANNELS.readCanvas, async (_event, projectId: unknown) => {
-    const result = await readCanvasArtifactState(resolveProjectPath(requireString(PROJECT_CHANNELS.readCanvas, projectId, "projectId")));
-    if (result.state === "failed") {
-      throw new Error(`FlowWeave Canvas is unreadable and was preserved: ${result.error}`);
-    }
-    return result.state === "loaded" ? result.canvas : undefined;
+    const projectPath = resolveProjectPath(requireString(PROJECT_CHANNELS.readCanvas, projectId, "projectId"));
+    return withArchitectureArtifactLock(projectPath, () => readCanvasArtifactState(projectPath));
   });
 
   handleIpc(PROJECT_CHANNELS.saveCanvas, async (_event, projectId: unknown, canvas: unknown, options: unknown) => {
     const safeProjectId = requireString(PROJECT_CHANNELS.saveCanvas, projectId, "projectId");
     const projectPath = resolveProjectPath(safeProjectId);
-    const value = requireCanvasV5(PROJECT_CHANNELS.saveCanvas, canvas);
-    const saveOptions = options === undefined
-      ? { allowStaleNoop: false }
-      : requireObject(PROJECT_CHANNELS.saveCanvas, options, "options") as { allowStaleNoop?: unknown };
+    const value = requireCanvasV6(PROJECT_CHANNELS.saveCanvas, canvas);
+    if (options !== undefined) requireObject(PROJECT_CHANNELS.saveCanvas, options, "options");
     if (value.artifactState !== "current") {
-      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v5 can be saved.`);
+      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Only a current Canvas v6 can be saved.`);
     }
     for (const node of value.nodes) {
       const override = node.assessment?.risk.override;
@@ -213,25 +210,19 @@ export function registerProjectIpc() {
         throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Risk override for "${node.id}" requires a reason.`);
       }
     }
-    const projectArtifact = JSON.parse(
-      await readFile(join(projectPath, FLOWWEAVE_DIR, "project.json"), "utf8")
-    ) as { scanFingerprint?: string };
     const canvasPath = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
-    if (!value.scanFingerprint || value.scanFingerprint !== projectArtifact.scanFingerprint) {
-      if (saveOptions.allowStaleNoop === true) return canvasPath;
-      throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Canvas scan fingerprint is stale.`);
-    }
-    await assertSafeProjectWritePath(projectPath, canvasPath);
-    await mkdir(join(projectPath, FLOWWEAVE_DIR, "canvas"), { recursive: true });
-    await assertSafeProjectWritePath(projectPath, canvasPath);
-    const temporaryPath = `${canvasPath}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporaryPath, `${JSON.stringify({ ...value, projectPath }, null, 2)}\n`, "utf8");
-      await rename(temporaryPath, canvasPath);
-    } catch (error) {
-      await rm(temporaryPath, { force: true });
-      throw error;
-    }
+    await withArchitectureArtifactLock(projectPath, async () => {
+      const stored = await readCanvasArtifactState(projectPath);
+      if (stored?.mode === "legacy-readonly") throw new Error(`Legacy Canvas v5 is read-only; re-scan successfully before saving: ${canvasPath}`);
+      const projectArtifact = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "project.json")) as CodeflowProject | undefined;
+      if (!projectArtifact || !value.scanFingerprint || value.scanFingerprint !== projectArtifact.scanFingerprint) {
+        throw new Error(`[${PROJECT_CHANNELS.saveCanvas}] Canvas scan fingerprint is stale: ${canvasPath}`);
+      }
+      await assertArtifactGeneration(projectPath, canvasPath, value);
+      await assertArtifactGeneration(projectPath, join(projectPath, FLOWWEAVE_DIR, "project.json"), projectArtifact);
+      await assertSafeProjectWritePath(projectPath, canvasPath);
+      await writeJsonAtomic(canvasPath, { ...value, projectPath });
+    });
     await refreshConnectionWithoutFailing(safeProjectId, projectPath);
     return canvasPath;
   });
@@ -295,19 +286,11 @@ async function generateSequenceDiagramsForProject(
 }
 
 async function scanProjectWithCurrentProjectArtifact(projectPath: string) {
-  const project = await scanProject(projectPath);
-  const scanFingerprint = project.scanFingerprint ?? "";
-  if (!scanFingerprint) {
-    throw new Error(`Project scan did not produce a scan fingerprint: ${projectPath}`);
+  const generated = await generateProject(projectPath, {});
+  if (generated.status === "superseded") {
+    throw new Error(`Analysis generation superseded: project ${projectPath}, request ${generated.requestId}`);
   }
-  await writeJsonAtomic(join(projectPath, FLOWWEAVE_DIR, "project.json"), {
-    ...project,
-    generatorVersion: "1.0.0",
-    inputFingerprint: scanFingerprint,
-    artifactState: "current",
-    scanFingerprint
-  });
-  return project;
+  return generated.project;
 }
 
 async function reviseSequenceDiagramForProject(
@@ -324,34 +307,26 @@ async function reviseSequenceDiagramForProject(
 }
 
 async function scanAndPersistProject(projectId: string, sender: WebContents, options: ProjectScanOptions) {
+  const projectPath = resolveProjectPath(projectId);
+  const request = await registerGenerationRequest(projectPath);
+  latestScanRequests.set(projectPath, request.requestId);
   const started = startOperation("project-scan", "Discovering project files.", projectId);
   const notify = (operation: import("../../types").AnalysisOperation) => {
-    if (!sender.isDestroyed()) sender.send(PROJECT_CHANNELS.operationProgress, operation);
+    if (!sender.isDestroyed() && latestScanRequests.get(projectPath) === request.requestId) {
+      sender.send(PROJECT_CHANNELS.operationProgress, { ...operation, requestId: request.requestId });
+    }
   };
   notify(started.operation);
-  const projectPath = resolveProjectPath(projectId);
   try {
-    const project = await scanProject(projectPath, options);
-    const total = project.summary.totalFiles;
-    notify(updateOperation(started.operation.operationId, {
-      stage: "hashing",
-      completed: 0,
-      total,
-      failed: 0,
-      message: `Discovered ${total} project files.`
-    }));
-    const { index } = await buildSemanticIndex(project, {
+    const generated = await generateRegisteredProject(request, {
+      scanOptions: options,
       onProgress: (progress) => notify(updateOperation(started.operation.operationId, progress))
     });
-    const scanFingerprint = project.scanFingerprint ?? "";
-    const inferredGraph = await inferGraphFromProject(project);
-    const graph = {
-      nodes: assessModules(inferredGraph.nodes, inferredGraph.edges, index, scanFingerprint, new Date().toISOString()),
-      edges: inferredGraph.edges
-    };
-    const architectureInputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
-    const written = await writeFlowWeaveProject(projectPath, project, graph.nodes, graph.edges, scanFingerprint);
-    await readModificationDelta(projectPath, "");
+    if (generated.status === "superseded") return { canceled: false as const, status: "superseded" as const, projectId, requestId: request.requestId };
+    const { project, index, architectureMap, graph, written, generation } = generated;
+    const total = project.summary.totalFiles;
+    const scanFingerprint = project.scanFingerprint!;
+    const architectureInputFingerprint = generated.localArchitecture.metadata!.inputFingerprint;
     await refreshConnectionWithoutFailing(projectId, projectPath);
     const artifacts: ProjectArtifactStatuses = {
       project: "current",
@@ -375,6 +350,7 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     ) {
       const resumed = await analyzeArchitecture(project, architectureReview.agentId, {
         projectId,
+        semanticIndex: index,
         timeoutMs: options.agentPlanTimeoutMs,
         resumeArchitectureReview: architectureReview,
         onArchitectureReview: (reviewEvent) => sendArchitectureReview(sender, reviewEvent)
@@ -413,6 +389,8 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
     }));
     return {
       canceled: false as const,
+      status: "committed" as const,
+      generation,
       projectId,
       scanFingerprint,
       artifacts,
@@ -420,9 +398,14 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       sequenceReview,
       project,
       graph,
+      relationDiagnostics: architectureMap.relationDiagnostics ?? [],
+      quality: architectureMap.quality, groups: architectureMap.groups, resources: architectureMap.resources,
       written
     };
   } catch (error) {
+    const latest = await withArchitectureArtifactLock(projectPath, () =>
+      readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "generation-request.json"))) as { requestId?: string } | undefined;
+    if (latest?.requestId !== request.requestId) return { canceled: false as const, status: "superseded" as const, projectId, requestId: request.requestId };
     notify(updateOperation(started.operation.operationId, {
       stage: "failed",
       completed: 0,
@@ -434,7 +417,7 @@ async function scanAndPersistProject(projectId: string, sender: WebContents, opt
       category: "scan",
       code: "project-scan-failed",
       message: error instanceof Error ? error.message : String(error),
-      context: { projectId }
+      context: { projectId, requestId: request.requestId }
     });
     throw error;
   } finally {
@@ -513,18 +496,142 @@ async function runTrackedAnalysis<T>(
   }
 }
 
-async function readCanvasArtifactState(projectPath: string): Promise<
-  { state: "missing" } | { state: "failed"; error: string } | { state: "loaded"; canvas: CodeflowCanvas }
-> {
+/** Caller holds the project write lock, so a read cannot observe half a generation. */
+async function readCanvasArtifactState(projectPath: string): Promise<CanvasReadResult | undefined> {
   const path = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
-  try {
-    const canvas = JSON.parse(await readFile(path, "utf8")) as CodeflowCanvas;
-    if (canvas.version !== 5) throw new Error("Canvas version must be 5. Re-scan the project to rebuild it.");
-    return { state: "loaded", canvas };
-  } catch (error) {
-    if (isMissing(error)) return { state: "missing" };
-    return { state: "failed", error: error instanceof Error ? error.message : String(error) };
+  const value = await readJsonArtifact(path);
+  if (value === undefined) return undefined;
+  const issue = canvasArtifactShapeIssue(value);
+  if (issue) throw new Error(`FlowWeave Canvas is invalid and was preserved: ${path}: ${issue}`);
+  const canvas = value as CodeflowCanvas | import("../../types").LegacyCanvasV5;
+  await assertArtifactGeneration(projectPath, path, canvas);
+  return canvas.version === 5 ? { mode: "legacy-readonly", canvas } : { mode: "editable", canvas };
+}
+
+export function canvasArtifactShapeIssue(value: unknown): string | undefined {
+  if (!isRecord(value)) return "canvas must be an object";
+  if (value.version !== 5 && value.version !== 6) return "version must be 5 or 6";
+  for (const field of ["id", "title", "projectPath", "generatedAt"] as const) {
+    if (typeof value[field] !== "string") return `${field} must be a string`;
   }
+  if (!Array.isArray(value.nodes)) return "nodes must be an array";
+  if (!Array.isArray(value.edges)) return "edges must be an array";
+  for (const [index, node] of value.nodes.entries()) {
+    const issue = graphNodeShapeIssue(node, `nodes[${index}]`, value.version);
+    if (issue) return issue;
+  }
+  for (const [index, edge] of value.edges.entries()) {
+    const issue = graphEdgeShapeIssue(edge, `edges[${index}]`);
+    if (issue) return issue;
+  }
+  if (value.orphanedEdges !== undefined) {
+    if (!Array.isArray(value.orphanedEdges)) return "orphanedEdges must be an array";
+    for (const [index, edge] of value.orphanedEdges.entries()) {
+      const issue = graphEdgeShapeIssue(edge, `orphanedEdges[${index}]`);
+      if (issue) return issue;
+    }
+  }
+  return undefined;
+}
+
+function graphNodeShapeIssue(value: unknown, path: string, version: 5 | 6): string | undefined {
+  if (!isRecord(value)) return `${path} must be an object`;
+  for (const field of ["id", "title", "subtitle", "description", "guidanceDraft"] as const) {
+    if (typeof value[field] !== "string") return `${path}.${field} must be a string`;
+  }
+  if (!enumHas(value.kind, ["module", "requirement", "task", "file", "doc", "agent", "diff"])) return `${path}.kind is invalid`;
+  if (!enumHas(value.nodeType, ["module", "entrypoint", "api", "service", "data", "external", "worker", "utility", "test"])) return `${path}.nodeType is invalid`;
+  if (!enumHas(value.risk, version === 5 ? ["low", "medium", "high", "unknown", "normal", "review", "blocked"] : ["low", "medium", "high", "unknown"])) return `${path}.risk is invalid`;
+  if (!enumHas(value.status, ["mapped", "needs-review", "draft"])) return `${path}.status is invalid`;
+  if (!Array.isArray(value.files) || value.files.some((file) => typeof file !== "string")) return `${path}.files must be an array of strings`;
+  if (typeof value.x !== "number" || !Number.isFinite(value.x) || typeof value.y !== "number" || !Number.isFinite(value.y)) return `${path}.x and ${path}.y must be finite numbers`;
+  if (value.evidence !== undefined) {
+    const issue = evidenceArrayShapeIssue(value.evidence, `${path}.evidence`);
+    if (issue) return issue;
+  }
+  if (value.fileRoles !== undefined && (!Array.isArray(value.fileRoles) || value.fileRoles.some((item) => !isRecord(item) || typeof item.path !== "string" || typeof item.role !== "string"))) return `${path}.fileRoles must contain path and role strings`;
+  if (value.symbols !== undefined && (!Array.isArray(value.symbols) || value.symbols.some((item) => !isRecord(item) || typeof item.name !== "string" || typeof item.kind !== "string" || typeof item.filePath !== "string"))) return `${path}.symbols must contain valid symbols`;
+  if (value.relationDiagnostics !== undefined && (!Array.isArray(value.relationDiagnostics) || value.relationDiagnostics.some((item) => !isRecord(item) || typeof item.code !== "string" || typeof item.message !== "string" || typeof item.filePath !== "string" || (item.candidates !== undefined && (!Array.isArray(item.candidates) || item.candidates.some((candidate) => typeof candidate !== "string"))) || (item.range !== undefined && !validRange(item.range))))) return `${path}.relationDiagnostics must contain valid diagnostics`;
+  return undefined;
+}
+
+function graphEdgeShapeIssue(value: unknown, path: string): string | undefined {
+  if (!isRecord(value)) return `${path} must be an object`;
+  for (const field of ["id", "source", "target"] as const) {
+    if (typeof value[field] !== "string" || !value[field]) return `${path}.${field} must be a non-empty string`;
+  }
+  if (!enumHas(value.relation, ["depends_on", "calls", "reads_writes", "external_api", "publishes_event", "subscribes_event", "tests"])) return `${path}.relation is invalid`;
+  if (value.guidanceNote !== undefined && typeof value.guidanceNote !== "string") return `${path}.guidanceNote must be a string`;
+  if (value.evidence !== undefined) {
+    const issue = evidenceArrayShapeIssue(value.evidence, `${path}.evidence`);
+    if (issue) return issue;
+  }
+  for (const field of ["semanticKinds", "operations", "importUsages", "sourceRelationIds", "aggregatedEdgeIds"] as const) {
+    if (value[field] !== undefined && (!Array.isArray(value[field]) || value[field].some((entry) => typeof entry !== "string"))) return `${path}.${field} must be an array of strings`;
+  }
+  return undefined;
+}
+
+function evidenceArrayShapeIssue(value: unknown, path: string): string | undefined {
+  if (!Array.isArray(value)) return `${path} must be an array`;
+  for (const [index, evidence] of value.entries()) {
+    if (!isRecord(evidence) || typeof evidence.detail !== "string") return `${path}[${index}] must include a detail string`;
+    for (const field of ["filePath", "symbol", "eventId", "relationId", "bindingBasis"] as const) {
+      if (evidence[field] !== undefined && typeof evidence[field] !== "string") return `${path}[${index}].${field} must be a string`;
+    }
+    if (evidence.line !== undefined && (typeof evidence.line !== "number" || !Number.isFinite(evidence.line))) return `${path}[${index}].line must be a finite number`;
+    if (evidence.range !== undefined && !validRange(evidence.range)) return `${path}[${index}].range is invalid`;
+    if (evidence.declarationRange !== undefined && !validRange(evidence.declarationRange)) return `${path}[${index}].declarationRange is invalid`;
+  }
+  return undefined;
+}
+
+function validRange(value: unknown): boolean {
+  return isRecord(value) && validPosition(value.start) && validPosition(value.end);
+}
+
+function validPosition(value: unknown): boolean {
+  return isRecord(value) && Number.isInteger(value.line) && Number(value.line) > 0 && Number.isInteger(value.column) && Number(value.column) > 0;
+}
+
+function enumHas(value: unknown, options: readonly string[]): boolean {
+  return typeof value === "string" && options.includes(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function readStoredProject(projectId: string): Promise<FlowWeaveStoredProject | undefined> {
+  const projectPath = resolveProjectPath(projectId);
+  const stored = await withArchitectureArtifactLock(projectPath, async () => {
+    const path = join(projectPath, FLOWWEAVE_DIR, "project.json");
+    const value = await readJsonArtifact(path);
+    if (value === undefined) return undefined;
+    if (!value || typeof value !== "object" || !("files" in value) || !Array.isArray(value.files) || !("summary" in value)) {
+      throw new Error(`FlowWeave project artifact is invalid and was preserved: ${path}`);
+    }
+    const project = value as CodeflowProject;
+    await assertArtifactGeneration(projectPath, path, project);
+    const canvas = await readCanvasArtifactState(projectPath);
+    if (!canvas) return undefined;
+    const architecture = await readArchitectureMap(projectPath);
+    if (architecture) await assertArtifactGeneration(projectPath, join(projectPath, FLOWWEAVE_DIR, "architecture-map.json"), architecture);
+    return { project, canvas, architecture };
+  });
+  if (!stored) return undefined;
+  const { project, canvas, architecture } = stored;
+  const scanFingerprint = project.scanFingerprint ?? canvas.canvas.scanFingerprint ?? "";
+  const inputFingerprint = architecture?.metadata?.inputFingerprint;
+  return {
+    projectId, project, canvas, generation: project.generation, scanFingerprint,
+    graph: { nodes: canvas.canvas.nodes, edges: canvas.canvas.edges },
+    artifacts: { project: "current", canvas: canvas.mode === "legacy-readonly" ? "stale" : "current", task: "stale", context: "stale", architecture: architecture ? "current" : "missing", sequences: await artifactStateForFingerprint(projectPath, "sequence-diagrams.json", scanFingerprint) },
+    architectureReview: await readArchitectureReviewStatus(projectPath, { scanFingerprint, inputFingerprint: inputFingerprint ?? "" }),
+    sequenceReview: await readSequenceReviewStatus(projectPath, scanFingerprint),
+    relationDiagnostics: architecture?.relationDiagnostics ?? [],
+    quality: architecture?.quality, groups: architecture?.groups, resources: architecture?.resources
+  };
 }
 
 async function artifactStateForFingerprint(projectPath: string, fileName: string, fingerprint: string): Promise<ProjectArtifactState> {
@@ -555,11 +662,13 @@ function requireRuntimeAgentId(channel: string, value: unknown): RuntimeAgentId 
   return requireEnum(channel, value, "agentId", TOOL_IDS);
 }
 
-export function requireCanvasV5(channel: string, value: unknown): CodeflowCanvas {
+export function requireCanvasV6(channel: string, value: unknown): CodeflowCanvas {
   const canvas = requireObject(channel, value, "canvas") as Partial<CodeflowCanvas>;
-  if (canvas.version !== 5 || !Array.isArray(canvas.nodes) || !Array.isArray(canvas.edges)) {
-    throw new Error(`[${channel}] Canvas must be a current v5 Canvas. Re-scan the project to rebuild it.`);
+  if (canvas.version !== 6) {
+    throw new Error(`[${channel}] Canvas must be a current v6 Canvas. Re-scan the project to rebuild it.`);
   }
+  const issue = canvasArtifactShapeIssue(canvas);
+  if (issue) throw new Error(`[${channel}] Canvas is invalid: ${issue}`);
   return canvas as CodeflowCanvas;
 }
 

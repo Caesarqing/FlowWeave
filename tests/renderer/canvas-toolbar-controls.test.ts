@@ -14,10 +14,12 @@ describe('canvas toolbar controls', () => {
     expect(styles).toContain('.canvas-view-tools-content {\n  display: flex;\n  align-items: center;\n  width: max-content;\n  min-width: max-content;\n  margin-inline: auto;');
   });
 
-  it('starts in execution mode and offers an explicit inferred dependency overlay', () => {
+  it('uses the persisted graph view and offers an explicit inferred dependency overlay', () => {
     const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
 
-    expect(source).toContain('useState<CanvasLayoutMode>("execution")');
+    expect(source).toContain('canvasLayout.viewMode ?? chooseInitialGraphView(edges.map(graphEdgeFromFlow))');
+    expect(source).toContain('onSetViewMode(mode)');
+    expect(source).toContain('autoLayoutIsCurrent(canvasLayout, layoutMode, visibleTopologyFingerprint)');
     expect(source).toContain('<option value="execution">');
     expect(source).toContain('canvas.inferredDependencyOverlay');
     expect(source).toContain('projectGraphForView(');

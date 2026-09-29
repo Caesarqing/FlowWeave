@@ -4,6 +4,121 @@ import type { ArchitectureModule, FileInsight, SemanticRelation } from "../../sr
 import { moduleClusteringFixture } from "./graph.fixture";
 
 describe("module-clustering.service", () => {
+  it("uses complete service, page, and shared directory boundaries in a mixed application", () => {
+    const paths = [
+      "backend/services/news-service/app.js", "backend/services/news-service/routes/news.routes.js",
+      "backend/services/news-service/models/News.js", "backend/services/news_scraper/app.py",
+      "backend/services/news_scraper/service.py", "backend/services/news_scraper/__init__.py",
+      "frontend/src/pages/auth/Login.tsx", "frontend/src/pages/auth/Register.tsx",
+      "frontend/src/shared/ui/button.tsx", "frontend/src/shared/ui/utils.ts",
+      "frontend/src/shared/i18n/index.ts", "frontend/src/shared/i18n/messages/en.ts"
+    ];
+    const result = clusterArchitectureModules(paths.map(fileInsight), [], []);
+    expect(moduleForFile(result.modules, paths[0])?.files).toEqual(paths.slice(0, 3).sort());
+    expect(moduleForFile(result.modules, paths[3])?.files).toEqual(paths.slice(3, 6).sort());
+    expect(moduleForFile(result.modules, paths[6])?.files).toEqual(paths.slice(6, 8).sort());
+    expect(moduleForFile(result.modules, paths[8])).toMatchObject({ title: "Shared Ui", category: "shared-utility", files: paths.slice(8, 10).sort() });
+    expect(moduleForFile(result.modules, paths[10])).toMatchObject({ title: "Shared I18n", category: "shared-utility" });
+    expect(result.modules.some((module) => module.title === "Unknown" || module.title === "Init")).toBe(false);
+  });
+
+  it("does not absorb a named server responsibility just because one client calls it", () => {
+    const client = "client/UserPage.tsx";
+    const server = "server/users.ts";
+    const result = clusterArchitectureModules([client, server].map(fileInsight), [relation("load-user", client, server)], []);
+    expect(result.modules).toHaveLength(2);
+    expect(moduleForFile(result.modules, server)?.files).toEqual([server]);
+  });
+
+  it("keeps same-named features in different applications separate", () => {
+    const paths = ["apps/admin/src/features/news/index.ts", "apps/public/src/features/news/index.ts"];
+    const result = clusterArchitectureModules(paths.map(fileInsight), [], []);
+    expect(result.modules).toHaveLength(2);
+    expect(new Set(result.modules.map((module) => module.id)).size).toBe(2);
+  });
+
+  it("keeps shared contracts outside their callers and scopes filename responsibilities to each application", () => {
+    const paths = ["frontend/src/app/App.tsx", "frontend/src/types/api.ts", "packages/contracts/src/api-paths.ts",
+      "frontend/src/utils/formatter.ts", "backend/utils/formatter.ts"];
+    const result = clusterArchitectureModules(paths.map(fileInsight), [
+      relation("contract-call", paths[0], paths[2])
+    ], []);
+    expect(moduleForFile(result.modules, paths[1])).toMatchObject({ title: "Shared Contracts", category: "shared-utility", files: [paths[1]] });
+    expect(moduleForFile(result.modules, paths[2])).toMatchObject({ title: "Shared Contracts", category: "shared-utility", files: [paths[2]] });
+    expect(moduleForFile(result.modules, paths[0])?.files).not.toContain(paths[2]);
+    expect(moduleForFile(result.modules, paths[3])?.id).not.toBe(moduleForFile(result.modules, paths[4])?.id);
+  });
+  it("groups named Canvas helpers with confirmed calls and keeps unrelated helpers named", () => {
+    const workspace = "src/components/CanvasWorkspace.tsx";
+    const layout = "src/utils/canvas-layout.ts";
+    const filters = "src/utils/canvas-filters.ts";
+    const unrelated = "src/utils/graph-converters.ts";
+    const result = clusterArchitectureModules(
+      [workspace, layout, filters, unrelated].map(fileInsight),
+      [relation("canvas-layout", workspace, layout), relation("canvas-filters", workspace, filters)],
+      []
+    );
+
+    expect(moduleForFile(result.modules, workspace)?.files).toEqual([workspace, filters, layout]);
+    expect(moduleForFile(result.modules, unrelated)).toMatchObject({ title: "Graph Converters" });
+    expect(result.modules.some((module) => module.title === "Unknown")).toBe(false);
+  });
+
+  it("separates application entry files from shared contracts", () => {
+    const result = clusterArchitectureModules([
+      "src/App.tsx", "src/main.tsx", "src/main/index.ts", "src/types.ts", "src/common/ipc-channels.ts"
+    ].map(fileInsight), [], []);
+
+    expect(moduleForFile(result.modules, "src/App.tsx")).toMatchObject({
+      title: "Application Shell",
+      files: ["src/App.tsx", "src/main.tsx"]
+    });
+    expect(moduleForFile(result.modules, "src/types.ts")).toMatchObject({
+      title: "Shared Contracts",
+      category: "shared-utility"
+    });
+    expect(moduleForFile(result.modules, "src/main/index.ts")?.title).toBe("Main Entry");
+  });
+
+  it("keeps specialized graph nodes and Agent adapters in functional groups", () => {
+    const result = clusterArchitectureModules([
+      "src/components/nodes/ModuleNode.tsx",
+      "src/components/nodes/TaskNode.tsx",
+      "src/main/agents/claude-code.adapter.ts",
+      "src/main/agents/codex-local.adapter.ts"
+    ].map(fileInsight), [], []);
+
+    expect(moduleForFile(result.modules, "src/components/nodes/ModuleNode.tsx")?.files).toHaveLength(2);
+    expect(moduleForFile(result.modules, "src/components/nodes/ModuleNode.tsx")?.title).toBe("Graph Node Components");
+    expect(moduleForFile(result.modules, "src/main/agents/claude-code.adapter.ts")?.files).toHaveLength(2);
+    expect(moduleForFile(result.modules, "src/main/agents/claude-code.adapter.ts")?.title).toBe("Agent Adapters");
+  });
+
+  it("keeps a singleton independent when confirmed callers tie across responsibilities", () => {
+    const helper = "src/services/formatter.service.ts";
+    const billing = "src/features/billing/billing.service.ts";
+    const orders = "src/features/orders/order.service.ts";
+    const result = clusterArchitectureModules(
+      [helper, billing, orders].map(fileInsight),
+      [relation("billing-formatter", billing, helper), relation("orders-formatter", orders, helper)],
+      []
+    );
+
+    expect(moduleForFile(result.modules, helper)?.files).toEqual([helper]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "ambiguous-ownership",
+      filePaths: [helper]
+    }));
+  });
+
+  it("keeps a generic utility entry honestly unknown when no responsibility is evidenced", () => {
+    const result = clusterArchitectureModules([fileInsight("src/utils/index.ts")], [], []);
+    expect(result.modules[0]).toMatchObject({ title: "Unknown", category: "unknown" });
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "unknown-files",
+      filePaths: ["src/utils/index.ts"]
+    }));
+  });
   it("keeps cohesive feature files together and prefers a stable boundary-file anchor", () => {
     const result = clusterArchitectureModules(
       moduleClusteringFixture.files,
@@ -176,24 +291,24 @@ describe("module-clustering.service", () => {
   it("records every predecessor when a merge keeps one predecessor's ID", () => {
     const initial = clusterArchitectureModules([
       fileInsight("src/main/billing.service.ts"),
-      fileInsight("src/main/identity.service.ts")
+      fileInsight("src/main/billing-format.service.ts")
     ], [], []);
     const previousModules = initial.modules.map(toArchitectureModule);
     const billingParent = moduleForFile(initial.modules, "src/main/billing.service.ts");
-    const identityParent = moduleForFile(initial.modules, "src/main/identity.service.ts");
+    const identityParent = moduleForFile(initial.modules, "src/main/billing-format.service.ts");
     if (!billingParent || !identityParent) throw new Error("Expected separate billing and identity modules.");
     const merged = clusterArchitectureModules([
       fileInsight("src/main/billing.service.ts"),
       fileInsight("src/main/billing.store.ts"),
-      fileInsight("src/main/identity.service.ts")
-    ], [relation("billing-calls-identity", "src/main/billing.service.ts", "src/main/identity.service.ts")], previousModules);
+      fileInsight("src/main/billing-format.service.ts")
+    ], [relation("billing-calls-identity", "src/main/billing.service.ts", "src/main/billing-format.service.ts")], previousModules);
     const mergedBilling = moduleForFile(merged.modules, "src/main/billing.service.ts");
 
     expect(mergedBilling?.id).toBe(billingParent.id);
     expect(mergedBilling?.identity.predecessorIds).toEqual([billingParent.id, identityParent.id].sort());
   });
 
-  it("merges a non-boundary singleton into its strongest confirmed neighbor", () => {
+  it("keeps a named responsibility independent when its name does not establish auxiliary ownership", () => {
     const ui = "src/features/billing/BillingPanel.tsx";
     const service = "src/main/invoice.service.ts";
     const result = clusterArchitectureModules(
@@ -202,7 +317,8 @@ describe("module-clustering.service", () => {
       []
     );
 
-    expect(moduleForFile(result.modules, ui)?.files).toEqual([ui, service]);
+    expect(moduleForFile(result.modules, ui)?.files).toEqual([ui]);
+    expect(moduleForFile(result.modules, service)?.files).toEqual([service]);
   });
 
   it("keeps unclassified and oversized modules visible through diagnostics", () => {

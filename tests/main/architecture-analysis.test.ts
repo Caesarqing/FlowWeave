@@ -18,13 +18,15 @@ import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-l
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
 import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
+import { generateProject } from "../../src/main/services/project-generation.service";
 import {
   buildArchitectureReviewPrompt,
   createArchitectureReviewPromptInput
 } from "../../src/main/services/architecture-review-prompt.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
-import type { ArchitectureReviewResponse, CodeflowProject } from "../../src/types";
+import type { ArchitectureModule, ArchitectureReviewResponse, CodeflowProject, SemanticRelation } from "../../src/types";
 import { createNodeCliFixture } from "./test-cli-fixture";
+import { projectGraphForView } from "../../src/utils/graph-view-projection";
 
 describe("architecture-analysis.service", () => {
   it("marks only the local analysis result as a static presentation", () => {
@@ -111,6 +113,69 @@ describe("architecture-analysis.service", () => {
 
     expect(relationships).toHaveLength(181);
     expect(relationships.every((relationship) => relationship.evidence.length === 1)).toBe(true);
+  });
+
+  it("maps only evidenced semantic relations and preserves their confidence", () => {
+    const modules = [
+      architectureModule("module-a", "src/a.ts"),
+      architectureModule("module-b", "src/b.ts"),
+      architectureModule("module-c", "src/c.ts"),
+      architectureModule("module-d", "src/d.ts")
+    ];
+    const relations: SemanticRelation[] = [
+      semanticRelation("import", "src/a.ts", "src/b.ts", "import", "confirmed"),
+      semanticRelation("call", "src/b.ts", "src/c.ts", "call", "inferred"),
+      semanticRelation("http", "src/a.ts", "src/d.ts", "http", "confirmed"),
+      semanticRelation("event", "src/c.ts", "src/d.ts", "event", "confirmed"),
+      semanticRelation("process", "src/c.ts", "src/a.ts", "process", "confirmed"),
+      semanticRelation("database", "src/d.ts", "src/b.ts", "database", "confirmed"),
+      { ...semanticRelation("external-http", "src/a.ts", "https://service.test", "http", "inferred"), targetFile: undefined }
+    ];
+    const files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"].map((path) => ({
+      path,
+      imports: path === "src/a.ts" ? ["./b"] : [],
+      exports: [],
+      symbols: [],
+      calls: [],
+      externalCalls: []
+    }));
+
+    const relationships = aggregateArchitectureRelationships(modules, {
+      projectName: "semantic-relations",
+      rootPath: "/tmp/semantic-relations",
+      languages: { TypeScript: 4 },
+      files,
+      relations
+    });
+
+    expect(relationships.map(({ source, target, relation, confidence }) => ({ source, target, relation, confidence }))).toEqual([
+      { source: "module-a", target: "module-b", relation: "depends_on", confidence: "confirmed" },
+      { source: "module-a", target: "module-d", relation: "calls", confidence: "confirmed" },
+      { source: "module-b", target: "module-c", relation: "calls", confidence: "inferred" },
+      { source: "module-d", target: "module-b", relation: "reads_writes", confidence: "confirmed" }
+    ]);
+    expect(relationships.find((relationship) => relationship.source === "module-a" && relationship.target === "module-b")?.evidence)
+      .toHaveLength(1);
+    expect(architectureMapToGraph({
+      ...architectureFixtureMap("local"),
+      relationships
+    }).edges.find((edge) => edge.source === "module-b" && edge.target === "module-c")?.confidence)
+      .toBe("inferred");
+    const projectionGraph = architectureMapToGraph({
+      ...architectureFixtureMap("local"),
+      relationships: [{
+        ...architectureFixtureMap("local").relationships[0],
+        confidence: "inferred"
+      }]
+    });
+    const projected = projectGraphForView(
+      projectionGraph.nodes,
+      projectionGraph.edges,
+      "dependency",
+      { includeInferredDependencyOverlay: false }
+    );
+    expect(projected.edges.find((edge) => edge.source === "user-api" && edge.target === "user-service")?.confidence)
+      .toBe("inferred");
   });
 
   it("keeps every static module when the Mock Agent produces architecture output", async () => {
@@ -284,13 +349,13 @@ describe("architecture-analysis.service", () => {
     expect(result.review).toMatchObject({
       state: "reviewing",
       reviewId: expect.stringMatching(/^review-/),
-      scanFingerprint: "scan-test",
+      scanFingerprint: result.architectureMap.metadata?.scanFingerprint,
       inputFingerprint: expect.not.stringMatching(/^scan-test$/),
       agentId: agent.id
     });
     expect(result.architectureMap.metadata).toMatchObject({
       source: "local",
-      scanFingerprint: "scan-test",
+      scanFingerprint: result.architectureMap.metadata?.scanFingerprint,
       inputFingerprint: result.review.inputFingerprint
     });
     expect(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")).toContain(result.review.inputFingerprint);
@@ -379,24 +444,11 @@ describe("architecture-analysis.service", () => {
 
   it("adopts a stable-ID response through the manual artifact path", async () => {
     const root = await createFixtureFiles();
-    const project = await scanProject(root);
-    const scanFingerprint = project.scanFingerprint ?? "";
-    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint }), "utf8");
-    const { index } = await buildSemanticIndex(project);
-    const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
-    const local = {
-      ...architectureFixtureMap("local"),
-      version: 2 as const,
-      rootPath: root,
-      metadata: {
-        source: "local" as const,
-        scanFingerprint,
-        inputFingerprint,
-        fileCoverage: 1,
-        evidenceCoverage: 1
-      }
-    };
-    await writeFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), JSON.stringify(local), "utf8");
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Fixture generation was superseded.");
+    const { index, localArchitecture: local } = generated;
+    const scanFingerprint = generated.project.scanFingerprint!;
+    const inputFingerprint = local.metadata!.inputFingerprint;
     const prompt = buildArchitectureReviewPrompt(createArchitectureReviewPromptInput(local, index));
     const projectId = await registerProject(root);
     const reviewId = "review-manual-adoption";
@@ -427,11 +479,11 @@ describe("architecture-analysis.service", () => {
       inputFingerprint,
       reviewId
     }, JSON.stringify({
-      modules: [{ moduleId: "user-api", title: "Manually reviewed API" }],
+      modules: [{ moduleId: local.modules[0].id, title: "Manually reviewed API" }],
       findings: []
     }), "manual");
 
-    expect(prompt.moduleIds).toContain("user-api");
+    expect(prompt.moduleIds).toContain(local.modules[0].id);
     expect(adoption.status).toBe("applied");
     const reviewed = await readArchitectureMap(root);
     expect(reviewed?.modules.map((module) => module.id)).toEqual(local.modules.map((module) => module.id));
@@ -441,12 +493,8 @@ describe("architecture-analysis.service", () => {
 
   it("marks completed artifact runs stale when the scan fingerprint changed", async () => {
     const root = await createFixtureFiles();
-    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-    await writeFile(
-      join(root, FLOWWEAVE_DIR, "project.json"),
-      JSON.stringify({ scanFingerprint: "scan-new" }),
-      "utf8"
-    );
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Fixture generation was superseded.");
 
     const adoption = await adoptArtifactRun(
       root,
@@ -471,34 +519,16 @@ describe("architecture-analysis.service", () => {
       status: "stale",
       message: "Run completed but not applied because the project scan changed."
     });
-    expect(await readArchitectureMap(root)).toBeUndefined();
+    expect(await readArchitectureMap(root)).toEqual(generated.architectureMap);
   });
 
   it("rejects a previous review identically for automatic and manual adoption", async () => {
     const root = await createFixtureFiles();
-    const project = await scanProject(root);
-    const scanFingerprint = project.scanFingerprint ?? "";
-    await writeFile(
-      join(root, FLOWWEAVE_DIR, "project.json"),
-      JSON.stringify({ scanFingerprint }),
-      "utf8"
-    );
-    const { index } = await buildSemanticIndex(project);
-    const inputFingerprint = buildArchitectureInputFingerprint(scanFingerprint, index);
-    const local = {
-      ...architectureFixtureMap("local"),
-      version: 2 as const,
-      rootPath: root,
-      metadata: {
-        source: "local" as const,
-        generatedAt: "2026-06-25T00:00:00.000Z",
-        scanFingerprint,
-        inputFingerprint,
-        fileCoverage: 1,
-        evidenceCoverage: 1
-      }
-    };
-    await writeFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), JSON.stringify(local), "utf8");
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Fixture generation was superseded.");
+    const { index, localArchitecture: local } = generated;
+    const scanFingerprint = generated.project.scanFingerprint!;
+    const inputFingerprint = local.metadata!.inputFingerprint;
     await writeArchitectureReviewStatus(root, {
       state: "reviewing",
       projectId: "project-1",
@@ -531,7 +561,7 @@ describe("architecture-analysis.service", () => {
 
     expect(automatic).toMatchObject({ status: "stale" });
     expect(manual).toEqual(automatic);
-    expect(await readArchitectureMap(root)).toBeUndefined();
+    expect(await readArchitectureMap(root)).toEqual(generated.architectureMap);
   });
 
   it("rejects invalid Agent output after one run and publishes a review failure", async () => {
@@ -614,7 +644,10 @@ describe("architecture-analysis.service", () => {
     ].join("\n"), process.platform);
     process.env.PATH = `${binRoot}${delimiter}${originalPath ?? ""}`;
     try {
-      const result = await analyzeArchitecture(projectFixture(root), "claude-code");
+      await writeFile(join(root, "src/service/user.service.ts"), "export class UserService { load() { return true; } changed() { return false; } }\n", "utf8");
+      const regenerated = await generateProject(root, {});
+      if (regenerated.status !== "committed") throw new Error("Expected the edited project generation to commit.");
+      const result = await analyzeArchitecture(regenerated.project, "claude-code");
       const stored = await readArchitectureMap(root);
 
       expect(result.outcome).toBe("generated");
@@ -622,7 +655,7 @@ describe("architecture-analysis.service", () => {
       expect(result.architectureMap.source).toBe("local");
       expect(result.architectureMap.metadata).toMatchObject({
         source: "local",
-        scanFingerprint: "scan-test",
+        scanFingerprint: result.architectureMap.metadata?.scanFingerprint,
         inputFingerprint: expect.any(String)
       });
       expect(result.warning).toBeUndefined();
@@ -690,6 +723,41 @@ async function createModuleClusteringFiles(): Promise<string> {
     await writeFile(absolutePath, content, "utf8");
   }));
   return root;
+}
+
+function architectureModule(id: string, file: string): ArchitectureModule {
+  return {
+    id,
+    title: id,
+    category: "domain-service",
+    nodeType: "service",
+    role: "Owns behavior.",
+    description: "A test module.",
+    files: [file],
+    fileRoles: [],
+    symbols: [],
+    evidence: [],
+    risk: "unknown"
+  };
+}
+
+function semanticRelation(
+  id: string,
+  sourceFile: string,
+  targetFile: string,
+  kind: SemanticRelation["kind"],
+  confidence: SemanticRelation["confidence"]
+): SemanticRelation {
+  return {
+    id,
+    kind,
+    source: sourceFile,
+    target: targetFile,
+    sourceFile,
+    targetFile,
+    detail: `${sourceFile} ${kind} ${targetFile}`,
+    confidence
+  };
 }
 
 function projectFixture(rootPath: string): CodeflowProject {

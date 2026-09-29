@@ -6,7 +6,7 @@ import {
   type NodeChange
 } from "@xyflow/react";
 import { useMemo, useState } from "react";
-import type { CanvasLayoutMode, CanvasLayoutState, GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
+import type { CanvasLayoutMode, CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
 import { usePreferencesStore } from "../stores/preferences.store";
 import { useCanvasStore } from "../stores/canvas.store";
 import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../utils/canvas-graph-crud";
@@ -34,10 +34,16 @@ export function useFlowWeaveState() {
   const updateModule = useCanvasStore((state) => state.updateModule);
   const syncNodePositions = useCanvasStore((state) => state.syncNodePositions);
   const canvasLayout = useCanvasStore((state) => state.canvasLayout);
+  const groups = useCanvasStore((state) => state.groups);
+  const quality = useCanvasStore((state) => state.quality);
+  const generation = useCanvasStore((state) => state.generation);
+  const orphanedNodeEdits = useCanvasStore((state) => state.orphanedNodeEdits);
+  const canvasMetadata = useMemo(() => ({ generation, groups, quality, orphanedNodeEdits }), [generation, groups, quality, orphanedNodeEdits]);
   const orphanedEdges = useCanvasStore((state) => state.orphanedEdges);
   const applyAutoLayout = useCanvasStore((state) => state.applyAutoLayout);
   const restoreManualLayout = useCanvasStore((state) => state.restoreManualLayout);
   const setCollapsedGroups = useCanvasStore((state) => state.setCollapsedGroups);
+  const setViewMode = useCanvasStore((state) => state.setViewMode);
   const adoptReviewedGraph = useCanvasStore((state) => state.adoptReviewedGraph);
   const graphRelations = useMemo(() => edges.map(graphEdgeFromFlow), [edges]);
   const decoratedGraph = useMemo(() => decorateFlowGraph(nodes, edges, selectedEdgeId), [edges, nodes, selectedEdgeId]);
@@ -53,9 +59,10 @@ export function useFlowWeaveState() {
     nextEdges: GraphEdge[],
     nextFiles: ProjectFileNode[],
     layout?: CanvasLayoutState,
-    nextOrphanedEdges?: GraphEdge[]
+    nextOrphanedEdges?: GraphEdge[],
+    metadata?: Pick<CodeflowCanvas, "generation" | "groups" | "quality" | "orphanedNodeEdits">
   ) {
-    setGraph(nextModules, nextEdges, nextFiles, layout, nextOrphanedEdges);
+    setGraph(nextModules, nextEdges, nextFiles, layout, nextOrphanedEdges, metadata);
   }
 
   function adoptReviewedProjectGraph(
@@ -232,6 +239,7 @@ export function useFlowWeaveState() {
   return {
     addModuleNode,
     canvasLayout,
+    canvasMetadata,
     addConnection,
     clearConnectionSelection,
     connectionPanelMode,
@@ -260,6 +268,7 @@ export function useFlowWeaveState() {
     selectedNodeId,
     setSelectedNodeId,
     setCollapsedGroups,
+    setViewMode,
     togglePath,
     updateEdgeGuidance,
     updateEdgeEndpoints,

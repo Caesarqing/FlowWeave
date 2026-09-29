@@ -16,6 +16,7 @@
     "dist:win:arm64": "npm run build && electron-builder --win nsis --arm64",
     "smoke:agent": "node --import tsx scripts/run-agent-smoke.ts",
     "smoke:packaged": "node scripts/run-packaged-smoke.mjs",
+    "smoke:graph": "node scripts/run-graph-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
@@ -28,6 +29,7 @@
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
     "web-tree-sitter": "^0.26.9",
     "zustand": "^5.0.13"
   },
@@ -42,7 +44,6 @@
     "tree-sitter-go": "^0.25.0",
     "tree-sitter-java": "^0.23.5",
     "tree-sitter-python": "^0.25.0",
-    "typescript": "^5.9.3",
     "tsx": "^4.22.1",
     "vite": "^7.3.0",
     "vitest": "^4.1.6"
@@ -59,7 +60,14 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      {
+        "from": "node_modules/typescript/lib",
+        "to": "node_modules/typescript/lib",
+        "filter": [
+          "*.d.ts"
+        ]
+      }
     ],
     "extraResources": [
       {
@@ -85,6 +93,13 @@
       {
         "from": "node_modules/tree-sitter-go/tree-sitter-go.wasm",
         "to": "parsers/tree-sitter-go.wasm"
+      },
+      {
+        "from": "node_modules",
+        "to": "parsers/licenses",
+        "filter": [
+          "tree-sitter-{python,java,go}/LICENSE"
+        ]
       }
     ],
     "mac": {

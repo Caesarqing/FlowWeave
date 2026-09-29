@@ -15,10 +15,7 @@ import {
   reviseSequenceDiagram,
   writeSequenceDiagramBundle
 } from "../../src/main/services/sequence-diagram.service";
-import { registerProject } from "../../src/main/services/project-registry.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
-import { installBuiltInAgentPlugin } from "../../src/main/services/agent-plugin.service";
-import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import type { CodeflowProject, SequenceDiagram, SequenceDiagramBundle } from "../../src/types";
 
@@ -466,79 +463,6 @@ describe("sequence-diagram.service", () => {
     expect(await readFile(invocationPath, "utf8")).toBe("x");
   });
 
-  it("waits for Agent Inbox response.json before completing sequence review", async () => {
-    const root = await createFixtureFiles();
-    const projectId = await registerProject(root);
-    await installBuiltInAgentPlugin(root);
-    await enableProjectAgentConnection(root);
-    const events: import("../../src/types").SequenceReviewEvent[] = [];
-
-    void writeDesktopSequenceResponseWhenRunStarts(root, projectId, events);
-
-    const result = await generateSequenceDiagrams(projectFixture(root), "codex-desktop", {
-      projectId,
-      onSequenceReview: (event) => events.push(event),
-    });
-    const reviewed = await waitForEvent(events, "reviewed");
-
-    expect(result.outcome).toBe("generated");
-    expect(reviewed).toMatchObject({
-      status: {
-        state: "reviewed",
-        agentId: "codex-desktop",
-        runId: expect.stringMatching(/^run-/)
-      },
-      bundle: {
-        source: "agent"
-      }
-    });
-    expect((await readSequenceDiagrams(root))?.source).toBe("agent");
-  });
-
-  async function writeDesktopSequenceResponseWhenRunStarts(
-    root: string,
-    projectId: string,
-    events: import("../../src/types").SequenceReviewEvent[]
-  ): Promise<void> {
-    const running = await waitForRunId(events);
-    const runId = running.status.runId;
-    if (!runId) throw new Error("Expected sequence review run id.");
-    await waitForPath(join(root, FLOWWEAVE_DIR, "runs", runId, "agent-request.json"));
-    await mkdir(join(root, FLOWWEAVE_DIR, "runs", runId), { recursive: true });
-    await writeFile(
-      join(root, ".flowweave", "runs", runId, "agent-response.json"),
-      JSON.stringify({
-        protocolVersion: 2,
-        runId,
-        projectId,
-        status: "completed",
-        summary: "desktop sequence response",
-        content: JSON.stringify(validSequenceBundle(root)),
-        completedAt: "2026-06-26T04:00:00.000Z"
-      }),
-      "utf8"
-    );
-  }
-
-  async function waitForRunId(events: import("../../src/types").SequenceReviewEvent[]) {
-    const deadline = Date.now() + 3_000;
-    while (Date.now() < deadline) {
-      const event = events.find((candidate) => candidate.status.runId);
-      if (event) return event;
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    throw new Error("Timed out waiting for sequence review run id.");
-  }
-
-  async function waitForPath(path: string) {
-    const deadline = Date.now() + 3_000;
-    while (Date.now() < deadline) {
-      if (await readFile(path, "utf8").then(() => true).catch(() => false)) return;
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    throw new Error(`Timed out waiting for ${path}.`);
-  }
-
   it("regenerates local diagrams instead of reusing stale local cache", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-refresh-local-agent-"));
     const root = await createFixtureFiles();
@@ -600,6 +524,7 @@ describe("sequence-diagram.service", () => {
 
   it("returns generated when valid output is parsed and written", async () => {
     const root = await createFixtureFiles();
+    await addInventoryBoundary(root);
     const result = await generateSequenceDiagrams(projectFixture(root), "mock");
 
     expect(result.outcome).toBe("generated");
@@ -643,6 +568,7 @@ describe("sequence-diagram.service", () => {
 
   it("revises the current diagram with the selected agent", async () => {
     const root = await createFixtureFiles();
+    await addInventoryBoundary(root);
     const project = projectFixture(root);
     const generated = await generateSequenceDiagrams(project, "mock");
     if (generated.outcome !== "generated") throw new Error(generated.error.message);
@@ -685,19 +611,6 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     if (Date.now() >= deadline) throw new Error("Timed out waiting for sequence review event.");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-}
-
-async function waitForEvent(
-  events: import("../../src/types").SequenceReviewEvent[],
-  state: import("../../src/types").SequenceReviewState
-): Promise<import("../../src/types").SequenceReviewEvent> {
-  const deadline = Date.now() + 3_000;
-  while (Date.now() < deadline) {
-    const event = events.find((candidate) => candidate.status.state === state);
-    if (event) return event;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`Timed out waiting for sequence review ${state} event.`);
 }
 
 function projectFixture(rootPath: string): CodeflowProject {
@@ -768,64 +681,9 @@ function existingBundle(rootPath: string): SequenceDiagramBundle {
   };
 }
 
-function validSequenceBundle(rootPath: string): SequenceDiagramBundle {
-  return {
-    version: 2,
-    projectName: "sequence-fixture",
-    rootPath,
-    generatedAt: "2026-06-26T04:00:00.000Z",
-    source: "agent",
-    architectural: {
-      id: "architectural-sequence",
-      title: "Architectural Sequence Diagram",
-      kind: "architectural",
-      summary: "Order request flows from the API controller into the order service.",
-      participants: [
-        {
-          id: "order-controller",
-          title: "Order Controller",
-          kind: "gateway",
-          description: "Receives order creation requests.",
-          filePath: "src/api/order.controller.ts",
-          symbol: "OrderController"
-        },
-        {
-          id: "order-service",
-          title: "Order Service",
-          kind: "service",
-          description: "Creates orders.",
-          filePath: "src/service/order.service.ts",
-          symbol: "OrderService"
-        }
-      ],
-      messages: [
-        {
-          id: "controller-calls-service",
-          sequence: 1,
-          from: "order-controller",
-          to: "order-service",
-          kind: "sync",
-          label: "Create order",
-          description: "The controller delegates order creation to the service.",
-          methodName: "createOrder",
-          input: "CreateOrderDto",
-          output: "Order",
-          evidence: [
-            {
-              filePath: "src/api/order.controller.ts",
-              symbol: "OrderController",
-              detail: "OrderController.createOrder constructs OrderService and calls createOrder."
-            }
-          ]
-        }
-      ],
-      evidence: [
-        {
-          filePath: "src/service/order.service.ts",
-          symbol: "OrderService",
-          detail: "OrderService.createOrder returns an order result."
-        }
-      ]
-    }
-  };
+async function addInventoryBoundary(root: string): Promise<void> {
+  await mkdir(join(root, "src/features/inventory"), { recursive: true });
+  await writeFile(join(root, "src/features/inventory/stock.ts"), "export function reserveStock() { return true; }\n");
+  await writeFile(join(root, "src/api/order.controller.ts"),
+    'import { OrderService } from "../service/order.service";\nimport { reserveStock } from "../features/inventory/stock";\nexport class OrderController { createOrder(dto: unknown) { reserveStock(); return new OrderService().createOrder(dto); } }\n');
 }

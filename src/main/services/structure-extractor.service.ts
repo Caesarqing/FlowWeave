@@ -11,7 +11,7 @@ import type {
   StructureSymbol,
   StructureSymbolKind
 } from "../../types";
-import { flattenProjectFilePaths } from "./import-parser.service";
+import { flattenProjectFilePaths } from "./project-import-resolver.service";
 
 const MAX_INSIGHT_FILES = 800;
 const MAX_FILE_BYTES = 220_000;
@@ -80,9 +80,6 @@ function representativePathScore(filePath: string) {
 
 export function extractTypeScriptInsight(filePath: string, content: string, language = detectLanguage(filePath)): FileInsight {
   const loadedTypeScript = loadTypeScript();
-  if (!loadedTypeScript) {
-    return extractLightweightInsight(filePath, content, language);
-  }
   const ts = loadedTypeScript;
   const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, filePath.endsWith(".tsx") || filePath.endsWith(".jsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const imports = new Set<string>();
@@ -120,12 +117,8 @@ export function extractTypeScriptInsight(filePath: string, content: string, lang
   };
 }
 
-function loadTypeScript(): TypeScriptApi | undefined {
-  try {
-    return require("typescript") as TypeScriptApi;
-  } catch {
-    return undefined;
-  }
+function loadTypeScript(): TypeScriptApi {
+  return require("typescript") as TypeScriptApi;
 }
 
 export function extractLightweightInsight(

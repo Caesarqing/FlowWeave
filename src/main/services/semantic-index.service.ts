@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+
 import { dirname, extname, join, sep } from "node:path";
 import type {
   CodeflowProject,
@@ -11,21 +11,26 @@ import type {
   SemanticIndexManifest,
   SemanticIndexManifestEntry,
   SemanticRelation,
-  ProjectStructureFacts
+  ProjectStructureFacts, ProjectAnalysisContext, SemanticDiagnostic, SemanticOperationFact, StaticAnalysisQuality, StructureSymbol
 } from "../../types";
+import { createSourceSnapshot, type SourceSnapshot } from "./source-snapshot.service";
+import type { ArtifactUpdate } from "../storage/flowweave-store";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
-import { flattenProjectFilePaths, resolveProjectImport } from "./import-parser.service";
+import { readJsonArtifact } from "../storage/artifact-store";
+import { flattenProjectFilePaths, resolveProjectImport, resolvePythonProjectImport } from "./project-import-resolver.service";
 import { analyzeTypeScriptProject } from "./typescript-semantic.service";
-import { analyzeSourceFile } from "./language-analyzer.service";
+import { analyzeTreeSitterProject } from "./project-language-binding.service";
+import { discoverProjectAnalysisContext } from "./project-analysis-context.service";
+import { buildResourceRelations } from "./semantic-resource.service";
+import { analyzeSourceFile, TreeSitterInitializationError } from "./language-analyzer.service";
 import { buildCrossStackHttpRelations } from "./cross-stack-relation.service";
 
-const GENERATOR_VERSION = "4.0.0";
-const INDEX_VERSION = 4;
+const GENERATOR_VERSION = "5.0.1";
+const INDEX_VERSION = 5;
 const DEFAULT_PARSE_CONCURRENCY = 8;
 const MAX_FILE_BYTES = 220_000;
 const CODE_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".py", ".go", ".java", ".rs", ".php", ".cs"
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".py", ".go", ".java", ".rs", ".php", ".cs"
 ]);
 
 export type BuildSemanticIndexOptions = {
@@ -36,14 +41,30 @@ export type BuildSemanticIndexOptions = {
 export async function buildSemanticIndex(
   project: CodeflowProject,
   options?: BuildSemanticIndexOptions
-): Promise<{ index: SemanticIndex; delta: ScanDelta }> {
+): Promise<{ index: SemanticIndex; delta: ScanDelta; updates: ArtifactUpdate[]; removedPaths: string[]; snapshot: SourceSnapshot }> {
   const projectPaths = flattenProjectFilePaths(project.files).sort();
   const paths = projectPaths
     .filter((path) => CODE_EXTENSIONS.has(extname(path).toLowerCase()))
     .sort();
   const previousManifest = await readManifest(project.rootPath);
+  const snapshot = createSourceSnapshot(paths.map((path) => join(project.rootPath, path)), previousManifest?.inputState);
+  const context = await discoverProjectAnalysisContext(project.rootPath, projectPaths, snapshot);
   const previousIndex = await readSemanticIndex(project.rootPath);
-  const configurationFingerprint = await createConfigurationFingerprint(project.rootPath, projectPaths);
+  const currentInputFingerprint = snapshot.fingerprint();
+  const canReuseIndex = Boolean(previousManifest?.inputState && previousManifest.generatorVersion === GENERATOR_VERSION &&
+    previousManifest.scanFingerprint === project.scanFingerprint && previousManifest.configurationFingerprint === currentInputFingerprint &&
+    previousIndex?.version === INDEX_VERSION && previousIndex.generatorVersion === GENERATOR_VERSION &&
+    previousIndex.scanFingerprint === project.scanFingerprint && previousIndex.configurationFingerprint === currentInputFingerprint &&
+    previousIndex.projectName === project.projectName && previousIndex.rootPath === project.rootPath);
+  if (canReuseIndex && previousManifest && previousIndex) {
+    const generatedAt = new Date().toISOString();
+    const delta = createScanDelta(previousManifest.files, previousManifest.files);
+    const index = { ...previousIndex, generatedAt };
+    const manifest: SemanticIndexManifest = { ...previousManifest, generatedAt, configurationFingerprint: currentInputFingerprint, inputState: snapshot.inputState() };
+    options?.onProgress?.({ stage: "linking", completed: paths.length, total: paths.length, failed: 0, message: "Reusing unchanged project bindings." });
+    options?.onProgress?.({ stage: "persisting", completed: paths.length, total: paths.length, failed: 0, message: "Preparing the unchanged semantic index for the generation transaction." });
+    return { index, delta, updates: prepareSemanticIndex(project.rootPath, index, manifest), snapshot, removedPaths: [] };
+  }
   const previousByPath = new Map(previousManifest?.files.map((file) => [file.path, file]) ?? []);
   const projectFileSet = new Set(paths);
   const concurrency = normalizeConcurrency(options?.concurrency);
@@ -58,7 +79,8 @@ export async function buildSemanticIndex(
   });
   const semanticFiles = await mapWithConcurrency(paths, concurrency, async (path) =>
     {
-      const file = await buildSemanticFile(project, path, previousByPath.get(path));
+      const file = await buildSemanticFile(project, path,
+        previousManifest?.generatorVersion === GENERATOR_VERSION ? previousByPath.get(path) : undefined, snapshot);
       completed += 1;
       if (file?.status === "failed") failed += 1;
       options?.onProgress?.({
@@ -74,38 +96,38 @@ export async function buildSemanticIndex(
   const files = semanticFiles.filter((file): file is SemanticFile => Boolean(file));
   const manifestEntries = files.map(toManifestEntry);
   const delta = createScanDelta(previousManifest?.files ?? [], manifestEntries);
-  const configurationChanged = previousManifest?.configurationFingerprint !== configurationFingerprint;
-  const canReuseLinkedIndex = previousIndex !== undefined &&
-    previousIndex.generatorVersion === GENERATOR_VERSION &&
-    !configurationChanged &&
-    delta.added.length === 0 &&
-    delta.modified.length === 0 &&
-    delta.deleted.length === 0;
-  const analysisScopes = semanticAnalysisScopes(projectPaths, paths);
-  const typeScriptResult = canReuseLinkedIndex
-    ? { relations: [], symbolsByFile: new Map<string, import("../../types").StructureSymbol[]>() }
-    : analyzeProjectTypeScript(project, files, analysisScopes);
-  const enrichedFiles = canReuseLinkedIndex
-    ? files
-    : files.map((file) => enrichTypeScriptSymbols(file, typeScriptResult.symbolsByFile.get(file.path)));
-  const httpEndpoints = enrichedFiles.flatMap((file) => file.httpEndpoints);
   options?.onProgress?.({
-    stage: "linking",
-    completed: paths.length,
-    total: paths.length,
-    failed,
-    message: "Linking symbols and cross-stack relations."
+    stage: "linking", completed: paths.length, total: paths.length, failed,
+    message: "Binding project imports, symbols and resources."
   });
-  const relations = canReuseLinkedIndex
-    ? previousIndex.relations
-    : dedupeRelations([
-      ...buildSemanticRelations(enrichedFiles, projectFileSet),
-      ...typeScriptResult.relations,
-      ...buildCrossStackHttpRelations(httpEndpoints)
-    ]);
+  const parsedFiles = files.filter((file) => file.status === "parsed");
+  const typeScriptResult = analyzeProjectTypeScript(project, parsedFiles, context, snapshot);
+  const languageResult = await analyzeTreeSitterProject(project.rootPath, parsedFiles, context, snapshot);
+  const symbolsByFile = new Map([...typeScriptResult.symbolsByFile, ...languageResult.symbolsByFile]);
+  const bindingDiagnostics = [...typeScriptResult.diagnostics, ...languageResult.diagnostics];
+  const enrichedFiles = files.map((file) => enrichLinkedSymbols(file, symbolsByFile.get(file.path), bindingDiagnostics));
+  const operations = [...typeScriptResult.operations, ...languageResult.operations];
+  const httpEndpoints = [
+    ...enrichedFiles.flatMap((file) => file.httpEndpoints).filter((endpoint) => endpoint.kind === "route"),
+    ...operations.flatMap(httpEndpointFromOperation)
+  ];
+  const importsAndCalls = [...buildSemanticRelations(enrichedFiles, projectFileSet, typeScriptResult.relations), ...typeScriptResult.relations, ...languageResult.relations];
+  const resourceResult = buildResourceRelations(operations, importsAndCalls.filter((relation) => relation.kind === "import"));
+  const resourceImports = new Map(resourceResult.relations.filter((relation) => relation.kind === "import").map((relation) => [relation.id, relation]));
+  const relations = dedupeRelations([
+    ...importsAndCalls.map((relation) => resourceImports.get(relation.id) ?? relation),
+    ...resourceResult.relations.filter((relation) => relation.kind !== "import"),
+    ...buildCrossStackHttpRelations(httpEndpoints)
+  ]);
+  const diagnostics = [
+    ...context.diagnostics, ...enrichedFiles.flatMap((file) => file.diagnostics),
+    ...bindingDiagnostics, ...resourceResult.diagnostics
+  ];
+  const quality = calculateAnalysisQuality(enrichedFiles, importsAndCalls, diagnostics);
   const generatedAt = new Date().toISOString();
   const index: SemanticIndex = {
     version: INDEX_VERSION,
+    configurationFingerprint: snapshot.fingerprint(),
     generatorVersion: GENERATOR_VERSION,
     projectName: project.projectName,
     rootPath: project.rootPath,
@@ -115,7 +137,10 @@ export async function buildSemanticIndex(
     symbols: enrichedFiles.flatMap((file) => file.insight?.symbols ?? []),
     relations,
     httpEndpoints,
-    diagnostics: files.flatMap((file) => file.diagnostics)
+    diagnostics,
+    scopes: context.scopes,
+    resources: resourceResult.resources,
+    quality
   };
   const manifest: SemanticIndexManifest = {
     version: INDEX_VERSION,
@@ -124,7 +149,8 @@ export async function buildSemanticIndex(
     rootPath: project.rootPath,
     generatedAt,
     scanFingerprint: project.scanFingerprint ?? "",
-    configurationFingerprint,
+    configurationFingerprint: snapshot.fingerprint(),
+    inputState: snapshot.inputState(),
     files: enrichedFiles.map(toManifestEntry)
   };
 
@@ -135,19 +161,11 @@ export async function buildSemanticIndex(
     failed,
     message: "Persisting semantic index."
   });
-  const cacheWritePaths = configurationChanged
-    ? new Set(paths)
-    : new Set([...delta.added, ...delta.modified]);
-  await persistSemanticIndex(
-    project.rootPath,
-    index,
-    manifest,
-    cacheWritePaths,
-    delta.deleted,
-    previousByPath
-  );
-  project.scanDelta = delta;
-  return { index, delta };
+  const updates = prepareSemanticIndex(project.rootPath, index, manifest);
+  return { index, delta, updates, snapshot, removedPaths: delta.deleted.flatMap((path) => {
+    const previous = previousByPath.get(path);
+    return previous ? [join(indexRoot(project.rootPath), "files", `${previous.cacheKey}.json`)] : [];
+  }) };
 }
 
 export type SemanticAnalysisScope = {
@@ -175,22 +193,47 @@ export function semanticAnalysisScopes(projectPaths: string[], codePaths: string
 function analyzeProjectTypeScript(
   project: CodeflowProject,
   files: SemanticFile[],
-  scopes: SemanticAnalysisScope[]
+  context: ProjectAnalysisContext,
+  snapshot: SourceSnapshot
 ): import("./typescript-semantic.service").TypeScriptSemanticResult {
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const relations: SemanticRelation[] = [];
-  const symbolsByFile = new Map<string, import("../../types").StructureSymbol[]>();
-  for (const scope of scopes) {
+  const diagnostics: SemanticDiagnostic[] = [];
+  const operations: SemanticOperationFact[] = [];
+  const symbolsByFile = new Map<string, StructureSymbol[]>();
+  for (const scope of context.scopes.filter((item) => item.language === "typescript")) {
     const scopeFiles = scope.paths.flatMap((path) => filesByPath.get(path) ?? []);
-    const result = analyzeTypeScriptProject(
-      project.rootPath,
-      join(project.rootPath, scope.configurationRoot),
-      scopeFiles.map((file) => ({ ...file, path: relativeScopePath(file.path, scope.configurationRoot) }))
-    );
+    const result = analyzeTypeScriptProject(project.rootPath, join(project.rootPath, scope.rootPath),
+      scopeFiles.map((file) => ({ ...file, path: relativeScopePath(file.path, scope.rootPath) })), context, snapshot);
     relations.push(...result.relations);
+    diagnostics.push(...result.diagnostics);
+    operations.push(...result.operations);
     result.symbolsByFile.forEach((symbols, path) => symbolsByFile.set(path, symbols));
   }
-  return { relations: dedupeRelations(relations), symbolsByFile };
+  return { relations: dedupeRelations(relations), symbolsByFile, diagnostics, operations };
+}
+
+function httpEndpointFromOperation(operation: SemanticOperationFact): import("../../types").SemanticHttpEndpoint[] {
+  if (operation.kind !== "http" || !operation.target || operation.unresolvedReason) return [];
+  const url = /^https?:\/\//.test(operation.target) ? new URL(operation.target) : undefined;
+  return [{ id: relationId("http-request", operation.filePath, JSON.stringify(operation.range)), normalizedPath: url?.pathname ?? operation.target.split("?")[0], kind: "request", method: operation.method ?? "UNKNOWN", path: url?.pathname ?? operation.target.split("?")[0],
+    origin: url?.origin ?? operation.origin, filePath: operation.filePath, symbol: operation.apiName,
+    confidence: operation.confidence, range: operation.range }];
+}
+
+function calculateAnalysisQuality(files: SemanticFile[], relations: SemanticRelation[], diagnostics: SemanticDiagnostic[]): StaticAnalysisQuality {
+  const imports = relations.filter((relation) => relation.kind === "import" && relation.targetRef?.kind !== "external" && relation.targetRef?.kind !== "resource");
+  const calls = relations.filter((relation) => relation.kind === "call" || relation.kind === "render");
+  const failedFiles = files.filter((file) => file.status === "failed").length;
+  const unsupportedFiles = files.filter((file) => !/\.(?:[cm]?[tj]sx?|py|java|go)$/.test(file.path)).length;
+  return {
+    eligibleFiles: files.length, parsedFiles: files.filter((file) => file.status === "parsed").length, failedFiles, unsupportedFiles,
+    internalImports: imports.length, resolvedInternalImports: imports.filter((item) => Boolean(item.targetFile)).length,
+    unresolvedInternalImports: imports.filter((item) => !item.targetFile).length,
+    calls: calls.length, resolvedCalls: calls.filter((item) => item.targetRef?.kind === "file").length,
+    ambiguousCalls: calls.filter((item) => item.targetRef?.kind === "unresolved" && item.targetRef.candidates.length > 1).length,
+    complete: failedFiles === 0 && unsupportedFiles === 0 && !diagnostics.some((item) => item.severity === "error")
+  };
 }
 
 function nearestRoot(path: string, roots: string[]): string | undefined {
@@ -211,17 +254,12 @@ function relativeScopePath(path: string, root: string): string {
   return root === "." || root === "" ? path : path.slice(`${root}/`.length);
 }
 
-function enrichTypeScriptSymbols(file: SemanticFile, symbols: import("../../types").StructureSymbol[] | undefined): SemanticFile {
-  if (!file.insight || !symbols || symbols.length === 0) return file;
-  return {
-    ...file,
-    analyzerId: "typescript-program",
-    analysisDepth: "semantic",
-    insight: {
-      ...file.insight,
-      symbols
-    }
-  };
+function enrichLinkedSymbols(file: SemanticFile, symbols: StructureSymbol[] | undefined, diagnostics: SemanticDiagnostic[]): SemanticFile {
+  const errors = diagnostics.filter((item) => item.filePath === file.path && item.severity === "error");
+  if (!file.insight || !symbols) return file;
+  return { ...file, analyzerId: /\.[cm]?[tj]sx?$/.test(file.path) ? "typescript-program" : "tree-sitter-project",
+    analysisDepth: "semantic", status: errors.length ? "failed" : file.status,
+    diagnostics: [...file.diagnostics, ...errors], insight: { ...file.insight, symbols } };
 }
 
 export async function readSemanticIndex(projectPath: string): Promise<SemanticIndex | undefined> {
@@ -238,7 +276,8 @@ export function semanticIndexToStructureFacts(
     rootPath: project.rootPath,
     languages: project.summary.languages,
     files: index.files.flatMap((file) => file.insight ? [file.insight] : []),
-    relations: index.relations
+    relations: index.relations,
+    scopes: index.scopes, resources: index.resources, quality: index.quality, diagnostics: index.diagnostics
   };
 }
 
@@ -269,15 +308,12 @@ function normalizeConcurrency(value: number | undefined): number {
 async function buildSemanticFile(
   project: CodeflowProject,
   path: string,
-  previous: SemanticIndexManifestEntry | undefined
+  previous: SemanticIndexManifestEntry | undefined,
+  snapshot: SourceSnapshot
 ): Promise<SemanticFile | undefined> {
   const absolutePath = join(project.rootPath, ...path.split("/"));
-  const info = await stat(absolutePath);
-  const modifiedAt = info.mtime.toISOString();
-  if (previous && previous.size === info.size && previous.modifiedAt === modifiedAt) {
-    const cached = await readCachedFile(project.rootPath, previous.cacheKey);
-    if (cached) return cached;
-  }
+  const info = snapshot.info(absolutePath);
+  const modifiedAt = info.modifiedAt;
   if (info.size > MAX_FILE_BYTES) {
     const contentHash = createHash("sha256").update(`${path}:${info.size}:${modifiedAt}`).digest("hex");
     return {
@@ -301,8 +337,13 @@ async function buildSemanticFile(
     };
   }
   try {
-    const content = await readFile(absolutePath, "utf8");
+    const content = snapshot.read(absolutePath);
+    if (content === undefined) throw new Error(`Missing source snapshot: ${absolutePath}`);
     const contentHash = createHash("sha256").update(content).digest("hex");
+    if (previous && previous.contentHash === contentHash) {
+      const cached = await readCachedFile(project.rootPath, previous.cacheKey);
+      if (cached?.path === path && cached.contentHash === contentHash) return { ...cached, size: info.size, modifiedAt };
+    }
     const analysis = await analyzeSourceFile(path, content, project.files);
     return {
       path,
@@ -314,13 +355,14 @@ async function buildSemanticFile(
       cacheKey: cacheKeyForPath(path),
       analyzerId: analysis.analyzerId,
       analysisDepth: analysis.analysisDepth,
-      status: "parsed",
-      diagnostics: [],
+      status: analysis.diagnostics?.some((item) => item.severity === "error") ? "failed" : analysis.analysisDepth === "lightweight" ? "unsupported" : "parsed",
+      diagnostics: [...(analysis.diagnostics ?? []), ...(analysis.analysisDepth === "lightweight" ? [{ code: "unsupported-semantic-language", severity: "warning" as const, filePath: path, message: "Only structural facts are available for this language; project symbol binding is not supported." }] : [])],
       insight: analysis.insight,
       httpEndpoints: analysis.httpEndpoints,
       renderTargets: analysis.renderTargets
     };
   } catch (error) {
+    if (error instanceof TreeSitterInitializationError) throw error;
     const contentHash = createHash("sha256").update(`${path}:${info.size}:${modifiedAt}`).digest("hex");
     return {
       path,
@@ -344,13 +386,21 @@ async function buildSemanticFile(
   }
 }
 
-function buildSemanticRelations(files: SemanticFile[], projectFiles: Set<string>): SemanticRelation[] {
+function buildSemanticRelations(files: SemanticFile[], projectFiles: Set<string>, programRelations: SemanticRelation[]): SemanticRelation[] {
   const relations: SemanticRelation[] = [];
+  const resolvedImports = new Set(programRelations.filter((relation) => relation.kind === "import" && relation.targetFile)
+    .map((relation) => `${relation.sourceFile}\0${relation.symbol}`));
   for (const file of files) {
     const insight = file.insight;
-    if (!insight) continue;
+    if (!insight || file.analysisDepth === "lightweight" || /\.(?:[cm]?[tj]sx?|py|java|go)$/.test(file.path)) continue;
     for (const specifier of insight.imports) {
-      const targetFile = resolveProjectImport(file.path, specifier, projectFiles);
+      if (resolvedImports.has(`${file.path}\0${specifier}`)) continue;
+      const pythonResolution = file.path.endsWith(".py")
+        ? resolvePythonProjectImport(file.path, specifier, projectFiles)
+        : undefined;
+      const targetFile = file.path.endsWith(".py")
+        ? pythonResolution?.targetFile
+        : resolveProjectImport(file.path, specifier, projectFiles);
       relations.push({
         id: relationId("import", file.path, targetFile ?? specifier),
         kind: "import",
@@ -358,8 +408,8 @@ function buildSemanticRelations(files: SemanticFile[], projectFiles: Set<string>
         target: targetFile ?? specifier,
         sourceFile: file.path,
         targetFile,
-        detail: targetFile ? `${file.path} imports ${targetFile}` : `${file.path} imports external module ${specifier}`,
-        confidence: targetFile ? "confirmed" : "inferred"
+        detail: targetFile ? `${file.path} imports ${targetFile}` : `${file.path} imports unresolved module ${specifier}`,
+        confidence: pythonResolution?.confidence ?? (targetFile ? "confirmed" : "inferred")
       });
     }
     for (const external of insight.externalCalls) {
@@ -378,28 +428,13 @@ function buildSemanticRelations(files: SemanticFile[], projectFiles: Set<string>
   return dedupeRelations(relations);
 }
 
-async function persistSemanticIndex(
-  projectPath: string,
-  index: SemanticIndex,
-  manifest: SemanticIndexManifest,
-  cacheWritePaths: Set<string>,
-  deletedPaths: string[],
-  previousByPath: Map<string, SemanticIndexManifestEntry>
-): Promise<void> {
+function prepareSemanticIndex(projectPath: string, index: SemanticIndex, manifest: SemanticIndexManifest): ArtifactUpdate[] {
   const root = indexRoot(projectPath);
-  const filesRoot = join(root, "files");
-  await mkdir(filesRoot, { recursive: true });
-  await Promise.all(index.files
-    .filter((file) => cacheWritePaths.has(file.path))
-    .map((file) => writeJsonAtomic(join(filesRoot, `${file.cacheKey}.json`), file)));
-  await Promise.all(deletedPaths.map(async (path) => {
-    const previous = previousByPath.get(path);
-    if (previous) await rm(join(filesRoot, `${previous.cacheKey}.json`), { force: true });
-  }));
-  await Promise.all([
-    writeJsonAtomic(join(root, "manifest.json"), manifest),
-    writeJsonAtomic(join(root, "semantic-index.json"), index)
-  ]);
+  return [
+    ...index.files.map((file) => ({ path: join(root, "files", `${file.cacheKey}.json`), content: `${JSON.stringify(file, null, 2)}\n` })),
+    { path: join(root, "manifest.json"), content: `${JSON.stringify(manifest, null, 2)}\n` },
+    { path: join(root, "semantic-index.json"), content: `${JSON.stringify(index, null, 2)}\n` }
+  ];
 }
 
 async function readManifest(projectPath: string): Promise<SemanticIndexManifest | undefined> {
@@ -445,19 +480,6 @@ function indexRoot(projectPath: string): string {
   return join(projectPath, FLOWWEAVE_DIR, "index");
 }
 
-async function createConfigurationFingerprint(projectPath: string, projectPaths: string[]): Promise<string> {
-  const hash = createHash("sha256");
-  const configurationPaths = projectPaths.filter((path) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(path) || /(^|\/)package\.json$/.test(path));
-  for (const path of configurationPaths) {
-    try {
-      hash.update(path);
-      hash.update(await readFile(join(projectPath, ...path.split("/"))));
-    } catch (error) {
-      if (!isMissingFile(error)) throw error;
-    }
-  }
-  return hash.digest("hex");
-}
 
 function cacheKeyForPath(path: string): string {
   return createHash("sha256").update(path).digest("hex");
@@ -525,10 +547,14 @@ async function mapWithConcurrency<T, R>(
 
 function isManifest(value: unknown): value is SemanticIndexManifest {
   if (!isRecord(value) || value.version !== INDEX_VERSION || !Array.isArray(value.files)) return false;
+  const inputState = value.inputState;
+  const validInputState = inputState === undefined || isRecord(inputState) && Array.isArray(inputState.filePaths) && inputState.filePaths.every((path) => typeof path === "string") &&
+    Array.isArray(inputState.observations) && inputState.observations.every((entry) => Array.isArray(entry) && entry.length === 2 && entry.every((part) => typeof part === "string"));
   return typeof value.projectName === "string" &&
     typeof value.rootPath === "string" &&
     typeof value.scanFingerprint === "string" &&
     (value.configurationFingerprint === undefined || typeof value.configurationFingerprint === "string") &&
+    validInputState &&
     value.files.every(isManifestEntry);
 }
 

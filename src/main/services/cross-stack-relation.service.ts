@@ -6,12 +6,13 @@ export function buildCrossStackHttpRelations(endpoints: SemanticHttpEndpoint[]):
   const routes = endpoints.filter((endpoint) => endpoint.kind === "route");
   const relations: SemanticRelation[] = [];
   for (const request of requests) {
-    for (const route of routes) {
-      if (!methodsMatch(request, route) || !pathsMatch(request.path, route.path)) continue;
+    const candidates = routes.filter((route) => methodsMatch(request, route) && pathsMatch(request.path, route.path) && sameService(request, route));
+    if (candidates.length !== 1) continue;
+    for (const route of candidates) {
       const confidence = request.confidence === "confirmed" && route.confidence === "confirmed" ? "confirmed" : "inferred";
       relations.push({
         id: createHash("sha256")
-          .update(`http\0${request.filePath}\0${route.filePath}\0${request.method}\0${request.path}`)
+          .update(`http\0${request.id}\0${route.id}`)
           .digest("hex")
           .slice(0, 24),
         kind: "http",
@@ -21,15 +22,22 @@ export function buildCrossStackHttpRelations(endpoints: SemanticHttpEndpoint[]):
         targetFile: route.filePath,
         symbol: request.symbol,
         detail: `${request.method} ${request.path} matches backend route ${route.method} ${route.path}`,
-        confidence
+        confidence, sourceRange: request.range,
+        targetRef: { kind: "file", filePath: route.filePath, declarationRange: route.range },
+        bindingBasis: request.serviceId ? "unique-service-mapping" : "unique-origin-mapping"
       });
     }
   }
   return relations;
 }
 
+function sameService(request: SemanticHttpEndpoint, route: SemanticHttpEndpoint): boolean {
+  if (request.serviceId && route.serviceId) return request.serviceId === route.serviceId;
+  return Boolean(request.origin && route.origin && request.origin === route.origin);
+}
+
 function methodsMatch(request: SemanticHttpEndpoint, route: SemanticHttpEndpoint): boolean {
-  return request.method === route.method || request.method === "UNKNOWN" || route.method === "UNKNOWN";
+  return request.method !== "UNKNOWN" && request.method === route.method;
 }
 
 function pathsMatch(requestPath: string, routePath: string): boolean {

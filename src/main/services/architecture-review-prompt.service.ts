@@ -4,7 +4,7 @@ import type {
   ArchitectureMap,
   ArchitectureModule,
   ArchitectureRelationship,
-  SemanticIndex
+  SemanticIndex, SemanticResource, SemanticDiagnostic, StaticAnalysisQuality
 } from "../../types";
 
 export const ARCHITECTURE_REVIEW_PROMPT_TARGET_CHARS = 8_000;
@@ -25,6 +25,9 @@ export type ArchitectureReviewPromptInput = {
   modules: ArchitectureModule[];
   relationships: ArchitectureRelationship[];
   evidence: ArchitectureReviewPromptEvidence[];
+  resources?: SemanticResource[];
+  diagnostics?: SemanticDiagnostic[];
+  quality?: StaticAnalysisQuality;
 };
 
 export type ArchitectureReviewPrompt = {
@@ -77,13 +80,13 @@ export function createArchitectureReviewPromptInput(
   const relationshipEvidence = architecture.relationships.flatMap((relationship) =>
     relationship.evidence.map((evidence) => {
       const semanticRelation = index.relations.find((relation) =>
-        relation.sourceFile === evidence.filePath &&
+        (evidence.relationId ? relation.id === evidence.relationId : relation.sourceFile === evidence.filePath) &&
         relation.symbol === evidence.symbol &&
         relation.detail === evidence.detail
       );
       return promptEvidence(
         evidence,
-        [relationship.source, relationship.target],
+        [relationship.source, relationship.target].filter((id) => architecture.modules.some((module) => module.id === id)),
         relationship.id,
         "info",
         semanticRelation?.confidence ?? "inferred"
@@ -96,6 +99,7 @@ export function createArchitectureReviewPromptInput(
     architectureStyle: architecture.architectureStyle,
     modules: architecture.modules,
     relationships: architecture.relationships,
+    resources: architecture.resources, diagnostics: index.diagnostics, quality: index.quality,
     evidence: deduplicateEvidence([...moduleEvidence, ...relationshipEvidence])
   };
 }
@@ -167,7 +171,7 @@ function promptEvidence(
     evidence.symbol ?? "",
     evidence.line ?? "",
     evidence.eventId ?? "",
-    evidence.detail
+    evidence.relationId ?? "", JSON.stringify(evidence.range ?? null), evidence.detail
   ];
   const id = `evidence-${createHash("sha256").update(JSON.stringify(identity)).digest("hex")}`;
   return { ...evidence, id, moduleIds: [...moduleIds].sort(), relationshipId, severity, confidence };
@@ -273,6 +277,7 @@ function renderPrompt(
   evidence: ArchitectureReviewPromptEvidence[]
 ): string {
   const moduleIndexes = new Map(modules.map((module, index) => [module.id, index]));
+  const endpointIndexes = new Map<string, string | number>([...modules.map((module, index) => [module.id, index] as const), ...(input.resources ?? []).map((resource, index) => [resource.id, `s${index}`] as const)]);
   const categories = createStringDictionary(modules.map((module) => module.category));
   const roles = createStringDictionary(modules.map((module) => module.role));
   const relations = createStringDictionary(relationships.map((relationship) => relationship.relation));
@@ -286,8 +291,8 @@ function renderPrompt(
     module.symbols.length
   ]);
   const relationshipRows = relationships.map((relationship) => [
-    moduleIndexes.get(relationship.source),
-    moduleIndexes.get(relationship.target),
+    endpointIndexes.get(relationship.source),
+    endpointIndexes.get(relationship.target),
     relations.indexes.get(relationship.relation),
     descriptions.indexes.get(relationship.description)
   ]);
@@ -298,6 +303,10 @@ function renderPrompt(
     input.architectureStyle ? `Current architecture style: ${input.architectureStyle}` : "",
     "M=[id,title,categoryIndex,roleIndex,fileCount,symbolCount]; C/O/T/D are category/role/relation/full-description dictionaries; R=[sourceModuleIndex,targetModuleIndex,relationIndex,descriptionIndex]; V=[evidenceId,owner(m<index>|r<index>),file,symbol,line,detail]. IDs appear once; use M IDs and V evidence IDs exactly.",
     `Local module graph and representative evidence:\nM:${JSON.stringify(moduleRows)}\nC:${JSON.stringify(categories.values)}\nO:${JSON.stringify(roles.values)}\nR:${JSON.stringify(relationshipRows)}\nT:${JSON.stringify(relations.values)}\nD:${JSON.stringify(descriptions.values)}\nV:${JSON.stringify(evidenceRows)}`,
+    input.resources?.length ? `S=[id,kind,scope,title]: ${JSON.stringify(input.resources.map((resource) => [resource.id, resource.kind, resource.scopeId, resource.title]))}` : "",
+    input.quality || input.diagnostics?.length ? `Quality/limitations: ${JSON.stringify({ quality: input.quality, diagnostics: (input.diagnostics ?? []).slice(0, 12).map((item) => [item.code, item.filePath, item.range, item.message]) })}` : "",
+    evidence.some((item) => item.bindingBasis) ? `Bindings: ${JSON.stringify(evidence.filter((item) => item.bindingBasis).map((item) => [item.id, item.bindingBasis, item.range]))}` : "",
+    input.quality ? "References prove static targets, not runtime execution. Resources are not source modules." : "",
     "Review response schema:",
     JSON.stringify({
       architectureStyle: "optional short style description",

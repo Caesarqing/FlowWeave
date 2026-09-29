@@ -3,14 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  analyzeArchitecture,
-  buildArchitectureInputFingerprint
+  analyzeArchitecture
 } from "../../src/main/services/architecture-analysis.service";
-import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { generateSequenceDiagrams } from "../../src/main/services/sequence-diagram.service";
-import { inferGraphFromProject } from "../../src/main/services/task-generator.service";
-import { scanProject } from "../../src/main/services/project-scanner.service";
-import { writeFlowWeaveProject } from "../../src/main/storage/flowweave-store";
+import { generateProject } from "../../src/main/services/project-generation.service";
 
 describe("full project flow", () => {
   it("scans, indexes, visualizes, and generates architecture and sequence artifacts", async () => {
@@ -19,33 +15,26 @@ describe("full project flow", () => {
     await mkdir(join(root, "server"), { recursive: true });
     await writeFile(
       join(root, "client", "UserPage.tsx"),
-      "export const loadUser = (id: string) => fetch(`/api/users/${id}`);\n",
+      'import { getUser } from "../server/users";\nexport const loadUser = () => { fetch("https://users.example/api/users"); return getUser(); };\n',
       "utf8"
     );
     await writeFile(
       join(root, "server", "users.ts"),
-      "router.get('/api/users/:id', getUser);\nexport function getUser() { return database.user.findUnique(); }\n",
+      "export function getUser() { return { id: 1 }; }\n",
       "utf8"
     );
 
-    const project = await scanProject(root);
-    const semantic = await buildSemanticIndex(project);
-    const graph = await inferGraphFromProject(project);
-    await writeFlowWeaveProject(
-      root,
-      project,
-      graph.nodes,
-      graph.edges,
-      project.scanFingerprint ?? ""
-    );
-    const architecture = await analyzeArchitecture(project, "mock");
+    const generated = await generateProject(root, {});
+    if (generated.status !== "committed") throw new Error("Expected a committed project generation.");
+    const { project, index, graph } = generated;
+    const architecture = await analyzeArchitecture(project, "mock", { semanticIndex: index });
     const sequences = await generateSequenceDiagrams(project, "mock");
 
-    expect(semantic.index.relations).toEqual(expect.arrayContaining([
+    expect(index.relations).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: "http",
         sourceFile: "client/UserPage.tsx",
-        targetFile: "server/users.ts"
+        targetRef: expect.objectContaining({ kind: "resource" })
       })
     ]));
     expect(architecture.outcome).toBe("generated");
@@ -68,14 +57,14 @@ describe("full project flow", () => {
       detailedDesign?: unknown;
     };
 
-    expect(canvasArtifact.version).toBe(5);
+    expect(canvasArtifact.version).toBe(6);
+    expect(graph.nodes.length).toBeGreaterThan(0);
+    expect(graph.edges).toContainEqual(expect.objectContaining({ relation: "calls", source: expect.any(String), target: expect.any(String) }));
     expect(canvasArtifact.scanFingerprint).toBe(projectArtifact.scanFingerprint);
-    expect(architectureArtifact.metadata.inputFingerprint).toBe(
-      buildArchitectureInputFingerprint(projectArtifact.scanFingerprint, semantic.index)
-    );
+    expect(architectureArtifact.metadata.inputFingerprint).toBe(generated.localArchitecture.metadata?.inputFingerprint);
     expect(sequenceArtifact.metadata.inputFingerprint).toBe(projectArtifact.scanFingerprint);
     expect(sequenceArtifact.detailedDesign).toBeUndefined();
-    await expect(readFile(join(artifactRoot, "index", "semantic-index.json"), "utf8")).resolves.toContain('"version": 4');
+    await expect(readFile(join(artifactRoot, "index", "semantic-index.json"), "utf8")).resolves.toContain('"version": 5');
     await expect(readFile(join(artifactRoot, "tasks", "current.task.md"), "utf8")).resolves.toContain("Acceptance Criteria");
   });
 });

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
@@ -15,9 +16,74 @@ import {
   traceNodeIds
 } from "../../src/utils/canvas-layout";
 import { createFlowNode } from "../../src/utils/graph-converters";
-import type { GraphNode } from "../../src/types";
+import type { ArchitectureLayer, GraphNode } from "../../src/types";
 
 describe("canvas layout and tracing", () => {
+  it("finishes real ELK overview and expanded layout for dense parallel relations", async () => {
+    const topology = JSON.parse(readFileSync(new URL("../fixtures/architecture-dense-layout-topology.json", import.meta.url), "utf8")) as {
+      roles: ArchitectureLayer[]; edges: [number, number][];
+    };
+    const nodes = topology.roles.map((role, index) => createFlowNode({ ...node(String(index), []), architectureLayer: role }));
+    const edges = topology.edges.map(([source, target], index) => ({ id: String(index), source: String(source), target: String(target) }));
+    const snapshot = structuredClone({ nodes, edges });
+    const result = await layoutCanvasNodesWithEngine(nodes, edges, "architecture", realElkLayout);
+    expect({ nodes, edges }).toEqual(snapshot);
+    expect(result).toHaveLength(topology.roles.length);
+    expect(result.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.y))).toBe(true);
+    expect(new Set(result.map((item) => `${item.position.x},${item.position.y}`)).size).toBe(topology.roles.length);
+  });
+
+  it("finishes real ELK architecture layout for a mixed graph with backward cross-layer dependencies", async () => {
+    const topology = JSON.parse(readFileSync(new URL("../fixtures/architecture-layout-topology.json", import.meta.url), "utf8")) as {
+      roles: ArchitectureLayer[]; edges: [number, number][];
+    };
+    const nodes = topology.roles.map((role, index) => createFlowNode({ ...node(String(index), []), architectureLayer: role }));
+    const edges = topology.edges.map(([source, target], index) => ({ id: String(index), source: String(source), target: String(target) }));
+    const result = await layoutCanvasNodesWithEngine(nodes, edges, "architecture", realElkLayout);
+    expect(result).toHaveLength(63);
+    expect(result.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.y))).toBe(true);
+    expect(new Set(result.map((item) => `${item.position.x},${item.position.y}`)).size).toBe(63);
+  });
+
+  it("packs large cycles and disconnected modules without overlap or a long single column", async () => {
+    const cycle = Array.from({ length: 16 }, (_, index) => createFlowNode(node(`cycle-${index}`, [])));
+    const support = Array.from({ length: 82 }, (_, index) => ({
+      ...createFlowNode(node(`support-${index}`, [])),
+      measured: { width: 280 + index % 3 * 20, height: 150 + index % 4 * 30 }
+    }));
+    const nodes = [createFlowNode(node("entry", ["src/main.ts"])), ...cycle, ...support];
+    const snapshot = structuredClone(nodes);
+    const edges: Edge[] = [
+      { id: "entry-cycle", source: "entry", target: cycle[0].id, data: { relation: "calls" } },
+      ...cycle.map((item, index) => ({
+        id: `call-${index}`, source: item.id, target: cycle[(index + 1) % cycle.length].id, data: { relation: "calls" }
+      }))
+    ];
+    const result = await layoutCanvasNodesWithEngine(nodes, edges, "execution", realElkLayout);
+    expect(nodes).toEqual(snapshot);
+    expect(result).toHaveLength(99);
+    expect(result.filter((item) => item.data.isSupportNode)).toHaveLength(82);
+    const maxX = Math.max(...result.map((item) => item.position.x + (item.measured?.width ?? 280)));
+    const maxY = Math.max(...result.map((item) => item.position.y + (item.measured?.height ?? 150)));
+    expect(maxX).toBeLessThan(4000);
+    expect(maxY).toBeLessThan(5000);
+    expect(result.find((item) => item.id === "entry")?.position.x).toBeLessThan(result.find((item) => item.id === cycle[0].id)?.position.x ?? 0);
+    for (const [index, left] of result.entries()) {
+      for (const right of result.slice(index + 1)) {
+        const overlaps = left.position.x < right.position.x + (right.measured?.width ?? 280) &&
+          right.position.x < left.position.x + (left.measured?.width ?? 280) &&
+          left.position.y < right.position.y + (right.measured?.height ?? 150) &&
+          right.position.y < left.position.y + (left.measured?.height ?? 150);
+        expect(overlaps, `${left.id} overlaps ${right.id}`).toBe(false);
+      }
+    }
+    const fanEdges: Edge[] = cycle.map((item, index) => ({
+      id: `fan-${index}`, source: item.id, target: "entry", data: { relation: "calls" }
+    }));
+    const fan = await layoutCanvasNodesWithEngine(nodes, fanEdges, "execution", realElkLayout);
+    const flowRight = Math.max(...fan.filter((item) => !item.data.isSupportNode).map((item) => item.position.x + 280));
+    expect(fan.filter((item) => item.data.isSupportNode).every((item) => item.position.x > flowRight)).toBe(true);
+  });
   it("invalidates a cached layout when the graph topology changes", () => {
     const nodes = [createFlowNode(node("api", [])), createFlowNode(node("service", []))];
     const edges: Edge[] = [{ id: "api-service", source: "api", target: "service" }];
@@ -114,8 +180,8 @@ describe("canvas layout and tracing", () => {
 
     expect(positioned.get("tests")?.data.isSupportNode).toBe(true);
     expect(positioned.get("helper")?.data.isSupportNode).toBe(true);
-    expect(positioned.get("tests")?.position.x).toBeGreaterThan(positioned.get("service")?.position.x ?? 0);
-    expect(positioned.get("helper")?.position.x).toBeGreaterThan(positioned.get("service")?.position.x ?? 0);
+    expect(positioned.get("tests")?.position.y).toBeGreaterThan((positioned.get("service")?.position.y ?? 0) + 150);
+    expect(positioned.get("helper")?.position.y).toBeGreaterThan((positioned.get("service")?.position.y ?? 0) + 150);
   });
 
   it("traces upstream and downstream nodes without mutating the graph", () => {
@@ -178,6 +244,14 @@ describe("canvas layout and tracing", () => {
     expect(positions.get("account-api")).not.toBe(positions.get("billing"));
   });
 });
+
+async function realElkLayout(graph: ElkNode): Promise<ElkNode> {
+  // The child timeout can stop an ELK loop without blocking the test runner's event loop.
+  const stdout = execFileSync(process.execPath, ["-e",
+    'const ELK = require("elkjs/lib/elk.bundled.js"); new ELK().layout(JSON.parse(require("node:fs").readFileSync(0, "utf8"))).then(graph => process.stdout.write(JSON.stringify(graph)));'
+  ], { input: JSON.stringify(graph), encoding: "utf8", timeout: 5000, maxBuffer: 1_000_000 });
+  return JSON.parse(stdout) as ElkNode;
+}
 
 function node(id: string, files: string[]): GraphNode {
   return {

@@ -21,7 +21,7 @@ describe('canvas filters', () => {
     });
   });
 
-  it('projects connections from collapsed groups to their stable representative', () => {
+  it('projects connections from collapsed groups to a separate group card', () => {
     const nodes = [
       createFlowNode({ ...node('billing-api', ['src/billing/api.ts']), classification: { role: 'api', runtimeTags: ['backend'], domain: 'billing' } }),
       createFlowNode({ ...node('billing-service', ['src/billing/service.ts']), classification: { role: 'domain', runtimeTags: ['backend'], domain: 'billing' } }),
@@ -34,9 +34,10 @@ describe('canvas filters', () => {
 
     const projected = projectCollapsedFlowGraph(nodes, edges, 'domain', ['domain:billing']);
 
-    expect(projected.nodes.map((item) => item.id)).toEqual(['billing-api', 'ledger']);
+    expect(projected.nodes.map((item) => item.id)).toEqual(['ledger', 'group:domain:billing']);
+    expect(projected.nodes[1].data).toMatchObject({ syntheticKind: 'group', memberNodeIds: ['billing-api', 'billing-service'] });
     expect(projected.edges).toHaveLength(1);
-    expect(projected.edges[0]).toMatchObject({ source: 'billing-api', target: 'ledger' });
+    expect(projected.edges[0]).toMatchObject({ source: 'group:domain:billing', target: 'ledger' });
     expect(projected.edges[0].data?.aggregatedEdgeIds).toEqual(['api-ledger', 'service-ledger']);
   });
 

@@ -24,9 +24,10 @@ import { useRunHistory } from "./useRunHistory";
 import { useI18n } from "../utils/i18n";
 import { sortAgentsForSelection } from "../utils/agent-display";
 import { createAsyncRequestGuard } from "../utils/async-request-guard";
-import type { ArtifactRunTarget, FlowWeaveProjectOpenResult, RuntimeAgentId } from "../types";
+import type { ArtifactRunTarget, FlowWeaveProjectOpenResult, GraphEdge, GraphNode, RuntimeAgentId } from "../types";
 
 const MAX_RENDERED_TREE_ROWS = 900;
+type CommittedProjectOpenResult = Extract<FlowWeaveProjectOpenResult, { graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>;
 
 export function useAppController({
   onProjectOpenStarted,
@@ -34,7 +35,7 @@ export function useAppController({
   restoreProjectId
 }: {
   onProjectOpenStarted?: () => void;
-  onProjectOpened?: (result: Exclude<FlowWeaveProjectOpenResult, { canceled: true }>) => void;
+  onProjectOpened?: (result: CommittedProjectOpenResult) => void;
   restoreProjectId?: string;
 }) {
   const { t } = useI18n();
@@ -45,11 +46,13 @@ export function useAppController({
   const projectId = useProjectStore((state) => state.projectId);
   const projectPath = useProjectStore((state) => state.projectPath);
   const scanFingerprint = useProjectStore((state) => state.scanFingerprint);
+  const relationDiagnostics = useProjectStore((state) => state.relationDiagnostics);
   const artifactStatuses = useProjectStore((state) => state.artifactStatuses);
   const architectureReview = useProjectStore((state) => state.architectureReview);
   const localGenerationStatus = useProjectStore((state) => state.localGenerationStatus);
   const projectStatus = useProjectStore((state) => state.projectStatus);
   const isProjectLoading = useProjectStore((state) => state.isProjectLoading);
+  const legacyCanvasReadOnly = useProjectStore((state) => state.legacyCanvasReadOnly);
   const agents = useAgentStore((state) => state.agents);
   const selectedAgentId = useAgentStore((state) => state.selectedAgentId);
   const executionMode = useAgentStore((state) => state.executionMode);
@@ -68,12 +71,14 @@ export function useAppController({
   const setProjectId = useProjectStore((state) => state.setProjectId);
   const setProjectPath = useProjectStore((state) => state.setProjectPath);
   const setScanFingerprint = useProjectStore((state) => state.setScanFingerprint);
+  const setRelationDiagnostics = useProjectStore((state) => state.setRelationDiagnostics);
   const setArtifactStatuses = useProjectStore((state) => state.setArtifactStatuses);
   const setArchitectureReview = useProjectStore((state) => state.setArchitectureReview);
   const setLocalGenerationStatus = useProjectStore((state) => state.setLocalGenerationStatus);
   const setSequenceReview = useProjectStore((state) => state.setSequenceReview);
   const setProjectStatus = useProjectStore((state) => state.setProjectStatus);
   const setIsProjectLoading = useProjectStore((state) => state.setIsProjectLoading);
+  const setLegacyCanvasReadOnly = useProjectStore((state) => state.setLegacyCanvasReadOnly);
   const setAgents = useAgentStore((state) => state.setAgents);
   const setSelectedAgentId = useAgentStore((state) => state.setSelectedAgentId);
   const setExecutionMode = useAgentStore((state) => state.setExecutionMode);
@@ -90,6 +95,7 @@ export function useAppController({
     projectPath,
     selectedAgentId,
     hasPendingInstruction: Boolean(modificationResult?.delta.sequenceInstruction),
+    legacyCanvasReadOnly,
     onModificationAcknowledged: async () => {
       await refreshModificationDelta();
     }
@@ -99,21 +105,25 @@ export function useAppController({
       JSON.stringify({
         modules: flow.modules,
         relations: flow.graphRelations,
-        orphanedEdges: flow.orphanedEdges
+        orphanedEdges: flow.orphanedEdges,
+      ...flow.canvasMetadata
       }),
-    [flow.modules, flow.graphRelations, flow.orphanedEdges]
+    [flow.modules, flow.graphRelations, flow.orphanedEdges, flow.canvasMetadata]
   );
   const agentConnection = useAgentConnection(projectId, projectPath);
   useCanvasPersistence(
     projectId,
     projectPath,
     scanFingerprint,
+    legacyCanvasReadOnly,
+    isProjectLoading,
     artifactStatuses?.canvas,
     canvasSnapshot,
     flow.modules,
     flow.graphRelations,
     flow.canvasLayout,
-    flow.orphanedEdges
+    flow.orphanedEdges,
+    flow.canvasMetadata
   );
   const { applySelectedRunArtifact, openGitReviewFromRun, openSelectedAgentInbox, refreshRuns, selectRun } = useRunHistory(projectId);
   const projectActions = useProjectActions({
@@ -123,14 +133,17 @@ export function useAppController({
     scanFingerprint,
     architectureReview,
     localGenerationStatus,
+    legacyCanvasReadOnly,
     loadInitialStaticGraph: flow.loadInitialStaticGraph,
     adoptReviewedProjectGraph: flow.adoptReviewedProjectGraph,
     setIsProjectLoading,
+    setLegacyCanvasReadOnly,
     setLastRunStatus,
     setProjectLabel,
     setProjectId,
     setProjectPath,
     setScanFingerprint,
+    setRelationDiagnostics,
     setArtifactStatuses,
     setArchitectureReview,
     setLocalGenerationStatus,
@@ -201,7 +214,7 @@ export function useAppController({
 
   function buildCurrentCanvas(): import("../types").CodeflowCanvas {
     return {
-      version: 5,
+      version: 6,
       id: "main",
       title: "Main Canvas",
       projectPath,
@@ -211,7 +224,8 @@ export function useAppController({
       layout: flow.canvasLayout,
       nodes: flow.modules,
       edges: flow.graphRelations,
-      orphanedEdges: flow.orphanedEdges
+      orphanedEdges: flow.orphanedEdges,
+      ...flow.canvasMetadata
     };
   }
 
@@ -230,7 +244,7 @@ export function useAppController({
     if (!window.flowweave || !projectId) {
       throw new Error(t("docs.needDesktop"));
     }
-    if (!scanFingerprint || artifactStatuses?.canvas !== "current") {
+    if (legacyCanvasReadOnly || !scanFingerprint || artifactStatuses?.canvas !== "current") {
       throw new Error(t("canvas.saveUnavailable"));
     }
     const canvas = buildCurrentCanvas();
@@ -240,6 +254,7 @@ export function useAppController({
   }
 
   async function saveCurrentModuleGuidance() {
+    if (legacyCanvasReadOnly) return;
     if (!flow.selectedNode?.guidanceDraft.trim()) return;
     setModuleGuidanceOperation("save");
     try {
@@ -254,6 +269,7 @@ export function useAppController({
   }
 
   async function sendCurrentModuleGuidance() {
+    if (legacyCanvasReadOnly) return;
     const selectedNode = flow.selectedNode;
     const api = window.flowweave;
     if (!api || !projectId || !selectedNode?.guidanceDraft.trim()) return;
@@ -291,6 +307,30 @@ export function useAppController({
   }
 
   async function exportGuidanceFiles() {
+    if (legacyCanvasReadOnly) {
+      downloadText(
+        "flowweave-legacy-canvas.json",
+        JSON.stringify({
+          version: 5,
+          projectLabel,
+          projectPath,
+          modules: flow.modules,
+          relations: flow.graphRelations,
+          pendingRelations: flow.orphanedEdges,
+          layout: flow.canvasLayout,
+          groups: flow.canvasMetadata.groups,
+          orphanedNodeEdits: flow.canvasMetadata.orphanedNodeEdits
+        }, null, 2)
+      );
+      downloadText("flowweave-legacy-canvas.md", buildLegacyCanvasMarkdown(
+        projectLabel,
+        flow.modules,
+        flow.graphRelations,
+        flow.orphanedEdges
+      ));
+      setLastRunStatus(t("sequence.exported"));
+      return;
+    }
     const result = await refreshModificationDelta();
     if (!result) return;
     const context = createModificationGuidanceContext(projectLabel, projectPath, result);
@@ -300,6 +340,7 @@ export function useAppController({
   }
 
   async function sendCompleteGuidanceToAgent() {
+    if (legacyCanvasReadOnly) return;
     const api = window.flowweave;
     if (!api || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
@@ -462,6 +503,7 @@ export function useAppController({
   }
 
   async function analyzeCurrentProjectWithAgent(agentId?: RuntimeAgentId) {
+    if (legacyCanvasReadOnly) return;
     await projectActions.analyzeProject(agentId ?? selectedAgentId);
     setActivePage("canvas");
     await refreshRuns();
@@ -498,8 +540,12 @@ export function useAppController({
       edges: flow.edges,
       expandedPaths: flow.expandedPaths,
       graphRelations: flow.graphRelations,
+      relationDiagnostics,
+      quality: flow.canvasMetadata.quality,
+      orphanedNodeEdits: flow.canvasMetadata.orphanedNodeEdits,
       hasPendingGuidance: hasPendingModuleGuidance,
       isProjectLoading,
+      legacyCanvasReadOnly,
       maxRenderedTreeRows: MAX_RENDERED_TREE_ROWS,
       nodes: flow.nodes,
       modules: flow.modules,
@@ -525,6 +571,7 @@ export function useAppController({
         moduleActions.selectNode(nodeId);
       },
       onSetCollapsedGroups: flow.setCollapsedGroups,
+      onSetViewMode: flow.setViewMode,
       onTogglePath: moduleActions.toggleProjectPath,
       onUpdateEdgeGuidance: flow.updateEdgeGuidance,
       onUpdateEdgeEndpoints: flow.updateEdgeEndpoints,
@@ -544,6 +591,7 @@ export function useAppController({
     onPageChange: setActivePage,
     onSendToTool: sendCompleteGuidanceToAgent,
     projectLabel,
+    legacyCanvasReadOnly,
     projectId,
     scanFingerprint,
     sequence,
@@ -587,4 +635,34 @@ export function useAppController({
 function formatErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+function buildLegacyCanvasMarkdown(
+  projectLabel: string,
+  modules: GraphNode[],
+  relations: GraphEdge[],
+  pendingRelations: GraphEdge[]
+): string {
+  const moduleSections = modules.map((module) => [
+    `## ${module.title}`,
+    `ID: \`${module.id}\``,
+    module.description,
+    module.files.length ? `Files: ${module.files.join(", ")}` : "",
+    module.guidanceDraft ? `Guidance:\n\n${module.guidanceDraft}` : ""
+  ].filter(Boolean).join("\n\n"));
+  const relationLines = relations.map((relation) => {
+    const evidence = relation.evidence?.map((item) => `${item.filePath ?? ""}${item.line ? `:${item.line}` : ""} ${item.detail}`).join("; ");
+    return `- ${relation.source} -> ${relation.target} (${relation.relation})${relation.guidanceNote ? `\n  Guidance: ${relation.guidanceNote}` : ""}${evidence ? `\n  Evidence: ${evidence}` : ""}`;
+  });
+  const pendingLines = pendingRelations.map((relation) => `- ${relation.source} -> ${relation.target} (${relation.relation}) · pending user edit${relation.guidanceNote ? `\n  Guidance: ${relation.guidanceNote}` : ""}`);
+  return [
+    `# ${projectLabel}`,
+    "Legacy Canvas v5 export",
+    "",
+    ...moduleSections,
+    "## Relationships",
+    ...relationLines,
+    "## Pending user relationships",
+    ...pendingLines
+  ].join("\n\n");
 }

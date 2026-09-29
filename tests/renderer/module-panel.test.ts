@@ -73,11 +73,16 @@ describe("module panel display data", () => {
       { filePath: "src/api.ts", detail: "Third call." }
     ]);
 
-    expect(buildConnectionDisplayDetails(edge)).toMatchObject({
+    expect(buildConnectionDisplayDetails({ ...edge, confidence: "confirmed" })).toMatchObject({
       confidence: "confirmed",
       representativeEvidence: { detail: "First call." },
       additionalEvidenceCount: 2
     });
+  });
+
+  it("retains inferred confidence even when source evidence is available", () => {
+    const edge = edgeFixture("inferred", "api", "orders", "calls", [{ filePath: "src/api.ts", detail: "Dynamic receiver." }]);
+    expect(buildConnectionDisplayDetails({ ...edge, confidence: "inferred" }).confidence).toBe("inferred");
   });
 
   it("reports low execution coverage without restoring hidden dependency edges", () => {

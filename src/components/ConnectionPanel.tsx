@@ -13,7 +13,7 @@ export type ConnectionDisplayDetails = {
 export function buildConnectionDisplayDetails(edge: GraphEdge): ConnectionDisplayDetails {
   const evidence = edge.evidence ?? [];
   return {
-    confidence: edge.relation === "depends_on" || evidence.length === 0 ? "inferred" : "confirmed",
+    confidence: edge.confidence ?? "inferred",
     representativeEvidence: evidence[0],
     additionalEvidenceCount: Math.max(0, evidence.length - 1)
   };
@@ -29,7 +29,8 @@ export function ConnectionPanel({
   onUpdateEdgeEndpoints,
   onUpdateEdgeGuidance,
   onUpdateEdgeRelation,
-  selectedEdge
+  selectedEdge,
+  readOnly
 }: {
   defaultRelation: GraphEdgeRelation;
   mode: "create" | "edit";
@@ -41,6 +42,7 @@ export function ConnectionPanel({
   onUpdateEdgeGuidance: (edgeId: string, guidanceNote: string) => void;
   onUpdateEdgeRelation: (edgeId: string, relation: GraphEdgeRelation) => void;
   selectedEdge?: GraphEdge;
+  readOnly: boolean;
 }) {
   const { t } = useI18n();
   const [source, setSource] = useState(modules[0]?.id ?? "");
@@ -50,6 +52,8 @@ export function ConnectionPanel({
   const sourceNode = useMemo(() => modules.find((node) => node.id === selectedEdge?.source), [modules, selectedEdge?.source]);
   const targetNode = useMemo(() => modules.find((node) => node.id === selectedEdge?.target), [modules, selectedEdge?.target]);
   const selectedEdgeDetails = selectedEdge ? buildConnectionDisplayDetails(selectedEdge) : undefined;
+  const isProjected = Boolean(selectedEdge && (selectedEdge.aggregatedEdgeIds?.length ||
+    !modules.some((node) => node.id === selectedEdge.source) || !modules.some((node) => node.id === selectedEdge.target)));
 
   useEffect(() => {
     if (mode !== "create") return;
@@ -64,11 +68,11 @@ export function ConnectionPanel({
   }, [mode, selectedEdge]);
 
   useEffect(() => {
-    if (mode !== "edit" || !selectedEdge) return;
+    if (readOnly || mode !== "edit" || !selectedEdge || isProjected) return;
     if (guidanceNote === (selectedEdge.guidanceNote ?? "")) return;
     const timeout = window.setTimeout(() => onUpdateEdgeGuidance(selectedEdge.id, guidanceNote), 450);
     return () => window.clearTimeout(timeout);
-  }, [guidanceNote, mode, onUpdateEdgeGuidance, selectedEdge]);
+  }, [guidanceNote, isProjected, mode, onUpdateEdgeGuidance, readOnly, selectedEdge]);
 
   const canCreate = mode === "create" && source && target && source !== target;
 
@@ -88,7 +92,7 @@ export function ConnectionPanel({
   }
 
   function commitGuidanceNote() {
-    if (mode !== "edit" || !selectedEdge) return;
+    if (readOnly || mode !== "edit" || !selectedEdge || isProjected) return;
     onUpdateEdgeGuidance(selectedEdge.id, guidanceNote);
   }
 
@@ -115,43 +119,49 @@ export function ConnectionPanel({
               {moduleOptionLabel(sourceNode, selectedEdge.source)} {"->"} {moduleOptionLabel(targetNode, selectedEdge.target)}
             </p>
             <p>{t("connection.direction", { source: moduleOptionLabel(sourceNode, selectedEdge.source), target: moduleOptionLabel(targetNode, selectedEdge.target) })}</p>
-            <p>{t("connection.confidence", { value: t(`connection.confidence.${selectedEdge.confidence ?? "confirmed"}`) })}</p>
+            <p>{t("connection.confidence", { value: t(`connection.confidence.${selectedEdgeDetails?.confidence ?? "inferred"}`) })}</p>
           </section>
           <section className="module-card connection-form">
+            {isProjected ? <p>{t("connection.projectedReadOnly")}</p> : null}
             <div className="connection-endpoints">
               <span><strong>{t("connection.directionLabel")}</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)} {"->"} {moduleOptionLabel(targetNode, selectedEdge.target)}</span>
               <span><strong>{t("connection.relationType")}</strong>{t(`relation.${selectedEdge.relation}`)}</span>
               <span><strong>{t("connection.confidenceLabel")}</strong>{t(`connection.confidence.${selectedEdgeDetails?.confidence ?? "inferred"}`)}</span>
             </div>
-            <label>
-              {t("connection.source")}
-              <NodeSelect modules={modules} value={selectedEdge.source} onChange={(nextSource) => updateSource(selectedEdge, nextSource)} />
-            </label>
-            <label>
-              {t("connection.target")}
-              <NodeSelect modules={modules} value={selectedEdge.target} onChange={(nextTarget) => updateTarget(selectedEdge, nextTarget)} />
-            </label>
-            <label>
-              {t("connection.relationType")}
-              <RelationSelect value={selectedEdge.relation} onChange={(nextRelation) => onUpdateEdgeRelation(selectedEdge.id, nextRelation)} />
-            </label>
-            <label>
-              {t("connection.guidance")}
-              <textarea
-                value={guidanceNote}
-                onBlur={commitGuidanceNote}
-                onChange={(event) => setGuidanceNote(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                    commitGuidanceNote();
-                  }
-                }}
-              />
-            </label>
-            <div className="connection-endpoints">
-              <span><strong>{t("connection.source")}</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)}</span>
-              <span><strong>{t("connection.target")}</strong>{moduleOptionLabel(targetNode, selectedEdge.target)}</span>
-            </div>
+            <fieldset disabled={readOnly || isProjected}>
+              <label>
+                {t("connection.source")}
+                <NodeSelect modules={modules} value={selectedEdge.source} onChange={(nextSource) => updateSource(selectedEdge, nextSource)} />
+              </label>
+              <label>
+                {t("connection.target")}
+                <NodeSelect modules={modules} value={selectedEdge.target} onChange={(nextTarget) => updateTarget(selectedEdge, nextTarget)} />
+              </label>
+              <label>
+                {t("connection.relationType")}
+                <RelationSelect value={selectedEdge.relation} onChange={(nextRelation) => onUpdateEdgeRelation(selectedEdge.id, nextRelation)} />
+              </label>
+              <label>
+                {t("connection.guidance")}
+                <textarea
+                  value={guidanceNote}
+                  onBlur={commitGuidanceNote}
+                  onChange={(event) => setGuidanceNote(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      commitGuidanceNote();
+                    }
+                  }}
+                />
+              </label>
+              <div className="connection-endpoints">
+                <span><strong>{t("connection.source")}</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)}</span>
+                <span><strong>{t("connection.target")}</strong>{moduleOptionLabel(targetNode, selectedEdge.target)}</span>
+              </div>
+            </fieldset>
+            {selectedEdge.semanticKinds?.length ? <div className="connection-evidence"><strong>{t("connection.semanticKinds")}</strong><span>{selectedEdge.semanticKinds.map((kind) => t(`connection.semantic.${kind}`)).join(" · ")}</span></div> : null}
+            {selectedEdge.operations?.length ? <div className="connection-evidence"><strong>{t("connection.operations")}</strong><span>{selectedEdge.operations.map((operation) => t(`connection.operation.${operation}`)).join(" · ")}</span></div> : null}
+            {selectedEdge.sourceRelationIds?.length ? <details className="connection-evidence"><summary>{t("connection.sourceReferences")}</summary>{selectedEdge.sourceRelationIds.map((id) => <code key={id}>{id}</code>)}</details> : null}
             <div className="connection-evidence">
               <strong>{t("connection.representativeEvidence")}</strong>
               {selectedEdgeDetails?.representativeEvidence ? (
@@ -170,7 +180,7 @@ export function ConnectionPanel({
                 {selectedEdge.aggregatedEdgeIds.map((edgeId) => <code key={edgeId}>{edgeId}</code>)}
               </div>
             ) : null}
-            <button className="ghost-button danger-button" type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
+            <button className="ghost-button danger-button" disabled={readOnly || isProjected} type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
               <Trash2 size={15} />
               {t("connection.delete")}
             </button>
@@ -184,6 +194,7 @@ export function ConnectionPanel({
             <p>{t("connection.newDescription")}</p>
           </section>
           <section className="module-card connection-form">
+            <fieldset disabled={readOnly}>
             <label>
               {t("connection.source")}
               <NodeSelect modules={modules} value={source} onChange={setSource} />
@@ -200,7 +211,8 @@ export function ConnectionPanel({
               {t("connection.guidance")}
               <textarea value={guidanceNote} onChange={(event) => setGuidanceNote(event.target.value)} />
             </label>
-            <button className="send-button" disabled={!canCreate} type="button" onClick={createConnection}>
+            </fieldset>
+            <button className="send-button" disabled={readOnly || !canCreate} type="button" onClick={createConnection}>
               <Plus size={15} />
               {t("connection.create")}
             </button>

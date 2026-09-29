@@ -14,7 +14,7 @@ import type {
 } from "../types";
 import { useI18n } from "../utils/i18n";
 
-export type ProjectStatusKind = "ready" | "pending" | "checking" | "stale" | "failed";
+export type ProjectStatusKind = "ready" | "reviewed" | "review-warning" | "reviewing" | "pending" | "checking" | "stale" | "failed";
 
 export type ProjectStatusAction = "refresh-project" | "update-architecture" | "update-sequences";
 
@@ -40,6 +40,7 @@ export type ProjectStatusInput = {
 };
 
 export type ActiveProjectStatus = ProjectStatusInput & {
+  readOnly?: boolean;
   onRefreshProject: () => void;
   onUpdateArchitecture: () => void;
   onUpdateSequences: () => void;
@@ -47,10 +48,13 @@ export type ActiveProjectStatus = ProjectStatusInput & {
 
 const statusPriority: Record<ProjectStatusKind, number> = {
   ready: 0,
-  pending: 1,
-  stale: 2,
-  checking: 3,
-  failed: 4
+  reviewed: 1,
+  "review-warning": 2,
+  pending: 3,
+  stale: 4,
+  checking: 5,
+  reviewing: 5,
+  failed: 6
 };
 
 export function buildProjectStatusViewModel(input: ProjectStatusInput): ProjectStatusViewModel {
@@ -87,7 +91,7 @@ export function buildProjectStatusViewModel(input: ProjectStatusInput): ProjectS
 
   return {
     kind,
-    items: kind === "ready" ? [] : items.filter((item) => item.kind !== "ready")
+    items: kind === "ready" || kind === "reviewed" ? [] : items.filter((item) => item.kind !== "ready" || item.key === "architecture")
   };
 }
 
@@ -98,6 +102,7 @@ export function ProjectStatusIndicator({
   onUpdateArchitecture,
   onUpdateSequences,
   sequenceReview,
+  readOnly,
   statuses
 }: ActiveProjectStatus) {
   const { t } = useI18n();
@@ -149,7 +154,7 @@ export function ProjectStatusIndicator({
               {item.error ? <small>{item.error}</small> : null}
             </div>
             {item.action ? (
-              <button type="button" onClick={actionCallbacks[item.action]}>
+              <button disabled={Boolean(readOnly && item.action !== "refresh-project")} type="button" onClick={actionCallbacks[item.action]}>
                 {t(actionLabelKey(item))}
               </button>
             ) : null}
@@ -175,7 +180,7 @@ function reviewedArtifactItem(
   review: ArchitectureReviewStatus | SequenceReviewStatus,
   action: ProjectStatusAction
 ): ProjectStatusItem {
-  const kind = reviewedArtifactKind(artifactState, review);
+  const kind = reviewedArtifactKind(key, artifactState, review);
   return {
     key,
     kind,
@@ -187,13 +192,20 @@ function reviewedArtifactItem(
 }
 
 function reviewedArtifactKind(
+  key: "architecture" | "sequences",
   artifactState: ProjectArtifactState,
   review: ArchitectureReviewStatus | SequenceReviewStatus
 ): ProjectStatusKind {
-  if (artifactState === "failed" || review.state === "review-failed") return "failed";
-  if (review.state === "reviewing") return "checking";
+  if (artifactState === "failed") return "failed";
   if (artifactState === "stale" || review.state === "stale") return "stale";
   if (artifactState === "missing" || review.state === "missing") return "pending";
+  if (review.state === "review-failed") return "review-warning";
+  if (key === "sequences") {
+    if (review.state === "reviewing") return "checking";
+    return "ready";
+  }
+  if (review.state === "reviewing") return "reviewing";
+  if (review.state === "reviewed") return "reviewed";
   return "ready";
 }
 
@@ -206,7 +218,7 @@ function reviewSource(
 }
 
 function actionable(kind: ProjectStatusKind): boolean {
-  return kind === "pending" || kind === "stale" || kind === "failed";
+  return kind === "pending" || kind === "stale" || kind === "failed" || kind === "review-warning";
 }
 
 function actionLabelKey(item: ProjectStatusItem): string {
@@ -217,9 +229,9 @@ function actionLabelKey(item: ProjectStatusItem): string {
 }
 
 function StatusIcon({ kind }: { kind: ProjectStatusKind }) {
-  if (kind === "ready") return <CircleCheck aria-hidden="true" size={13} />;
+  if (kind === "ready" || kind === "reviewed") return <CircleCheck aria-hidden="true" size={13} />;
   if (kind === "pending") return <CircleDashed aria-hidden="true" size={13} />;
-  if (kind === "checking") return <LoaderCircle aria-hidden="true" className="project-status-spinner" size={13} />;
-  if (kind === "stale") return <TriangleAlert aria-hidden="true" size={13} />;
+  if (kind === "checking" || kind === "reviewing") return <LoaderCircle aria-hidden="true" className="project-status-spinner" size={13} />;
+  if (kind === "stale" || kind === "review-warning") return <TriangleAlert aria-hidden="true" size={13} />;
   return <CircleX aria-hidden="true" size={13} />;
 }

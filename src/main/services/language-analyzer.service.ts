@@ -9,7 +9,9 @@ import type {
   FileInsight,
   ProjectFileNode,
   SemanticHttpEndpoint,
-  StructureSymbol
+  StructureSymbol,
+  SemanticDiagnostic,
+  SourceRange
 } from "../../types";
 import { extractLightweightInsight, extractTypeScriptInsight } from "./structure-extractor.service";
 
@@ -19,6 +21,7 @@ export type LanguageAnalysisResult = {
   insight: FileInsight;
   httpEndpoints: SemanticHttpEndpoint[];
   renderTargets: string[];
+  diagnostics?: SemanticDiagnostic[];
 };
 
 export type LanguageAnalyzer = {
@@ -49,7 +52,7 @@ export async function analyzeSourceFile(
 function createTypeScriptAnalyzer(): LanguageAnalyzer {
   return {
     id: "typescript-ast",
-    supports: (filePath) => /\.(tsx?|jsx?|mjs|cjs)$/.test(filePath),
+    supports: (filePath) => /\.([cm]?tsx?|[cm]?jsx?)$/.test(filePath),
     analyze: (filePath, content) => ({
       analyzerId: "typescript-ast",
       analysisDepth: "syntax",
@@ -101,7 +104,7 @@ function createGoAnalyzer(): LanguageAnalyzer {
   return createTreeSitterAnalyzer("go", ".go", "Go");
 }
 
-type TreeSitterLanguageId = "python" | "java" | "go";
+export type TreeSitterLanguageId = "python" | "java" | "go";
 
 function createTreeSitterAnalyzer(
   languageId: TreeSitterLanguageId,
@@ -111,30 +114,65 @@ function createTreeSitterAnalyzer(
   return {
     id: `${languageId}-tree-sitter-wasm`,
     supports: (filePath) => filePath.endsWith(extension),
-    analyze: async (filePath, content, projectFiles) => ({
+    analyze: async (filePath, content) => withTreeSitterTree(languageId, filePath, content, (root) => ({
       analyzerId: `${languageId}-tree-sitter-wasm`,
-      analysisDepth: "semantic",
-      insight: enhanceSymbols(
-        extractLightweightInsight(filePath, content, languageLabel, projectFiles),
-        await collectTreeSitterSymbols(languageId, filePath, content)
-      ),
-      httpEndpoints: extractHttpEndpoints(filePath, content),
+      analysisDepth: "syntax",
+      insight: {
+        path: filePath,
+        language: languageLabel,
+        imports: root.descendantsOfType(languageId === "python" ? ["import_statement", "import_from_statement"] : languageId === "java" ? ["import_declaration"] : ["import_spec"]).map((node) => node.text),
+        exports: [],
+        symbols: collectSyntaxTreeSymbols(languageId, filePath, root),
+        calls: root.descendantsOfType(languageId === "python" ? ["call"] : languageId === "java" ? ["method_invocation", "object_creation_expression"] : ["call_expression"]).map((node) => node.childForFieldName("function")?.text ?? node.childForFieldName("name")?.text ?? node.childForFieldName("type")?.text ?? node.text),
+        externalCalls: []
+      },
+      diagnostics: treeSitterSyntaxDiagnostics(root, filePath, content),
+      httpEndpoints: [],
       renderTargets: []
-    })
+    }))
   };
+}
+
+export class TreeSitterInitializationError extends Error {
+  constructor(message: string, options: ErrorOptions) {
+    super(message, options);
+    this.name = "TreeSitterInitializationError";
+  }
+}
+
+export function syntaxNodeRange(node: SyntaxNode, content: string): SourceRange {
+  const position = (index: number) => {
+    const before = content.slice(0, index);
+    return { line: before.split("\n").length, column: index - before.lastIndexOf("\n") };
+  };
+  return { start: position(node.startIndex), end: position(node.endIndex) };
+}
+
+export function treeSitterSyntaxDiagnostics(root: SyntaxNode, filePath: string, content: string): SemanticDiagnostic[] {
+  if (!root.hasError) return [];
+  function firstError(node: SyntaxNode): SyntaxNode | undefined {
+    if (node.type === "ERROR" || node.isMissing) return node;
+    for (const child of node.children) {
+      const error = firstError(child);
+      if (error) return error;
+    }
+    return undefined;
+  }
+  return [{ code: "syntax-error", severity: "error", filePath, range: syntaxNodeRange(firstError(root) ?? root, content), message: `Tree-sitter found syntax errors in ${filePath}` }];
 }
 
 let parserInitialization: Promise<void> | undefined;
 const treeSitterLanguages = new Map<TreeSitterLanguageId, Promise<Language>>();
 
-async function collectTreeSitterSymbols(
+export async function withTreeSitterTree<T>(
   languageId: TreeSitterLanguageId,
   filePath: string,
-  content: string
-): Promise<StructureSymbol[]> {
+  content: string,
+  analyze: (root: SyntaxNode) => T
+): Promise<T> {
   await initializeTreeSitter();
-  const parser = new Parser();
   const language = await loadTreeSitterLanguage(languageId);
+  const parser = new Parser();
   parser.setLanguage(language);
   const tree = parser.parse(content);
   if (!tree) {
@@ -142,10 +180,7 @@ async function collectTreeSitterSymbols(
     throw new Error(`Tree-sitter returned no syntax tree for ${filePath}`);
   }
   try {
-    if (tree.rootNode.hasError) {
-      throw new Error(`Tree-sitter found syntax errors in ${filePath}`);
-    }
-    return collectSyntaxTreeSymbols(languageId, filePath, tree.rootNode);
+    return analyze(tree.rootNode);
   } finally {
     tree.delete();
     parser.delete();
@@ -155,14 +190,14 @@ async function collectTreeSitterSymbols(
 function initializeTreeSitter(): Promise<void> {
   parserInitialization ??= Parser.init({
     locateFile: () => resolveParserAsset("web-tree-sitter.wasm")
-  });
+  }).catch((cause: unknown) => { throw new TreeSitterInitializationError("Tree-sitter runtime initialization failed", { cause }); });
   return parserInitialization;
 }
 
 function loadTreeSitterLanguage(languageId: TreeSitterLanguageId): Promise<Language> {
   const existing = treeSitterLanguages.get(languageId);
   if (existing) return existing;
-  const language = Language.load(resolveParserAsset(`tree-sitter-${languageId}.wasm`));
+  const language = Language.load(resolveParserAsset(`tree-sitter-${languageId}.wasm`)).catch((cause: unknown) => { throw new TreeSitterInitializationError(`Tree-sitter ${languageId} grammar loading failed`, { cause }); });
   treeSitterLanguages.set(languageId, language);
   return language;
 }
@@ -176,7 +211,7 @@ function resolveParserAsset(fileName: string): string {
     : fileName.replace(".wasm", "");
   const developmentPath = join(process.cwd(), "node_modules", packageName, fileName);
   if (!existsSync(developmentPath)) {
-    throw new Error(`Tree-sitter WASM asset not found: ${fileName}`);
+    throw new TreeSitterInitializationError(`Tree-sitter WASM asset not found: ${developmentPath}`, {});
   }
   return developmentPath;
 }
@@ -243,18 +278,6 @@ function createLightweightAnalyzer(): LanguageAnalyzer {
   };
 }
 
-function enhanceSymbols(insight: FileInsight, symbols: StructureSymbol[]): FileInsight {
-  const seen = new Set<string>();
-  return {
-    ...insight,
-    symbols: [...symbols, ...insight.symbols].filter((symbol) => {
-      const key = `${symbol.kind}:${symbol.name}:${symbol.line ?? 0}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-  };
-}
 
 function extractHttpEndpoints(filePath: string, content: string): SemanticHttpEndpoint[] {
   const endpoints: SemanticHttpEndpoint[] = [];

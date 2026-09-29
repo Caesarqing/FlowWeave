@@ -8,12 +8,14 @@ import type {
   ArchitectureAnalysisResult,
   ArchitectureMap,
   ArchitectureReviewEvent,
+  CanvasReadResult,
   CodeflowCanvas,
   CustomAgentInput,
   GitDiffResult,
   GitRollbackPreview,
   GitStatus,
   FlowWeaveProjectOpenResult,
+  FlowWeaveStoredProject,
   FlowWeaveErrorData,
   ProjectScanOptions,
   SequenceReviewEvent,
@@ -137,7 +139,9 @@ const flowweaveApi = {
   ) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.acknowledgeModificationChanges, projectId, snapshot, scope) as Promise<import("../types").ModificationBaseline>,
   readCanvas: (projectId: string) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.readCanvas, projectId) as Promise<CodeflowCanvas | undefined>,
+    ipcRenderer.invoke(PROJECT_CHANNELS.readCanvas, projectId) as Promise<CanvasReadResult | undefined>,
+  readRegisteredProject: (projectId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.readRegisteredProject, projectId) as Promise<FlowWeaveStoredProject | undefined>,
   saveCanvas: (projectId: string, canvas: CodeflowCanvas, options?: { allowStaleNoop?: boolean }) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.saveCanvas, projectId, canvas, options) as Promise<string>,
   exportDiagnostics: (projectId: string) =>

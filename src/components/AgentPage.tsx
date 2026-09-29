@@ -126,6 +126,7 @@ export function AgentPage({
   isRunsLoading,
   isDesktopBridgeAvailable,
   lastRunStatus,
+  legacyCanvasReadOnly,
   onAnalyzeCurrentProject,
   onApplyRunArtifact,
   onDeleteCustomAgent,
@@ -162,6 +163,7 @@ export function AgentPage({
   isRunsLoading: boolean;
   isDesktopBridgeAvailable: boolean;
   lastRunStatus: string;
+  legacyCanvasReadOnly: boolean;
   onAnalyzeCurrentProject: (agentId?: RuntimeAgentId) => void;
   onApplyRunArtifact: () => void;
   onDeleteCustomAgent: (agentId: AgentId) => void;
@@ -219,7 +221,7 @@ export function AgentPage({
           <strong>{selectedAgent?.name ?? t("agent.notSelected")}</strong>
           <span>{selectedAgent ? commandLabel(selectedAgent) : t("agent.addOrSelect")}</span>
         </div>
-        <button className="send-button" disabled={!projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
+        <button className="send-button" disabled={legacyCanvasReadOnly || !projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
           <Play size={14} />
           {isArchitectureReviewing
             ? t("agent.waitingForRun", { runId: architectureReview.runId ?? architectureReview.reviewId ?? "" })

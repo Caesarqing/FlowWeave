@@ -27,7 +27,8 @@ import {
 } from "./architecture-review-prompt.service";
 import { parseArchitectureReviewResponse } from "./structured-output.service";
 import { scanProject } from "./project-scanner.service";
-import { buildSemanticIndex, semanticIndexToStructureFacts } from "./semantic-index.service";
+import { semanticIndexToStructureFacts } from "./semantic-index.service";
+import { readCommittedAnalysis } from "./project-generation.service";
 import {
   parseSequenceDiagramBundleJson,
   parseSequenceDiagramJson,
@@ -61,6 +62,15 @@ export async function adoptArtifactRun(
   }
   if (!output.trim()) {
     return { status: "rejected", message: "Run completed without artifact output." };
+  }
+  const committed = await readCommittedAnalysis(projectPath);
+  if (!committed) return { status: "rejected", message: `No committed analysis is available; complete a project scan before adopting review output: ${projectPath}` };
+  if (result.scanFingerprint && result.scanFingerprint !== committed.project.scanFingerprint) {
+    return { status: "stale", message: "Run completed but not applied because the project scan changed." };
+  }
+  const current = await scanProject(projectPath);
+  if (current.scanFingerprint !== committed.project.scanFingerprint) {
+    return { status: "stale", message: "Run completed but not applied because the project source changed." };
   }
 
   if (result.artifactTarget === "architecture-map") {
@@ -158,7 +168,7 @@ async function adoptSequenceRun(
   mode: ArtifactRunAdoptionMode
 ): Promise<ArtifactAdoption> {
   const project = await scanProject(projectPath);
-  const { facts, scanFingerprint } = await adoptionFacts(project);
+  const { facts, scanFingerprint, generation } = await adoptionFacts(project);
   const inputFingerprint = result.scanFingerprint ?? scanFingerprint;
   const stale = await staleScanMessage(projectPath, scanFingerprint);
   if (stale) return stale;
@@ -182,7 +192,7 @@ async function adoptSequenceRun(
   }
 
   const bundle = withSequenceMetadata(
-    parsed,
+    { ...parsed, generation },
     runAgentId(result),
     result.id ?? "unknown-run",
     inputFingerprint,
@@ -192,6 +202,7 @@ async function adoptSequenceRun(
   await writeSequenceDiagramBundle(projectPath, bundle, undefined);
   await writeSequenceReviewStatus(projectPath, {
     state: "reviewed",
+    generation,
     reviewId: result.reviewId ?? activeReview.reviewId,
     scanFingerprint: inputFingerprint,
     agentId: runAgentId(result),
@@ -227,13 +238,16 @@ async function adoptionFacts(
   facts: ProjectStructureFacts;
   index: SemanticIndex;
   scanFingerprint: string;
+  generation: import("../../types").GenerationIdentity;
 }> {
-  const { index } = await buildSemanticIndex(project);
-  const facts = semanticIndexToStructureFacts(project, index);
-  if (!project.scanFingerprint) {
+  const committed = await readCommittedAnalysis(project.rootPath);
+  if (!committed) throw new Error(`No committed analysis is available for review adoption: ${project.rootPath}`);
+  const { index } = committed;
+  const facts = semanticIndexToStructureFacts(committed.project, index);
+  if (!committed.project.scanFingerprint) {
     throw new Error(`Project scan fingerprint is missing for ${project.rootPath}.`);
   }
-  return { facts, index, scanFingerprint: project.scanFingerprint };
+  return { facts, index, scanFingerprint: committed.project.scanFingerprint, generation: committed.generation };
 }
 
 async function staleScanMessage(projectPath: string, inputFingerprint: string): Promise<ArtifactAdoption | undefined> {

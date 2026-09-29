@@ -490,12 +490,12 @@ function formatPendingChanges(delta: ModificationGuidanceContext["delta"]): stri
   }
   if (delta.relations.added.length) {
     sections.push(`## Added Relations\n\n${delta.relations.added.map((relation) =>
-      `- ${relation.source} -> ${relation.target}: ${relation.relation}${relation.guidanceNote ? ` — ${relation.guidanceNote}` : ""}`
+      `- ${relation.pending ? "Pending relation edit: " : ""}${relation.source} -> ${relation.target}: ${relation.relation}${relation.guidanceNote ? ` — ${relation.guidanceNote}` : ""}`
     ).join("\n")}`);
   }
   if (delta.relations.updated.length) {
     sections.push(`## Updated Relations\n\n${delta.relations.updated.map((relation) =>
-      `- ${relation.id}: ${JSON.stringify(relation.changes)}`
+      `- ${relation.changes.pending ? "Pending relation edit: " : ""}${relation.id}: ${JSON.stringify(relation.changes)}`
     ).join("\n")}`);
   }
   if (delta.relations.deleted.length) {

@@ -12,8 +12,26 @@ import { useNavigationStore } from '../../src/stores/navigation.store';
 import { useProjectStore } from '../../src/stores/project.store';
 import { useGitStore } from '../../src/stores/git.store';
 import { useRunsStore } from '../../src/stores/runs.store';
+import type { GraphNode } from '../../src/types';
 
 describe('project workspace state', () => {
+  it('retains relationship diagnostics in source and display nodes across snapshot restoration', () => {
+    const node: GraphNode = {
+      id: 'orders', title: 'Orders', subtitle: '', kind: 'module', nodeType: 'service', risk: 'unknown',
+      description: '', files: ['src/orders.ts'], guidanceDraft: '', status: 'mapped', x: 0, y: 0, origin: 'generated',
+      relationSummary: { dependencies: 1, internalRelations: 2, unresolvedRelations: 1, externalRelations: 0 },
+      relationDiagnostics: [{ code: 'dynamic-call', severity: 'warning', message: 'Receiver cannot be resolved.', filePath: 'src/orders.ts', relationId: 'call-1', range: { start: { line: 8, column: 12 }, end: { line: 8, column: 20 } } }]
+    };
+    useCanvasStore.getState().setGraph([node], [], []);
+    const snapshot = captureProjectWorkspaceState();
+    clearProjectWorkspaceState();
+    restoreProjectWorkspaceState(snapshot);
+    expect(useCanvasStore.getState().modules[0]).toEqual(node);
+    expect(useCanvasStore.getState().nodes[0].data.relationSummary).toEqual(node.relationSummary);
+    expect(useCanvasStore.getState().nodes[0].data.relationDiagnostics).toEqual(node.relationDiagnostics);
+    expect(useCanvasStore.getState().quality).toBeUndefined();
+  });
+
   it('clears project-specific Agent and plugin state when no snapshot is available', () => {
     useAgentStore.setState({
       agents: [{
@@ -55,8 +73,13 @@ describe('project workspace state', () => {
   });
 
   it('restores independent project, canvas, and page state after switching projects', () => {
-    useProjectStore.setState({ projectId: 'project-a', projectLabel: 'Alpha', projectPath: '/alpha' });
-    useCanvasStore.setState({ selectedNodeId: 'alpha-node', expandedPaths: new Set(['src']) });
+    useProjectStore.setState({ projectId: 'project-a', projectLabel: 'Alpha', projectPath: '/alpha', legacyCanvasReadOnly: true });
+    useCanvasStore.setState({
+      selectedNodeId: 'alpha-node', expandedPaths: new Set(['src']),
+      groups: [{ id: 'group:alpha', title: 'Alpha', rootPath: 'alpha', moduleIds: ['alpha-node'] }],
+      orphanedEdges: [{ id: 'pending-edge', source: 'alpha-node', target: 'gone', relation: 'calls', origin: 'manual' }],
+      orphanedNodeEdits: [{ reason: 'removed', node: { id: 'gone', title: 'Gone', subtitle: '', kind: 'module', nodeType: 'module', risk: 'unknown', description: '', files: [], guidanceDraft: 'Preserved instructions', status: 'mapped', x: 0, y: 0 } }]
+    });
     useNavigationStore.setState({ activePage: 'docs' });
     useGitStore.setState({ checkpointId: 'alpha-checkpoint' });
     useAgentStore.setState({
@@ -72,8 +95,8 @@ describe('project workspace state', () => {
     });
     const alpha = captureProjectWorkspaceState();
 
-    useProjectStore.setState({ projectId: 'project-b', projectLabel: 'Beta', projectPath: '/beta' });
-    useCanvasStore.setState({ selectedNodeId: 'beta-node', expandedPaths: new Set(['app']) });
+    useProjectStore.setState({ projectId: 'project-b', projectLabel: 'Beta', projectPath: '/beta', legacyCanvasReadOnly: false });
+    useCanvasStore.setState({ selectedNodeId: 'beta-node', expandedPaths: new Set(['app']), groups: [], orphanedEdges: [], orphanedNodeEdits: [] });
     useNavigationStore.setState({ activePage: 'tools' });
     useGitStore.setState({ checkpointId: 'beta-checkpoint' });
     useAgentStore.setState({ pluginStatuses: [] });
@@ -81,7 +104,11 @@ describe('project workspace state', () => {
 
     restoreProjectWorkspaceState(alpha);
     expect(useProjectStore.getState().projectId).toBe('project-a');
+    expect(useProjectStore.getState().legacyCanvasReadOnly).toBe(true);
     expect(useCanvasStore.getState().selectedNodeId).toBe('alpha-node');
+    expect(useCanvasStore.getState().groups[0].id).toBe('group:alpha');
+    expect(useCanvasStore.getState().orphanedEdges[0].id).toBe('pending-edge');
+    expect(useCanvasStore.getState().orphanedNodeEdits[0].node.guidanceDraft).toBe('Preserved instructions');
     expect(useCanvasStore.getState().expandedPaths).toEqual(new Set(['src']));
     expect(useNavigationStore.getState().activePage).toBe('docs');
     expect(useGitStore.getState().checkpointId).toBe('alpha-checkpoint');
@@ -91,6 +118,7 @@ describe('project workspace state', () => {
 
     restoreProjectWorkspaceState(beta);
     expect(useProjectStore.getState().projectId).toBe('project-b');
+    expect(useProjectStore.getState().legacyCanvasReadOnly).toBe(false);
     expect(useCanvasStore.getState().selectedNodeId).toBe('beta-node');
     expect(useNavigationStore.getState().activePage).toBe('tools');
     expect(useGitStore.getState().checkpointId).toBe('beta-checkpoint');

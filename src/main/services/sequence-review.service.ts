@@ -9,6 +9,8 @@ import type {
 } from "../../types";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { withArchitectureArtifactLock } from "./architecture-review.service";
+import { assertArtifactGeneration, readCommittedGeneration } from "./project-generation.service";
 
 const REVIEW_STATE_FILENAME = "sequence-review.json";
 const activeReviewIds = new Set<string>();
@@ -30,6 +32,7 @@ export type StartSequenceReviewInput = {
   projectPath: string;
   reviewId: string;
   scanFingerprint: string;
+  generation: import("../../types").GenerationIdentity;
   agentId: RuntimeAgentId;
   localBundle: SequenceDiagramBundle;
   startedAt: string;
@@ -41,6 +44,7 @@ export type StartSequenceReviewInput = {
 export async function startSequenceReview(input: StartSequenceReviewInput): Promise<SequenceReviewStatus> {
   const reviewing: SequenceReviewStatus = {
     state: "reviewing",
+    generation: input.generation,
     reviewId: input.reviewId,
     scanFingerprint: input.scanFingerprint,
     agentId: input.agentId,
@@ -63,26 +67,34 @@ export async function readSequenceReviewStatus(
   projectPath: string,
   scanFingerprint: string
 ): Promise<SequenceReviewStatus> {
-  const value = await readJsonArtifact(reviewStatePath(projectPath));
-  if (!isSequenceReviewStatus(value)) {
-    return deriveReviewStatusFromBundle(projectPath, scanFingerprint);
-  }
-  const derived = await deriveReviewStatusFromBundle(projectPath, scanFingerprint);
-  if (!value.scanFingerprint) return derived;
-  if (value.scanFingerprint !== scanFingerprint) {
-    return { ...value, state: "stale" };
-  }
-  if (value.state === "local" || value.state === "reviewed") {
-    if (derived.state !== value.state) return derived;
-  }
-  return value;
+  return withArchitectureArtifactLock(projectPath, async () => {
+    const value = await readJsonArtifact(reviewStatePath(projectPath));
+    if (!isSequenceReviewStatus(value)) return deriveReviewStatusFromBundle(projectPath, scanFingerprint);
+    const generation = await readCommittedGeneration(projectPath);
+    if (generation && (value.generation?.requestId !== generation.requestId || value.generation.inputFingerprint !== generation.inputFingerprint)) {
+      return { ...value, state: "stale" };
+    }
+    const derived = await deriveReviewStatusFromBundle(projectPath, scanFingerprint);
+    if (!value.scanFingerprint) return derived;
+    if (value.scanFingerprint !== scanFingerprint) return { ...value, state: "stale" };
+    if (value.state === "local" || value.state === "reviewed") {
+      if (derived.state !== value.state) return derived;
+    }
+    return value;
+  });
 }
 
 export async function writeSequenceReviewStatus(
   projectPath: string,
   status: SequenceReviewStatus
 ): Promise<void> {
-  await writeJsonAtomic(reviewStatePath(projectPath), status);
+  await withArchitectureArtifactLock(projectPath, async () => {
+    const canvasPath = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
+    const canvas = await readJsonArtifact(canvasPath) as { version?: number } | undefined;
+    if (canvas?.version === 5) throw new Error(`Legacy Canvas v5 is read-only; re-scan successfully before updating sequence review: ${canvasPath}`);
+    if (status.generation) await assertArtifactGeneration(projectPath, "sequence-review.json", status);
+    await writeJsonAtomic(reviewStatePath(projectPath), status);
+  });
 }
 
 export function compareSequenceBundles(
@@ -140,7 +152,7 @@ async function completeSequenceReview(
   let result: SequenceReviewRunResult;
   try {
     result = await input.run(async (runId) => {
-      const running = { ...reviewing, runId };
+      const running = { ...reviewing, generation: input.generation, runId };
       await writeSequenceReviewStatus(input.projectPath, running);
       input.onEvent(reviewEvent(input, running));
     });

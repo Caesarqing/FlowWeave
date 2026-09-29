@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { CanvasLayoutState, GraphEdge, GraphNode } from "../types";
+import type { CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphNode } from "../types";
 import { useAgentStore } from "../stores/agents.store";
 import { useI18n } from "../utils/i18n";
 
@@ -7,23 +7,26 @@ export function useCanvasPersistence(
   projectId: string,
   projectPath: string,
   scanFingerprint: string,
+  legacyCanvasReadOnly: boolean,
+  isProjectLoading: boolean,
   artifactState: import("../types").ProjectArtifactState | undefined,
   snapshot: string,
   modules: GraphNode[],
   relations: GraphEdge[],
   layout: CanvasLayoutState,
-  orphanedEdges: GraphEdge[]
+  orphanedEdges: GraphEdge[],
+  metadata: Pick<CodeflowCanvas, "groups" | "quality" | "orphanedNodeEdits">
 ) {
   const { t } = useI18n();
   const setLastRunStatus = useAgentStore((state) => state.setLastRunStatus);
 
   useEffect(() => {
-    if (!window.flowweave || !projectId || modules.length === 0 || artifactState !== "current") return;
+    if (!window.flowweave || !projectId || legacyCanvasReadOnly || isProjectLoading || modules.length === 0 || artifactState !== "current") return;
     const timeout = window.setTimeout(() => {
       void window.flowweave?.saveCanvas(
         projectId,
         {
-          version: 5,
+          version: 6,
           id: "main",
           title: "Main Canvas",
           projectPath,
@@ -33,7 +36,8 @@ export function useCanvasPersistence(
           layout,
           nodes: modules,
           edges: relations,
-          orphanedEdges
+          orphanedEdges,
+          ...metadata
         },
         { allowStaleNoop: true }
       ).catch((error) => {
@@ -41,7 +45,7 @@ export function useCanvasPersistence(
       });
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [projectId, projectPath, scanFingerprint, artifactState, snapshot, layout, orphanedEdges]);
+  }, [projectId, projectPath, scanFingerprint, legacyCanvasReadOnly, isProjectLoading, artifactState, snapshot, layout, orphanedEdges, metadata]);
 }
 
 function formatErrorMessage(error: unknown) {

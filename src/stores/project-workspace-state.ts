@@ -12,14 +12,20 @@ type ProjectWorkspaceSnapshot = {
     projectId: string;
     projectPath: string;
     scanFingerprint: string;
+    relationDiagnostics: ReturnType<typeof useProjectStore.getState>['relationDiagnostics'];
     artifactStatuses: ReturnType<typeof useProjectStore.getState>['artifactStatuses'];
     architectureReview: ReturnType<typeof useProjectStore.getState>['architectureReview'];
     sequenceReview: ReturnType<typeof useProjectStore.getState>['sequenceReview'];
     projectStatus: string;
     isProjectLoading: boolean;
+    legacyCanvasReadOnly: boolean;
   };
   canvas: {
     canvasLayout: CanvasLayoutState;
+    orphanedEdges: ReturnType<typeof useCanvasStore.getState>['orphanedEdges'];
+    groups: ReturnType<typeof useCanvasStore.getState>['groups'];
+    quality: ReturnType<typeof useCanvasStore.getState>['quality'];
+    orphanedNodeEdits: ReturnType<typeof useCanvasStore.getState>['orphanedNodeEdits'];
     modules: ReturnType<typeof useCanvasStore.getState>['modules'];
     edges: ReturnType<typeof useCanvasStore.getState>['edges'];
     nodes: ReturnType<typeof useCanvasStore.getState>['nodes'];
@@ -67,14 +73,20 @@ export function captureProjectWorkspaceState(): ProjectWorkspaceSnapshot {
       projectId: project.projectId,
       projectPath: project.projectPath,
       scanFingerprint: project.scanFingerprint,
+      relationDiagnostics: project.relationDiagnostics,
       artifactStatuses: project.artifactStatuses,
       architectureReview: project.architectureReview,
       sequenceReview: project.sequenceReview,
       projectStatus: project.projectStatus,
-      isProjectLoading: project.isProjectLoading
+      isProjectLoading: project.isProjectLoading,
+      legacyCanvasReadOnly: project.legacyCanvasReadOnly
     },
     canvas: {
       canvasLayout: canvas.canvasLayout,
+      orphanedEdges: canvas.orphanedEdges,
+      groups: canvas.groups,
+      quality: canvas.quality,
+      orphanedNodeEdits: canvas.orphanedNodeEdits,
       modules: canvas.modules,
       edges: canvas.edges,
       nodes: canvas.nodes,
@@ -155,14 +167,20 @@ export function clearProjectWorkspaceState(): void {
       projectId: '',
       projectPath: '',
       scanFingerprint: '',
+      relationDiagnostics: [],
       artifactStatuses: undefined,
       architectureReview: { state: 'missing' },
       sequenceReview: { state: 'missing' },
       projectStatus: 'Open a local backend project first. FlowWeave will read the file tree and generate module nodes.',
-      isProjectLoading: false
+      isProjectLoading: false,
+      legacyCanvasReadOnly: false
     },
     canvas: {
       canvasLayout: emptyCanvasLayout(),
+      orphanedEdges: [],
+      groups: [],
+      quality: undefined,
+      orphanedNodeEdits: [],
       modules: [],
       edges: [],
       nodes: [],

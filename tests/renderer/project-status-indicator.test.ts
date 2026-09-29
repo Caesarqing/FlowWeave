@@ -9,7 +9,16 @@ import {
 import type { ProjectArtifactStatuses } from "../../src/types";
 
 describe("ProjectStatusIndicator", () => {
-  it("shows one stale sequence state when a local review conflicts with a stale artifact", () => {
+  it("keeps usable static artifacts available when sequence AI review fails", () => {
+    const model = buildProjectStatusViewModel(statusInput({
+      sequenceReview: { state: "review-failed", scanFingerprint: "scan-1", error: { code: "agent-failed", message: "Sequence review could not write its response." } }
+    }));
+    expect(model.kind).toBe("review-warning");
+    expect(model.items).toContainEqual(expect.objectContaining({
+      key: "sequences", kind: "review-warning", action: "update-sequences", error: "Sequence review could not write its response."
+    }));
+  });
+  it("keeps the static architecture ready when a sequence artifact is stale", () => {
     const model = buildProjectStatusViewModel(statusInput({
       statuses: artifactStatuses({ sequences: "stale" }),
       sequenceReview: { state: "local", scanFingerprint: "scan-1" }
@@ -17,16 +26,14 @@ describe("ProjectStatusIndicator", () => {
 
     expect(model).toEqual({
       kind: "stale",
-      items: [{
-        key: "sequences",
-        kind: "stale",
-        source: "local",
-        action: "update-sequences"
-      }]
+      items: [
+        { key: "architecture", kind: "ready" },
+        { key: "sequences", kind: "stale", source: "local", action: "update-sequences" }
+      ]
     });
   });
 
-  it("shows the local graph as usable while Agent enhancement runs in the background", () => {
+  it("shows the local graph as usable while Agent review runs in the background", () => {
     const model = buildProjectStatusViewModel(statusInput({
       architectureReview: {
         state: "reviewing",
@@ -38,10 +45,10 @@ describe("ProjectStatusIndicator", () => {
     }));
 
     expect(model).toEqual({
-      kind: "checking",
+      kind: "reviewing",
       items: [{
         key: "architecture",
-        kind: "checking",
+        kind: "reviewing",
         source: "local",
         activity: "agent-enhancing"
       }]
@@ -83,6 +90,12 @@ describe("ProjectStatusIndicator", () => {
     });
   });
 
+  it("shows AI Reviewed only when the current architecture was reviewed", () => {
+    expect(buildProjectStatusViewModel(statusInput({
+      architectureReview: { state: "reviewed", scanFingerprint: "scan-1", inputFingerprint: "input-1" }
+    })).kind).toBe("reviewed");
+  });
+
   it("renders a native compact popover without diagnostic identifiers", () => {
     const markup = renderToStaticMarkup(createElement(ProjectStatusIndicator, {
       ...statusInput({
@@ -118,7 +131,65 @@ describe("ProjectStatusIndicator", () => {
       onUpdateSequences: () => undefined
     }));
 
-    expect(markup).toContain("Agent enhancing");
+    expect(markup).toContain("Agent reviewing");
+  });
+
+  it("keeps a current static architecture available after Agent review fails", () => {
+    const input = statusInput({
+      architectureReview: {
+        state: "review-failed",
+        scanFingerprint: "scan-1",
+        inputFingerprint: "input-1",
+        error: { message: "Agent timed out", code: "agent-failed" }
+      }
+    });
+    const model = buildProjectStatusViewModel(input);
+
+    expect(model.kind).toBe("review-warning");
+    expect(model.items).toContainEqual(expect.objectContaining({
+      key: "architecture",
+      kind: "review-warning",
+      action: "update-architecture",
+      error: "Agent timed out"
+    }));
+    const markup = renderToStaticMarkup(createElement(ProjectStatusIndicator, {
+      ...input,
+      onRefreshProject: () => undefined,
+      onUpdateArchitecture: () => undefined,
+      onUpdateSequences: () => undefined
+    }));
+    expect(markup).toContain("Static Ready · AI Review Failed");
+    expect(markup).toContain("Agent timed out");
+    expect(markup).toContain("Retry");
+  });
+
+  it("disables architecture and sequence review actions for a legacy read-only canvas", () => {
+    const markup = renderToStaticMarkup(createElement(ProjectStatusIndicator, {
+      ...statusInput({
+        statuses: artifactStatuses({ canvas: "stale", architecture: "stale", sequences: "stale" }),
+        architectureReview: { state: "stale", scanFingerprint: "scan-1" },
+        sequenceReview: { state: "stale", scanFingerprint: "scan-1" }
+      }),
+      readOnly: true,
+      onRefreshProject: () => undefined,
+      onUpdateArchitecture: () => undefined,
+      onUpdateSequences: () => undefined
+    }));
+
+    expect(markup.match(/<button disabled=""/g)).toHaveLength(2);
+    expect(markup).toContain(">Rescan</button>");
+  });
+
+  it("shows a genuinely stale architecture as stale even when review failed", () => {
+    const model = buildProjectStatusViewModel(statusInput({
+      statuses: artifactStatuses({ architecture: "stale" }),
+      architectureReview: {
+        state: "review-failed",
+        error: { code: "agent-failed", message: "Agent timed out" }
+      }
+    }));
+
+    expect(model.items.find((item) => item.key === "architecture")?.kind).toBe("stale");
   });
 });
 

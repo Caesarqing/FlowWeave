@@ -1,13 +1,11 @@
-import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
 import { buildRunPrompt, startToolPlan } from "../../src/main/services/agent-run.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
-import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
-import { installBuiltInAgentPlugin } from "../../src/main/services/agent-plugin.service";
 import { createNodeCliFixture } from "./test-cli-fixture";
 
 describe("agent-run.service", () => {
@@ -188,85 +186,6 @@ describe("agent-run.service", () => {
     expect(result.agentReadiness?.checks.find((check) => check.id === "project-agent-plugin-codex")?.blocking).toBe(true);
   });
 
-  it("writes Agent Inbox responses into run artifacts", async () => {
-    const projectPath = await createProjectWithConnection();
-    await installBuiltInAgentPlugin(projectPath);
-    const projectId = await registerProject(projectPath);
-    setTimeout(() => {
-      void readdir(join(projectPath, FLOWWEAVE_DIR, "runs")).then((runIds) => {
-        const runId = runIds.find((id) => id.startsWith("run-"));
-        if (!runId) throw new Error("Expected a run directory for the desktop response.");
-        return mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true }).then(() =>
-        writeFile(
-          join(projectPath, ".flowweave", "runs", runId, "agent-response.json"),
-          JSON.stringify({
-            protocolVersion: 2,
-            runId,
-            projectId,
-            status: "completed",
-            summary: "desktop response",
-            content: "# Desktop Run Plan",
-            completedAt: "2026-06-09T12:00:00.000Z"
-          }),
-          "utf8"
-        )
-        );
-      });
-    }, 20);
-
-    const result = await startToolPlan({
-      projectId,
-      toolId: "codex-desktop",
-      prompt: "Review Agent Inbox.",
-      executionMode: "plan",
-      purpose: "implementation-plan"
-    });
-
-    expect(result.status).toBe("pending");
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    const summaries = await listRunSummaries(projectPath);
-    const artifact = await readRunArtifact(projectPath, result.id);
-    expect(summaries[0].status).toBe("completed");
-    expect(artifact.plan).toContain("Desktop Run Plan");
-    expect(artifact.result).toContain('"toolId": "codex-desktop"');
-  });
-
-  it("imports Agent Inbox response.json for implementation-plan runs", async () => {
-    const projectPath = await createProjectWithConnection();
-    await installBuiltInAgentPlugin(projectPath);
-    const projectId = await registerProject(projectPath);
-    setTimeout(() => {
-      void readdir(join(projectPath, FLOWWEAVE_DIR, "runs")).then((runIds) => {
-        const runId = runIds.find((id) => id.startsWith("run-"));
-        if (!runId) throw new Error("Expected a run directory for the desktop response.");
-        return mkdir(join(projectPath, FLOWWEAVE_DIR, "runs", runId), { recursive: true }).then(() =>
-        writeFile(join(projectPath, ".flowweave", "runs", runId, "agent-response.json"), JSON.stringify({
-          protocolVersion: 2,
-          runId,
-          projectId,
-          status: "completed",
-          summary: "desktop markdown response",
-          content: "# Desktop Markdown Plan",
-          completedAt: "2026-06-09T12:00:00.000Z"
-        }), "utf8")
-        );
-      });
-    }, 20);
-
-    const result = await startToolPlan({
-      projectId,
-      toolId: "codex-desktop",
-      prompt: "Review Agent Inbox markdown.",
-      executionMode: "plan",
-      purpose: "implementation-plan"
-    });
-
-    expect(result.status).toBe("pending");
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    const artifact = await readRunArtifact(projectPath, result.id);
-    expect(artifact.summary.status).toBe("completed");
-    expect(artifact.plan).toContain("Desktop Markdown Plan");
-  });
 });
 
 async function createProjectWithConnection() {

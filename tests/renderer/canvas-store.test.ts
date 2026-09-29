@@ -7,10 +7,30 @@ describe("canvas store layout modes", () => {
     useCanvasStore.getState().setGraph([], [], [], manualLayout);
   });
 
-  it("uses execution for a newly generated graph", () => {
+  it("chooses the initial graph view from the available relationships", () => {
     useCanvasStore.getState().setGraph([moduleNode], [], []);
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("architecture");
 
-    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("execution");
+    useCanvasStore.getState().setGraph([moduleNode, { ...moduleNode, id: "next" }], [
+      { id: "dependency", source: "module", target: "next", relation: "depends_on" }
+    ], []);
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("architecture");
+
+    useCanvasStore.getState().setGraph([moduleNode, { ...moduleNode, id: "next" }], [
+      { id: "runtime", source: "module", target: "next", relation: "calls" }
+    ], []);
+
+    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("architecture");
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("architecture");
+  });
+
+  it("persists the graph view separately from manual positioning", () => {
+    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, viewMode: "architecture" });
+
+    useCanvasStore.getState().setViewMode("dependency");
+
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("dependency");
+    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("manual");
   });
 
   it("records the topology fingerprint that produced an automatic layout", () => {
@@ -57,7 +77,7 @@ describe("canvas store layout modes", () => {
     expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("technology");
   });
 
-  it("retains orphaned manual edges when restoring a v5 Canvas", () => {
+  it("retains orphaned manual edges when restoring a v6 Canvas", () => {
     const orphanedEdges: GraphEdge[] = [{
       id: "orphan",
       source: "manual-node",
@@ -69,6 +89,13 @@ describe("canvas store layout modes", () => {
     useCanvasStore.getState().setGraph([moduleNode], [], [], manualLayout, orphanedEdges);
 
     expect(useCanvasStore.getState().orphanedEdges).toEqual(orphanedEdges);
+  });
+
+  it("retains the committed generation identity when restoring a Canvas", () => {
+    const generation = { requestId: "request-a", inputFingerprint: "fingerprint-a" };
+    useCanvasStore.getState().setGraph([moduleNode], [], [], manualLayout, [], { generation });
+
+    expect(useCanvasStore.getState().generation).toEqual(generation);
   });
 });
 

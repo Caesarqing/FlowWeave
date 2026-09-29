@@ -1,23 +1,20 @@
 import { resolve } from "node:path";
-import { scanProject } from "../services/project-scanner.service";
-import { inferGraphFromProject } from "../services/task-generator.service";
-import { writeFlowWeaveProject } from "../storage/flowweave-store";
+import { generateProject } from "../services/project-generation.service";
 
 async function main() {
   const projectPath = resolve(process.argv[2] ?? process.cwd());
-  const project = await scanProject(projectPath);
-  const graph = await inferGraphFromProject(project);
-  const written = await writeFlowWeaveProject(
-    projectPath,
-    project,
-    graph.nodes,
-    graph.edges,
-    project.scanFingerprint ?? ""
-  );
+  const result = await generateProject(projectPath, {});
+  if (result.status === "superseded") {
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    return;
+  }
+  const { project, architectureMap, graph, written } = result;
 
   process.stdout.write(
     `${JSON.stringify(
       {
+        status: result.status,
+        generation: result.generation,
         project: {
           name: project.projectName,
           rootPath: project.rootPath,
@@ -28,6 +25,7 @@ async function main() {
           nodes: graph.nodes.length,
           edges: graph.edges.length
         },
+        quality: architectureMap.quality, groups: architectureMap.groups?.length, resources: architectureMap.resources?.length,
         written
       },
       null,

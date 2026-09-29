@@ -1,3 +1,5 @@
+export type GenerationIdentity = { requestId: string; inputFingerprint: string };
+
 export type ProjectFileNode = {
   id: string;
   name: string;
@@ -82,6 +84,7 @@ export type CanvasClassification = {
 export type CanvasPosition = { x: number; y: number };
 export type CanvasLayoutState = {
   activeMode: "manual" | CanvasLayoutMode;
+  viewMode?: GraphViewMode;
   manualPositions: Record<string, CanvasPosition>;
   autoLayouts: Partial<Record<CanvasLayoutMode, Record<string, CanvasPosition>>>;
   autoLayoutTopologyFingerprints?: Partial<Record<CanvasLayoutMode, string>>;
@@ -131,7 +134,7 @@ export type ModuleIdentity = {
 };
 
 export type ModuleClusteringDiagnostic = {
-  code: "unknown-files" | "oversized-module" | "lineage-split" | "lineage-merge";
+  code: "unknown-files" | "oversized-module" | "lineage-split" | "lineage-merge" | "ambiguous-ownership";
   moduleIds: string[];
   filePaths: string[];
   message: string;
@@ -140,6 +143,10 @@ export type ModuleClusteringDiagnostic = {
 export type StructureSymbolKind = "function" | "class" | "method" | "export" | "variable";
 
 export type StructureSymbol = {
+  id?: string;
+  qualifiedName?: string;
+  scopeId?: string;
+  range?: SourceRange;
   name: string;
   kind: StructureSymbolKind;
   filePath: string;
@@ -169,6 +176,12 @@ export type FileInsight = {
 };
 
 export type ArchitectureEvidence = {
+  operation?: SemanticOperation;
+  role?: "source" | "target";
+  relationId?: string;
+  range?: SourceRange;
+  declarationRange?: SourceRange;
+  bindingBasis?: string;
   filePath?: string;
   symbol?: string;
   line?: number;
@@ -177,6 +190,10 @@ export type ArchitectureEvidence = {
 };
 
 export type GraphNode = {
+  relationSummary?: { dependencies: number; internalRelations: number; unresolvedRelations: number; externalRelations: number };
+  relationDiagnostics?: SemanticDiagnostic[];
+  resource?: SemanticResource;
+  groupPath?: ArchitectureGroupReference[];
   id: string;
   title: string;
   subtitle: string;
@@ -213,6 +230,10 @@ export type GraphNode = {
 };
 
 export type GraphEdge = {
+  semanticKinds?: SemanticRelationKind[];
+  operations?: SemanticOperation[];
+  importUsages?: SemanticImportUsage[];
+  sourceRelationIds?: string[];
   id: string;
   source: string;
   target: string;
@@ -226,6 +247,7 @@ export type GraphEdge = {
 };
 
 export type NormalizedModule = {
+  resourceId?: string;
   id: string;
   title: string;
   nodeType: GraphNodeType;
@@ -239,6 +261,7 @@ export type NormalizedModule = {
 };
 
 export type NormalizedRelation = {
+  pending?: true;
   id: string;
   source: string;
   target: string;
@@ -247,6 +270,7 @@ export type NormalizedRelation = {
 };
 
 export type ModificationSnapshot = {
+  generation?: GenerationIdentity;
   scanFingerprint?: string;
   canvas: {
     modules: NormalizedModule[];
@@ -257,6 +281,7 @@ export type ModificationSnapshot = {
 
 export type ModificationBaseline = ModificationSnapshot & {
   version: 1;
+  graphModelVersion?: number;
   acknowledgedAt: string;
   moduleGuidanceAcknowledgements?: Record<string, string>;
 };
@@ -333,6 +358,7 @@ export type ProjectScanOptions = {
 };
 
 export type CodeflowProject = {
+  generation?: GenerationIdentity;
   version: 1 | 2;
   generatorVersion?: string;
   inputFingerprint?: string;
@@ -362,7 +388,106 @@ export type SemanticRelationKind =
   | "test";
 export type SemanticRelationConfidence = "confirmed" | "inferred";
 
+export type SourcePosition = { line: number; column: number };
+export type SourceRange = { start: SourcePosition; end: SourcePosition };
+export type SemanticImportUsage = "value" | "type" | "side-effect" | "inherit";
+export type SemanticOperation = "read" | "write" | "publish" | "subscribe" | "invoke";
+export type SemanticTarget =
+  | { kind: "file"; filePath: string; symbolId?: string; declarationRange?: SourceRange }
+  | { kind: "resource"; resourceId: string }
+  | { kind: "external"; moduleName: string; standardLibrary: boolean }
+  | { kind: "unresolved"; reason: string; candidates: string[] };
+
+export type AnalysisLanguage = "typescript" | "python" | "java" | "go";
+export type AnalysisScope = {
+  id: string;
+  language: AnalysisLanguage;
+  rootPath: string;
+  sourceRoots: string[];
+  paths: string[];
+  configurationPaths: string[];
+  packageName?: string;
+  dependencies?: string[];
+};
+export type PackageExport = string | null | PackageExport[] | { [condition: string]: PackageExport };
+export type WorkspacePackage = {
+  workspaceRoot?: string;
+  name: string;
+  rootPath: string;
+  manifestPath: string;
+  exports?: PackageExport;
+  main?: string;
+  types?: string;
+  sourceRoot?: string;
+  outputRoot?: string;
+  configurationPath?: string;
+  dependencies: string[];
+};
+export type ProjectAnalysisContext = {
+  scopes: AnalysisScope[];
+  packages: WorkspacePackage[];
+  configurationPaths: string[];
+  diagnostics: SemanticDiagnostic[];
+};
+export type SemanticOperationFact = {
+  role?: "source" | "target";
+  unresolvedReason?: string;
+  kind: "http" | "database" | "filesystem" | "process" | "event";
+  filePath: string;
+  range: SourceRange;
+  scopeId: string;
+  moduleName: string;
+  apiName: string;
+  receiverId?: string;
+  target?: string;
+  operation: SemanticOperation;
+  method?: SemanticHttpMethod;
+  origin?: string;
+  confidence: SemanticRelationConfidence;
+};
+export type SemanticResource = {
+  id: string;
+  kind: "api" | "database" | "filesystem" | "event" | "process" | "package";
+  scopeId: string;
+  key: string;
+  title: string;
+  detail: string;
+  evidence: ArchitectureEvidence[];
+};
+export type ArchitectureGroupReference = {
+  id: string;
+  title: string;
+  rootPath: string;
+  parentId?: string;
+};
+export type ArchitectureGroup = ArchitectureGroupReference & {
+  moduleIds: string[];
+};
+export type SemanticFactOutcome = {
+  kind: SemanticRelationKind;
+  outcome: "architecture-edge" | "module-internal" | "external" | "ambiguous" | "unresolved" | "unsupported";
+  count: number;
+  relationIds: string[];
+};
+export type StaticAnalysisQuality = {
+  factOutcomes?: SemanticFactOutcome[];
+  eligibleFiles: number;
+  parsedFiles: number;
+  failedFiles: number;
+  unsupportedFiles: number;
+  internalImports: number;
+  resolvedInternalImports: number;
+  unresolvedInternalImports: number;
+  calls: number;
+  resolvedCalls: number;
+  ambiguousCalls: number;
+  complete: boolean;
+};
+
 export type SemanticDiagnostic = {
+  relationId?: string;
+  range?: SourceRange;
+  candidates?: string[];
   code: string;
   severity: "warning" | "error";
   message: string;
@@ -370,6 +495,7 @@ export type SemanticDiagnostic = {
 };
 
 export type SemanticFile = {
+  generation?: GenerationIdentity;
   path: string;
   language?: string;
   framework?: string;
@@ -389,6 +515,9 @@ export type SemanticFile = {
 export type SemanticHttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD" | "UNKNOWN";
 
 export type SemanticHttpEndpoint = {
+  origin?: string;
+  serviceId?: string;
+  range?: SourceRange;
   id: string;
   kind: "request" | "route";
   filePath: string;
@@ -400,6 +529,13 @@ export type SemanticHttpEndpoint = {
 };
 
 export type SemanticRelation = {
+  role?: "source" | "target";
+  targetRef?: SemanticTarget;
+  sourceRange?: SourceRange;
+  scopeId?: string;
+  bindingBasis?: string;
+  importUsage?: SemanticImportUsage;
+  operation?: SemanticOperation;
   id: string;
   kind: SemanticRelationKind;
   source: string;
@@ -412,7 +548,12 @@ export type SemanticRelation = {
 };
 
 export type SemanticIndex = {
-  version: 1 | 2 | 3 | 4;
+  generation?: GenerationIdentity;
+  configurationFingerprint?: string;
+  version: 1 | 2 | 3 | 4 | 5;
+  scopes?: AnalysisScope[];
+  resources?: SemanticResource[];
+  quality?: StaticAnalysisQuality;
   generatorVersion: string;
   projectName: string;
   rootPath: string;
@@ -434,13 +575,18 @@ export type SemanticIndexManifestEntry = {
 };
 
 export type SemanticIndexManifest = {
-  version: 1 | 2 | 3 | 4;
+  generation?: GenerationIdentity;
+  version: 1 | 2 | 3 | 4 | 5;
   generatorVersion: string;
   projectName: string;
   rootPath: string;
   generatedAt: string;
   scanFingerprint: string;
   configurationFingerprint?: string;
+  inputState?: {
+    filePaths: string[];
+    observations: Array<[string, string]>;
+  };
   files: SemanticIndexManifestEntry[];
 };
 
@@ -452,7 +598,11 @@ export type ScanDelta = {
 };
 
 export type CodeflowCanvas = {
-  version: 5;
+  generation?: GenerationIdentity;
+  groups?: ArchitectureGroup[];
+  quality?: StaticAnalysisQuality;
+  orphanedNodeEdits?: OrphanedNodeEdit[];
+  version: 6;
   generatorVersion?: string;
   inputFingerprint?: string;
   id: string;
@@ -562,6 +712,7 @@ export type SequenceReviewError = {
 
 export type SequenceReviewStatus = {
   state: SequenceReviewState;
+  generation?: GenerationIdentity;
   reviewId?: string;
   scanFingerprint?: string;
   agentId?: RuntimeAgentId;
@@ -583,6 +734,9 @@ export type SequenceReviewEvent = {
 };
 
 export type ArchitectureModule = {
+  relationSummary?: GraphNode["relationSummary"];
+  relationDiagnostics?: SemanticDiagnostic[];
+  groupPath?: ArchitectureGroupReference[];
   id: string;
   identity?: ModuleIdentity;
   title: string;
@@ -623,15 +777,24 @@ export type ArchitectureReviewResponse = {
 };
 
 export type ArchitectureRelationship = {
+  semanticKinds?: SemanticRelationKind[];
+  operations?: SemanticOperation[];
+  importUsages?: SemanticImportUsage[];
+  sourceRelationIds?: string[];
   id: string;
   source: string;
   target: string;
   relation: GraphEdgeRelation;
+  confidence?: SemanticRelationConfidence;
   description: string;
   evidence: ArchitectureEvidence[];
 };
 
 export type ProjectStructureFacts = {
+  diagnostics?: SemanticDiagnostic[];
+  scopes?: AnalysisScope[];
+  resources?: SemanticResource[];
+  quality?: StaticAnalysisQuality;
   projectName: string;
   rootPath: string;
   languages: Record<string, number>;
@@ -640,7 +803,12 @@ export type ProjectStructureFacts = {
 };
 
 export type ArchitectureMap = {
-  version: 1 | 2;
+  generatorVersion?: string;
+  generation?: GenerationIdentity;
+  version: 1 | 2 | 3;
+  resources?: SemanticResource[];
+  groups?: ArchitectureGroup[];
+  quality?: StaticAnalysisQuality;
   projectName: string;
   rootPath: string;
   generatedAt: string;
@@ -650,9 +818,22 @@ export type ArchitectureMap = {
   modules: ArchitectureModule[];
   reviewFindings?: ArchitectureReviewFinding[];
   moduleDiagnostics?: ModuleClusteringDiagnostic[];
+  relationDiagnostics?: ArchitectureRelationDiagnostic[];
   relationships: ArchitectureRelationship[];
   files: FileInsight[];
   symbols: StructureSymbol[];
+};
+
+export type ArchitectureRelationDiagnostic = {
+  relationIds?: string[];
+  kind: SemanticRelationKind;
+  reason: "unlocated-target" | "direction-unknown" | "same-module" | "ambiguous-target" | "unsupported" | "external";
+  count: number;
+};
+
+export type OrphanedNodeEdit = {
+  node: GraphNode;
+  reason: "split-or-merge" | "removed";
 };
 
 export type SequenceDiagramKind = "architectural";
@@ -707,6 +888,7 @@ export type SequenceDiagram = {
 
 export type SequenceDiagramBundle = {
   version: 2;
+  generation?: GenerationIdentity;
   projectName: string;
   rootPath: string;
   generatedAt: string;
@@ -786,6 +968,7 @@ export type AnalysisProgressUpdate = {
 };
 export type AnalysisOperation = {
   operationId: string;
+  requestId?: string;
   projectId: string;
   kind: "project-scan" | "architecture-analysis" | "sequence-analysis";
   stage: AnalysisOperationStage;
@@ -815,6 +998,7 @@ export type AnalysisGenerationOptions = {
   resumeArchitectureReview?: ArchitectureReviewStatus;
   onSequenceReview?: (event: SequenceReviewEvent) => void;
   resumeSequenceReview?: SequenceReviewStatus;
+  semanticIndex?: SemanticIndex;
 };
 
 export type ProjectAgentPlatform = "codex" | "claude" | "gemini" | "cursor";
@@ -841,6 +1025,7 @@ export type ProjectAgentConnectionStatus = {
 };
 
 export type CodeflowTask = {
+  generation?: GenerationIdentity;
   version: 1 | 2;
   generatorVersion?: string;
   inputFingerprint?: string;
@@ -878,8 +1063,11 @@ export type CodeflowWriteResult = {
 
 export type FlowWeaveProjectOpenResult =
   | { canceled: true }
+  | { canceled: false; status: "superseded"; projectId: string; requestId: string }
   | {
       canceled: false;
+      status?: "committed";
+      generation?: GenerationIdentity;
       projectId: string;
       scanFingerprint: string;
       artifacts: ProjectArtifactStatuses;
@@ -890,8 +1078,21 @@ export type FlowWeaveProjectOpenResult =
         nodes: GraphNode[];
         edges: GraphEdge[];
       };
+      relationDiagnostics: ArchitectureRelationDiagnostic[];
+      quality?: StaticAnalysisQuality;
+      groups?: ArchitectureGroup[];
+      resources?: SemanticResource[];
       written: CodeflowWriteResult;
     };
+
+export type LegacyCanvasV5 = Omit<CodeflowCanvas, "version"> & { version: 5 };
+export type CanvasReadResult =
+  | { mode: "editable"; canvas: CodeflowCanvas }
+  | { mode: "legacy-readonly"; canvas: LegacyCanvasV5 };
+export type FlowWeaveStoredProject = Omit<
+  Extract<FlowWeaveProjectOpenResult, { graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>,
+  "canceled" | "status" | "written"
+> & { canvas: CanvasReadResult };
 
 export type RegisteredProject = {
   id: string;
@@ -1383,7 +1584,8 @@ export type FlowWeaveApi = {
     snapshot: ModificationSnapshot,
     scope: ModificationAcknowledgementScope
   ): Promise<ModificationBaseline>;
-  readCanvas(projectId: string): Promise<CodeflowCanvas | undefined>;
+  readCanvas(projectId: string): Promise<CanvasReadResult | undefined>;
+  readRegisteredProject(projectId: string): Promise<FlowWeaveStoredProject | undefined>;
   saveCanvas(projectId: string, canvas: CodeflowCanvas, options?: { allowStaleNoop?: boolean }): Promise<string>;
   exportDiagnostics(projectId: string): Promise<string>;
   getProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;

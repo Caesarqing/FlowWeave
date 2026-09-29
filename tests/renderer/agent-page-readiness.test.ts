@@ -164,6 +164,7 @@ function renderAgentPage(status: ToolUiStatus, pluginStatuses: AgentPluginStatus
     isDesktopBridgeAvailable: true,
     isRunsLoading: false,
     lastRunStatus: "idle",
+    legacyCanvasReadOnly: false,
     onAnalyzeCurrentProject: noop,
     onApplyRunArtifact: noop,
     onDeleteCustomAgent: noop,

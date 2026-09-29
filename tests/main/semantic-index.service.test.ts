@@ -1,3 +1,4 @@
+import { generateProject } from "../../src/main/services/project-generation.service";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,45 @@ import { scanProject } from "../../src/main/services/project-scanner.service";
 import type { SemanticIndex, SemanticRelation } from "../../src/types";
 
 describe("semantic-index.service", () => {
+  it("rebuilds degraded file caches when the analyzer generator changes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-degraded-cache-"));
+    await writeFile(join(root, "app.js"), 'const service = require("./service");\nmodule.exports = () => service.load();\n', "utf8");
+    await writeFile(join(root, "service.js"), "exports.load = () => 1;\n", "utf8");
+    const first = await scanSemantic(root);
+    const manifestPath = join(root, ".flowweave", "index", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    await writeFile(manifestPath, JSON.stringify({ ...manifest, generatorVersion: "degraded-generator" }), "utf8");
+    const app = first.index.files.find((file) => file.path === "app.js")!;
+    await writeFile(join(root, ".flowweave", "index", "files", `${app.cacheKey}.json`), JSON.stringify({
+      ...app, insight: { ...app.insight, imports: [], calls: [], symbols: [] }
+    }), "utf8");
+    const second = await scanSemantic(root);
+    expect(second.index.files.find((file) => file.path === "app.js")?.insight?.imports).toContain("./service");
+    expect(second.index.relations).toContainEqual(expect.objectContaining({
+      kind: "import", sourceFile: "app.js", targetFile: "service.js"
+    }));
+  });
+
+  it("locates Python package dependencies without inventing calls or resolving ambiguous roots", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-python-dependencies-"));
+    for (const path of ["backend/services/news", "backend/services/shared", "other/services/shared"]) {
+      await mkdir(join(root, path), { recursive: true });
+    }
+    await writeFile(join(root, "backend/services/news/app.py"), "from .service import load\nfrom services.shared.queue import publish\nfrom services.shared.db import connect\n", "utf8");
+    await writeFile(join(root, "backend/services/news/service.py"), "def load():\n    return 1\n", "utf8");
+    await writeFile(join(root, "backend/services/shared/queue.py"), "def publish():\n    pass\n", "utf8");
+    for (const path of ["backend/services/shared/db.py", "other/services/shared/db.py"]) {
+      await writeFile(join(root, path), "def connect():\n    pass\n", "utf8");
+    }
+    const { index } = await scanSemantic(root);
+    expect(index.relations).toContainEqual(expect.objectContaining({
+      kind: "import", sourceFile: "backend/services/news/app.py", targetFile: "backend/services/news/service.py", confidence: "confirmed"
+    }));
+    expect(index.relations.some((relation) => relation.targetFile === "backend/services/shared/queue.py")).toBe(false);
+    expect(index.diagnostics).toContainEqual(expect.objectContaining({ code: "unresolved-import", filePath: "backend/services/news/app.py" }));
+    expect(index.relations.find((relation) => relation.target === "services.shared.db")?.targetFile).toBeUndefined();
+    expect(index.relations.some((relation) => relation.kind === "call")).toBe(false);
+  });
   it("exposes only confirmed, file-resolved runtime relations for module clustering", () => {
     const relations: SemanticRelation[] = [
       semanticRelation("import", "import", "src/z.ts", "src/a.ts", "confirmed"),
@@ -28,16 +68,16 @@ describe("semantic-index.service", () => {
     await writeFile(join(root, "src", "api.ts"), 'import { service } from "./service";\nexport const api = () => service();\n', "utf8");
     await writeFile(join(root, "src", "service.ts"), "export const service = () => fetch('/users');\n", "utf8");
 
-    const first = await buildSemanticIndex(await scanProject(root));
+    const first = await scanSemantic(root);
     const cachePath = join(root, ".flowweave", "index", "files", `${first.index.files[0].cacheKey}.json`);
     const cacheModifiedAt = (await stat(cachePath)).mtimeMs;
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const second = await buildSemanticIndex(await scanProject(root));
+    const second = await scanSemantic(root);
     const stored = await readSemanticIndex(root);
 
     expect(first.delta.added).toEqual(["src/api.ts", "src/service.ts"]);
     expect(second.delta.unchanged).toEqual(["src/api.ts", "src/service.ts"]);
-    expect(stored?.version).toBe(4);
+    expect(stored?.version).toBe(5);
     expect(stored?.relations).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: "import",
@@ -46,8 +86,9 @@ describe("semantic-index.service", () => {
         confidence: "confirmed"
       })
     ]));
-    expect((await stat(cachePath)).mtimeMs).toBe(cacheModifiedAt);
-    expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe("4.0.0");
+    expect((await stat(cachePath)).mtimeMs).toBeGreaterThan(cacheModifiedAt);
+    expect(JSON.parse(await readFile(cachePath, "utf8")).generation).toEqual(second.generation);
+    expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe("5.0.1");
   });
 
   it("keeps cold caches isolated by project and preserves graph counts across warm reuse", async () => {
@@ -61,13 +102,13 @@ describe("semantic-index.service", () => {
     const firstProject = await scanProject(firstRoot);
     const secondProject = await scanProject(secondRoot);
 
-    const firstCold = await buildSemanticIndex(firstProject);
-    const secondCold = await buildSemanticIndex(secondProject);
+    const firstCold = await scanSemantic(firstProject.rootPath);
+    const secondCold = await scanSemantic(secondProject.rootPath);
     const firstHash = firstCold.index.files.find((file) => file.path === "src/service.py")?.contentHash;
     const secondHash = secondCold.index.files.find((file) => file.path === "src/service.py")?.contentHash;
     let lastWarm = firstCold;
     for (let iteration = 0; iteration < 20; iteration += 1) {
-      lastWarm = await buildSemanticIndex(firstProject);
+      lastWarm = await scanSemantic(firstProject.rootPath);
       expect(lastWarm.delta.unchanged).toEqual(["src/api.py", "src/service.py"]);
     }
 
@@ -82,13 +123,13 @@ describe("semantic-index.service", () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-semantic-delta-"));
     await writeFile(join(root, "main.ts"), "export const value = 1;\n", "utf8");
     await writeFile(join(root, "old.ts"), "export const old = true;\n", "utf8");
-    const first = await buildSemanticIndex(await scanProject(root));
+    const first = await scanSemantic(root);
     const deletedCacheKey = first.index.files.find((file) => file.path === "old.ts")?.cacheKey;
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     await writeFile(join(root, "main.ts"), "export const value = 2;\n", "utf8");
     await rm(join(root, "old.ts"));
-    const second = await buildSemanticIndex(await scanProject(root));
+    const second = await scanSemantic(root);
 
     expect(second.delta.modified).toEqual(["main.ts"]);
     expect(second.delta.deleted).toEqual(["old.ts"]);
@@ -109,23 +150,18 @@ describe("semantic-index.service", () => {
     expect(JSON.stringify(project.files)).toContain("app.ts");
   });
 
-  it("persists frontend-to-backend HTTP relations in the shared semantic index", async () => {
+  it("preserves dynamic HTTP operations without inventing service or router bindings", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-semantic-http-"));
     await mkdir(join(root, "src"), { recursive: true });
     await mkdir(join(root, "server"), { recursive: true });
     await writeFile(join(root, "src", "api.ts"), "export const load = (id: string) => fetch(`/api/users/${id}`);\n", "utf8");
     await writeFile(join(root, "server", "users.ts"), "router.get('/api/users/:id', getUser);\n", "utf8");
 
-    const { index } = await buildSemanticIndex(await scanProject(root));
+    const { index } = await scanSemantic(root);
 
-    expect(index.httpEndpoints).toHaveLength(2);
-    expect(index.relations).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        kind: "http",
-        sourceFile: "src/api.ts",
-        targetFile: "server/users.ts"
-      })
-    ]));
+    expect(index.relations).toContainEqual(expect.objectContaining({ kind: "http", sourceFile: "src/api.ts", targetRef: expect.objectContaining({ kind: "unresolved" }) }));
+    expect(index.relations.some((relation) => relation.kind === "http" && relation.targetFile === "server/users.ts")).toBe(false);
+    expect(index.diagnostics).toContainEqual(expect.objectContaining({ code: "resource-target-unresolved", filePath: "src/api.ts" }));
   });
 
 });
@@ -147,4 +183,10 @@ function semanticRelation(
     detail: id,
     confidence
   };
+}
+
+async function scanSemantic(root: string) {
+  const result = await generateProject(root, {});
+  if (result.status !== "committed") throw new Error(`Unexpected superseded test scan: ${root}`);
+  return result;
 }

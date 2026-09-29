@@ -60,7 +60,7 @@ describe('ProjectTabs component', () => {
     expect(translate('zh-CN', 'projectTabs.openProjects')).toBe('已打开的项目');
     expect(translate('zh-CN', 'projectTabs.openAnother')).toBe('打开另一个项目');
     expect(translate('zh-CN', 'projectTabs.close', { project: '项目甲' })).toBe('关闭项目甲');
-    expect(translate('zh-CN', 'projectStatus.ready')).toBe('正常');
+    expect(translate('zh-CN', 'projectStatus.ready')).toBe('静态架构已就绪');
     expect(translate('zh-CN', 'projectStatus.pending')).toBe('待生成');
     expect(translate('zh-CN', 'projectStatus.stale')).toBe('需更新');
   });

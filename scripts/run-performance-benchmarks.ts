@@ -17,6 +17,8 @@ import {
 } from "../src/main/services/sequence-diagram.service";
 import { buildSemanticIndex } from "../src/main/services/semantic-index.service";
 import { scanProject } from "../src/main/services/project-scanner.service";
+import { writeBatchAtomic } from "../src/main/storage/flowweave-store";
+import { withArchitectureArtifactLock } from "../src/main/services/architecture-review.service";
 import type { ArchitectureModule, ArchitectureRelationship, SequenceDiagram } from "../src/types";
 
 const FILE_COUNTS = [1_000, 5_000, 10_000];
@@ -182,6 +184,7 @@ async function benchmarkSemanticIndex(
   }
   const warmRootColdDuration = performance.now() - coldStartedAt;
   assertIndexCounts("semantic-index-reference-cold", REFERENCE_INDEX_FILES, 1, [warmRootColdDuration], coldWarmRoot.index);
+  await withArchitectureArtifactLock(warmRoot, () => writeBatchAtomic(warmRoot, coldWarmRoot.updates, coldWarmRoot.removedPaths));
   const warmDurations: number[] = [];
   const localReadyWarmDurations: number[] = [];
   for (let iteration = 0; iteration < WARM_ITERATIONS; iteration += 1) {

@@ -13,11 +13,11 @@ export type TraceDirection = "all" | "upstream" | "downstream";
 export type { CanvasLayoutMode } from "../types";
 
 export function canvasTopologyFingerprint(nodes: FlowWeaveNode[], edges: Edge[]): string {
-  const nodeIds = nodes.map((node) => node.id).sort();
+  const nodeIds = nodes.map((node) => [node.id, node.data.groupPath?.map((group) => group.id) ?? [], node.data.memberNodeIds ?? []]).sort(([left], [right]) => String(left).localeCompare(String(right)));
   const edgeKeys = edges
     .map((edge) => `${edge.source}\u0000${edge.target}\u0000${String(edge.data?.relation ?? "depends_on")}`)
     .sort();
-  return JSON.stringify({ nodeIds, edgeKeys });
+  return JSON.stringify({ layoutVersion: 4, nodeIds, edgeKeys });
 }
 
 export function autoLayoutIsCurrent(
@@ -54,9 +54,7 @@ export async function layoutCanvasNodesWithEngine(
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": "RIGHT",
-      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.partitioning.activate": partitions ? "true" : "false",
       "elk.spacing.nodeNode": "70",
       "elk.layered.spacing.nodeNodeBetweenLayers": "110",
@@ -72,17 +70,14 @@ export async function layoutCanvasNodesWithEngine(
           ? { "elk.partitioning.partition": String(partitions.get(node.id) ?? 0) }
           : undefined
       })),
-    edges: [
-      ...edges
+    edges: edges
         .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
         .sort((left, right) => left.id.localeCompare(right.id))
         .map((edge) => ({
           id: edge.id,
           sources: [edge.source],
           targets: [edge.target]
-        })),
-      ...buildPartitionConstraintEdges(nodes, partitions)
-    ] as ElkExtendedEdge[]
+        }))
   });
   const positions = new Map(graph.children?.map((node) => [
     node.id,
@@ -131,27 +126,22 @@ async function layoutExecutionNodesWithEngine(
   }
   const componentEdges = projectComponentEdges(executionEdges, componentByNodeId);
   const componentDepths = longestPathDepths(components, componentEdges);
-  const componentNodes = components.map((component) => {
+  const componentGrids = new Map(components.map((component) => {
     const members = component.nodeIds.map((id) => nodeById.get(id)).filter((node): node is FlowWeaveNode => Boolean(node));
-    const height = component.cycleGroupId
-      ? members.reduce((total, node) => total + (node.measured?.height ?? node.height ?? NODE_HEIGHT), 0) + (members.length - 1) * 40
-      : members[0]?.measured?.height ?? members[0]?.height ?? NODE_HEIGHT;
-    return {
-      id: component.id,
-      width: Math.max(...members.map((node) => node.measured?.width ?? node.width ?? NODE_WIDTH), NODE_WIDTH),
-      height,
-      layoutOptions: { "elk.partitioning.partition": String(componentDepths.get(component.id) ?? 0) }
-    };
-  });
-  const partitionConstraints = buildDepthConstraintEdges(components, componentDepths);
+    return [component.id, layoutNodeGrid(members)] as const;
+  }));
+  const componentNodes = components.map((component) => ({
+    id: component.id,
+    width: componentGrids.get(component.id)!.width,
+    height: componentGrids.get(component.id)!.height,
+    layoutOptions: { "elk.partitioning.partition": String(componentDepths.get(component.id) ?? 0) }
+  }));
   const graph = await layout({
     id: "flowweave-execution-canvas",
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": "RIGHT",
-      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.layered.layering.strategy": "LONGEST_PATH",
       "elk.partitioning.activate": "true",
       "elk.spacing.nodeNode": "70",
@@ -159,31 +149,30 @@ async function layoutExecutionNodesWithEngine(
       "elk.padding": "[top=60,left=60,bottom=60,right=60]"
     },
     children: componentNodes,
-    edges: [
-      ...componentEdges.map(({ id, source, target }) => ({ id, sources: [source], targets: [target] })),
-      ...partitionConstraints
-    ] as ElkExtendedEdge[]
+    edges: componentEdges.map(({ id, source, target }) => ({ id, sources: [source], targets: [target] })) as ElkExtendedEdge[]
   });
   const positions = new Map(graph.children?.map((node) => [node.id, {
     x: node.x ?? 0,
     y: node.y ?? 0,
-    width: node.width ?? NODE_WIDTH
+    width: node.width ?? NODE_WIDTH,
+    height: node.height ?? NODE_HEIGHT
   }]) ?? []);
   const maxX = Math.max(0, ...[...positions.values()].map((position) => position.x + position.width));
-  const supportPositions = new Map(supportNodes
-    .sort((left, right) => left.id.localeCompare(right.id))
-    .map((node, index) => [node.id, {
-      x: maxX + 480,
-      y: 60 + index * ((node.measured?.height ?? node.height ?? NODE_HEIGHT) + 70)
-    }]));
-  const memberIndex = new Map(components.flatMap((component) => component.nodeIds.map((nodeId, index) => [nodeId, index] as const)));
+  const maxY = Math.max(0, ...[...positions.values()].map((position) => position.y + position.height));
+  const supportGrid = layoutNodeGrid(supportNodes);
+  const supportOnRight = components.length > 0 &&
+    Math.max(maxX + 110 + supportGrid.width, maxY, supportGrid.height) <
+    Math.max(maxX, supportGrid.width, maxY + 110 + supportGrid.height);
 
   return nodes.map((node) => {
     const component = componentByNodeId.get(node.id);
     if (!component) {
       return {
         ...node,
-        position: supportPositions.get(node.id) ?? node.position,
+        position: {
+          x: (supportOnRight ? maxX + 110 : 60) + supportGrid.positions.get(node.id)!.x,
+          y: (supportOnRight || components.length === 0 ? 60 : maxY + 110) + supportGrid.positions.get(node.id)!.y
+        },
         data: {
           ...node.data,
           cycleGroupId: undefined,
@@ -194,11 +183,12 @@ async function layoutExecutionNodesWithEngine(
       };
     }
     const componentPosition = positions.get(component.id);
+    const memberPosition = componentGrids.get(component.id)!.positions.get(node.id)!;
     return {
       ...node,
       position: componentPosition ? {
-        x: componentPosition.x,
-        y: componentPosition.y + (memberIndex.get(node.id) ?? 0) * (NODE_HEIGHT + 40)
+        x: componentPosition.x + memberPosition.x,
+        y: componentPosition.y + memberPosition.y
       } : node.position,
       data: {
         ...node.data,
@@ -209,6 +199,25 @@ async function layoutExecutionNodesWithEngine(
       }
     };
   });
+}
+
+function layoutNodeGrid(nodes: FlowWeaveNode[]): {
+  positions: Map<string, { x: number; y: number }>;
+  width: number;
+  height: number;
+} {
+  if (nodes.length === 0) return { positions: new Map(), width: 0, height: 0 };
+  const cellWidth = Math.max(...nodes.map((node) => node.measured?.width ?? node.width ?? NODE_WIDTH)) + 40;
+  const cellHeight = Math.max(...nodes.map((node) => node.measured?.height ?? node.height ?? NODE_HEIGHT)) + 40;
+  const columns = Math.ceil(Math.sqrt(nodes.length * cellHeight / cellWidth));
+  return {
+    positions: new Map([...nodes].sort((left, right) => left.id.localeCompare(right.id)).map((node, index) => [node.id, {
+      x: index % columns * cellWidth,
+      y: Math.floor(index / columns) * cellHeight
+    }])),
+    width: Math.min(columns, nodes.length) * cellWidth - 40,
+    height: Math.ceil(nodes.length / columns) * cellHeight - 40
+  };
 }
 
 function isExplicitExecutionEntry(node: FlowWeaveNode): boolean {
@@ -322,57 +331,6 @@ function longestPathDepths(components: StrongComponent[], edges: LayoutRelationE
   return depths;
 }
 
-function buildDepthConstraintEdges(
-  components: StrongComponent[],
-  depths: Map<string, number>
-): Array<{ id: string; sources: string[]; targets: string[] }> {
-  const groups = new Map<number, string[]>();
-  for (const component of components) {
-    const depth = depths.get(component.id) ?? 0;
-    groups.set(depth, [...(groups.get(depth) ?? []), component.id]);
-  }
-  const ordered = [...groups.entries()].sort(([left], [right]) => left - right).map(([, ids]) => ids.sort());
-  const constraints: Array<{ id: string; sources: string[]; targets: string[] }> = [];
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    for (const source of ordered[index]) {
-      for (const target of ordered[index + 1]) {
-        constraints.push({ id: `execution-layer:${index}:${source}:${target}`, sources: [source], targets: [target] });
-      }
-    }
-  }
-  return constraints;
-}
-
-function buildPartitionConstraintEdges(
-  nodes: FlowWeaveNode[],
-  partitions: Map<string, number> | undefined
-): Array<{ id: string; sources: string[]; targets: string[] }> {
-  if (!partitions) return [];
-  const groups = new Map<number, string[]>();
-  for (const node of nodes) {
-    const partition = partitions.get(node.id) ?? 0;
-    groups.set(partition, [...(groups.get(partition) ?? []), node.id]);
-  }
-  const orderedGroups = [...groups.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([, ids]) => ids.sort());
-  const edges: Array<{ id: string; sources: string[]; targets: string[] }> = [];
-  for (let index = 0; index < orderedGroups.length - 1; index += 1) {
-    const sources = orderedGroups[index];
-    const targets = orderedGroups[index + 1];
-    for (const source of sources) {
-      for (const target of targets) {
-        edges.push({
-          id: `partition:${index}:${source}:${target}`,
-          sources: [source],
-          targets: [target]
-        });
-      }
-    }
-  }
-  return edges;
-}
-
 export function nodeTechnologyStack(node: GraphNode): TechnologyStack {
   return nodeTechnologyStacks(node)[0] ?? "unknown";
 }
@@ -442,7 +400,7 @@ export function nodeFunctionalModule(node: GraphNode): string {
 
 export function nodeGroupKey(node: GraphNode, mode: Exclude<CanvasLayoutMode, "dependency">): string {
   if (mode === "technology") return `technology:${nodeTechnologyStack(node)}`;
-  if (mode === "architecture") return `architecture:${nodeArchitectureLayer(node)}`;
+  if (mode === "architecture") return node.groupPath?.at(-1)?.id ?? `architecture:${nodeArchitectureLayer(node)}`;
   return `domain:${nodeFunctionalModule(node)}`;
 }
 

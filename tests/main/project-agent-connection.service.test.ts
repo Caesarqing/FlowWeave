@@ -44,7 +44,7 @@ describe("project Agent connection", () => {
     expect(context).toContain(`Project root: ${projectPath}`);
     expect(context).toContain("Scan fingerprint: fixture-scan-fingerprint");
     expect(context).toContain(".flowweave/project.json (schema v1)");
-    expect(context).toContain(".flowweave/canvas/main.canvas.json (schema v5)");
+    expect(context).toContain(".flowweave/canvas/main.canvas.json (schema v6)");
     expect(context).not.toContain("## Canvas Modules");
     expect(context).not.toContain("## Canvas Relationships");
     expect(context).not.toContain("## File Tree");
@@ -267,7 +267,7 @@ async function createProject() {
 
 function createCanvas(projectPath: string, title: string): CodeflowCanvas {
   return {
-    version: 5,
+    version: 6,
     id: "main",
     title: "Main Canvas",
     projectPath,

@@ -29,6 +29,7 @@ export type SequenceDiagramState = {
   selectedParticipant?: SequenceParticipant;
   selectedParticipantId: string;
   status: string;
+  readOnly: boolean;
   generateDiagrams: (agentId?: RuntimeAgentId) => Promise<void>;
   reviseDiagram: () => Promise<void>;
   saveInstruction: () => Promise<void>;
@@ -44,6 +45,7 @@ export function useSequenceDiagramState({
   projectPath,
   selectedAgentId,
   hasPendingInstruction,
+  legacyCanvasReadOnly,
   onModificationAcknowledged
 }: {
   files: ProjectFileNode[];
@@ -51,6 +53,7 @@ export function useSequenceDiagramState({
   projectPath: string;
   selectedAgentId: RuntimeAgentId;
   hasPendingInstruction: boolean;
+  legacyCanvasReadOnly: boolean;
   onModificationAcknowledged: () => void | Promise<void>;
 }): SequenceDiagramState {
   const { t } = useI18n();
@@ -102,6 +105,7 @@ export function useSequenceDiagramState({
   useEffect(() => {
     if (!window.flowweave) return undefined;
     return window.flowweave.onSequenceReview((event) => {
+      if (legacyCanvasReadOnly) return;
       if (!shouldApplySequenceReviewEvent(
         event,
         projectId,
@@ -124,7 +128,7 @@ export function useSequenceDiagramState({
         setStatus(event.status.message ?? t("sequence.reviewing", { agent: event.status.agentId ?? "" }));
       }
     });
-  }, [projectId, scanFingerprint, setArtifactStatuses, setSequenceReview, t]);
+  }, [legacyCanvasReadOnly, projectId, scanFingerprint, setArtifactStatuses, setSequenceReview, t]);
 
   useEffect(() => {
     let isMounted = true;
@@ -152,6 +156,7 @@ export function useSequenceDiagramState({
   }, [bundle?.generatedAt]);
 
   async function generateDiagrams(agentId?: import("../types").RuntimeAgentId) {
+    if (legacyCanvasReadOnly) return;
     if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
@@ -183,6 +188,7 @@ export function useSequenceDiagramState({
   }
 
   async function reviseDiagram() {
+    if (legacyCanvasReadOnly) return;
     if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
@@ -218,6 +224,7 @@ export function useSequenceDiagramState({
   }
 
   async function saveInstruction() {
+    if (legacyCanvasReadOnly) return;
     if (!window.flowweave || !projectId) {
       setStatus(t("docs.needDesktop"));
       return;
@@ -235,6 +242,7 @@ export function useSequenceDiagramState({
   }
 
   async function persistInstruction(): Promise<import("../types").ModificationDeltaResult> {
+    if (legacyCanvasReadOnly) throw new Error(t("status.legacyCanvasReadOnly"));
     if (!window.flowweave || !projectId) {
       throw new Error(t("docs.needDesktop"));
     }
@@ -269,6 +277,7 @@ export function useSequenceDiagramState({
     instruction,
     isBusy,
     review: sequenceReview,
+    readOnly: legacyCanvasReadOnly,
     reviseDiagram,
     saveInstruction,
     selectedMessage,

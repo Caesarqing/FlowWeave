@@ -5,7 +5,7 @@ import type {
   FileInsight,
   ModuleIdentity,
   ModuleClusteringDiagnostic,
-  SemanticRelation
+  SemanticRelation, AnalysisScope
 } from "../../types";
 
 const FUNCTIONAL_DIRECTORY_MARKERS = new Set(["features", "modules", "domains"]);
@@ -16,7 +16,7 @@ const GENERIC_DIRECTORIES = new Set([
   "renderer", "repositories", "repository", "routes", "service", "services", "shared", "src",
   "storage", "stores", "utils", "utilities", "views", "workers", "worker", "common", "helpers"
 ]);
-const GENERIC_NAMES = new Set(["app", "common", "constants", "helpers", "index", "main", "module", "shared", "types", "util", "utils"]);
+const GENERIC_NAMES = new Set(["app", "common", "constants", "helpers", "index", "init", "main", "module", "shared", "types", "util", "utils"]);
 const SUPPORT_SUFFIXES = new Set(["helper", "helpers", "util", "utils", "utility", "utilities"]);
 const RESPONSIBILITY_SUFFIXES = new Set([
   "adapter", "api", "client", "component", "controller", "gateway", "hook", "ipc", "page",
@@ -49,7 +49,29 @@ export type ModuleClusteringResult = {
   diagnostics: ModuleClusteringDiagnostic[];
 };
 
-export function clusterArchitectureModules(
+/** Package boundaries constrain all responsibility and auxiliary-file merges. */
+export function clusterArchitectureModules(files: FileInsight[], relations: SemanticRelation[], previousModules: ArchitectureModule[], scopes?: AnalysisScope[]): ModuleClusteringResult {
+  if (!scopes) return clusterArchitectureScope(files, relations, previousModules);
+  const byRoot = new Map<string, FileInsight[]>();
+  for (const file of files) {
+    const root = scopes.filter((scope) => scope.paths.includes(file.path)).sort((a, b) => b.rootPath.length - a.rootPath.length)[0]?.rootPath ?? "";
+    byRoot.set(root, [...(byRoot.get(root) ?? []), file]);
+  }
+  const results = [...byRoot.entries()].map(([root, scopedFiles]) => {
+    const result = clusterArchitectureScope(scopedFiles, relations, previousModules);
+    const modules = result.modules.map((module) => {
+      const anchor = `scope:${root || "."}:${module.identity.anchor}`;
+      const id = moduleIdForAnchor(anchor);
+      const predecessors = predecessorModules(module.files, previousModules);
+      return { ...module, id, identity: { ...module.identity, id, anchor, predecessorIds: predecessors.map((item) => item.id).filter((previousId) => previousId !== id).sort() } };
+    });
+    const nextIdByOld = new Map(result.modules.map((module, index) => [module.id, modules[index].id]));
+    return { modules, diagnostics: result.diagnostics.map((diagnostic) => ({ ...diagnostic, moduleIds: diagnostic.moduleIds.map((id) => nextIdByOld.get(id) ?? id) })) };
+  });
+  return { modules: results.flatMap((result) => result.modules).sort((a, b) => a.id.localeCompare(b.id)), diagnostics: results.flatMap((result) => result.diagnostics) };
+}
+
+function clusterArchitectureScope(
   files: FileInsight[],
   relations: SemanticRelation[],
   previousModules: ArchitectureModule[]
@@ -64,16 +86,17 @@ export function clusterArchitectureModules(
     Boolean(relation.targetFile && filePaths.has(relation.targetFile))
   ));
   const seedByFile = new Map(sortedFiles.map((file) => [file.path, seedForFile(file.path)]));
-  const groupByFile = new Map([...seedByFile].map(([path, seed]) => [path, seed.key]));
+  let groupByFile = new Map([...seedByFile].map(([path, seed]) => [path, seed.key]));
   const supportReferences = supportDomainReferences(seedByFile, relevantRelations);
 
   for (const [path, seed] of seedByFile) {
-    if (seed.kind === "support" && (supportReferences.get(path)?.size ?? 0) >= 3) {
+    if (seed.kind === "support" && !seed.anchorDirectory && seed.name !== "shared-contracts" && (supportReferences.get(path)?.size ?? 0) >= 3) {
       groupByFile.set(path, "shared:utilities");
     }
   }
-  mergeRelatedSingletons(seedByFile, groupByFile, relevantRelations);
-  attachUniquelyRelatedUnknownFiles(seedByFile, groupByFile, relevantRelations);
+  groupByFile = mergeNamedSupportFiles(seedByFile, groupByFile, relevantRelations);
+  const ambiguousNamedFiles = mergeRelatedSingletons(seedByFile, groupByFile, relevantRelations);
+  const ambiguousUnknownFiles = attachUniquelyRelatedUnknownFiles(seedByFile, groupByFile, relevantRelations);
 
   const filesByGroup = groupFiles(sortedFiles, groupByFile);
   const clusters = [...filesByGroup.entries()].map(([key, clusterFiles]) => {
@@ -98,7 +121,7 @@ export function clusterArchitectureModules(
     };
   }).sort((left, right) => left.id.localeCompare(right.id));
 
-  const diagnostics = clusteringDiagnostics(clusters, previousModules);
+  const diagnostics = clusteringDiagnostics(clusters, previousModules, [...ambiguousNamedFiles, ...ambiguousUnknownFiles]);
   return { modules: clusters.map(({ previousIds: _previousIds, ...cluster }) => cluster), diagnostics };
 }
 
@@ -107,15 +130,27 @@ function seedForFile(path: string): ClusterSeed {
   const segments = normalizedPath.split("/");
   const lowerSegments = segments.map((segment) => segment.toLowerCase());
   if (lowerSegments.some((segment) => segment === "test" || segment === "tests" || segment === "__tests__") || /\.(test|spec)\.[^.]+$/.test(normalizedPath)) {
-    return { key: "tests", kind: "test", name: "tests", anchorDirectory: "tests" };
+    const marker = lowerSegments.findIndex((segment) => FUNCTIONAL_DIRECTORY_MARKERS.has(segment));
+    const testIndex = lowerSegments.findIndex((segment) => ["test", "tests", "__tests__"].includes(segment));
+    const anchorDirectory = marker >= 0 && segments[marker + 1] ? segments.slice(0, marker + 2).join("/") : testIndex >= 0 ? segments.slice(0, testIndex + 2).filter((segment) => !segment.includes(".")).join("/") : segments.slice(0, -1).join("/");
+    return { key: `tests:${anchorDirectory}`, kind: "test", name: "tests", anchorDirectory };
   }
+
+  const entry = applicationEntrySeed(normalizedPath);
+  if (entry) return entry;
+
+  const specializedGroup = specializedDirectorySeed(normalizedPath);
+  if (specializedGroup) return specializedGroup;
 
   const featureIndex = lowerSegments.findIndex((segment) => FUNCTIONAL_DIRECTORY_MARKERS.has(segment));
   if (featureIndex >= 0 && segments[featureIndex + 1]) {
     const feature = normalizeName(segments[featureIndex + 1]);
-    const anchorDirectory = normalizePath(segments.slice(featureIndex, featureIndex + 2).join("/"));
-    return { key: `feature:${feature}`, kind: "feature", name: feature, anchorDirectory };
+    const anchorDirectory = normalizePath(segments.slice(0, featureIndex + 2).join("/"));
+    return { key: `feature:${anchorDirectory}`, kind: "feature", name: feature, anchorDirectory };
   }
+
+  const directoryBoundary = explicitDirectorySeed(segments, lowerSegments);
+  if (directoryBoundary) return directoryBoundary;
 
   const integrationIndex = lowerSegments.findIndex((segment) => INTEGRATION_DIRECTORY_MARKERS.has(segment));
   const stem = responsibilityStem(segments.at(-1) ?? "");
@@ -132,22 +167,120 @@ function seedForFile(path: string): ClusterSeed {
   const supportName = stem && !GENERIC_NAMES.has(stem) ? stem : undefined;
   if (!hasSpecificResponsibilitySuffix(segments.at(-1) ?? "") &&
       (supportDirectory || SUPPORT_SUFFIXES.has(filenameSuffix(segments.at(-1) ?? "")))) {
-    const name = supportName ?? "unknown";
-    return { key: `support:${name}`, kind: "support", name, responsibility: name };
+    if (!supportName) return unknownSeed(normalizedPath);
+    const responsibility = `${applicationScope(normalizedPath)}${supportName}`;
+    return { key: `support:${responsibility}`, kind: "support", name: supportName, responsibility };
   }
 
   if (stem && !GENERIC_NAMES.has(stem)) {
-    return { key: `responsibility:${stem}`, kind: "responsibility", name: stem, responsibility: stem };
+    return responsibilitySeed(normalizedPath, stem);
+  }
+
+  const filename = segments.at(-1) ?? "";
+  if (stem && hasSpecificResponsibilitySuffix(filename)) {
+    const name = normalizeName(filename.replace(/\.[^.]+$/, "").replace(/([a-z0-9])([A-Z])/g, "$1-$2"));
+    return responsibilitySeed(normalizedPath, name);
   }
 
   const functionalDirectory = [...segments.slice(0, -1)].reverse()
     .find((segment) => !GENERIC_DIRECTORIES.has(segment.toLowerCase()) && !GENERIC_NAMES.has(normalizeName(segment)));
   if (functionalDirectory) {
     const name = normalizeName(functionalDirectory);
-    return { key: `responsibility:${name}`, kind: "responsibility", name, responsibility: name };
+    return responsibilitySeed(normalizedPath, name);
   }
 
   return unknownSeed(normalizedPath);
+}
+
+function explicitDirectorySeed(segments: string[], lowerSegments: string[]): ClusterSeed | undefined {
+  const sourceIndex = lowerSegments.indexOf("src");
+  const contractsIndex = lowerSegments.indexOf("contracts");
+  const contractEnd = sourceIndex >= 0 && lowerSegments[sourceIndex + 1] === "types"
+    ? sourceIndex + 2 : contractsIndex >= 0 ? contractsIndex + 1 : undefined;
+  if (contractEnd !== undefined) {
+    const anchorDirectory = segments.slice(0, contractEnd).join("/");
+    return { key: `support:${anchorDirectory}`, kind: "support", name: "shared-contracts", anchorDirectory };
+  }
+  const sharedIndex = lowerSegments.findIndex((segment) => segment === "shared" || segment === "common");
+  const sharedAreas = new Set(["ui", "components", "i18n", "layouts", "providers", "node", "python"]);
+  if (sharedIndex >= 0 && (sharedAreas.has(lowerSegments[sharedIndex + 1]) || lowerSegments[sharedIndex - 1] === "services")) {
+    const next = segments[sharedIndex + 1];
+    const end = next && !next.includes(".") ? sharedIndex + 2 : sharedIndex + 1;
+    const anchorDirectory = segments.slice(0, end).join("/");
+    const name = end > sharedIndex + 1 ? `shared-${normalizeName(next)}` : "shared-utilities";
+    return { key: `support:${anchorDirectory}`, kind: "support", name, anchorDirectory };
+  }
+  for (const marker of ["services", "pages"]) {
+    const index = lowerSegments.indexOf(marker);
+    const name = segments[index + 1];
+    if (index < 0 || !name || name.includes(".") || GENERIC_DIRECTORIES.has(name.toLowerCase())) continue;
+    const anchorDirectory = segments.slice(0, index + 2).join("/");
+    return { key: `feature:${anchorDirectory}`, kind: "feature", name: normalizeName(name), anchorDirectory };
+  }
+  if (sourceIndex >= 0 && lowerSegments[sourceIndex + 1] === "app") {
+    const anchorDirectory = segments.slice(0, sourceIndex + 2).join("/");
+    return { key: `feature:${anchorDirectory}`, kind: "feature", name: "application-shell", anchorDirectory };
+  }
+  return undefined;
+}
+
+function applicationScope(path: string): string {
+  const segments = path.split("/");
+  const sourceIndex = segments.indexOf("src");
+  const length = sourceIndex >= 0 ? sourceIndex : ["apps", "packages"].includes(segments[0]) ? 2 : segments.length > 1 ? 1 : 0;
+  const scope = segments.slice(0, length).join("/");
+  return scope ? `${scope}/` : "";
+}
+
+function responsibilitySeed(path: string, name: string): ClusterSeed {
+  const responsibility = `${applicationScope(path)}${name}`;
+  return { key: `responsibility:${responsibility}`, kind: "responsibility", name, responsibility };
+}
+
+function applicationEntrySeed(path: string): ClusterSeed | undefined {
+  const lowerPath = path.toLowerCase();
+  if (/(^|\/)src\/(app|main)\.tsx$/.test(lowerPath)) {
+    return responsibilitySeed(path, "application-shell");
+  }
+  if (lowerPath === "src/main/index.ts") {
+    return { key: "responsibility:main-entry", kind: "responsibility", name: "main-entry", responsibility: "main-entry" };
+  }
+  if (lowerPath === "src/types.ts" || lowerPath === "src/common/ipc-channels.ts") {
+    return { key: "support:shared-contracts", kind: "support", name: "shared-contracts", responsibility: "shared-contracts" };
+  }
+  return undefined;
+}
+
+function specializedDirectorySeed(path: string): ClusterSeed | undefined {
+  const lowerPath = path.toLowerCase();
+  if (/^src\/components\/nodes\/[^/]+\.[jt]sx$/.test(lowerPath)) {
+    return {
+      key: "responsibility:graph-node-components",
+      kind: "responsibility",
+      name: "graph-node-components",
+      anchorDirectory: "src/components/nodes",
+      responsibility: "graph-node-components"
+    };
+  }
+  if (/^src\/main\/agents\/[^/]+\.adapter\.[jt]s$/.test(lowerPath)) {
+    return {
+      key: "responsibility:agent-adapters",
+      kind: "responsibility",
+      name: "agent-adapters",
+      anchorDirectory: "src/main/agents",
+      responsibility: "agent-adapters"
+    };
+  }
+  if (/^src\/main\/ipc\/ipc-[^/]+\.[jt]s$/.test(lowerPath)) {
+    return {
+      key: "responsibility:ipc-infrastructure",
+      kind: "responsibility",
+      name: "ipc-infrastructure",
+      anchorDirectory: "src/main/ipc",
+      responsibility: "ipc-infrastructure"
+    };
+  }
+  return undefined;
 }
 
 function hasSpecificResponsibilitySuffix(filename: string): boolean {
@@ -188,12 +321,35 @@ function supportDomainReferences(
   return references;
 }
 
+function mergeNamedSupportFiles(
+  seedByFile: Map<string, ClusterSeed>,
+  groupByFile: Map<string, string>,
+  relations: SemanticRelation[]
+): Map<string, string> {
+  const mergedGroups = new Map(groupByFile);
+  for (const [path, seed] of seedByFile) {
+    if (seed.kind !== "support" || seed.anchorDirectory || mergedGroups.get(path) === "shared:utilities") continue;
+    const prefix = seed.name.split("-")[0];
+    if (!prefix || prefix === seed.name || GENERIC_NAMES.has(prefix)) continue;
+    const targetGroup = `responsibility:${applicationScope(path)}${prefix}`;
+    if (![...mergedGroups.values()].includes(targetGroup)) continue;
+    const hasConfirmedCall = relations.some((relation) =>
+      (relation.kind === "call" || relation.kind === "render") &&
+      ((relation.sourceFile === path && mergedGroups.get(relation.targetFile ?? "") === targetGroup) ||
+        (relation.targetFile === path && mergedGroups.get(relation.sourceFile) === targetGroup))
+    );
+    if (hasConfirmedCall) mergedGroups.set(path, targetGroup);
+  }
+  return mergedGroups;
+}
+
 function attachUniquelyRelatedUnknownFiles(
   seedByFile: Map<string, ClusterSeed>,
   groupByFile: Map<string, string>,
   relations: SemanticRelation[]
-): void {
+): string[] {
   const assignments = new Map<string, string>();
+  const ambiguousFiles: string[] = [];
   for (const [path, seed] of seedByFile) {
     if (seed.kind !== "unknown") continue;
     const neighboringGroups = new Set<string>();
@@ -206,15 +362,18 @@ function attachUniquelyRelatedUnknownFiles(
       }
     }
     if (neighboringGroups.size === 1) assignments.set(path, [...neighboringGroups][0]);
+    if (neighboringGroups.size > 1) ambiguousFiles.push(path);
   }
   assignments.forEach((group, path) => groupByFile.set(path, group));
+  return ambiguousFiles;
 }
 
 function mergeRelatedSingletons(
   seedByFile: Map<string, ClusterSeed>,
   groupByFile: Map<string, string>,
   relations: SemanticRelation[]
-): void {
+): string[] {
+  const ambiguousFiles: string[] = [];
   const candidateGroups = [...new Set(groupByFile.values())].sort();
   for (const candidateGroup of candidateGroups) {
     const candidatePaths = [...groupByFile.entries()]
@@ -236,11 +395,18 @@ function mergeRelatedSingletons(
           (sourceSeed.kind !== "feature" && sourceSeed.kind !== "responsibility")) continue;
       scores.set(sourceGroup, (scores.get(sourceGroup) ?? 0) + relationStrength(relation.kind));
     }
-    const strongest = [...scores.entries()].sort(([leftGroup, leftScore], [rightGroup, rightScore]) =>
+    const ranked = [...scores.entries()].sort(([leftGroup, leftScore], [rightGroup, rightScore]) =>
       rightScore - leftScore || leftGroup.localeCompare(rightGroup)
-    )[0];
-    if (strongest && strongest[1] > 0) groupByFile.set(candidatePath, strongest[0]);
+    );
+    if (ranked.length > 1) {
+      ambiguousFiles.push(candidatePath);
+      continue;
+    }
+    const sourcePath = ranked[0] ? [...groupByFile].find(([, group]) => group === ranked[0][0])?.[0] : undefined;
+    const sourceSeed = sourcePath ? seedByFile.get(sourcePath) : undefined;
+    if (sourcePath && sourceSeed && applicationScope(sourcePath) === applicationScope(candidatePath) && candidateSeed.name.startsWith(`${sourceSeed.name}-`)) groupByFile.set(candidatePath, ranked[0][0]);
   }
+  return ambiguousFiles;
 }
 
 function relationStrength(kind: SemanticRelation["kind"]): number {
@@ -275,7 +441,11 @@ function categoryForGroup(
   if (kind === "test") return "test-surface";
   if (kind === "external") return "external-integration";
   if (kind === "shared") return "shared-utility";
-  if (kind === "unknown" || kind === "support") return "unknown";
+  if (kind === "unknown") return "unknown";
+  if (kind === "support") return files.some((file) => {
+    const seed = seedByFile.get(file.path);
+    return seed?.anchorDirectory || seed?.name === "shared-contracts";
+  }) ? "shared-utility" : "domain-service";
   const counts = new Map<ArchitectureModuleCategory, number>();
   for (const file of files) {
     const category = categoryForFile(file.path, seedByFile.get(file.path));
@@ -317,7 +487,8 @@ function categoryRank(category: ArchitectureModuleCategory): number {
 function titleForGroup(kind: ClusterSeedKind | "shared", name: string): string {
   if (kind === "test") return "Tests";
   if (kind === "shared") return "Shared Utilities";
-  if (kind === "unknown" || kind === "support") return "Unknown";
+  if (kind === "unknown") return "Unknown";
+  if (kind === "support") return titleFromName(name);
   if (kind === "external") return `${titleFromName(name)} Integration`;
   return titleFromName(name);
 }
@@ -333,7 +504,7 @@ function anchorForGroup(kind: ClusterSeedKind | "shared", seed: ClusterSeed, pat
   if (kind === "external") return `directory:${seed.anchorDirectory ?? seed.name}`;
   if (kind === "responsibility") return `responsibility:${seed.responsibility ?? seed.name}`;
   if (kind === "unknown") return seed.anchorDirectory ? `directory:${seed.anchorDirectory}` : `file:${normalizePath(paths[0])}`;
-  return `directory:${seed.name}`;
+  return `directory:${seed.anchorDirectory ?? seed.responsibility ?? seed.name}`;
 }
 
 function boundaryPriority(path: string): number {
@@ -369,7 +540,8 @@ function predecessorModules(paths: string[], previousModules: ArchitectureModule
 
 function clusteringDiagnostics(
   clusters: Array<ModuleCluster & { previousIds: string[] }>,
-  previousModules: ArchitectureModule[]
+  previousModules: ArchitectureModule[],
+  ambiguousFiles: string[]
 ): ModuleClusteringDiagnostic[] {
   const diagnostics: ModuleClusteringDiagnostic[] = [];
   for (const cluster of clusters) {
@@ -412,6 +584,17 @@ function clusteringDiagnostics(
         message: `Previous module ${previous.id} now spans multiple functional modules.`
       });
     }
+  }
+
+  for (const path of [...new Set(ambiguousFiles)].sort()) {
+    const module = clusters.find((cluster) => cluster.files.includes(path));
+    if (!module) continue;
+    diagnostics.push({
+      code: "ambiguous-ownership",
+      moduleIds: [module.id],
+      filePaths: [path],
+      message: "Confirmed relations point to multiple equally plausible modules; this file remains independent."
+    });
   }
 
   return diagnostics.sort((left, right) =>

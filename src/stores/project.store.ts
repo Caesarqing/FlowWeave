@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  ArchitectureRelationDiagnostic,
   ArchitectureReviewStatus,
   LocalGenerationStatus,
   ProjectArtifactStatuses,
@@ -11,16 +12,19 @@ type ProjectState = {
   projectId: string;
   projectPath: string;
   scanFingerprint: string;
+  relationDiagnostics: ArchitectureRelationDiagnostic[];
   artifactStatuses?: ProjectArtifactStatuses;
   architectureReview: ArchitectureReviewStatus;
   localGenerationStatus: LocalGenerationStatus;
   sequenceReview: SequenceReviewStatus;
   projectStatus: string;
   isProjectLoading: boolean;
+  legacyCanvasReadOnly: boolean;
   setProjectLabel: (value: string) => void;
   setProjectId: (value: string) => void;
   setProjectPath: (value: string) => void;
   setScanFingerprint: (value: string) => void;
+  setRelationDiagnostics: (value: ArchitectureRelationDiagnostic[]) => void;
   setArtifactStatuses: (
     value: ProjectArtifactStatuses | ((current?: ProjectArtifactStatuses) => ProjectArtifactStatuses | undefined)
   ) => void;
@@ -33,6 +37,7 @@ type ProjectState = {
   ) => void;
   setProjectStatus: (value: string) => void;
   setIsProjectLoading: (value: boolean) => void;
+  setLegacyCanvasReadOnly: (value: boolean) => void;
 };
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -40,15 +45,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
   projectId: "",
   projectPath: "",
   scanFingerprint: "",
+  relationDiagnostics: [],
   architectureReview: { state: "missing" },
   localGenerationStatus: "idle",
   sequenceReview: { state: "missing" },
   projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
+  legacyCanvasReadOnly: false,
   setProjectLabel: (projectLabel) => set({ projectLabel }),
   setProjectId: (projectId) => set({ projectId }),
   setProjectPath: (projectPath) => set({ projectPath }),
   setScanFingerprint: (scanFingerprint) => set({ scanFingerprint }),
+  setRelationDiagnostics: (relationDiagnostics) => set({ relationDiagnostics }),
   setArtifactStatuses: (value) => set((state) => ({
     artifactStatuses: typeof value === "function" ? value(state.artifactStatuses) : value
   })),
@@ -60,5 +68,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
     sequenceReview: typeof value === "function" ? value(state.sequenceReview) : value
   })),
   setProjectStatus: (projectStatus) => set({ projectStatus }),
-  setIsProjectLoading: (isProjectLoading) => set({ isProjectLoading })
+  setIsProjectLoading: (isProjectLoading) => set({ isProjectLoading }),
+  setLegacyCanvasReadOnly: (legacyCanvasReadOnly) => set({ legacyCanvasReadOnly })
 }));

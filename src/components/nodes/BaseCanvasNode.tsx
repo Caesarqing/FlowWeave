@@ -19,19 +19,23 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
         data.edgeConnected && "edge-connected",
         data.selectedEdgeRole && `edge-role-${data.selectedEdgeRole}`,
         data.risk,
-        `kind-${data.kind}`
+        `kind-${data.kind}`,
+        data.syntheticKind === "group" && "canvas-group-node",
+        data.resource && "canvas-resource-node"
       )}
+      title={data.connectionExplanation}
       style={data.selectedEdgeColor ? ({ "--selected-edge-color": data.selectedEdgeColor } as CSSProperties) : undefined}
     >
       <ConnectionHandles handles={targetHandles} position={Position.Left} selectedEdgeId={data.selectedEdgeId} type="target" />
       <div className="node-meta-line">
-        <span>{localizedArchitectureCategory(data.category, data.nodeType, t)}</span>
-        <strong>{t(`risk.${data.risk}`)}</strong>
+        <span>{data.syntheticKind === "group" ? t("canvas.group") : data.resource ? t(`canvas.resource.${data.resource.kind}`) : localizedArchitectureCategory(data.category, data.nodeType, t)}</span>
+        {data.syntheticKind === "group" ? <strong>{data.memberModuleCount ? t("canvas.groupModuleCount", { count: data.memberModuleCount }) : t("canvas.groupResourceCount", { count: data.memberResourceCount ?? 0 })}{data.memberModuleCount && data.memberResourceCount ? ` · ${t("canvas.groupResourceCount", { count: data.memberResourceCount })}` : ""}</strong> : !data.resource ? <strong>{t(`risk.${data.risk}`)}</strong> : null}
       </div>
       <h3>{data.title}</h3>
       <p>{data.role ?? data.description}</p>
       <div className="node-footer">
-        <span>{t("module.fileCount", { count: data.files.length })}</span>
+        <span>{data.syntheticKind === "group" ? t("canvas.groupExpandHint") : data.resource?.detail ?? t("module.fileCount", { count: data.files.length })}</span>
+        {data.syntheticKind === "group" ? <button className="nodrag" type="button" onClick={data.onExpandGroup}>{t("canvas.expandGroup")}</button> : null}
         <small>{data.symbols?.length ? t("module.symbolCount", { count: data.symbols.length }) : data.files[0] ?? data.subtitle}</small>
       </div>
       <ConnectionHandles handles={sourceHandles} position={Position.Right} selectedEdgeId={data.selectedEdgeId} type="source" />

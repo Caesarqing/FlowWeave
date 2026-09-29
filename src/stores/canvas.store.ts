@@ -1,18 +1,23 @@
 import type { Edge, NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import type { CanvasLayoutMode, CanvasLayoutState, GraphEdge, GraphNode, ProjectFileNode } from "../types";
-import { createFlowEdge, createFlowNode, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
+import type { CanvasLayoutMode, CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphNode, GraphViewMode, ProjectFileNode } from "../types";
+import { chooseInitialCollapsedGroups, createFlowEdge, createFlowNode, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
+import { chooseInitialGraphView } from "../utils/graph-view-projection";
 
 type CanvasState = {
   canvasLayout: CanvasLayoutState;
   orphanedEdges: GraphEdge[];
+  groups: NonNullable<CodeflowCanvas["groups"]>;
+  quality: CodeflowCanvas["quality"];
+  generation: CodeflowCanvas["generation"];
+  orphanedNodeEdits: NonNullable<CodeflowCanvas["orphanedNodeEdits"]>;
   modules: GraphNode[];
   edges: Edge[];
   nodes: FlowWeaveNode[];
   projectFiles: ProjectFileNode[];
   expandedPaths: Set<string>;
   selectedNodeId: string;
-  setGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[], layout?: CanvasLayoutState, orphanedEdges?: GraphEdge[]) => void;
+  setGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[], layout?: CanvasLayoutState, orphanedEdges?: GraphEdge[], metadata?: Pick<CodeflowCanvas, "generation" | "groups" | "quality" | "orphanedNodeEdits">) => void;
   adoptReviewedGraph: (modules: GraphNode[], edges: GraphEdge[], files: ProjectFileNode[]) => boolean;
   setEdges: (updater: Edge[] | ((edges: Edge[]) => Edge[])) => void;
   setNodes: (updater: FlowWeaveNode[] | ((nodes: FlowWeaveNode[]) => FlowWeaveNode[])) => void;
@@ -23,29 +28,35 @@ type CanvasState = {
   applyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>, topologyFingerprint?: string) => void;
   restoreManualLayout: () => void;
   setCollapsedGroups: (groups: string[]) => void;
+  setViewMode: (mode: GraphViewMode) => void;
 };
 
 export const useCanvasStore = create<CanvasState>((set) => ({
   canvasLayout: emptyLayout(),
   orphanedEdges: [],
+  groups: [],
+  quality: undefined,
+  generation: undefined,
+  orphanedNodeEdits: [],
   modules: [],
   edges: [],
   nodes: [],
   projectFiles: [],
   expandedPaths: new Set(),
   selectedNodeId: "",
-  setGraph: (modules, edges, files, layout, orphanedEdges) => set({
+  setGraph: (modules, edges, files, layout, orphanedEdges, metadata) => set({
     modules,
     edges: edges.map(createFlowEdge),
     nodes: modules.map(createFlowNode),
     projectFiles: files,
-    canvasLayout: layout ?? {
-      activeMode: "execution",
-      manualPositions: Object.fromEntries(modules.map((node) => [node.id, { x: node.x, y: node.y }])),
-      autoLayouts: {},
-      collapsedGroups: []
-    },
+    canvasLayout: layout
+      ? { ...layout, viewMode: layout.viewMode ?? chooseInitialGraphView(edges) }
+      : defaultCanvasLayout(modules, edges),
     orphanedEdges: orphanedEdges ?? [],
+    groups: metadata?.groups ?? [],
+    quality: metadata?.quality,
+    generation: metadata?.generation,
+    orphanedNodeEdits: metadata?.orphanedNodeEdits ?? [],
     expandedPaths: new Set(),
     selectedNodeId: modules[0]?.id ?? ""
   }),
@@ -147,15 +158,34 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       ...state.canvasLayout,
       collapsedGroups: [...new Set(collapsedGroups)].sort()
     }
+  })),
+  setViewMode: (viewMode) => set((state) => ({
+    canvasLayout: {
+      ...state.canvasLayout,
+      activeMode: state.canvasLayout.activeMode === "manual" ? "manual" : viewMode,
+      viewMode
+    }
   }))
 }));
 
 function emptyLayout(): CanvasLayoutState {
   return {
     activeMode: "manual",
+    viewMode: "architecture",
     manualPositions: {},
     autoLayouts: {},
     collapsedGroups: []
+  };
+}
+
+function defaultCanvasLayout(modules: GraphNode[], edges: GraphEdge[]): CanvasLayoutState {
+  const viewMode = chooseInitialGraphView(edges);
+  return {
+    activeMode: viewMode,
+    viewMode,
+    manualPositions: Object.fromEntries(modules.map((node) => [node.id, { x: node.x, y: node.y }])),
+    autoLayouts: {},
+    collapsedGroups: chooseInitialCollapsedGroups(modules)
   };
 }
 
