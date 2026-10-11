@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -245,7 +245,8 @@ describe("static graph measurement runner", () => {
     await writeFile(join(checkout, "package.json"), "{}\n");
     await writeFile(join(checkout, "LICENSE"), "fixture license\n");
     await symlink("main.ts", join(checkout, "src/link.ts"));
-    await writeFile(join(checkout, "src/unsafe\\name.ts"), "export const unsafe = true;\n");
+    const unsafePath = "src/unsafe\\name.ts";
+    if (process.platform !== "win32") await writeFile(join(checkout, unsafePath), "export const unsafe = true;\n");
     await writeFile(join(checkout, "README.md"), "not an inventory candidate\n");
     execFileSync("git", ["-C", checkout, "add", "."]);
     execFileSync("git", ["-C", checkout, "commit", "-qm", "fixture"]);
@@ -265,10 +266,10 @@ describe("static graph measurement runner", () => {
     expect(result.project.inventoryEntries.map((entry) => entry.path)).toEqual(["LICENSE", "package.json", "src/main.ts"]);
     expect(result.evidence.excludedCandidatePaths).toEqual([
       { path: "src/link.ts", mode: "120000", reason: "symlink" },
-      { path: "src/unsafe\\name.ts", mode: "100644", reason: "unsafe-path" }
+      ...(process.platform === "win32" ? [] : [{ path: unsafePath, mode: "100644", reason: "unsafe-path" }])
     ]);
     expect(result.evidence.inventory).toMatchObject({ fileCount: 3, sourceFileCount: 1, languageCounts: { TypeScript: 1 } });
-    expect(result.evidence.scope).toMatchObject({ includePaths: ["."], excludePaths: ["src/link.ts", "src/unsafe\\name.ts"], sha256: expect.any(String) });
+    expect(result.evidence.scope).toMatchObject({ includePaths: ["."], excludePaths: ["src/link.ts", ...(process.platform === "win32" ? [] : [unsafePath])], sha256: expect.any(String) });
     expect(result.evidence.scale).toMatchObject({ stratum: "unclassified", sourceFileCount: 1, sha256: expect.any(String) });
     expect(execFileSync("git", ["-C", checkout, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" })).toBe("");
   });
@@ -319,7 +320,7 @@ describe("static graph measurement runner", () => {
       resolve(sourceRoot, "src/types.ts")
     ];
     const runtimeSourceManifest = await Promise.all(measurementSources.slice(1).map(async (path) => ({
-      path: relative(sourceRoot, path),
+      path: relative(sourceRoot, path).split(sep).join("/"),
       sha256: createHash("sha256").update(await readFile(path)).digest("hex")
     })));
     await writeFile(sourceManifestPath, JSON.stringify(runtimeSourceManifest));
@@ -583,7 +584,7 @@ describe("static graph measurement runner", () => {
     const wrongGeneration = await createFixture({ currentGenerationId: "stale-generation" });
 
     await expect(collectStaticGraphBaseline(wrongGeneration.baselineSpec)).rejects.toThrow(/generation/i);
-  });
+  }, 120_000);
 
   it("rejects a clean checkout committed at a different source revision before launching", async () => {
     const fixture = await createFixture();

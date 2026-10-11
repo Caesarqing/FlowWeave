@@ -140,7 +140,8 @@ export async function validateMeasurementSourceInventory(
     const actualMode = (stats.mode & 0o777).toString(8).padStart(3, "0");
     const expectedMode = entry.mode.slice(-3);
     const actualSha256 = createHash("sha256").update(bytes).digest("hex");
-    if (bytes.byteLength !== entry.sizeBytes || actualMode !== expectedMode || actualSha256 !== entry.sha256.toLowerCase()) {
+    // shortcut: Windows stat cannot preserve Git executable bits; revisit if Node exposes them reliably.
+    if (bytes.byteLength !== entry.sizeBytes || process.platform !== "win32" && actualMode !== expectedMode || actualSha256 !== entry.sha256.toLowerCase()) {
       throw new Error(`Measurement source inventory content changed: project ${projectPath}, path ${entry.path}; expected size/mode/hash ${entry.sizeBytes}/${expectedMode}/${entry.sha256.toLowerCase()}, found ${bytes.byteLength}/${actualMode}/${actualSha256}.`);
     }
   }

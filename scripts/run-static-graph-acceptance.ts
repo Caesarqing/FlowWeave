@@ -2463,7 +2463,7 @@ async function verifyAutomatedPackageSourceEvidence(executablePath: string, boun
   }
   const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   for (const path of AUTOMATED_RUNTIME_SOURCE_FILES) {
-    const relativePath = relative(sourceRoot, path);
+    const relativePath = relative(sourceRoot, path).split(sep).join("/");
     if (sourceEntries.get(relativePath) !== boundFileHashes.get(resolve(path))) {
       throw new Error(`Automated engineering runtime source differs from the A5 package source manifest: ${relativePath}.`);
     }

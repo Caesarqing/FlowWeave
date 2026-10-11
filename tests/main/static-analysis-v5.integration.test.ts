@@ -45,9 +45,9 @@ describe("independent four-language static analysis", () => {
       trackedFileHashes?: Array<[string, string, string]>;
     };
     const capturedPaths = snapshotState.filePaths;
-    expect(capturedPaths.some((path) => path.endsWith("/node_modules/large-types/index.d.ts"))).toBe(false);
-    expect(capturedPaths.some((path) => path.endsWith("/node_modules/@types/unused/index.d.ts"))).toBe(false);
-    expect(snapshotState.trackedFileHashes?.some(([path]) => path.endsWith("/node_modules/large-types/index.d.ts"))).toBe(true);
+    expect(capturedPaths.some((path) => path.endsWith(join("node_modules", "large-types", "index.d.ts")))).toBe(false);
+    expect(capturedPaths.some((path) => path.endsWith(join("node_modules", "@types", "unused", "index.d.ts")))).toBe(false);
+    expect(snapshotState.trackedFileHashes?.some(([path]) => path.endsWith(join("node_modules", "large-types", "index.d.ts")))).toBe(true);
     expect(prepared.index.relations).toContainEqual(expect.objectContaining({
       sourceFile: "app.ts",
       kind: "call",
@@ -57,7 +57,7 @@ describe("independent four-language static analysis", () => {
 
     await writeFile(join(root, "app.ts"), "export function read(items: string[]) { return items.join(','); }\n");
     const rebuilt = await buildSemanticIndex(await scanProject(root));
-    expect(rebuilt.snapshot.inputState().trackedFileHashes.some(([path]) => path.endsWith("/node_modules/large-types/index.d.ts"))).toBe(false);
+    expect(rebuilt.snapshot.inputState().trackedFileHashes.some(([path]) => path.endsWith(join("node_modules", "large-types", "index.d.ts")))).toBe(false);
   });
 
   it("preserves automatically included ambient types while filtering external modules from the checker", async () => {

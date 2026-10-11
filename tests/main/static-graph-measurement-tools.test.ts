@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -89,6 +89,29 @@ describe("static graph measurement tools", () => {
       await writeFile(sourcePath, "export const value = 2;\n");
       await expect(validateMeasurementSourceInventory(root, selection, entries)).rejects.toThrow(/content changed/);
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores Unix permission bits when validating a Windows source inventory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-windows-measurement-inventory-"));
+    const sourcePath = join(root, "index.ts");
+    const sourceBytes = Buffer.from("export const value = 1;\n");
+    await writeFile(sourcePath, sourceBytes);
+    await chmod(sourcePath, 0o600);
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    if (!originalPlatform) throw new Error("The process platform descriptor is unavailable.");
+    Object.defineProperty(process, "platform", { ...originalPlatform, value: "win32" });
+    try {
+      await expect(validateMeasurementSourceInventory(root, { sourcePaths: ["index.ts"], configurationPaths: [] }, [{
+        path: "index.ts",
+        kind: "source",
+        mode: "100644",
+        sizeBytes: sourceBytes.byteLength,
+        sha256: createHash("sha256").update(sourceBytes).digest("hex")
+      }])).resolves.toBeUndefined();
+    } finally {
+      Object.defineProperty(process, "platform", originalPlatform);
       await rm(root, { recursive: true, force: true });
     }
   });

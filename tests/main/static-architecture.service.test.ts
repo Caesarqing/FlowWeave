@@ -155,7 +155,7 @@ describe("static-architecture.service", () => {
     });
     await expect(readFile(join(root, FLOWWEAVE_DIR, "project.json"), "utf8")).rejects.toHaveProperty("code", "ENOENT");
     await expect(readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")).rejects.toHaveProperty("code", "ENOENT");
-    expect(second.written.canvasUserStatePath).toContain("canvas/user-state.json");
+    expect(second.written.canvasUserStatePath).toContain(join("canvas", "user-state.json"));
   });
   it("builds a local graph from the supplied semantic index without starting Agent review", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-static-architecture-"));

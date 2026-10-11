@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, realpath, rm } from "node:fs/promises";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import type {
   CodeflowProject,
   CodeflowTask,
@@ -543,7 +543,7 @@ async function listTaskPaths(tasksPath: string, projectPath: string, project: Co
       throw new Error(`Invalid JSON in FlowWeave task artifact "${taskPath}": ${formatError(error)}`);
     }
     if (!isCurrentTask(value, project)) return [];
-    return [relative(projectPath, taskPath)];
+    return [relative(projectPath, taskPath).split(sep).join("/")];
   } catch (error) {
     if (isMissingFileError(error)) return [];
     throw new Error(`Reading FlowWeave task artifacts failed at "${tasksPath}": ${formatError(error)}`);
