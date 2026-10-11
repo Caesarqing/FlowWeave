@@ -47,7 +47,8 @@ export async function discoverProjectAnalysisContext(rootPath: string, projectPa
         message: "TypeScript test-fixture configuration is retained as input data and is not an active compiler configuration." });
       continue;
     }
-    const result = ts.getParsedCommandLineOfConfigFile(join(rootPath, path), {}, {
+    const configPath = join(rootPath, path).replaceAll("\\", "/");
+    const result = ts.getParsedCommandLineOfConfigFile(configPath, {}, {
       ...(snapshot?.system ?? ts.sys),
       onUnRecoverableConfigFileDiagnostic: (error) => { throw compilerConfigurationError(ts, path, [error]); }
     });

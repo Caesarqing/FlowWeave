@@ -33,6 +33,24 @@ describe("source-only project language binding", () => {
     expect(createHash("sha256").update(JSON.stringify(evidence)).digest("hex")).toBe(expectedSha256);
   });
 
+  it("produces identical binding evidence for LF and CRLF source files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-crlf-binding-"));
+    const filePath = "src/Service.java";
+    const source = "package sample;\nclass Service {\n  void load() {}\n  void run() { load(); }\n}\n";
+    const analysisContext = context([scope("java", "src", ["src"], [filePath], "sample")]);
+    try {
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(join(root, filePath), source, "utf8");
+      const lf = await analyzeTreeSitterProject(root, [file(filePath)], analysisContext);
+      await writeFile(join(root, filePath), source.replaceAll("\n", "\r\n"), "utf8");
+      const crlf = await analyzeTreeSitterProject(root, [file(filePath)], analysisContext);
+
+      expect(crlf).toEqual(lf);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("binds Python reexports, Java static imports, and Go module aliases in the real workspace", async () => {
     const root = resolve("tests/fixtures/four-language-workspace");
     const py = ["python/src/sample/__init__.py", "python/src/sample/app.py", "python/src/sample/service.py"];

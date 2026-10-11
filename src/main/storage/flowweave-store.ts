@@ -1588,7 +1588,7 @@ async function restoreJournal(projectRoot: string, journal: TransactionJournal):
           throw new Error(`Recovery backup content mismatch: ${entry.backupPath}`);
         }
         await copyFile(entry.backupPath, entry.path);
-        const handle = await open(entry.path, "r");
+        const handle = await open(entry.path, "r+");
         try { await handle.sync(); } finally { await handle.close(); }
         await syncDirectory(dirname(entry.path));
       }

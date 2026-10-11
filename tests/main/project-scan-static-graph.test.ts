@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_CHANNELS } from "../../src/common/ipc-channels";
 import { projectGraphForView } from "../../src/utils/graph-view-projection";
@@ -335,7 +335,7 @@ describe("first project open static graph", () => {
 
     const opened = await handler({ sender }, { concurrency: 2 });
 
-    expect(opened).toMatchObject({ status: "analyzing", projectName: root.split("/").at(-1), projectPath: await realpath(root) });
+    expect(opened).toMatchObject({ status: "analyzing", projectName: basename(root), projectPath: await realpath(root) });
     expect(events).not.toContainEqual(expect.objectContaining({ channel: PROJECT_CHANNELS.analysisResult }));
     const completed = await analysis as { status: string; result: { graph: { nodes: unknown[] } } };
     expect(completed.status).toBe("completed");

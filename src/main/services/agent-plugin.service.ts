@@ -429,7 +429,7 @@ async function readHostPluginStatus(input: ReadHostStatusInput): Promise<AgentPl
       }
     }
   } catch (error) {
-    const filePath = checkingFilePath ? relative(projectPath, checkingFilePath) : undefined;
+    const filePath = checkingFilePath ? relative(projectPath, checkingFilePath).split(sep).join("/") : undefined;
     if (filePath && !missingFiles.includes(filePath)) missingFiles.push(filePath);
     checks.push({
       code: "check-error",

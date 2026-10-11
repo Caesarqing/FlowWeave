@@ -41,7 +41,8 @@ export async function analyzeTreeSitterProject(rootPath: string, files: Semantic
     if (!scope) throw new Error(`No ${language} analysis scope owns ${file.path}`);
     const content = snapshot ? snapshot.read(join(rootPath, file.path)) : await readFile(join(rootPath, file.path), "utf8");
     if (content === undefined) throw new Error(`Missing source snapshot: ${file.path}`);
-    facts.push(await withTreeSitterTree(language, file.path, content, (root) => collectFileFacts(file.path, scope, language, content, root)));
+    const source = content.replace(/\r\n/g, "\n");
+    facts.push(await withTreeSitterTree(language, file.path, source, (root) => collectFileFacts(file.path, scope, language, source, root)));
   }
   const bindingFacts = createBindingFacts(facts);
   const relations: SemanticRelation[] = [];

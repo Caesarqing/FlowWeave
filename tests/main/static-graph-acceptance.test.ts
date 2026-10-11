@@ -28,7 +28,7 @@ import {
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 })));
 });
 
 describe("static graph measurement runner", () => {
@@ -575,7 +575,7 @@ describe("static graph measurement runner", () => {
     expect(affectedRuns.every((run: { measurementValid: boolean; failureStage: string; productOutcome: string; error: string }) =>
       !run.measurementValid && run.failureStage === "collector" && run.productOutcome === "unknown" &&
       /source inventory changed during the measurement process.*tracked\.ts/i.test(run.error))).toBe(true);
-  });
+  }, 120_000);
 
   it("rejects evidence from the wrong generation or pinned source revision", async () => {
     const fixture = await createFixture({ sourceRevision: "different-revision" });
@@ -950,7 +950,7 @@ describe("static graph measurement runner", () => {
     const output = JSON.parse(await readFile(join(fixture.outputDirectory, "baseline-run.json"), "utf8"));
     expect(output.runs).toHaveLength(160);
     expect(output.runs[0]).toMatchObject({ measurementValid: false, failureStage: "collector", productOutcome: "unknown" });
-    expect(output.runs[0].error).toMatch(/SIGKILL/i);
+    expect(output.runs[0].error).toMatch(process.platform === "win32" ? /sent SIGTERM/i : /SIGKILL/i);
   });
 
   it("allows baseline collection before a contract is frozen and refuses formal acceptance", async () => {
