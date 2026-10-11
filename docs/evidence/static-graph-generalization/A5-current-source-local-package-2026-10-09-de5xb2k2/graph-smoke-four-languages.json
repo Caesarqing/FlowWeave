@@ -1,0 +1,153 @@
+{
+  "status": "completed",
+  "fixture": "four-languages",
+  "onboardingVisible": false,
+  "nodes": 3,
+  "nodeIds": [
+    "module-105cc96e2949c3e9",
+    "module-c05bc0dca2d8b5e0",
+    "group:view:unlinked"
+  ],
+  "viewportNodeIds": [
+    "module-105cc96e2949c3e9",
+    "module-c05bc0dca2d8b5e0",
+    "group:view:unlinked"
+  ],
+  "groups": 1,
+  "groupCards": [
+    {
+      "id": "group:view:unlinked",
+      "text": "Group3 modulesNo confirmed callsExpand to inspect these modu",
+      "x": 393.1953125,
+      "y": 599.2921142578125,
+      "opacity": "1",
+      "visibility": "visible"
+    }
+  ],
+  "edges": [
+    {
+      "id": "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed",
+      "label": "Edge from module-105cc96e2949c3e9 to module-c05bc0dca2d8b5e0",
+      "path": "M307 130.8203125L327 130.8203125L363 130.8203125L363 130.8203125L399 130.8203125L419 130.8203125",
+      "markerEnd": "url('#1__color=#42f5a7&type=arrowclosed')"
+    }
+  ],
+  "edgePaths": 1,
+  "layoutPending": false,
+  "emptyText": "",
+  "viewMode": "execution",
+  "projectStatus": "Read 21 files and generated 10 module nodes.",
+  "workspaceVisible": true,
+  "staleBanner": false,
+  "modulePanelVisible": false,
+  "workspaceVisibleMs": 1747,
+  "graphRenderedMs": 2248,
+  "nodeClickableMs": 4216,
+  "detailPanelMs": 551,
+  "keyboardNavigation": {
+    "groupNodeId": "group:view:unlinked",
+    "expandedFocusedNodeId": "group:group:function:java:java:example",
+    "overviewFocusedNodeId": "group:view:unlinked",
+    "enterInputDiagnostics": {
+      "windowFocused": true,
+      "documentHasFocus": true,
+      "events": [
+        {
+          "type": "keydown",
+          "key": "Enter",
+          "code": "Enter",
+          "targetTag": "BUTTON",
+          "targetText": "Expand",
+          "activeNodeId": "group:view:unlinked",
+          "defaultPrevented": false,
+          "atMs": 2252.9
+        },
+        {
+          "type": "keyup",
+          "key": "Enter",
+          "code": "Enter",
+          "targetTag": "BODY",
+          "targetText": "AgentCanvasSequence DiagramDocsGitProfil",
+          "activeNodeId": null,
+          "defaultPrevented": false,
+          "atMs": 2256.2
+        }
+      ]
+    }
+  },
+  "viewportSamples": [
+    {
+      "stageWidth": 548,
+      "stageHeight": 359,
+      "visibleNodeCount": 2,
+      "overlappingNodePairCount": 0,
+      "edgePaths": 1,
+      "invalidEdgePathCount": 0,
+      "readabilityWarning": true,
+      "readabilityWarningText": "This view shows 3 cards; the current area is sized for about 1. Expand fewer groups or enlarge the canvas.Auto layout",
+      "flowZoom": 1.35,
+      "smallestVisibleTitleFontPx": 20.25,
+      "smallestVisibleBodyFontPx": 16.200000000000003,
+      "detailPanelVisible": true,
+      "requiredCanvasControlsReachable": {
+        "search": true,
+        "viewMode": true,
+        "moduleScope": true,
+        "relationDisplay": true,
+        "moreActions": true,
+        "canvasNavigation": true
+      },
+      "windowWidth": 960,
+      "windowHeight": 640
+    },
+    {
+      "stageWidth": 759,
+      "stageHeight": 579,
+      "visibleNodeCount": 3,
+      "overlappingNodePairCount": 0,
+      "edgePaths": 1,
+      "invalidEdgePathCount": 0,
+      "readabilityWarning": false,
+      "readabilityWarningText": "",
+      "flowZoom": 1.35,
+      "smallestVisibleTitleFontPx": 20.25,
+      "smallestVisibleBodyFontPx": 16.200000000000003,
+      "detailPanelVisible": true,
+      "requiredCanvasControlsReachable": {
+        "search": true,
+        "viewMode": true,
+        "moduleScope": true,
+        "relationDisplay": true,
+        "moreActions": true,
+        "canvasNavigation": true
+      },
+      "windowWidth": 1440,
+      "windowHeight": 900
+    },
+    {
+      "stageWidth": 1184,
+      "stageHeight": 683,
+      "visibleNodeCount": 5,
+      "overlappingNodePairCount": 0,
+      "edgePaths": 1,
+      "invalidEdgePathCount": 0,
+      "readabilityWarning": false,
+      "readabilityWarningText": "",
+      "flowZoom": 1.35,
+      "smallestVisibleTitleFontPx": 20.25,
+      "smallestVisibleBodyFontPx": 16.200000000000003,
+      "detailPanelVisible": true,
+      "requiredCanvasControlsReachable": {
+        "search": true,
+        "viewMode": true,
+        "moduleScope": true,
+        "relationDisplay": true,
+        "moreActions": true,
+        "canvasNavigation": true
+      },
+      "windowWidth": 1920,
+      "windowHeight": 1080
+    }
+  ],
+  "mainRssMiB": 259
+}

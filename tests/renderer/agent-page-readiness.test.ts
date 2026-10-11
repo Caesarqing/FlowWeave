@@ -12,6 +12,12 @@ import type {
 } from "../../src/types";
 
 describe("AgentPage readiness", () => {
+  it("shows an explicit task artifact action when the current graph is ready", () => {
+    const html = renderAgentPage(cliStatus({ severity: "ok", checks: [] }));
+
+    expect(html).toContain("Generate task artifact");
+  });
+
   it("labels disabled project context without blocking a detected CLI run", () => {
     const html = renderAgentPage(cliStatus({
       severity: "warning",
@@ -160,12 +166,13 @@ function renderAgentPage(status: ToolUiStatus, pluginStatuses: AgentPluginStatus
   return renderToStaticMarkup(createElement(AgentPage, {
     agents: [agent()],
     architectureReview: architectureReview(),
+    canGenerateTaskArtifact: true,
     executionMode: "plan",
     isDesktopBridgeAvailable: true,
     isRunsLoading: false,
     lastRunStatus: "idle",
-    legacyCanvasReadOnly: false,
     onAnalyzeCurrentProject: noop,
+    onGenerateTaskArtifact: async () => undefined,
     onApplyRunArtifact: noop,
     onDeleteCustomAgent: noop,
     onDetectAgent: noop,

@@ -40,7 +40,6 @@ export type ProjectStatusInput = {
 };
 
 export type ActiveProjectStatus = ProjectStatusInput & {
-  readOnly?: boolean;
   onRefreshProject: () => void;
   onUpdateArchitecture: () => void;
   onUpdateSequences: () => void;
@@ -102,7 +101,6 @@ export function ProjectStatusIndicator({
   onUpdateArchitecture,
   onUpdateSequences,
   sequenceReview,
-  readOnly,
   statuses
 }: ActiveProjectStatus) {
   const { t } = useI18n();
@@ -154,7 +152,7 @@ export function ProjectStatusIndicator({
               {item.error ? <small>{item.error}</small> : null}
             </div>
             {item.action ? (
-              <button disabled={Boolean(readOnly && item.action !== "refresh-project")} type="button" onClick={actionCallbacks[item.action]}>
+              <button type="button" onClick={actionCallbacks[item.action]}>
                 {t(actionLabelKey(item))}
               </button>
             ) : null}
@@ -166,7 +164,7 @@ export function ProjectStatusIndicator({
 }
 
 function resolveProjectKind(statuses: ProjectArtifactStatuses, isProjectLoading: boolean): ProjectStatusKind {
-  const requiredStates = [statuses.project, statuses.canvas, statuses.task, statuses.context];
+  const requiredStates = [statuses.project, statuses.canvas];
   if (requiredStates.includes("failed")) return "failed";
   if (isProjectLoading) return "checking";
   if (requiredStates.includes("stale")) return "stale";

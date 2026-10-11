@@ -1,0 +1,102 @@
+{
+  "observedAt": "2026-10-07",
+  "artifactPath": "release/mac-arm64/FlowWeave.app",
+  "filesystemObservation": {
+    "appBundleMtime": "2026-10-04 00:02:29",
+    "ignoredBy": ".gitignore release/",
+    "provenance": "unknown; no source commit or distribution record was established"
+  },
+  "publicDistributionChecks": {
+    "checkedAt": "2026-10-08",
+    "remoteTagsCommand": "git ls-remote --tags origin",
+    "remoteTagsExitCode": 0,
+    "remoteTagRefs": 0,
+    "githubReleasesPage": "https://github.com/Caesarqing/FlowWeave/releases",
+    "githubReleasesApi": "https://api.github.com/repos/Caesarqing/FlowWeave/releases?per_page=100",
+    "githubReleasesPageState": "No releases listed; public releases API returned an empty array on 2026-10-08",
+    "limits": "These checks exclude public tags/releases on this origin at the time checked, not private or alternate-channel distribution."
+  },
+  "githubActionsArtifactChecks": {
+    "checkedAt": "2026-10-08",
+    "workflow": {
+      "id": 295737100,
+      "name": "Desktop packages",
+      "path": ".github/workflows/windows-build.yml",
+      "state": "active",
+      "triggers": ["workflow_dispatch", "push to main"],
+      "artifactRetentionDays": 1,
+      "uploadedArtifactNames": [
+        "flowweave-macos-arm64",
+        "flowweave-windows-x64",
+        "flowweave-windows-arm64-native",
+        "flowweave-windows-arm64-unvalidated"
+      ],
+      "publishesReleaseAssets": false
+    },
+    "runsEndpoint": "https://api.github.com/repos/Caesarqing/FlowWeave/actions/workflows/295737100/runs?per_page=100",
+    "jobsEndpointPattern": "https://api.github.com/repos/Caesarqing/FlowWeave/actions/runs/{run_id}/jobs?per_page=100",
+    "artifactsEndpointPattern": "https://api.github.com/repos/Caesarqing/FlowWeave/actions/runs/{run_id}/artifacts?per_page=100",
+    "recentRuns": [
+      { "id": 35833128921, "number": 30, "createdAt": "2026-09-23T07:42:30Z", "conclusion": "failure", "artifactCount": 0 },
+      { "id": 35742221662, "number": 29, "createdAt": "2026-09-22T14:42:47Z", "conclusion": "failure", "artifactCount": 0 },
+      { "id": 35495207811, "number": 28, "createdAt": "2026-09-20T06:48:59Z", "conclusion": "failure", "artifactCount": 0 },
+      { "id": 29387208447, "number": 23, "createdAt": "2026-07-15T03:43:04Z", "conclusion": "success", "artifactCount": 0 }
+    ],
+    "jobOutcomes": [
+      {
+        "runId": 35833128921,
+        "jobs": {
+          "macOS ARM64": "failure",
+          "Windows 11 x64": "failure",
+          "Windows 11 ARM64 native": "failure",
+          "Windows ARM64 cross-build fallback": "failure"
+        }
+      },
+      {
+        "runId": 35742221662,
+        "jobs": {
+          "macOS ARM64": "failure",
+          "Windows 11 x64": "failure",
+          "Windows 11 ARM64 native": "failure",
+          "Windows ARM64 cross-build fallback": "failure"
+        }
+      },
+      {
+        "runId": 35495207811,
+        "jobs": {
+          "macOS ARM64": "failure",
+          "Windows 11 x64": "failure",
+          "Windows 11 ARM64 native": "failure",
+          "Windows ARM64 cross-build fallback": "failure"
+        }
+      },
+      {
+        "runId": 29387208447,
+        "jobs": {
+          "macOS ARM64": "success",
+          "Windows 11 x64": "success",
+          "Windows 11 ARM64 native": "success",
+          "Windows ARM64 cross-build fallback": "skipped"
+        }
+      }
+    ],
+    "artifactListing": "The public artifacts endpoint returned an empty list for each of the four listed runs.",
+    "run23SuccessfulSteps": "For the macOS ARM64, Windows x64, and native Windows ARM64 jobs, the packaged smoke and actions/upload-artifact@v4 steps both concluded success; the cross-build fallback was skipped.",
+    "limits": "The July 15 run's three platform jobs completed packaged smoke and artifact-upload steps successfully, but the artifact is no longer listed. The three later runs failed in every listed job. One-day retention and empty current listings mean no package is presently recoverable from these Actions runs; they do not prove that an artifact was never downloaded or shared elsewhere."
+  },
+  "bundle": {
+    "identifier": "com.flowweave.app",
+    "version": "0.1.0",
+    "architecture": "arm64",
+    "signature": "adhoc",
+    "teamIdentifier": null,
+    "appAsarSha256": "7edc029266c72a42de3a48445b01f9f56b914a777058a68f81c1dc172966c865",
+    "executableSha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157"
+  },
+  "embeddedCodeObservation": {
+    "main": "out/main/index.js",
+    "storageProtocolMarkers": [7, 7, 7],
+    "interpretation": "This local bundle contains protocol-v7 code. It does not establish a published v1-v6 format or prove what data an actual user release produced."
+  },
+  "scopeLimit": "Read-only bundle inspection only. The app was not launched, user data was not opened, and no release provenance was inferred from the filesystem name or modification time."
+}

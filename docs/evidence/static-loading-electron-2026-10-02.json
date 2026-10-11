@@ -1,0 +1,513 @@
+{
+  "date": "2026-10-02",
+  "machine": {
+    "cpu": "Apple M4",
+    "ramBytes": 17179869184,
+    "macos": "26.6.2"
+  },
+  "sample": "coregist-news_v1.0.0 isolated copies, 282 scanned files, 164 stored graph nodes",
+  "runs": 20,
+  "method": "Each cold trial starts a new Electron process, fresh project copy and fresh userData; the graph smoke dismisses first-run onboarding, waits for a non-pending default graph, then clicks a module and waits for its detail panel. Each hot trial restarts Electron with the same copy and userData. No details panel is preselected. Times start immediately after project registration, just before window creation, and are sampled every 250 ms. OS file cache is not cleared. mainRssMiB is a main-process snapshot, not whole-app peak RSS. This does not measure directory-picker completion, IPC bytes, long tasks, human readability or cross-project performance.",
+  "trials": [
+    {
+      "trial": 1,
+      "cold": {
+        "workspaceVisibleMs": 1812,
+        "graphRenderedMs": 5396,
+        "nodeClickableMs": 5426,
+        "mainRssMiB": 324,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 307,
+        "graphRenderedMs": 307,
+        "nodeClickableMs": 334,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 2,
+      "cold": {
+        "workspaceVisibleMs": 1658,
+        "graphRenderedMs": 5181,
+        "nodeClickableMs": 5211,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 333,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 3,
+      "cold": {
+        "workspaceVisibleMs": 1822,
+        "graphRenderedMs": 5351,
+        "nodeClickableMs": 5375,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 309,
+        "graphRenderedMs": 309,
+        "nodeClickableMs": 335,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 4,
+      "cold": {
+        "workspaceVisibleMs": 1637,
+        "graphRenderedMs": 5163,
+        "nodeClickableMs": 5189,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 307,
+        "graphRenderedMs": 307,
+        "nodeClickableMs": 334,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 5,
+      "cold": {
+        "workspaceVisibleMs": 1797,
+        "graphRenderedMs": 5329,
+        "nodeClickableMs": 5356,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 329,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 6,
+      "cold": {
+        "workspaceVisibleMs": 1976,
+        "graphRenderedMs": 5515,
+        "nodeClickableMs": 5550,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 332,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 7,
+      "cold": {
+        "workspaceVisibleMs": 2994,
+        "graphRenderedMs": 6521,
+        "nodeClickableMs": 6550,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 307,
+        "graphRenderedMs": 307,
+        "nodeClickableMs": 332,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 8,
+      "cold": {
+        "workspaceVisibleMs": 1761,
+        "graphRenderedMs": 5287,
+        "nodeClickableMs": 5381,
+        "mainRssMiB": 313,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 331,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 9,
+      "cold": {
+        "workspaceVisibleMs": 1635,
+        "graphRenderedMs": 5158,
+        "nodeClickableMs": 5183,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 331,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 10,
+      "cold": {
+        "workspaceVisibleMs": 1766,
+        "graphRenderedMs": 5296,
+        "nodeClickableMs": 5319,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 331,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 11,
+      "cold": {
+        "workspaceVisibleMs": 1751,
+        "graphRenderedMs": 5279,
+        "nodeClickableMs": 5300,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 331,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 12,
+      "cold": {
+        "workspaceVisibleMs": 1762,
+        "graphRenderedMs": 5288,
+        "nodeClickableMs": 5318,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 307,
+        "graphRenderedMs": 307,
+        "nodeClickableMs": 330,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 13,
+      "cold": {
+        "workspaceVisibleMs": 1754,
+        "graphRenderedMs": 5787,
+        "nodeClickableMs": 5815,
+        "mainRssMiB": 324,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 307,
+        "graphRenderedMs": 307,
+        "nodeClickableMs": 329,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 14,
+      "cold": {
+        "workspaceVisibleMs": 1648,
+        "graphRenderedMs": 5176,
+        "nodeClickableMs": 5203,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 330,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 15,
+      "cold": {
+        "workspaceVisibleMs": 1687,
+        "graphRenderedMs": 5222,
+        "nodeClickableMs": 5300,
+        "mainRssMiB": 313,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 314,
+        "graphRenderedMs": 314,
+        "nodeClickableMs": 343,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 16,
+      "cold": {
+        "workspaceVisibleMs": 2025,
+        "graphRenderedMs": 5553,
+        "nodeClickableMs": 5586,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 308,
+        "graphRenderedMs": 308,
+        "nodeClickableMs": 331,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 17,
+      "cold": {
+        "workspaceVisibleMs": 1827,
+        "graphRenderedMs": 5359,
+        "nodeClickableMs": 5379,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 309,
+        "graphRenderedMs": 309,
+        "nodeClickableMs": 331,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 18,
+      "cold": {
+        "workspaceVisibleMs": 1811,
+        "graphRenderedMs": 5340,
+        "nodeClickableMs": 5366,
+        "mainRssMiB": 230,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 313,
+        "graphRenderedMs": 313,
+        "nodeClickableMs": 343,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 19,
+      "cold": {
+        "workspaceVisibleMs": 1977,
+        "graphRenderedMs": 5506,
+        "nodeClickableMs": 5527,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 313,
+        "graphRenderedMs": 313,
+        "nodeClickableMs": 342,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    },
+    {
+      "trial": 20,
+      "cold": {
+        "workspaceVisibleMs": 1822,
+        "graphRenderedMs": 5348,
+        "nodeClickableMs": 5376,
+        "mainRssMiB": 228,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": false,
+        "modulePanelVisibleBeforeClick": false
+      },
+      "hot": {
+        "workspaceVisibleMs": 313,
+        "graphRenderedMs": 313,
+        "nodeClickableMs": 342,
+        "mainRssMiB": 229,
+        "nodes": 22,
+        "groups": 5,
+        "visibleDomEdges": 3,
+        "staleBanner": true,
+        "modulePanelVisibleBeforeClick": false
+      }
+    }
+  ]
+}

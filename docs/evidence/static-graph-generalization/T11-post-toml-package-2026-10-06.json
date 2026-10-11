@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "T11-post-toml-package-2026-10-06",
+  "recordedAt": "2026-10-06T12:03:53Z",
+  "status": "current-code arm64 package and non-keyboard smoke checks passed; release, keyboard, manual visual, and frozen T1 acceptance remain incomplete",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v24.6.0",
+    "electronBuilder": "26.15.3",
+    "electron": "42.8.1"
+  },
+  "source": {
+    "tomlParserPath": "src/main/services/project-analysis-context.service.ts",
+    "tomlParserSha256": "0724d61a84c6ceab4cd77f2ede7051698418c387631bf0994bf5097709b58dc3",
+    "regressionTestPath": "tests/main/project-analysis-context.test.ts",
+    "regressionTestSha256": "222635732e54465e0435e92c3a87cf92904e79df1e0665d14ade5f537bd6fd4a"
+  },
+  "verification": [
+    {
+      "command": "npm test -- --reporter=dot",
+      "exitCode": 0,
+      "testFilesPassed": 103,
+      "testsPassed": 951,
+      "testsSkipped": 1,
+      "testsSkippedReason": "One Windows-only descendant process termination test in tests/main/spawn-agent-process.test.ts is skipped on macOS."
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0,
+      "includes": ["npm run typecheck", "electron-vite build", "check-bundle-size"]
+    },
+    {
+      "command": "npm test -- --reporter=dot tests/main/project-analysis-context.test.ts",
+      "exitCode": 0,
+      "testFilesPassed": 1,
+      "testsPassed": 7,
+      "purpose": "Final TOML array edge cases and static configuration safety sentinels"
+    }
+  ],
+  "package": {
+    "buildCommand": "npx electron-builder --mac --dir --arm64 -c.electronDist=node_modules/electron/dist -c.directories.output=/tmp/flowweave-static-loading-post-toml-2026-10-06",
+    "appPath": "/tmp/flowweave-static-loading-post-toml-2026-10-06/mac-arm64/FlowWeave.app",
+    "executableSha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157",
+    "appAsarSha256": "df180ddb2e72e11de7f47a9bd19fac82f3ffd07954e906d2611c1b092bc984f0",
+    "signature": "ad-hoc; no TeamIdentifier; not a notarized release",
+    "packagedSmoke": {"command": "FLOWWEAVE_PACKAGED_EXECUTABLE=<app executable> npm run smoke:packaged", "exitCode": 0}
+  },
+  "graphSmokeReports": [
+    {"fixture": "edges", "path": "T11-post-toml-packaged-edges-2026-10-06.json", "exitCode": 0, "sha256": "3283d25cf092fe936155fabd48b89de184976e1765a0c0279f1dd09b034312d5"},
+    {"fixture": "empty", "path": "T11-post-toml-packaged-empty-2026-10-06.json", "exitCode": 0, "sha256": "dc61e42ae864e059298e6d43a2cbde0c123e29f9806ff72aa34660fb35dc96ed"},
+    {"fixture": "save-failure", "path": "T11-post-toml-packaged-save-failure-2026-10-06.json", "exitCode": 0, "sha256": "1e2b8d4dc54e1d688af50fa8a16d97d262f1a7658d6921cfe07b57c0dac02708"},
+    {"fixture": "tab-switch", "path": "T11-post-toml-packaged-tab-switch-2026-10-06.json", "exitCode": 0, "sha256": "ede18dae740ed7314cc99deef8369cb279375d9c0229e7e5427c3131b1b16318"},
+    {"fixture": "viewport-only", "path": "T11-post-toml-packaged-viewport-only-2026-10-06.json", "exitCode": 0, "sha256": "78fbd0ed7c1a0149554dedd0c689e885ea7cbf516076ea0807c531fbaaf8fb0e"},
+    {"fixture": "details-race", "path": "T11-post-toml-packaged-details-race-2026-10-06.json", "exitCode": 0, "sha256": "72ea603407a21c87eecb3f8f8eccdee043c68c5ab338b513723bc7affc8638c6"}
+  ],
+  "limits": [
+    "The viewport-only fixture had no overlaps and all six controls reachable at 960x640, 1440x900, and 1920x1080; narrow view displayed its readability warning.",
+    "No keyboard input was sent because the host remains locked and lacks foreground window focus.",
+    "These tests do not replace manual visual review, independent labels, the frozen T1 corpus/contract, or Developer ID signing and notarization."
+  ]
+}

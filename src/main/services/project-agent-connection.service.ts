@@ -1,15 +1,22 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, realpath, rm, stat } from "node:fs/promises";
+import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import type {
   CodeflowProject,
+  CodeflowTask,
+  GenerationIdentity,
   ProjectAgentConnectionConfig,
   ProjectAgentConnectionStatus,
   ProjectAgentPlatform
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { assertSafeProjectWritePath, writeProjectTextAtomic } from "../storage/project-write-guard";
+import { readProjectProtocolCanvas, readProjectProtocolOverview, readProjectProtocolSnapshot } from "../storage/flowweave-store";
+import { withArchitectureArtifactLock } from "./architecture-review.service";
 import { buildAgentProtocolContextInstructions } from "./agent-protocol.service";
+import { readSequenceDiagrams } from "./sequence-diagram.service";
+import { ArtifactGenerationMismatchError } from "./generation-errors";
+import { readCommittedGeneration } from "./project-generation.service";
 
 const FLOWWEAVE_BLOCK_START = "<!-- flowweave:start -->";
 const FLOWWEAVE_BLOCK_END = "<!-- flowweave:end -->";
@@ -32,7 +39,7 @@ type ProjectArtifacts = {
 
 type ArtifactSchema = {
   path: string;
-  schemaVersion: number | "text" | "missing" | "unknown";
+  schemaVersion: number;
 };
 
 type AgentContextInput = {
@@ -284,41 +291,64 @@ function isConnectionConfig(value: unknown): value is ProjectAgentConnectionConf
 }
 
 async function requireProjectArtifact(projectPath: string) {
-  const projectPathname = join(projectPath, FLOWWEAVE_DIR, "project.json");
-  try {
-    await stat(projectPathname);
-  } catch (error) {
-    throw new Error(`Cannot connect external Agents: required FlowWeave project artifact is missing at "${projectPathname}". ${formatError(error)}`);
-  }
+  if (await readProjectProtocolSnapshot(projectPath)) return;
+  const snapshotPath = join(projectPath, FLOWWEAVE_DIR, "static-snapshot.json");
+  throw new Error(`Cannot connect external Agents before FlowWeave protocol v7 is committed. Missing or unverified snapshot at "${snapshotPath}".`);
 }
 
 async function readProjectArtifacts(projectPath: string): Promise<ProjectArtifacts> {
   const root = join(projectPath, FLOWWEAVE_DIR);
-  const project = await readRequiredJson<CodeflowProject>(join(root, "project.json"));
-  const [canvas, architecture, sequences, fileTree, taskPaths] = await Promise.all([
-    readOptionalJson<unknown>(join(root, "canvas", "main.canvas.json")),
-    readOptionalJson<unknown>(join(root, "architecture-map.json")),
-    readOptionalJson<unknown>(join(root, "sequence-diagrams.json")),
-    readOptionalText(join(root, "context", "file-tree.md")),
-    listTaskPaths(join(root, "tasks"), projectPath)
+  const core = await withArchitectureArtifactLock(projectPath, async () => {
+    const [snapshot, overview, canvas] = await Promise.all([
+      readProjectProtocolSnapshot(projectPath),
+      readProjectProtocolOverview(projectPath),
+      readProjectProtocolCanvas(projectPath)
+    ]);
+    if (!snapshot || !overview || !canvas) throw new Error(`Cannot build Agent context before FlowWeave protocol v7 is committed: ${projectPath}`);
+    return {
+      project: snapshot.project,
+      artifactSchemas: [
+        { path: ".flowweave/static-snapshot.json", schemaVersion: snapshot.schemaVersion },
+        { path: ".flowweave/graph-overview.json", schemaVersion: overview.schemaVersion },
+        { path: ".flowweave/canvas/user-state.json", schemaVersion: 1 }
+      ]
+    };
+  });
+
+  const [sequence, taskPaths] = await Promise.all([
+    readCurrentSequence(projectPath, core.project.generation),
+    listTaskPaths(join(root, "tasks"), projectPath, core.project)
   ]);
-  return {
-    project,
-    artifactSchemas: [
-      { path: ".flowweave/project.json", schemaVersion: project.version },
-      { path: ".flowweave/canvas/main.canvas.json", schemaVersion: schemaVersion(canvas) },
-      { path: ".flowweave/architecture-map.json", schemaVersion: schemaVersion(architecture) },
-      { path: ".flowweave/sequence-diagrams.json", schemaVersion: schemaVersion(sequences) },
-      { path: ".flowweave/context/file-tree.md", schemaVersion: fileTree === undefined ? "missing" : "text" }
-    ],
-    taskPaths,
-  };
+  await withArchitectureArtifactLock(projectPath, async () => {
+    const currentGeneration = await readCommittedGeneration(projectPath);
+    if (!sameGeneration(core.project.generation, currentGeneration)) {
+      throw new ArtifactGenerationMismatchError(projectPath, "Agent context", core.project.generation, currentGeneration);
+    }
+  });
+  const artifactSchemas = sequence
+    ? [...core.artifactSchemas, { path: ".flowweave/sequence-diagrams.json", schemaVersion: sequence.version }]
+    : core.artifactSchemas;
+  return { project: core.project, artifactSchemas, taskPaths };
 }
 
-function schemaVersion(value: unknown): ArtifactSchema["schemaVersion"] {
-  if (value === undefined) return "missing";
-  if (!isRecord(value) || typeof value.version !== "number") return "unknown";
-  return value.version;
+async function readCurrentSequence(projectPath: string, generation: GenerationIdentity | undefined) {
+  let bundle: Awaited<ReturnType<typeof readSequenceDiagrams>>;
+  try {
+    bundle = await readSequenceDiagrams(projectPath);
+  } catch (error) {
+    if (error instanceof ArtifactGenerationMismatchError) return undefined;
+    throw error;
+  }
+  if (!bundle || !sameGeneration(generation, bundle.generation)) return undefined;
+  return bundle;
+}
+
+function sameGeneration(left: GenerationIdentity | undefined, right: GenerationIdentity | undefined) {
+  return Boolean(left && right && left.requestId === right.requestId && left.inputFingerprint === right.inputFingerprint);
+}
+
+function isGenerationIdentity(value: unknown): value is GenerationIdentity {
+  return isRecord(value) && typeof value.requestId === "string" && typeof value.inputFingerprint === "string";
 }
 
 async function createAgentContextInput(projectPath: string): Promise<AgentContextInput> {
@@ -499,36 +529,31 @@ async function findConnectionFileIssue(
   return undefined;
 }
 
-async function listTaskPaths(tasksPath: string, projectPath: string) {
+async function listTaskPaths(tasksPath: string, projectPath: string, project: CodeflowProject) {
   try {
     const entries = await readdir(tasksPath, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isFile() && (entry.name === "current.task.md" || entry.name === "current.task.json"))
-      .map((entry) => relative(projectPath, join(tasksPath, entry.name)))
-      .sort();
+    if (!entries.some((entry) => entry.isFile() && entry.name === "current.task.json")) return [];
+    const taskPath = join(tasksPath, "current.task.json");
+    const content = await readOptionalText(taskPath);
+    if (content === undefined) return [];
+    let value: unknown;
+    try {
+      value = JSON.parse(content) as unknown;
+    } catch (error) {
+      throw new Error(`Invalid JSON in FlowWeave task artifact "${taskPath}": ${formatError(error)}`);
+    }
+    if (!isCurrentTask(value, project)) return [];
+    return [relative(projectPath, taskPath)];
   } catch (error) {
     if (isMissingFileError(error)) return [];
     throw new Error(`Reading FlowWeave task artifacts failed at "${tasksPath}": ${formatError(error)}`);
   }
 }
 
-async function readRequiredJson<T>(filePath: string): Promise<T> {
-  const content = await readFile(filePath, "utf8");
-  try {
-    return JSON.parse(content) as T;
-  } catch (error) {
-    throw new Error(`Invalid JSON in FlowWeave artifact "${filePath}": ${formatError(error)}`);
-  }
-}
-
-async function readOptionalJson<T>(filePath: string): Promise<T | undefined> {
-  const content = await readOptionalText(filePath);
-  if (content === undefined) return undefined;
-  try {
-    return JSON.parse(content) as T;
-  } catch (error) {
-    throw new Error(`Invalid JSON in FlowWeave artifact "${filePath}": ${formatError(error)}`);
-  }
+function isCurrentTask(value: unknown, project: CodeflowProject): value is CodeflowTask {
+  if (!isRecord(value) || value.version !== 2 || value.artifactState !== "current") return false;
+  if (value.inputFingerprint !== project.scanFingerprint) return false;
+  return isGenerationIdentity(project.generation) && isGenerationIdentity(value.generation) && sameGeneration(project.generation, value.generation);
 }
 
 async function readOptionalText(filePath: string) {

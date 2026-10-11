@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronRight, FileCode2, Folder, GitPullRequestArrow, Trash2 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
-import type { AssessmentLevel, GraphEdge, GraphNode, GraphNodeType } from "../types";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { AssessmentLevel, GraphEdge, GraphNode, GraphNodeType, StaticGraphDetailUiTiming } from "../types";
 import { nodeConnectionExplanation } from "../utils/graph-view-projection";
 import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
+import { useCanvasStore } from "../stores/canvas.store";
 import { buildModuleFileTree, type ModuleFileTreeNode } from "../utils/module-file-tree";
 import { applyRiskOverride, clearRiskOverride } from "../utils/module-assessment";
 import {
@@ -20,6 +21,16 @@ export type ModuleDisplaySummary = {
   downstreamCount: number;
   evidenceState: "confirmed" | "partial" | "unavailable";
 };
+
+type StaticGraphMeasurementWindow = Window & {
+  __flowweaveStaticGraphMeasurement?: {
+    collectMetrics: boolean;
+    detailClickStartedAtEpochMs?: number;
+    detailTimings: StaticGraphDetailUiTiming[];
+  };
+};
+type DetailRequestTiming = Omit<StaticGraphDetailUiTiming, "panelPresentedAtEpochMs">;
+const performanceEpochMs = () => performance.timeOrigin + performance.now();
 
 export function buildModuleDisplaySummary(node: GraphNode, edges: GraphEdge[]): ModuleDisplaySummary {
   const related = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
@@ -45,18 +56,27 @@ export function formatModuleRelation(edge: GraphEdge, modules: GraphNode[]): str
 }
 
 export function ModulePanel({
+  readOnly,
+  userRevision,
+  onEnsureSaved,
+  projectId,
+  generationId,
   edges,
   modules,
   guidanceOperation,
-  node,
+  node: canvasNode,
   onDeleteNode,
   onGuidanceChange,
   onModuleChange,
   onSaveGuidance,
   onSendGuidance,
-  sendGuidanceDisabled,
-  readOnly
+  sendGuidanceDisabled
 }: {
+  readOnly: boolean;
+  userRevision: number;
+  onEnsureSaved: () => Promise<void>;
+  projectId: string;
+  generationId?: string;
   edges: GraphEdge[];
   modules: GraphNode[];
   guidanceOperation: "save" | "send" | "";
@@ -67,9 +87,60 @@ export function ModulePanel({
   onSaveGuidance: () => void;
   onSendGuidance: () => void;
   sendGuidanceDisabled: boolean;
-  readOnly: boolean;
 }) {
   const { t } = useI18n();
+  const ensureSaved = useRef(onEnsureSaved);
+  ensureSaved.current = onEnsureSaved;
+  const filesKey = canvasNode.files.join("\u0000");
+  const detailKey = `${projectId}:${generationId ?? ""}:${userRevision}:${canvasNode.id}:${filesKey}`;
+  const [detailResult, setDetailResult] = useState<{ key: string; detail?: Pick<GraphNode, "symbols" | "fileRoles" | "evidence" | "assessment" | "relationDiagnostics">; error?: string; timing?: DetailRequestTiming }>();
+  useEffect(() => {
+    if (!projectId || !generationId || canvasNode.origin === "manual") return;
+    const api = window.flowweave;
+    if (!api) {
+      setDetailResult({ key: detailKey, error: "Desktop API unavailable" });
+      return;
+    }
+    let active = true;
+    const measurement = (window as StaticGraphMeasurementWindow).__flowweaveStaticGraphMeasurement;
+    const clickStartedAtEpochMs = measurement?.collectMetrics ? measurement.detailClickStartedAtEpochMs : undefined;
+    void ensureSaved.current()
+      .then(() => {
+        const liveMeasurement = (window as StaticGraphMeasurementWindow).__flowweaveStaticGraphMeasurement;
+        const ipcStartedAtEpochMs = liveMeasurement?.collectMetrics ? performanceEpochMs() : undefined;
+        return api.readCanvasNodeDetail(projectId, generationId, useCanvasStore.getState().userRevision, canvasNode.id)
+          .then((response) => ({ response, clickStartedAtEpochMs, ipcStartedAtEpochMs,
+            ipcResponseAtEpochMs: ipcStartedAtEpochMs === undefined ? undefined : performanceEpochMs() }));
+      })
+      .then(({ response, clickStartedAtEpochMs, ipcStartedAtEpochMs, ipcResponseAtEpochMs }) => {
+        if (active && response.generationId === generationId && response.nodeId === canvasNode.id &&
+          response.userRevision === useCanvasStore.getState().userRevision) {
+          const timing = clickStartedAtEpochMs === undefined || ipcStartedAtEpochMs === undefined || ipcResponseAtEpochMs === undefined ? undefined : {
+            projectId, generationId, userRevision: response.userRevision, nodeId: response.nodeId,
+            clickStartedAtEpochMs, ipcStartedAtEpochMs, ipcResponseAtEpochMs
+          };
+          setDetailResult({ key: detailKey, detail: response.detail, timing });
+        }
+      })
+      .catch((error) => { if (active) setDetailResult({ key: detailKey, error: error instanceof Error ? error.message : String(error) }); });
+    return () => { active = false; };
+  }, [projectId, generationId, canvasNode.id, canvasNode.origin, detailKey]);
+  useLayoutEffect(() => {
+    if (!detailResult?.timing || detailResult.key !== detailKey || !detailResult.detail) return;
+    const measurement = (window as StaticGraphMeasurementWindow).__flowweaveStaticGraphMeasurement;
+    if (!measurement?.collectMetrics || !detailResult.timing) return;
+    measurement.detailTimings.push({ ...detailResult.timing, panelPresentedAtEpochMs: performanceEpochMs() });
+  }, [detailResult, detailKey]);
+  const currentDetail = detailResult?.key === detailKey ? detailResult.detail : undefined;
+  const node = useMemo(() => {
+    const files = new Set(canvasNode.files);
+    return { ...canvasNode, ...currentDetail,
+      symbols: (currentDetail?.symbols ?? canvasNode.symbols)?.filter((symbol) => files.has(symbol.filePath)),
+      fileRoles: (currentDetail?.fileRoles ?? canvasNode.fileRoles)?.filter((role) => files.has(role.path)),
+      evidence: (currentDetail?.evidence ?? canvasNode.evidence)?.filter((item) => !item.filePath || files.has(item.filePath)),
+      relationDiagnostics: (currentDetail?.relationDiagnostics ?? canvasNode.relationDiagnostics)?.filter((diagnostic) => files.has(diagnostic.filePath)),
+      assessment: canvasNode.assessmentPending ? canvasNode.assessment : currentDetail?.assessment ?? canvasNode.assessment };
+  }, [canvasNode, currentDetail]);
   const [openSections, setOpenSections] = useState({
     files: true,
     symbols: false,
@@ -126,11 +197,13 @@ export function ModulePanel({
   }
 
   return (
-    <aside className="module-panel">
+    <aside className="module-panel" data-detail-node-id={canvasNode.id} data-detail-state={canvasNode.origin === "manual" || detailResult?.key === detailKey && detailResult.detail
+      ? "ready" : detailResult?.key === detailKey && detailResult.error ? "error" : "loading"}>
       <div className="panel-header">
         <span>{t("module.context")}</span>
         <span className={cn("risk-chip", node.risk)}>{t(`risk.${node.risk}`)}</span>
       </div>
+      {node.assessmentPending ? <p role="status">{t("module.assessmentPending")}</p> : null}
 
       <section className="module-card hero-card">
         <small>{localizedArchitectureCategory(node.category, node.nodeType, t)}</small>
@@ -156,6 +229,8 @@ export function ModulePanel({
       </section>
 
       <section className="module-card module-edit-card">
+        {canvasNode.origin !== "manual" && generationId && detailResult?.key !== detailKey ? <p>{t("canvas.detailLoading")}</p> : null}
+        {detailResult?.key === detailKey && detailResult.error ? <p role="alert">{t("canvas.detailLoadFailed", { error: detailResult.error })}</p> : null}
         <h3>{t("module.change")}</h3>
         <fieldset className="module-edit-form" disabled={readOnly}>
           <label>
@@ -186,7 +261,7 @@ export function ModulePanel({
             <div className="module-edit-wide assessment-override">
               <strong>{t("module.riskOverride")}</strong>
               <span>{node.assessment.risk.override.reason}</span>
-              {node.assessment.risk.systemLevelChanged ? (
+              {currentDetail && node.assessment.risk.systemLevelChanged ? (
                 <span>{t("module.systemRiskChanged", {
                   previous: t(`assessment.${node.assessment.risk.previousSystemLevel ?? "unknown"}`),
                   current: t(`assessment.${node.assessment.risk.systemLevel}`)

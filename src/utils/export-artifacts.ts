@@ -160,8 +160,9 @@ export function createModificationGuidanceContext(
     delta: result.delta,
     hasChanges: result.hasChanges,
     artifactReferences: [
-      ".flowweave/project.json",
-      ".flowweave/canvas/main.canvas.json",
+      ".flowweave/static-snapshot.json",
+      ".flowweave/graph-overview.json",
+      ".flowweave/canvas/user-state.json",
       ".flowweave/architecture-map.json",
       ".flowweave/sequence-diagrams.json"
     ]
@@ -368,8 +369,11 @@ export function buildSequencePlanPrompt(projectLabel: string, bundle: SequenceDi
 }
 
 export function buildExecutionAssessmentSummary(nodes: GraphNode[], edges: GraphEdge[]): string {
-  const assessed = nodes.filter((node) => node.assessment);
-  if (assessed.length === 0) return "Assessment: unavailable. Refresh the project scan before relying on module guidance.";
+  const pending = nodes.filter((node) => node.assessmentPending);
+  const assessed = nodes.filter((node) => node.assessment && !node.assessmentPending);
+  if (assessed.length === 0) return pending.length > 0
+    ? `Assessment pending for ${pending.length} module(s). Existing system scores are unavailable until reassessment.\nManual risk overrides: ${pending.filter((node) => node.assessment?.risk.override).map((node) => node.title).join(", ") || "none"}.`
+    : "Assessment: unavailable. Refresh the project scan before relying on module guidance.";
   const riskOrder = { unknown: 4, high: 3, medium: 2, low: 1 };
   const highestRisk = [...assessed].sort((left, right) =>
     riskOrder[right.assessment!.risk.effectiveLevel] - riskOrder[left.assessment!.risk.effectiveLevel]
@@ -390,6 +394,7 @@ export function buildExecutionAssessmentSummary(nodes: GraphNode[], edges: Graph
     return source && target && source !== "unknown" && target !== "unknown" && source !== target;
   });
   return [
+    ...(pending.length > 0 ? [`Assessment pending for ${pending.length} module(s); old system scores are excluded.`] : []),
     `Highest module risk: ${highestRisk?.title ?? "unknown"} (${highestRisk?.assessment?.risk.effectiveLevel ?? "unknown"}).`,
     lowestConfidence
       ? `Lowest confidence: ${lowestConfidence.title} (${lowestConfidence.assessment!.confidence.score}/100).`
@@ -527,6 +532,10 @@ ${node.guidanceDraft || "No guidance recorded."}
 }
 
 function formatAssessmentMarkdown(node: GraphNode): string {
+  if (node.assessmentPending) return [
+    "System assessment: pending after module changes; prior system scores are excluded.",
+    node.assessment?.risk.override ? `Manual override: ${node.assessment.risk.override.level} (${node.assessment.risk.override.reason})` : ""
+  ].filter(Boolean).join("\n");
   if (!node.assessment) return "Assessment: unavailable";
   const topRiskFactors = node.assessment.risk.factors
     .filter((factor) => factor.score > 0)

@@ -6,6 +6,9 @@ import type { ElkNode } from "elkjs/lib/elk-api";
 import {
   autoLayoutIsCurrent,
   canvasTopologyFingerprint,
+  canvasLayoutTopologyFingerprint,
+  handleLayoutIsCurrent,
+  layoutCanvasNodesWithPortsWithEngine,
   layoutCanvasNodesWithEngine,
   nodeArchitectureLayer,
   nodeClassification,
@@ -15,31 +18,31 @@ import {
   nodeTechnologyStacks,
   traceNodeIds
 } from "../../src/utils/canvas-layout";
-import { createFlowNode } from "../../src/utils/graph-converters";
-import type { ArchitectureLayer, GraphNode } from "../../src/types";
+import { createFlowNode, decorateFlowGraph } from "../../src/utils/graph-converters";
+import type { ArchitectureLayer, ConnectionHandleSlot, GraphNode } from "../../src/types";
 
 describe("canvas layout and tracing", () => {
-  it("finishes real ELK overview and expanded layout for dense parallel relations", async () => {
+  it("finishes real ELK dependency layout for dense parallel relations", async () => {
     const topology = JSON.parse(readFileSync(new URL("../fixtures/architecture-dense-layout-topology.json", import.meta.url), "utf8")) as {
       roles: ArchitectureLayer[]; edges: [number, number][];
     };
     const nodes = topology.roles.map((role, index) => createFlowNode({ ...node(String(index), []), architectureLayer: role }));
     const edges = topology.edges.map(([source, target], index) => ({ id: String(index), source: String(source), target: String(target) }));
     const snapshot = structuredClone({ nodes, edges });
-    const result = await layoutCanvasNodesWithEngine(nodes, edges, "architecture", realElkLayout);
+    const result = await layoutCanvasNodesWithEngine(nodes, edges, "dependency", realElkLayout);
     expect({ nodes, edges }).toEqual(snapshot);
     expect(result).toHaveLength(topology.roles.length);
     expect(result.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.y))).toBe(true);
     expect(new Set(result.map((item) => `${item.position.x},${item.position.y}`)).size).toBe(topology.roles.length);
   });
 
-  it("finishes real ELK architecture layout for a mixed graph with backward cross-layer dependencies", async () => {
+  it("finishes real ELK dependency layout for a mixed graph with backward dependencies", async () => {
     const topology = JSON.parse(readFileSync(new URL("../fixtures/architecture-layout-topology.json", import.meta.url), "utf8")) as {
       roles: ArchitectureLayer[]; edges: [number, number][];
     };
     const nodes = topology.roles.map((role, index) => createFlowNode({ ...node(String(index), []), architectureLayer: role }));
     const edges = topology.edges.map(([source, target], index) => ({ id: String(index), source: String(source), target: String(target) }));
-    const result = await layoutCanvasNodesWithEngine(nodes, edges, "architecture", realElkLayout);
+    const result = await layoutCanvasNodesWithEngine(nodes, edges, "dependency", realElkLayout);
     expect(result).toHaveLength(63);
     expect(result.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.y))).toBe(true);
     expect(new Set(result.map((item) => `${item.position.x},${item.position.y}`)).size).toBe(63);
@@ -98,6 +101,131 @@ describe("canvas layout and tracing", () => {
 
     expect(autoLayoutIsCurrent(layout, "execution", fingerprint)).toBe(true);
     expect(autoLayoutIsCurrent(layout, "execution", canvasTopologyFingerprint(nodes, []))).toBe(false);
+    expect(canvasTopologyFingerprint(nodes, [{ ...edges[0], id: "replacement-edge" }])).not.toBe(fingerprint);
+    expect(canvasTopologyFingerprint(nodes, [{ ...edges[0], source: "service", target: "api" }])).not.toBe(fingerprint);
+    expect(canvasTopologyFingerprint(nodes, [{ ...edges[0], data: { relation: "calls" } }])).not.toBe(fingerprint);
+    const handles = {
+      positions: Object.fromEntries(nodes.map((item) => [item.id, item.position])),
+      handles: {},
+      topologyFingerprint: canvasLayoutTopologyFingerprint(nodes, edges)
+    };
+    expect(handleLayoutIsCurrent(nodes, edges, handles)).toBe(true);
+    expect(handleLayoutIsCurrent(nodes, [{ ...edges[0], id: "manual-parallel-edge" }], handles)).toBe(false);
+  });
+
+  it("recomputes static handles when the renderer topology includes additional visible edges", async () => {
+    const nodes = [createFlowNode(node("api", [])), createFlowNode(node("service", []))];
+    const layoutEdge: Edge = { id: "api-service", source: "api", target: "service", data: { relation: "calls" } };
+    const visibleEdges: Edge[] = [layoutEdge, {
+      id: "manual-api-service", source: "api", target: "service", data: { relation: "calls", origin: "manual" }
+    }];
+    const staticFingerprint = canvasLayoutTopologyFingerprint(nodes, [layoutEdge]);
+    const staticCache = {
+      positions: Object.fromEntries(nodes.map((item) => [item.id, item.position])),
+      handles: {},
+      topologyFingerprint: staticFingerprint
+    };
+    const staticPositionCache = {
+      activeMode: "execution" as const,
+      manualPositions: {},
+      autoLayouts: { execution: staticCache.positions },
+      autoLayoutTopologyFingerprints: { execution: staticFingerprint },
+      collapsedGroups: []
+    };
+    const rendererFingerprint = canvasTopologyFingerprint(nodes, [layoutEdge], {
+      projectId: "project",
+      generationId: "generation",
+      viewport: { width: 1024, height: 768 },
+      manualPositionRevision: "[]"
+    });
+
+    expect(handleLayoutIsCurrent(nodes, visibleEdges, staticCache)).toBe(false);
+    expect(autoLayoutIsCurrent(staticPositionCache, "execution", rendererFingerprint)).toBe(false);
+
+    const refreshed = await layoutCanvasNodesWithPortsWithEngine(
+      nodes, [layoutEdge], "execution", realElkLayout, visibleEdges
+    );
+    expect(handleLayoutIsCurrent(refreshed.nodes, visibleEdges, refreshed.handleLayout)).toBe(true);
+  });
+
+  it("returns handles matching final constrained ELK sections for directions, loops, parallel edges, and measured nodes", async () => {
+    const nodes = [
+      { ...createFlowNode(node("large", [])), measured: { width: 360, height: 220 } },
+      createFlowNode(node("peer", []))
+    ];
+    const edges: Edge[] = [
+      { id: "forward-a", source: "large", target: "peer", data: { relation: "calls" } },
+      { id: "forward-b", source: "large", target: "peer", data: { relation: "calls" } },
+      { id: "reverse", source: "peer", target: "large", data: { relation: "calls" } },
+      { id: "loop", source: "large", target: "large", data: { relation: "calls" } }
+    ];
+    let finalGraph: ElkNode | undefined;
+    const result = await layoutCanvasNodesWithPortsWithEngine(nodes, edges, "execution", async (graph) => {
+      const output = await realElkLayout(graph);
+      if (graph.layoutOptions?.["elk.algorithm"] === "org.eclipse.elk.fixed") finalGraph = output;
+      return output;
+    }, edges);
+
+    expect(finalGraph).toBeDefined();
+    const finalNodeById = new Map(finalGraph?.children?.map((item) => [item.id, item]) ?? []);
+    for (const edge of edges) {
+      const section = finalGraph?.edges?.find((item) => item.id === edge.id)?.sections?.[0];
+      expect(section?.startPoint).toBeDefined();
+      expect(section?.endPoint).toBeDefined();
+      const sourceSlot = result.handleLayout.handles[edge.source]?.source.find((slot) => slot.edgeId === edge.id);
+      const targetSlot = result.handleLayout.handles[edge.target]?.target.find((slot) => slot.edgeId === edge.id);
+      expect(sourceSlot?.id).toBe(`${edge.source}-source-${edge.id}`);
+      expect(targetSlot?.id).toBe(`${edge.target}-target-${edge.id}`);
+      expect(sourceSlot?.position).toBeDefined();
+      expect(targetSlot?.position).toBeDefined();
+      const sourceNode = finalNodeById.get(edge.source);
+      const targetNode = finalNodeById.get(edge.target);
+      if (!section?.startPoint || !section.endPoint || !sourceNode || !targetNode || !sourceSlot || !targetSlot) {
+        throw new Error(`ELK final endpoint evidence is incomplete: edgeId=${edge.id}`);
+      }
+      expectHandleAtPoint(sourceSlot, section.startPoint, sourceNode);
+      expectHandleAtPoint(targetSlot, section.endPoint, targetNode);
+    }
+
+    const large = finalGraph?.children?.find((item) => item.id === "large");
+    expect(large?.width).toBe(360);
+    expect(large?.height).toBe(220);
+  });
+
+  it("places collapsed-group ELK handles against the measured card dimensions", () => {
+    const group = {
+      ...createFlowNode(node("group:billing", [])),
+      measured: { width: 360, height: 220 },
+      data: { ...createFlowNode(node("group:billing", [])).data, syntheticKind: "group" as const }
+    };
+    const peer = createFlowNode(node("peer", []));
+    const edge: Edge = { id: "group-peer", source: group.id, target: peer.id };
+    const decorated = decorateFlowGraph([group, peer], [edge], undefined, {
+      [group.id]: {
+        source: [{ id: "group-source", edgeId: edge.id, position: "bottom", offsetPercent: 75, count: 1 }],
+        target: []
+      },
+      [peer.id]: { source: [], target: [{ id: "peer-target", edgeId: edge.id, position: "top", offsetPercent: 25, count: 1 }] }
+    });
+    const groupHandle = decorated.nodes.find((item) => item.id === group.id)?.handles?.find((item) => item.id === "group-source");
+
+    expect(groupHandle).toMatchObject({ x: 270, y: 220 });
+  });
+
+  it("keys view layouts by project generation, viewport, and manual positions", () => {
+    const nodes = [createFlowNode(node("api", [])), createFlowNode(node("service", []))];
+    const edges: Edge[] = [{ id: "api-service", source: "api", target: "service" }];
+    const context = {
+      projectId: "/workspace/sample",
+      generationId: "generation-1",
+      viewport: { width: 960, height: 640 },
+      manualPositionRevision: "positions-1"
+    };
+    const fingerprint = canvasTopologyFingerprint(nodes, edges, context);
+
+    expect(canvasTopologyFingerprint(nodes, edges, { ...context, generationId: "generation-2" })).not.toBe(fingerprint);
+    expect(canvasTopologyFingerprint(nodes, edges, { ...context, viewport: { width: 1440, height: 900 } })).not.toBe(fingerprint);
+    expect(canvasTopologyFingerprint(nodes, edges, { ...context, manualPositionRevision: "positions-2" })).not.toBe(fingerprint);
   });
 
   it("keeps React Flow controlled by application state without a duplicate store sync loop", () => {
@@ -215,33 +343,16 @@ describe("canvas layout and tracing", () => {
     });
   });
 
-  it("orders technology partitions from frontend through backend to data", async () => {
-    const nodes = [
-      createFlowNode(node("data", ["schema.prisma"])),
-      createFlowNode(node("backend", ["server/app.py"])),
-      createFlowNode(node("frontend", ["src/App.tsx"]))
-    ];
-    const layout = await layoutCanvasNodesWithEngine(nodes, [], "technology", deterministicLayout);
-    const positions = new Map(layout.map((item) => [item.id, item.position.x]));
-
-    expect(positions.get("frontend")).toBeLessThan(positions.get("backend") ?? 0);
-    expect(positions.get("backend")).toBeLessThan(positions.get("data") ?? 0);
-  });
-
   it("groups nodes by stable functional module names", async () => {
     const accountApi = node("account-api", ["src/features/account/api.ts"]);
     const accountView = node("account-view", ["src/features/account/view.tsx"]);
     const billing = node("billing", ["src/features/billing/service.ts"]);
-    const nodes = [accountApi, accountView, billing].map(createFlowNode);
 
     expect(nodeFunctionalModule(accountApi)).toBe("account");
-    expect(nodeGroupKey(accountView, "domain")).toBe("domain:account");
+    expect(nodeGroupKey(accountApi)).toBe("area:account");
+    expect(nodeGroupKey(accountView)).toBe("area:account");
     expect(nodeFunctionalModule(billing)).toBe("billing");
-
-    const layout = await layoutCanvasNodesWithEngine(nodes, [], "domain", deterministicLayout);
-    const positions = new Map(layout.map((item) => [item.id, item.position.x]));
-    expect(positions.get("account-api")).toBe(positions.get("account-view"));
-    expect(positions.get("account-api")).not.toBe(positions.get("billing"));
+    expect(nodeGroupKey(billing)).toBe("area:billing");
   });
 });
 
@@ -251,6 +362,24 @@ async function realElkLayout(graph: ElkNode): Promise<ElkNode> {
     'const ELK = require("elkjs/lib/elk.bundled.js"); new ELK().layout(JSON.parse(require("node:fs").readFileSync(0, "utf8"))).then(graph => process.stdout.write(JSON.stringify(graph)));'
   ], { input: JSON.stringify(graph), encoding: "utf8", timeout: 5000, maxBuffer: 1_000_000 });
   return JSON.parse(stdout) as ElkNode;
+}
+
+function expectHandleAtPoint(
+  handle: ConnectionHandleSlot,
+  point: { x: number; y: number },
+  node: NonNullable<ElkNode["children"]>[number]
+) {
+  const width = node.width ?? 280;
+  const height = node.height ?? 150;
+  const candidates = [
+    { side: "left", distance: Math.abs(point.x - (node.x ?? 0)), offset: point.y - (node.y ?? 0), size: height },
+    { side: "right", distance: Math.abs(point.x - ((node.x ?? 0) + width)), offset: point.y - (node.y ?? 0), size: height },
+    { side: "top", distance: Math.abs(point.y - (node.y ?? 0)), offset: point.x - (node.x ?? 0), size: width },
+    { side: "bottom", distance: Math.abs(point.y - ((node.y ?? 0) + height)), offset: point.x - (node.x ?? 0), size: width }
+  ];
+  const expected = candidates.sort((left, right) => left.distance - right.distance)[0];
+  expect(handle.position).toBe(expected.side);
+  expect(handle.offsetPercent).toBeCloseTo(expected.offset / expected.size * 100, 5);
 }
 
 function node(id: string, files: string[]): GraphNode {

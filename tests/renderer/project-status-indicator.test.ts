@@ -90,6 +90,14 @@ describe("ProjectStatusIndicator", () => {
     });
   });
 
+  it("keeps the committed static project ready while task and context are deferred", () => {
+    const model = buildProjectStatusViewModel(statusInput({
+      statuses: artifactStatuses({ task: "missing", context: "missing" })
+    }));
+
+    expect(model).toEqual({ kind: "ready", items: [] });
+  });
+
   it("shows AI Reviewed only when the current architecture was reviewed", () => {
     expect(buildProjectStatusViewModel(statusInput({
       architectureReview: { state: "reviewed", scanFingerprint: "scan-1", inputFingerprint: "input-1" }
@@ -163,21 +171,19 @@ describe("ProjectStatusIndicator", () => {
     expect(markup).toContain("Retry");
   });
 
-  it("disables architecture and sequence review actions for a legacy read-only canvas", () => {
+  it("keeps current protocol actions available for stale artifacts", () => {
     const markup = renderToStaticMarkup(createElement(ProjectStatusIndicator, {
       ...statusInput({
         statuses: artifactStatuses({ canvas: "stale", architecture: "stale", sequences: "stale" }),
         architectureReview: { state: "stale", scanFingerprint: "scan-1" },
         sequenceReview: { state: "stale", scanFingerprint: "scan-1" }
       }),
-      readOnly: true,
       onRefreshProject: () => undefined,
       onUpdateArchitecture: () => undefined,
       onUpdateSequences: () => undefined
     }));
 
-    expect(markup.match(/<button disabled=""/g)).toHaveLength(2);
-    expect(markup).toContain(">Rescan</button>");
+    expect(markup).not.toContain('<button disabled=""');
   });
 
   it("shows a genuinely stale architecture as stale even when review failed", () => {

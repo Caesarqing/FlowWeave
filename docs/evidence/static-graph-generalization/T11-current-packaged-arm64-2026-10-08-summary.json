@@ -1,0 +1,111 @@
+{
+  "runDate": "2026-10-08",
+  "worktree": "/Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave",
+  "branch": "codex/static-loading-implementation",
+  "environment": {
+    "os": "macOS 26.6.2 arm64",
+    "node": "v24.6.0",
+    "npm": "11.5.1"
+  },
+  "artifact": {
+    "temporaryPath": "/var/folders/r5/1zvyd5dx45327vrxyn77m5sw0000gn/T/flowweave-static-graph-package-2026-10-08-XpKde1/release/mac-arm64/FlowWeave.app",
+    "version": "0.1.0",
+    "bundleId": "com.flowweave.app",
+    "architecture": "arm64",
+    "appAsarSha256": "8b0d3e74eda048aa4957b09d51f994d6b34080803547ca94b7fa873105275835",
+    "executableSha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157",
+    "signature": "ad-hoc",
+    "validDeveloperIdIdentities": 0,
+    "notarized": false
+  },
+  "verification": {
+    "fullTest": {
+      "command": "npm test -- --reporter=dot",
+      "exitCode": 0,
+      "filesPassed": 103,
+      "testsPassed": 981,
+      "testsSkipped": 1,
+      "skipReason": "The Win32-only descendant-process timeout test is skipped on macOS; three macOS-compatible variants ran."
+    },
+    "typecheck": {
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    "productionBuild": {
+      "command": "npm run build",
+      "exitCode": 0,
+      "result": "passed",
+      "output": "temporary directory; existing repository out/ restored unchanged",
+      "rendererModules": 1958,
+      "bundleSizeCheck": {
+        "command": "node scripts/check-bundle-size.mjs",
+        "exitCode": 0
+      }
+    },
+    "packageBuild": {
+      "command": "npm run dist:mac:arm64 -- --config.directories.output=/var/folders/r5/1zvyd5dx45327vrxyn77m5sw0000gn/T/flowweave-static-graph-package-2026-10-08-XpKde1/release",
+      "exitCode": 0
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    "packagedSmoke": {
+      "command": "FLOWWEAVE_PACKAGED_EXECUTABLE=/var/folders/r5/1zvyd5dx45327vrxyn77m5sw0000gn/T/flowweave-static-graph-package-2026-10-08-XpKde1/release/mac-arm64/FlowWeave.app/Contents/MacOS/FlowWeave npm run smoke:packaged",
+      "exitCode": 0
+    },
+    "graphSmoke": {
+      "command": "FLOWWEAVE_PACKAGED_EXECUTABLE=/var/folders/r5/1zvyd5dx45327vrxyn77m5sw0000gn/T/flowweave-static-graph-package-2026-10-08-XpKde1/release/mac-arm64/FlowWeave.app/Contents/MacOS/FlowWeave npm run smoke:graph",
+      "exitCode": 0,
+      "runner": "scripts/run-graph-smoke.mjs",
+      "fixtures": [
+        { "name": "edges", "status": "completed" },
+        { "name": "empty", "status": "completed" },
+        { "name": "four-languages", "status": "completed" },
+        { "name": "save-failure", "status": "completed" },
+        { "name": "tab-switch", "status": "completed" },
+        { "name": "viewport-only", "status": "completed" },
+        { "name": "details-race", "status": "completed" }
+      ],
+      "reportsUseIsolatedSyntheticProjects": true,
+      "reportBinding": "All seven fixture runs used FLOWWEAVE_PACKAGED_EXECUTABLE pointing to the executable whose path and SHA-256 are recorded above; the runner executed fixtures sequentially and retained one JSON report per fixture.",
+      "fourLanguagesKeyboardInput": "Electron webContents.sendInputEvent; not native OS keyboard input",
+      "viewportSamples": ["960x640", "1440x900", "1920x1080"],
+      "overlappingNodePairs": 0,
+      "readabilityWarning": "960x640 only"
+    }
+  },
+  "reports": [
+    "T11-current-packaged-arm64-2026-10-08-edges.json",
+    "T11-current-packaged-arm64-2026-10-08-empty.json",
+    "T11-current-packaged-arm64-2026-10-08-four-languages.json",
+    "T11-current-packaged-arm64-2026-10-08-save-failure.json",
+    "T11-current-packaged-arm64-2026-10-08-tab-switch.json",
+    "T11-current-packaged-arm64-2026-10-08-viewport-only.json",
+    "T11-current-packaged-arm64-2026-10-08-details-race.json"
+  ],
+  "nativeKeyboardReport": "T11-current-packaged-arm64-2026-10-08-native-keyboard-manual.json",
+  "nativeKeyboardHarnessFailures": [
+    "T11-current-packaged-arm64-2026-10-08-four-languages-native-keyboard.json",
+    "T11-current-packaged-arm64-2026-10-08-four-languages-native-keyboard-retry.json",
+    "T11-current-packaged-arm64-2026-10-08-four-languages-native-keyboard-final.json"
+  ],
+  "nativeKeyboardHarnessFailureScreenshots": [
+    "T11-current-packaged-viewport-2026-10-08-four-languages-native-keyboard-four-languages.png",
+    "T11-current-packaged-viewport-2026-10-08-four-languages-native-keyboard-retry-four-languages.png",
+    "T11-current-packaged-viewport-2026-10-08-four-languages-native-keyboard-final-four-languages.png"
+  ],
+  "screenshots": [
+    "T11-current-packaged-viewport-2026-10-08-four-languages-viewport-960x640.png",
+    "T11-current-packaged-viewport-2026-10-08-four-languages-viewport-1440x900.png",
+    "T11-current-packaged-viewport-2026-10-08-four-languages-viewport-1920x1080.png",
+    "T11-current-packaged-viewport-2026-10-08-viewport-only-viewport-960x640.png",
+    "T11-current-packaged-viewport-2026-10-08-viewport-only-viewport-1440x900.png",
+    "T11-current-packaged-viewport-2026-10-08-viewport-only-viewport-1920x1080.png"
+  ],
+  "limitations": [
+    "The temporary package path is host-local and is not a durable release artifact.",
+    "Automated graph smoke uses isolated synthetic projects and Electron input; it does not replace the separately passed native desktop keyboard report or satisfy human-label, holdout, human visual-review, or full T1 gates.",
+    "Ad-hoc signing without Developer ID and notarization does not satisfy formal macOS release requirements."
+  ]
+}

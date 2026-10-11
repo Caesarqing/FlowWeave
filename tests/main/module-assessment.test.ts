@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessModules } from "../../src/utils/module-assessment";
+import { applyAssessmentOverride, applyRiskOverride, assessModules, unknownAssessment } from "../../src/utils/module-assessment";
 import { buildExecutionAssessmentSummary, buildGuidanceMarkdown, scopeGraphForModule } from "../../src/utils/export-artifacts";
 import type { GraphEdge, GraphNode, SemanticIndex } from "../../src/types";
 
@@ -89,6 +89,18 @@ describe("module assessment", () => {
     expect(assessed.risk).toBe("high");
   });
 
+  it("does not claim the system level changed when risk was overridden before detail loaded", () => {
+    const module = graphNode("api", ["src/api.ts"]);
+    const overridden = applyRiskOverride(module, "high", "Manual review", "2026-10-03");
+    const override = overridden.assessment?.risk.override;
+    if (!override) throw new Error("Risk override was not created");
+    expect(override.systemLevelAtOverride).toBeUndefined();
+    const actual = { ...unknownAssessment("scan", "2026-10-03"), risk: { systemLevel: "low" as const,
+      effectiveLevel: "low" as const, factors: [] } };
+    expect(applyAssessmentOverride(actual, override).risk).toMatchObject({ effectiveLevel: "high" });
+    expect(applyAssessmentOverride(actual, override).risk.systemLevelChanged).toBeUndefined();
+  });
+
   it("includes actionable assessment details in Agent guidance and Execute summaries", () => {
     const assessed = assessModules(modulesFixture(), edgesFixture(), semanticIndexFixture(), "scan-1", "2026-06-15T00:00:00.000Z");
     assessed[0].technologyStack = "frontend";
@@ -103,6 +115,17 @@ describe("module assessment", () => {
     expect(summary).toContain("Lowest confidence:");
     expect(summary).toContain("Cross-stack connections: api -> service");
     expect(summary).toContain("Git Diff safety is evaluated independently");
+  });
+
+  it("excludes pending system scores from exported assessment summaries", () => {
+    const assessed = assessModules(modulesFixture(), edgesFixture(), semanticIndexFixture(), "scan-1", "2026-06-15T00:00:00.000Z");
+    const pending = { ...assessed[0], assessmentPending: true };
+    const summary = buildExecutionAssessmentSummary([pending], []);
+    const guidance = buildGuidanceMarkdown("fixture", [pending], []);
+    expect(summary).toContain("Assessment pending for 1 module");
+    expect(summary).not.toContain("Highest module risk:");
+    expect(guidance).toContain("System assessment: pending");
+    expect(guidance).not.toContain("System risk: high");
   });
 
   it("scopes module Execute summaries to the selected module and directly connected modules", () => {

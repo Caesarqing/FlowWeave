@@ -11,7 +11,8 @@ import type {
   SemanticIndexManifest,
   SemanticIndexManifestEntry,
   SemanticRelation,
-  ProjectStructureFacts, ProjectAnalysisContext, SemanticDiagnostic, SemanticOperationFact, StaticAnalysisQuality, StructureSymbol
+  ProjectStructureFacts, ProjectAnalysisContext, SemanticDiagnostic, SemanticOperationFact, StaticAnalysisQuality, StructureSymbol,
+  AnalysisLanguage, SemanticAnalysisCapability, SemanticImportUsage, SemanticOperation, SemanticRelationKind, SourceRange
 } from "../../types";
 import { createSourceSnapshot, type SourceSnapshot } from "./source-snapshot.service";
 import type { ArtifactUpdate } from "../storage/flowweave-store";
@@ -20,12 +21,12 @@ import { readJsonArtifact } from "../storage/artifact-store";
 import { flattenProjectFilePaths, resolveProjectImport, resolvePythonProjectImport } from "./project-import-resolver.service";
 import { analyzeTypeScriptProject } from "./typescript-semantic.service";
 import { analyzeTreeSitterProject } from "./project-language-binding.service";
-import { discoverProjectAnalysisContext } from "./project-analysis-context.service";
+import { discoverProjectAnalysisContext, isTypeScriptProjectConfiguration } from "./project-analysis-context.service";
 import { buildResourceRelations } from "./semantic-resource.service";
-import { analyzeSourceFile, TreeSitterInitializationError } from "./language-analyzer.service";
+import { analyzeSourceFile } from "./language-analyzer.service";
 import { buildCrossStackHttpRelations } from "./cross-stack-relation.service";
 
-const GENERATOR_VERSION = "5.0.1";
+export const SEMANTIC_INDEX_GENERATOR_VERSION = "5.0.9";
 const INDEX_VERSION = 5;
 const DEFAULT_PARSE_CONCURRENCY = 8;
 const MAX_FILE_BYTES = 220_000;
@@ -47,13 +48,16 @@ export async function buildSemanticIndex(
     .filter((path) => CODE_EXTENSIONS.has(extname(path).toLowerCase()))
     .sort();
   const previousManifest = await readManifest(project.rootPath);
-  const snapshot = createSourceSnapshot(paths.map((path) => join(project.rootPath, path)), previousManifest?.inputState);
-  const context = await discoverProjectAnalysisContext(project.rootPath, projectPaths, snapshot);
+  const previousInputState = previousManifest?.generatorVersion === SEMANTIC_INDEX_GENERATOR_VERSION
+    ? previousManifest.inputState
+    : undefined;
+  const snapshot = createSourceSnapshot(paths.map((path) => join(project.rootPath, path)), previousInputState);
+  let context = await discoverProjectAnalysisContext(project.rootPath, projectPaths, snapshot);
   const previousIndex = await readSemanticIndex(project.rootPath);
   const currentInputFingerprint = snapshot.fingerprint();
-  const canReuseIndex = Boolean(previousManifest?.inputState && previousManifest.generatorVersion === GENERATOR_VERSION &&
+  const canReuseIndex = Boolean(previousManifest?.inputState && previousManifest.generatorVersion === SEMANTIC_INDEX_GENERATOR_VERSION &&
     previousManifest.scanFingerprint === project.scanFingerprint && previousManifest.configurationFingerprint === currentInputFingerprint &&
-    previousIndex?.version === INDEX_VERSION && previousIndex.generatorVersion === GENERATOR_VERSION &&
+    previousIndex?.version === INDEX_VERSION && previousIndex.generatorVersion === SEMANTIC_INDEX_GENERATOR_VERSION &&
     previousIndex.scanFingerprint === project.scanFingerprint && previousIndex.configurationFingerprint === currentInputFingerprint &&
     previousIndex.projectName === project.projectName && previousIndex.rootPath === project.rootPath);
   if (canReuseIndex && previousManifest && previousIndex) {
@@ -65,7 +69,10 @@ export async function buildSemanticIndex(
     options?.onProgress?.({ stage: "persisting", completed: paths.length, total: paths.length, failed: 0, message: "Preparing the unchanged semantic index for the generation transaction." });
     return { index, delta, updates: prepareSemanticIndex(project.rootPath, index, manifest), snapshot, removedPaths: [] };
   }
+  snapshot.resetForRebuild();
+  context = await discoverProjectAnalysisContext(project.rootPath, projectPaths, snapshot);
   const previousByPath = new Map(previousManifest?.files.map((file) => [file.path, file]) ?? []);
+  const previousFileByPath = new Map(previousIndex?.files.map((file) => [file.path, file]) ?? []);
   const projectFileSet = new Set(paths);
   const concurrency = normalizeConcurrency(options?.concurrency);
   let completed = 0;
@@ -80,7 +87,8 @@ export async function buildSemanticIndex(
   const semanticFiles = await mapWithConcurrency(paths, concurrency, async (path) =>
     {
       const file = await buildSemanticFile(project, path,
-        previousManifest?.generatorVersion === GENERATOR_VERSION ? previousByPath.get(path) : undefined, snapshot);
+        previousManifest?.generatorVersion === SEMANTIC_INDEX_GENERATOR_VERSION ? previousByPath.get(path) : undefined,
+        previousFileByPath.get(path), snapshot);
       completed += 1;
       if (file?.status === "failed") failed += 1;
       options?.onProgress?.({
@@ -124,11 +132,12 @@ export async function buildSemanticIndex(
     ...bindingDiagnostics, ...resourceResult.diagnostics
   ];
   const quality = calculateAnalysisQuality(enrichedFiles, importsAndCalls, diagnostics);
+  const analysisCapabilities = buildAnalysisCapabilities(enrichedFiles, context, diagnostics);
   const generatedAt = new Date().toISOString();
   const index: SemanticIndex = {
     version: INDEX_VERSION,
     configurationFingerprint: snapshot.fingerprint(),
-    generatorVersion: GENERATOR_VERSION,
+    generatorVersion: SEMANTIC_INDEX_GENERATOR_VERSION,
     projectName: project.projectName,
     rootPath: project.rootPath,
     generatedAt,
@@ -140,11 +149,12 @@ export async function buildSemanticIndex(
     diagnostics,
     scopes: context.scopes,
     resources: resourceResult.resources,
-    quality
+    quality,
+    analysisCapabilities
   };
   const manifest: SemanticIndexManifest = {
     version: INDEX_VERSION,
-    generatorVersion: GENERATOR_VERSION,
+    generatorVersion: SEMANTIC_INDEX_GENERATOR_VERSION,
     projectName: project.projectName,
     rootPath: project.rootPath,
     generatedAt,
@@ -162,10 +172,7 @@ export async function buildSemanticIndex(
     message: "Persisting semantic index."
   });
   const updates = prepareSemanticIndex(project.rootPath, index, manifest);
-  return { index, delta, updates, snapshot, removedPaths: delta.deleted.flatMap((path) => {
-    const previous = previousByPath.get(path);
-    return previous ? [join(indexRoot(project.rootPath), "files", `${previous.cacheKey}.json`)] : [];
-  }) };
+  return { index, delta, updates, snapshot, removedPaths: [] };
 }
 
 export type SemanticAnalysisScope = {
@@ -175,7 +182,7 @@ export type SemanticAnalysisScope = {
 
 export function semanticAnalysisScopes(projectPaths: string[], codePaths: string[]): SemanticAnalysisScope[] {
   const configRoots = projectPaths
-    .filter((path) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(path))
+    .filter((path) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(path) && isTypeScriptProjectConfiguration(path))
     .map((path) => dirname(path));
   const packageRoots = projectPaths
     .filter((path) => /(^|\/)package\.json$/.test(path))
@@ -236,6 +243,98 @@ function calculateAnalysisQuality(files: SemanticFile[], relations: SemanticRela
   };
 }
 
+function buildAnalysisCapabilities(
+  files: SemanticFile[],
+  context: ProjectAnalysisContext,
+  diagnostics: SemanticDiagnostic[]
+): SemanticAnalysisCapability[] {
+  const groups = new Map<string, { scope: ProjectAnalysisContext["scopes"][number] | undefined; language: string; parserId: string; files: SemanticFile[] }>();
+  for (const file of files) {
+    const scope = context.scopes.find((candidate) => candidate.paths.includes(file.path));
+    const language = file.language ?? "Unknown";
+    const parserId = parserIdForFile(file, scope?.language);
+    const key = `${scope?.id ?? "unscoped"}\0${language}\0${parserId}`;
+    const group = groups.get(key) ?? { scope, language, parserId, files: [] };
+    group.files.push(file);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map(({ scope, language, parserId, files: sourceFiles }) => {
+    const paths = new Set(sourceFiles.map((file) => file.path));
+    const configurationPaths = scope?.configurationPaths ?? [];
+    const relevantDiagnostics = diagnostics.filter((diagnostic) => paths.has(diagnostic.filePath) || configurationPaths.includes(diagnostic.filePath));
+    const failedFiles = sourceFiles.filter((file) => file.status === "failed").length;
+    const unsupportedFiles = sourceFiles.filter((file) => file.status === "unsupported").length;
+    const parsedFiles = sourceFiles.filter((file) => file.status === "parsed").length;
+    const limitations = new Map<string, { code: string; reason: string; files: Set<string> }>();
+    for (const diagnostic of relevantDiagnostics) {
+      const key = `${diagnostic.code}\0${diagnostic.message}`;
+      const limitation = limitations.get(key) ?? { code: diagnostic.code, reason: diagnostic.message, files: new Set<string>() };
+      limitation.files.add(diagnostic.filePath);
+      limitations.set(key, limitation);
+      if (/Tree-sitter (?:runtime initialization|.+ grammar loading) failed|WASM asset not found/.test(diagnostic.message)) {
+        const dependencyKey = `parser-dependency-unavailable\0${diagnostic.message}`;
+        const dependency = limitations.get(dependencyKey) ?? {
+          code: "parser-dependency-unavailable",
+          reason: `The bundled parser runtime or grammar is unavailable: ${diagnostic.message}`,
+          files: new Set<string>()
+        };
+        dependency.files.add(diagnostic.filePath);
+        limitations.set(dependencyKey, dependency);
+      }
+    }
+    if (scope?.language === "java") {
+      limitations.set("classpath-not-loaded", {
+        code: "classpath-not-loaded",
+        reason: "Java bindings use scanned source files only; Maven or Gradle classpaths and external bytecode are not loaded.",
+        files: new Set(sourceFiles.map((file) => file.path))
+      });
+    }
+    const configurationUnavailable = relevantDiagnostics.some((diagnostic) => diagnostic.code === "configuration-unreadable");
+    const configurationStatus: SemanticAnalysisCapability["configurationStatus"] = configurationUnavailable
+      ? "unavailable"
+      : configurationPaths.length > 0 ? "readable" : "not-present";
+    const allUnsupported = unsupportedFiles === sourceFiles.length;
+    const status: SemanticAnalysisCapability["status"] = allUnsupported
+      ? "unsupported"
+      : failedFiles === sourceFiles.length ? "unavailable"
+      : failedFiles > 0 || configurationUnavailable ? "partial"
+      : "available";
+    return {
+      language, scopeId: scope?.id, parserId, status,
+      sourceFiles: sourceFiles.length, parsedFiles, failedFiles, unsupportedFiles,
+      capabilities: parserCapabilities(parserId),
+      limitations: [...limitations.values()].map(({ code, reason, files: affected }) => ({ code, reason, count: affected.size }))
+        .sort((left, right) => left.code.localeCompare(right.code) || left.reason.localeCompare(right.reason)),
+      configurationPaths: [...configurationPaths].sort(),
+      configurationStatus,
+      offline: true as const
+    };
+  }).sort((left, right) => left.language.localeCompare(right.language) || (left.scopeId ?? "").localeCompare(right.scopeId ?? ""));
+}
+
+function parserIdForFile(file: SemanticFile, language: AnalysisLanguage | undefined): string {
+  if (file.analyzerId === "unavailable") {
+    if (language === "typescript") return "typescript-compiler-api";
+    if (language) return `tree-sitter-${language}-wasm`;
+    return "unavailable";
+  }
+  if (file.status === "unsupported") return "lightweight-language";
+  if (file.path.endsWith(".vue")) return "vue-compiler-sfc";
+  if (language === "typescript" && file.analyzerId === "typescript-ast") return "typescript-ast";
+  if (language === "typescript") return "typescript-program";
+  if (language) return `tree-sitter-${language}-wasm`;
+  return file.analyzerId;
+}
+
+function parserCapabilities(parserId: string): string[] {
+  if (parserId === "typescript-program") return ["syntax", "source-ranges", "project-import-resolution", "symbol-targets", "call-binding", "source-operations"];
+  if (parserId === "typescript-ast") return ["syntax", "source-ranges"];
+  if (parserId.startsWith("tree-sitter-")) return ["syntax", "source-ranges", "source-import-resolution", "source-call-binding"];
+  if (parserId === "vue-compiler-sfc") return ["component-syntax", "script-insight", "template-render-targets"];
+  if (parserId === "lightweight-language") return ["syntax-outline"];
+  return [];
+}
+
 function nearestRoot(path: string, roots: string[]): string | undefined {
   return roots
     .filter((root) => isWithinRoot(path, root))
@@ -277,7 +376,8 @@ export function semanticIndexToStructureFacts(
     languages: project.summary.languages,
     files: index.files.flatMap((file) => file.insight ? [file.insight] : []),
     relations: index.relations,
-    scopes: index.scopes, resources: index.resources, quality: index.quality, diagnostics: index.diagnostics
+    scopes: index.scopes, resources: index.resources, quality: index.quality,
+    diagnostics: index.diagnostics, analysisCapabilities: index.analysisCapabilities
   };
 }
 
@@ -309,6 +409,7 @@ async function buildSemanticFile(
   project: CodeflowProject,
   path: string,
   previous: SemanticIndexManifestEntry | undefined,
+  previousFile: SemanticFile | undefined,
   snapshot: SourceSnapshot
 ): Promise<SemanticFile | undefined> {
   const absolutePath = join(project.rootPath, ...path.split("/"));
@@ -341,8 +442,7 @@ async function buildSemanticFile(
     if (content === undefined) throw new Error(`Missing source snapshot: ${absolutePath}`);
     const contentHash = createHash("sha256").update(content).digest("hex");
     if (previous && previous.contentHash === contentHash) {
-      const cached = await readCachedFile(project.rootPath, previous.cacheKey);
-      if (cached?.path === path && cached.contentHash === contentHash) return { ...cached, size: info.size, modifiedAt };
+      if (previousFile?.path === path && previousFile.contentHash === contentHash) return { ...previousFile, size: info.size, modifiedAt };
     }
     const analysis = await analyzeSourceFile(path, content, project.files);
     return {
@@ -362,7 +462,6 @@ async function buildSemanticFile(
       renderTargets: analysis.renderTargets
     };
   } catch (error) {
-    if (error instanceof TreeSitterInitializationError) throw error;
     const contentHash = createHash("sha256").update(`${path}:${info.size}:${modifiedAt}`).digest("hex");
     return {
       path,
@@ -379,6 +478,7 @@ async function buildSemanticFile(
       diagnostics: [{
         code: "parse-failed",
         severity: "error",
+        stage: "parsing",
         message: error instanceof Error ? error.message : String(error),
         filePath: path
       }]
@@ -431,7 +531,6 @@ function buildSemanticRelations(files: SemanticFile[], projectFiles: Set<string>
 function prepareSemanticIndex(projectPath: string, index: SemanticIndex, manifest: SemanticIndexManifest): ArtifactUpdate[] {
   const root = indexRoot(projectPath);
   return [
-    ...index.files.map((file) => ({ path: join(root, "files", `${file.cacheKey}.json`), content: `${JSON.stringify(file, null, 2)}\n` })),
     { path: join(root, "manifest.json"), content: `${JSON.stringify(manifest, null, 2)}\n` },
     { path: join(root, "semantic-index.json"), content: `${JSON.stringify(index, null, 2)}\n` }
   ];
@@ -440,11 +539,6 @@ function prepareSemanticIndex(projectPath: string, index: SemanticIndex, manifes
 async function readManifest(projectPath: string): Promise<SemanticIndexManifest | undefined> {
   const value = await readJsonArtifact(join(indexRoot(projectPath), "manifest.json"));
   return isManifest(value) ? value : undefined;
-}
-
-async function readCachedFile(projectPath: string, cacheKey: string): Promise<SemanticFile | undefined> {
-  const value = await readJsonArtifact(join(indexRoot(projectPath), "files", `${cacheKey}.json`));
-  return isSemanticFile(value) ? value : undefined;
 }
 
 function createScanDelta(
@@ -549,7 +643,8 @@ function isManifest(value: unknown): value is SemanticIndexManifest {
   if (!isRecord(value) || value.version !== INDEX_VERSION || !Array.isArray(value.files)) return false;
   const inputState = value.inputState;
   const validInputState = inputState === undefined || isRecord(inputState) && Array.isArray(inputState.filePaths) && inputState.filePaths.every((path) => typeof path === "string") &&
-    Array.isArray(inputState.observations) && inputState.observations.every((entry) => Array.isArray(entry) && entry.length === 2 && entry.every((part) => typeof part === "string"));
+    Array.isArray(inputState.observations) && inputState.observations.every((entry) => Array.isArray(entry) && entry.length === 2 && entry.every((part) => typeof part === "string")) &&
+    (inputState.trackedFileHashes === undefined || Array.isArray(inputState.trackedFileHashes) && inputState.trackedFileHashes.every((entry) => Array.isArray(entry) && entry.length === 3 && entry.every((part) => typeof part === "string")));
   return typeof value.projectName === "string" &&
     typeof value.rootPath === "string" &&
     typeof value.scanFingerprint === "string" &&
@@ -570,15 +665,82 @@ function isManifestEntry(value: unknown): value is SemanticIndexManifestEntry {
 function isSemanticIndex(value: unknown): value is SemanticIndex {
   return isRecord(value) &&
     value.version === INDEX_VERSION &&
-    value.generatorVersion === GENERATOR_VERSION &&
+    value.generatorVersion === SEMANTIC_INDEX_GENERATOR_VERSION &&
     typeof value.projectName === "string" &&
     typeof value.rootPath === "string" &&
     Array.isArray(value.files) &&
     value.files.every(isSemanticFile) &&
     Array.isArray(value.relations) &&
+    value.relations.every(isSemanticRelation) &&
     Array.isArray(value.httpEndpoints) &&
     Array.isArray(value.symbols) &&
-    Array.isArray(value.diagnostics);
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isSemanticDiagnostic);
+}
+
+function isSemanticDiagnostic(value: unknown): value is SemanticDiagnostic {
+  return isRecord(value) &&
+    typeof value.code === "string" &&
+    isOneOf(value.severity, ["warning", "error"]) &&
+    typeof value.message === "string" &&
+    typeof value.filePath === "string" &&
+    (value.stage === undefined || isOneOf(value.stage, ["parsing", "binding"])) &&
+    (value.severity !== "error" || value.stage !== undefined) &&
+    (value.relationId === undefined || typeof value.relationId === "string") &&
+    (value.range === undefined || isSourceRange(value.range)) &&
+    (value.candidates === undefined || Array.isArray(value.candidates) && value.candidates.every((candidate) => typeof candidate === "string"));
+}
+
+function isSemanticRelation(value: unknown): value is SemanticRelation {
+  if (!isRecord(value) ||
+    typeof value.id !== "string" ||
+    !isOneOf(value.kind, ["import", "call", "inherit", "render", "http", "database", "filesystem", "process", "event", "test"] satisfies readonly SemanticRelationKind[]) ||
+    typeof value.source !== "string" ||
+    typeof value.target !== "string" ||
+    typeof value.sourceFile !== "string" ||
+    (value.targetFile !== undefined && typeof value.targetFile !== "string") ||
+    (value.symbol !== undefined && typeof value.symbol !== "string") ||
+    typeof value.detail !== "string" ||
+    !isOneOf(value.confidence, ["confirmed", "inferred"]) ||
+    (value.role !== undefined && !isOneOf(value.role, ["source", "target"])) ||
+    (value.targetRef !== undefined && !isSemanticTarget(value.targetRef)) ||
+    (value.sourceRange !== undefined && !isSourceRange(value.sourceRange)) ||
+    (value.scopeId !== undefined && typeof value.scopeId !== "string") ||
+    (value.bindingBasis !== undefined && typeof value.bindingBasis !== "string") ||
+    (value.importUsage !== undefined && !isOneOf(value.importUsage, ["value", "type", "side-effect", "inherit"] satisfies readonly SemanticImportUsage[])) ||
+    (value.operation !== undefined && !isOneOf(value.operation, ["read", "write", "publish", "subscribe", "invoke"] satisfies readonly SemanticOperation[]))) return false;
+
+  if (value.kind !== "call") return true;
+  if (!isSemanticTarget(value.targetRef) || !isSourceRange(value.sourceRange)) return false;
+  if (value.targetRef.kind === "unresolved") return value.confidence === "inferred" && value.targetFile === undefined;
+  if (value.targetRef.kind === "file") return value.targetFile === value.targetRef.filePath;
+  return value.targetFile === undefined;
+}
+
+function isSemanticTarget(value: unknown): value is NonNullable<SemanticRelation["targetRef"]> {
+  if (!isRecord(value)) return false;
+  if (value.kind === "file") {
+    return typeof value.filePath === "string" &&
+      (value.symbolId === undefined || typeof value.symbolId === "string") &&
+      (value.declarationRange === undefined || isSourceRange(value.declarationRange));
+  }
+  if (value.kind === "resource") return typeof value.resourceId === "string";
+  if (value.kind === "external") return typeof value.moduleName === "string" && typeof value.standardLibrary === "boolean";
+  if (value.kind === "unresolved") return typeof value.reason === "string" && Array.isArray(value.candidates) && value.candidates.every((candidate) => typeof candidate === "string");
+  return false;
+}
+
+function isSourceRange(value: unknown): value is SourceRange {
+  return isRecord(value) && isSourcePosition(value.start) && isSourcePosition(value.end);
+}
+
+function isSourcePosition(value: unknown): boolean {
+  return isRecord(value) && typeof value.line === "number" && Number.isInteger(value.line) && value.line > 0 &&
+    typeof value.column === "number" && Number.isInteger(value.column) && value.column > 0;
+}
+
+function isOneOf(value: unknown, options: readonly string[]): boolean {
+  return typeof value === "string" && options.includes(value);
 }
 
 function isSemanticFile(value: unknown): value is SemanticFile {
@@ -591,7 +753,8 @@ function isSemanticFile(value: unknown): value is SemanticFile {
     typeof value.analyzerId === "string" &&
     Array.isArray(value.httpEndpoints) &&
     Array.isArray(value.renderTargets) &&
-    Array.isArray(value.diagnostics);
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.every(isSemanticDiagnostic);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

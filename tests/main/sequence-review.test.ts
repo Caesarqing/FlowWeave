@@ -9,6 +9,7 @@ import {
   writeSequenceReviewStatus
 } from "../../src/main/services/sequence-review.service";
 import type { SequenceDiagramBundle } from "../../src/types";
+import { writeEmptyProtocolFixture } from "./protocol.fixture";
 
 describe("sequence-review.service", () => {
   it("summarizes participant and message changes", () => {
@@ -25,6 +26,7 @@ describe("sequence-review.service", () => {
 
   it("persists reviewing state and publishes the reviewed bundle", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-sequence-review-"));
+    const canvas = await writeEmptyProtocolFixture(root, "scan-1");
     const local = bundle(["client"], ["request"]);
     const reviewed = {
       ...bundle(["client", "service"], ["request", "response"]),
@@ -46,6 +48,7 @@ describe("sequence-review.service", () => {
       projectPath: root,
       reviewId: "sequence-review-1",
       scanFingerprint: "scan-1",
+      generation: canvas.generation!,
       agentId: "mock",
       localBundle: local,
       startedAt: "2026-06-25T00:00:00.000Z",
@@ -118,6 +121,7 @@ describe("sequence-review.service", () => {
 
   it("does not let a legacy local review status hide a stale sequence bundle", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-sequence-review-local-status-stale-"));
+    await writeEmptyProtocolFixture(root, "scan-1");
     await mkdir(join(root, ".flowweave"), { recursive: true });
     await writeFile(
       join(root, ".flowweave", "sequence-diagrams.json"),
@@ -133,6 +137,7 @@ describe("sequence-review.service", () => {
 
   it("does not let a stored local status hide a current Agent sequence bundle", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-sequence-review-local-status-reviewed-"));
+    const canvas = await writeEmptyProtocolFixture(root, "scan-1");
     const reviewed = {
       ...bundle(["client"], ["request"]),
       source: "agent" as const,
@@ -152,7 +157,7 @@ describe("sequence-review.service", () => {
       `${JSON.stringify(reviewed)}\n`,
       "utf8"
     );
-    await writeSequenceReviewStatus(root, { state: "local", scanFingerprint: "scan-1" });
+    await writeSequenceReviewStatus(root, { state: "local", scanFingerprint: "scan-1", generation: canvas.generation });
 
     expect(await readSequenceReviewStatus(root, "scan-1")).toMatchObject({
       state: "reviewed",

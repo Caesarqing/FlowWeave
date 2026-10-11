@@ -16,8 +16,11 @@ import {
   writeSequenceDiagramBundle
 } from "../../src/main/services/sequence-diagram.service";
 import { buildProjectStructureFacts } from "../../src/main/services/structure-extractor.service";
+import { generateProject } from "../../src/main/services/project-generation.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
+import { readProjectProtocolCanvas } from "../../src/main/storage/flowweave-store";
 import type { CodeflowProject, SequenceDiagram, SequenceDiagramBundle } from "../../src/types";
+import { writeEmptyProtocolFixture } from "./protocol.fixture";
 
 describe("sequence-diagram.service", () => {
   it("builds a prompt for architectural diagrams only", () => {
@@ -349,9 +352,11 @@ describe("sequence-diagram.service", () => {
   it("returns a fresh local bundle without overwriting a trusted Agent bundle before review succeeds", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-agent-"));
     const root = await createFixtureFiles();
+    const project = await generateCommittedProject(root);
+    if (!project.generation) throw new Error("Expected a committed generation.");
     const flowweaveRoot = join(root, FLOWWEAVE_DIR);
     await mkdir(flowweaveRoot, { recursive: true });
-    const existing = existingBundle(root);
+    const existing = { ...existingBundle(root), generation: project.generation };
     await writeFile(join(flowweaveRoot, "sequence-diagrams.json"), `${JSON.stringify(existing, null, 2)}\n`, "utf8");
 
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
@@ -372,7 +377,7 @@ describe("sequence-diagram.service", () => {
       args: [scriptPath]
     });
 
-    const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const result = await generateSequenceDiagrams(project, agent.id);
     const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
     expect(result.outcome).toBe("generated");
@@ -404,7 +409,7 @@ describe("sequence-diagram.service", () => {
       args: [scriptPath]
     });
 
-    const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const result = await generateSequenceDiagrams(await generateCommittedProject(root), agent.id);
     const stored = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
     expect(result.outcome).toBe("generated");
@@ -448,7 +453,7 @@ describe("sequence-diagram.service", () => {
     });
     const events: import("../../src/types").SequenceReviewEvent[] = [];
 
-    const result = await generateSequenceDiagrams(projectFixture(root), agent.id, {
+    const result = await generateSequenceDiagrams(await generateCommittedProject(root), agent.id, {
       projectId: "project-00000000-0000-0000-0000-000000000000",
       onSequenceReview: (event) => events.push(event)
     });
@@ -466,9 +471,11 @@ describe("sequence-diagram.service", () => {
   it("regenerates local diagrams instead of reusing stale local cache", async () => {
     const configRoot = await mkdtemp(join(tmpdir(), "flowweave-sequence-refresh-local-agent-"));
     const root = await createFixtureFiles();
+    const project = await generateCommittedProject(root);
+    if (!project.generation) throw new Error("Expected a committed generation.");
     const flowweaveRoot = join(root, FLOWWEAVE_DIR);
     await mkdir(flowweaveRoot, { recursive: true });
-    const staleLocal = { ...existingBundle(root), source: "local" as const };
+    const staleLocal = { ...existingBundle(root), source: "local" as const, generation: project.generation };
     await writeFile(join(flowweaveRoot, "sequence-diagrams.json"), `${JSON.stringify(staleLocal, null, 2)}\n`, "utf8");
     const scriptPath = join(configRoot, "bad-sequence-agent.mjs");
     configureAgentRegistry(configRoot);
@@ -488,7 +495,7 @@ describe("sequence-diagram.service", () => {
       args: [scriptPath]
     });
 
-    const result = await generateSequenceDiagrams(projectFixture(root), agent.id);
+    const result = await generateSequenceDiagrams(project, agent.id);
     const stored = JSON.parse(await readFile(join(flowweaveRoot, "sequence-diagrams.json"), "utf8")) as SequenceDiagramBundle;
 
     expect(result.outcome).toBe("generated");
@@ -514,18 +521,20 @@ describe("sequence-diagram.service", () => {
 
   it("does not overwrite a v1 sequence bundle during v2 generation", async () => {
     const root = await createFixtureFiles();
+    const canvas = await writeEmptyProtocolFixture(root, "scan-test");
     const artifactPath = join(root, FLOWWEAVE_DIR, "sequence-diagrams.json");
     const legacy = `${JSON.stringify({ ...existingBundle(root), version: 1 }, null, 2)}\n`;
     await writeFile(artifactPath, legacy, "utf8");
 
-    await expect(writeSequenceDiagramBundle(root, existingBundle(root), undefined)).rejects.toThrow("must be v2. Regenerate it");
+    await expect(writeSequenceDiagramBundle(root, { ...existingBundle(root), generation: canvas.generation }, undefined)).rejects.toThrow("must be v2. Regenerate it");
     await expect(readFile(artifactPath, "utf8")).resolves.toBe(legacy);
   });
 
   it("returns generated when valid output is parsed and written", async () => {
     const root = await createFixtureFiles();
     await addInventoryBoundary(root);
-    const result = await generateSequenceDiagrams(projectFixture(root), "mock");
+    const project = await generateCommittedProject(root);
+    const result = await generateSequenceDiagrams(project, "mock");
 
     expect(result.outcome).toBe("generated");
     if (result.outcome !== "generated") throw new Error(result.error.message);
@@ -544,7 +553,8 @@ describe("sequence-diagram.service", () => {
 
   it("writes sequence diagram bundles as v2 artifacts", async () => {
     const root = await createFixtureFiles();
-    const bundle = existingBundle(root);
+    const canvas = await writeEmptyProtocolFixture(root, "scan-test");
+    const bundle = { ...existingBundle(root), generation: canvas.generation };
 
     await writeSequenceDiagramBundle(root, bundle, undefined);
 
@@ -555,9 +565,12 @@ describe("sequence-diagram.service", () => {
   it("reads a v2 sequence bundle without compatibility rewriting", async () => {
     const root = await createFixtureFiles();
     await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
+    const canvas = await readProjectProtocolCanvas(root);
+    if (!canvas?.generation) throw new Error("Expected a committed generation.");
     const storedBundle = {
       ...existingBundle(root),
-      source: "agent" as const
+      source: "agent" as const,
+      generation: canvas.generation
     };
     await writeFile(join(root, FLOWWEAVE_DIR, "sequence-diagrams.json"), `${JSON.stringify(storedBundle, null, 2)}\n`, "utf8");
 
@@ -566,10 +579,40 @@ describe("sequence-diagram.service", () => {
     expect(bundle).toEqual(storedBundle);
   });
 
+  it("rejects a stale v2 sequence bundle without changing its bytes", async () => {
+    const root = await createFixtureFiles();
+    const artifactPath = join(root, FLOWWEAVE_DIR, "sequence-diagrams.json");
+    const stale = {
+      ...existingBundle(root),
+      generation: { requestId: "previous-generation", inputFingerprint: "previous-input" }
+    };
+    const original = `${JSON.stringify(stale, null, 2)}\n`;
+    await writeFile(artifactPath, original, "utf8");
+
+    await expect(readSequenceDiagrams(root)).rejects.toMatchObject({ name: "ArtifactGenerationMismatchError" });
+    await expect(readFile(artifactPath, "utf8")).resolves.toBe(original);
+  });
+
+  it("preserves stale v2 sequence bytes and rejects regeneration rather than overwriting them", async () => {
+    const root = await createFixtureFiles();
+    const originalCanvas = await readProjectProtocolCanvas(root);
+    if (!originalCanvas?.generation) throw new Error("Expected an initial committed generation.");
+    const artifactPath = join(root, FLOWWEAVE_DIR, "sequence-diagrams.json");
+    const stale = { ...existingBundle(root), generation: originalCanvas.generation };
+    const original = `${JSON.stringify(stale, null, 2)}\n`;
+    await writeFile(artifactPath, original, "utf8");
+    await writeFile(join(root, "src/service/order.service.ts"), "export class OrderService { reserve() { return true; } }\n", "utf8");
+    const project = await generateCommittedProject(root);
+
+    await expect(generateSequenceDiagrams(project, "mock")).rejects.toMatchObject({ name: "ArtifactGenerationMismatchError" });
+    await expect(readSequenceDiagrams(root)).rejects.toMatchObject({ name: "ArtifactGenerationMismatchError" });
+    await expect(readFile(artifactPath, "utf8")).resolves.toBe(original);
+  });
+
   it("revises the current diagram with the selected agent", async () => {
     const root = await createFixtureFiles();
     await addInventoryBoundary(root);
-    const project = projectFixture(root);
+    const project = await generateCommittedProject(root);
     const generated = await generateSequenceDiagrams(project, "mock");
     if (generated.outcome !== "generated") throw new Error(generated.error.message);
     const revised = await reviseSequenceDiagram(project, "mock", "split payment into authorize and capture");
@@ -590,18 +633,7 @@ async function createFixtureFiles() {
   await mkdir(join(root, "src/service"), { recursive: true });
   await writeFile(join(root, "src/api/order.controller.ts"), 'import { OrderService } from "../service/order.service";\nexport class OrderController { createOrder(dto: CreateOrderDto) { return new OrderService().createOrder(dto); } }\n', "utf8");
   await writeFile(join(root, "src/service/order.service.ts"), "export class OrderService { createOrder(dto: unknown) { return { id: 'order-1', dto }; } }\n", "utf8");
-  await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-  const project: CodeflowProject = {
-    version: 1,
-    projectName: "sequence-fixture",
-    rootPath: root,
-    generatedAt: new Date().toISOString(),
-    scanFingerprint: "scan-test",
-    git: { isRepo: false },
-    summary: { totalFiles: 2, totalFolders: 3, languages: { TypeScript: 2 } },
-    files: []
-  };
-  await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), `${JSON.stringify(project, null, 2)}\n`, "utf8");
+  await generateCommittedProject(root);
   return root;
 }
 
@@ -650,6 +682,12 @@ function projectFixture(rootPath: string): CodeflowProject {
       }
     ]
   };
+}
+
+async function generateCommittedProject(rootPath: string): Promise<CodeflowProject> {
+  const result = await generateProject(rootPath, {});
+  if (result.status !== "committed") throw new Error("Expected a committed static generation.");
+  return result.project;
 }
 
 function diagramJson(messages: unknown[]) {

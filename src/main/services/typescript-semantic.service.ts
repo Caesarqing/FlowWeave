@@ -1,10 +1,11 @@
 import type { SourceSnapshot } from "./source-snapshot.service";
 import { createHash } from "node:crypto";
 import { builtinModules, createRequire } from "node:module";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import type * as TypeScript from "typescript";
 import type { PackageExport, ProjectAnalysisContext, SemanticDiagnostic, SemanticFile, SemanticImportUsage, SemanticOperationFact, SemanticRelation, SemanticTarget, SourceRange, StructureSymbol, WorkspacePackage } from "../../types";
 import { sourceOperation } from "./typescript-source-operations";
+import { isTypeScriptProjectConfiguration, isUnknownCompilerOption } from "./project-analysis-context.service";
 
 const require = createRequire(import.meta.url);
 type TypeScriptApi = typeof TypeScript;
@@ -62,13 +63,13 @@ export function analyzeTypeScriptProject(
   const referenced = referencedConfigurations(ts, configuration.projectReferences, new Set());
   const assigned = new Set(referenced.flatMap((item) => item.fileNames.map((path) => resolve(path))));
   const groups = [...referenced.map((item) => ({ configuration: item, paths: sourcePaths.filter((path) => item.fileNames.some((file) => resolve(file) === path)) })), { configuration, paths: sourcePaths.filter((path) => !assigned.has(path)) }].filter((item) => item.paths.length);
-  const results = groups.map((group) => analyzeTypeScriptSources(ts, workspaceRoot, configurationRoot, group.paths, context, group.configuration));
+  const results = groups.map((group) => analyzeTypeScriptSources(ts, workspaceRoot, configurationRoot, group.paths, context, group.configuration, snapshot));
   const symbolsByFile = new Map<string, StructureSymbol[]>();
   for (const result of results) for (const [path, symbols] of result.symbolsByFile) symbolsByFile.set(path, [...new Map([...(symbolsByFile.get(path) ?? []), ...symbols].map((symbol) => [symbol.id, symbol])).values()]);
   return { relations: [...new Map(results.flatMap((result) => result.relations).map((item) => [item.id, item])).values()], symbolsByFile, diagnostics: [...new Map(results.flatMap((result) => result.diagnostics).map((item) => [JSON.stringify(item), item])).values()], operations: [...new Map(results.flatMap((result) => result.operations).map((item) => [JSON.stringify(item), item])).values()] };
 }
 
-function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, configurationRoot: string, sourcePaths: string[], context: ProjectAnalysisContext, configuration: Configuration): TypeScriptSemanticResult {
+function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, configurationRoot: string, sourcePaths: string[], context: ProjectAnalysisContext, configuration: Configuration, snapshot?: SourceSnapshot): TypeScriptSemanticResult {
   const options = configuration.options;
   const scannedPaths = new Set(context.scopes.flatMap((scope) => scope.paths));
   sourcePaths.forEach((path) => { const scoped = projectPath(workspaceRoot, path); if (scoped) scannedPaths.add(scoped); });
@@ -76,9 +77,16 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
   const host = ts.createCompilerHost(options);
   const libraryPath = host.getDefaultLibFileName(options);
   if (!options.noLib && !host.fileExists(libraryPath)) throw new TypeScriptRuntimeAssetError(libraryPath);
-  host.resolveModuleNameLiterals = (literals, containingFile, redirectedReference, compilerOptions, sourceFile) => literals.map((literal) => ({
-    resolvedModule: resolveModule(ts, workspaceRoot, context, literal.text, containingFile, compilerOptions, ts.getModeForUsageLocation(sourceFile, literal, compilerOptions), redirectedReference).resolvedModule
-  }));
+  host.resolveModuleNameLiterals = (literals, containingFile, redirectedReference, compilerOptions, sourceFile) => literals.map((literal) => {
+    const resolvedModule = resolveModule(ts, workspaceRoot, context, literal.text, containingFile, compilerOptions,
+      ts.getModeForUsageLocation(sourceFile, literal, compilerOptions), redirectedReference).resolvedModule;
+    if (!resolvedModule) return { resolvedModule: undefined };
+    if (!scannedPaths.has(projectPath(workspaceRoot, resolvedModule.resolvedFileName) ?? "")) {
+      snapshot?.trackFile(resolvedModule.resolvedFileName);
+      return { resolvedModule: undefined };
+    }
+    return { resolvedModule };
+  });
   const requireRoots = sourcePaths.flatMap((path) => commonJsRoots(ts, workspaceRoot, context, path, options));
   const program = ts.createProgram({ rootNames: [...new Set([...sourcePaths, ...requireRoots])], options, host, projectReferences: configuration.projectReferences });
   const checker = program.getTypeChecker();
@@ -109,7 +117,7 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
       importTargets.set(node.text, targetRef);
       const item = relation("import", currentPath, targetRef, node.text, rangeOf(sourceFile, node), scopeId, usage);
       relations.push(item);
-      if (targetRef.kind === "unresolved") diagnostics.push({ code: "unresolved-import", severity: "warning", message: targetRef.reason, filePath: currentPath, range: item.sourceRange, relationId: item.id, candidates: targetRef.candidates });
+      if (targetRef.kind === "unresolved") diagnostics.push({ code: "unresolved-import", severity: "warning", stage: "binding", message: targetRef.reason, filePath: currentPath, range: item.sourceRange, relationId: item.id, candidates: targetRef.candidates });
     }
     function addReference(kind: "call" | "inherit" | "render", node: TypeScript.Node, expression: TypeScript.Node, usage: SemanticImportUsage | undefined): void {
       const typeOnlyRuntimeReference = referenceIsTypeOnly(ts, checker, expression) && (kind !== "inherit" || ts.isHeritageClause(node.parent) && ts.isClassLike(node.parent.parent));
@@ -142,7 +150,7 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
       const reason = typeOnlyRuntimeReference ? `${kind} ${expression.getText(sourceFile)} uses a type-only import, which has no runtime binding` : declarationOnly ? `${kind} ${expression.getText(sourceFile)} resolves only to a declaration in ${declarationPath}; no implementation is available` : `Cannot bind ${kind} ${expression.getText(sourceFile)} to a scanned implementation`;
       const unresolved = relation(kind, currentPath, { kind: "unresolved", reason, candidates: [] }, expression.getText(sourceFile), rangeOf(sourceFile, node), scopeId, usage);
       relations.push(unresolved);
-      diagnostics.push({ code: declarationOnly ? "declaration-only-call" : `unresolved-${kind}`, severity: "warning", message: reason, filePath: currentPath, range: unresolved.sourceRange, relationId: unresolved.id, candidates: [] });
+      diagnostics.push({ code: declarationOnly ? "declaration-only-call" : `unresolved-${kind}`, severity: "warning", stage: "binding", message: reason, filePath: currentPath, range: unresolved.sourceRange, relationId: unresolved.id, candidates: [] });
     }
     function visit(node: TypeScript.Node): void {
       const symbol = typedSymbol(ts, checker, sourceFile, currentPath, scopeId, node);
@@ -157,7 +165,9 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
         moduleRelation(node.moduleSpecifier, node.isTypeOnly ? "type" : "value", ts.getModeForUsageLocation(sourceFile, node.moduleSpecifier, options));
       }
       if (ts.isCallExpression(node)) {
-        const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+        const deferredImport = ts.isMetaProperty(node.expression) &&
+          node.expression.keywordToken === ts.SyntaxKind.ImportKeyword && node.expression.name.text === "defer";
+        const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword || deferredImport;
         const commonJs = ts.isIdentifier(node.expression) && node.expression.text === "require" && !hasLocalDeclaration(checker, node.expression);
         if (dynamicImport || commonJs) {
           const argument = node.arguments[0];
@@ -166,7 +176,7 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
             const reason = `Cannot resolve nonliteral ${dynamicImport ? "import" : "require"} target`;
             const unresolved = relation("import", currentPath, { kind: "unresolved", reason, candidates: [] }, argument?.getText(sourceFile) ?? "missing module target", rangeOf(sourceFile, node), scopeId, "value");
             relations.push(unresolved);
-            diagnostics.push({ code: "dynamic-import", severity: "warning", message: reason, filePath: currentPath, range: unresolved.sourceRange, relationId: unresolved.id, candidates: [] });
+            diagnostics.push({ code: "dynamic-import", severity: "warning", stage: "binding", message: reason, filePath: currentPath, range: unresolved.sourceRange, relationId: unresolved.id, candidates: [] });
           }
         } else addReference("call", node, node.expression, "value");
       }
@@ -176,7 +186,7 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
       ts.forEachChild(node, visit);
     }
     visit(sourceFile);
-    for (const diagnostic of program.getSyntacticDiagnostics(sourceFile)) diagnostics.push({ code: `typescript-${diagnostic.code}`, severity: "error", message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"), filePath: currentPath, range: diagnostic.start === undefined ? undefined : rangeOfPositions(sourceFile, diagnostic.start, diagnostic.start + (diagnostic.length ?? 0)) });
+    for (const diagnostic of program.getSyntacticDiagnostics(sourceFile)) diagnostics.push({ code: `typescript-${diagnostic.code}`, severity: "error", stage: "parsing", message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"), filePath: currentPath, range: diagnostic.start === undefined ? undefined : rangeOfPositions(sourceFile, diagnostic.start, diagnostic.start + (diagnostic.length ?? 0)) });
     symbolsByFile.set(currentPath, symbols);
   }
   return { relations, symbolsByFile, diagnostics, operations };
@@ -185,9 +195,11 @@ function analyzeTypeScriptSources(ts: TypeScriptApi, workspaceRoot: string, conf
 function compilerConfiguration(ts: TypeScriptApi, workspaceRoot: string, configurationRoot: string, context: ProjectAnalysisContext): Configuration {
   const rootPath = projectPath(workspaceRoot, configurationRoot) ?? "";
   const scope = context.scopes.find((item) => item.language === "typescript" && (item.rootPath === rootPath || item.rootPath === "." && rootPath === ""));
-  const listedConfigs = scope?.configurationPaths.filter((path) => /(^|\/)(tsconfig|jsconfig)(?:\.[^/]+)?\.json$/.test(path)) ?? [];
+  const listedConfigs = scope?.configurationPaths.filter((path) => isTypeScriptProjectConfiguration(path) &&
+    posix.dirname(path) === (rootPath || ".")) ?? [];
   const listedConfig = listedConfigs.find((path) => /(^|\/)(tsconfig|jsconfig)\.json$/.test(path)) ?? listedConfigs[0];
-  const configPath = listedConfig ? join(workspaceRoot, listedConfig) : ["tsconfig.json", "jsconfig.json"].map((fileName) => join(configurationRoot, fileName)).find((path) => ts.sys.fileExists(path));
+  const configPath = listedConfig ? join(workspaceRoot, listedConfig) : ["tsconfig.json", "jsconfig.json"].map((fileName) => join(configurationRoot, fileName))
+    .find((path) => isTypeScriptProjectConfiguration(projectPath(workspaceRoot, path) ?? "") && ts.sys.fileExists(path));
   if (!configPath) return { options: { allowJs: true, checkJs: false, jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.NodeJs, target: ts.ScriptTarget.ES2022, noEmit: true }, projectReferences: undefined, fileNames: [] };
   return readCompilerConfiguration(ts, configPath);
 }
@@ -197,7 +209,7 @@ function readCompilerConfiguration(ts: TypeScriptApi, configPath: string): Confi
   if (config.error) throw new SyntaxError(`TypeScript configuration ${configPath}: ${ts.flattenDiagnosticMessageText(config.error.messageText, "\n")}`);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(configPath, ".."), undefined, configPath);
   // The scanner supplies root files explicitly; a valid configuration need not include them.
-  const errors = parsed.errors.filter((error) => error.code !== 18003);
+  const errors = parsed.errors.filter((error) => error.code !== 18003 && !isUnknownCompilerOption(error));
   if (errors.length) throw new SyntaxError(`TypeScript configuration ${configPath}: ${errors.map((error) => ts.flattenDiagnosticMessageText(error.messageText, "\n")).join("; ")}`);
   return { options: { ...parsed.options, allowJs: true, noEmit: true }, projectReferences: parsed.projectReferences, fileNames: parsed.fileNames };
 }
@@ -272,7 +284,7 @@ function sourceExport(ts: TypeScriptApi, workspaceRoot: string, packageInfo: Wor
   const config = ts.readConfigFile(configurationPath, ts.sys.readFile);
   if (config.error) throw new SyntaxError(`TypeScript configuration ${configurationPath}: ${ts.flattenDiagnosticMessageText(config.error.messageText, "\n")}`);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(configurationPath, ".."), undefined, configurationPath);
-  const errors = parsed.errors.filter((error) => error.code !== 18003);
+  const errors = parsed.errors.filter((error) => error.code !== 18003 && !isUnknownCompilerOption(error));
   if (errors.length) throw new SyntaxError(`TypeScript configuration ${configurationPath}: ${errors.map((error) => ts.flattenDiagnosticMessageText(error.messageText, "\n")).join("; ")}`);
   const { rootDir, outDir, jsx, declaration, composite, emitDeclarationOnly, declarationDir } = parsed.options;
   if (!rootDir || !outDir) return [];
@@ -423,7 +435,7 @@ function declarationId(filePath: string, node: TypeScript.Node): string {
 
 function relation(kind: SemanticRelation["kind"], sourceFile: string, targetRef: SemanticTarget, symbol: string, sourceRange: SourceRange, scopeId: string, usage: SemanticImportUsage | undefined): SemanticRelation {
   const target = targetRef.kind === "file" ? targetRef.filePath : targetRef.kind === "external" ? `external:${targetRef.moduleName}` : targetRef.kind === "resource" ? targetRef.resourceId : symbol;
-  return { id: createHash("sha256").update(`${kind}\0${sourceFile}\0${sourceRange.start.line}:${sourceRange.start.column}\0${sourceRange.end.line}:${sourceRange.end.column}\0${target}\0${symbol}`).digest("hex").slice(0, 24), kind, source: sourceFile, target, sourceFile, targetFile: targetRef.kind === "file" ? targetRef.filePath : undefined, symbol, detail: `${sourceFile} ${kind}s ${symbol} from ${target}`, confidence: "confirmed", sourceRange, targetRef, scopeId, bindingBasis: "typescript-checker", importUsage: usage };
+  return { id: createHash("sha256").update(`${kind}\0${sourceFile}\0${sourceRange.start.line}:${sourceRange.start.column}\0${sourceRange.end.line}:${sourceRange.end.column}\0${target}\0${symbol}`).digest("hex").slice(0, 24), kind, source: sourceFile, target, sourceFile, targetFile: targetRef.kind === "file" ? targetRef.filePath : undefined, symbol, detail: `${sourceFile} ${kind}s ${symbol} from ${target}`, confidence: targetRef.kind === "unresolved" ? "inferred" : "confirmed", sourceRange, targetRef, scopeId, bindingBasis: "typescript-checker", importUsage: usage };
 }
 
 function typedSymbol(ts: TypeScriptApi, checker: TypeScript.TypeChecker, sourceFile: TypeScript.SourceFile, filePath: string, scopeId: string, node: TypeScript.Node): StructureSymbol | undefined {

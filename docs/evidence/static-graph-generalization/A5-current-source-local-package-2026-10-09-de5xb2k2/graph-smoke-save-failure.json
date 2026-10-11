@@ -1,0 +1,39 @@
+{
+  "status": "completed",
+  "fixture": "save-failure",
+  "onboardingVisible": false,
+  "nodes": 2,
+  "nodeIds": [
+    "module-75213745624312fd",
+    "module-84d8252a09142913"
+  ],
+  "viewportNodeIds": [
+    "module-75213745624312fd",
+    "module-84d8252a09142913"
+  ],
+  "groups": 0,
+  "groupCards": [],
+  "edges": [
+    {
+      "id": "module-75213745624312fd-module-84d8252a09142913-calls-confirmed",
+      "label": "Edge from module-75213745624312fd to module-84d8252a09142913",
+      "path": "M307 130.8203125L327 130.8203125L363 130.8203125L363 130.8203125L399 130.8203125L419 130.8203125",
+      "markerEnd": "url('#1__color=#42f5a7&type=arrowclosed')"
+    }
+  ],
+  "edgePaths": 1,
+  "layoutPending": false,
+  "emptyText": "",
+  "viewMode": "execution",
+  "projectStatus": "Read 2 files and generated 2 module nodes.",
+  "workspaceVisible": true,
+  "staleBanner": false,
+  "modulePanelVisible": false,
+  "workspaceVisibleMs": 3446,
+  "graphRenderedMs": 3696,
+  "nodeClickableMs": 3831,
+  "detailPanelMs": 103,
+  "failedSavePreservedEdit": true,
+  "viewportSamples": [],
+  "mainRssMiB": 257
+}

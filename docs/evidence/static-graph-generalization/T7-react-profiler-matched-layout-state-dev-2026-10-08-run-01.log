@@ -1,0 +1,3 @@
+FlowWeave persisted layout-state smoke test passed.
+Graph smoke report retained without replacing existing evidence: /Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-01.json.
+Persisted Canvas layout-state snapshots passed.

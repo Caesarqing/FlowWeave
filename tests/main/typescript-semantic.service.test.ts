@@ -77,6 +77,50 @@ describe("typescript semantic analysis", () => {
     expect(result.operations.filter((operation) => operation.kind === "http")).toEqual([expect.objectContaining({ method: "POST", target: "https://fixture.test/users", origin: "https://fixture.test" })]);
   });
 
+  it("keeps malformed nested fixture configs as data while the valid package config owns their source", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-ts-fixture-config-"));
+    const packageRoot = "packages/typescript-estree";
+    const fixtureRoot = `${packageRoot}/tests/fixtures/semanticInfo/badTSConfig`;
+    await mkdir(join(root, packageRoot, "src"), { recursive: true });
+    await mkdir(join(root, fixtureRoot), { recursive: true });
+    await writeFile(join(root, packageRoot, "package.json"), JSON.stringify({ name: "@fixture/typescript-estree" }));
+    await writeFile(join(root, packageRoot, "tsconfig.build.json"), JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@service": ["src/service.ts"] } }, include: ["src"]
+    }));
+    await writeFile(join(root, packageRoot, "src/service.ts"), "export function load() { return 1; }\n");
+    await writeFile(join(root, packageRoot, "src/app.ts"), "import { load } from '@service'; export function run() { return load(); }\n");
+    const malformedConfig = JSON.stringify({ compileOnSave: "hello" });
+    await writeFile(join(root, fixtureRoot, "tsconfig.json"), malformedConfig);
+    await writeFile(join(root, fixtureRoot, "fixture.ts"), "export const fixture = 1;\n");
+
+    const { index } = await buildSemanticIndex(await scanProject(root));
+
+    expect(index.relations).toContainEqual(expect.objectContaining({
+      kind: "call", sourceFile: `${packageRoot}/src/app.ts`, targetFile: `${packageRoot}/src/service.ts`, confidence: "confirmed"
+    }));
+    expect(index.files).toContainEqual(expect.objectContaining({ path: `${fixtureRoot}/fixture.ts`, status: "parsed" }));
+    expect(index.scopes?.find((scope) => scope.paths.includes(`${fixtureRoot}/fixture.ts`))).toMatchObject({
+      rootPath: packageRoot, configurationPaths: expect.arrayContaining([`${packageRoot}/tsconfig.build.json`])
+    });
+    expect(index.diagnostics).toContainEqual(expect.objectContaining({
+      code: "typescript-fixture-configuration", filePath: `${fixtureRoot}/tsconfig.json`, severity: "warning"
+    }));
+    expect(await readFile(join(root, fixtureRoot, "tsconfig.json"), "utf8")).toBe(malformedConfig);
+    await writeFile(join(root, fixtureRoot, "package.json"), JSON.stringify({ name: "@fixture/bad-config-data" }));
+    const withFixturePackage = (await buildSemanticIndex(await scanProject(root))).index;
+    expect(withFixturePackage.files).toContainEqual(expect.objectContaining({ path: `${fixtureRoot}/fixture.ts`, status: "parsed" }));
+    expect(withFixturePackage.relations).toContainEqual(expect.objectContaining({
+      kind: "call", sourceFile: `${packageRoot}/src/app.ts`, targetFile: `${packageRoot}/src/service.ts`, confidence: "confirmed"
+    }));
+    await writeFile(join(root, packageRoot, "tsconfig.build.json"), JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@service": ["src/service.ts"] } }, include: ["src"],
+      references: [{ path: "./tests/fixtures/semanticInfo/badTSConfig" }]
+    }));
+    await expect(buildSemanticIndex(await scanProject(root))).rejects.toThrow(/TypeScript configuration .*badTSConfig.*compileOnSave/);
+    await writeFile(join(root, packageRoot, "tsconfig.build.json"), malformedConfig);
+    await expect(buildSemanticIndex(await scanProject(root))).rejects.toThrow(/compileOnSave/);
+  });
+
   it("uses inherited alternate compiler configurations and import versus require export conditions", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-ts-config-conditions-"));
     await mkdir(join(root, "src"));
@@ -106,6 +150,50 @@ describe("typescript semantic analysis", () => {
     const result = analyzeTypeScriptProject(root, root, [scannedFile("app.ts")], context);
     expect(result.relations.filter((relation) => relation.kind === "call")).toEqual([expect.objectContaining({ targetRef: expect.objectContaining({ kind: "unresolved" }) })]);
     expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "declaration-only-call" }));
+  });
+
+  it("marks unresolved TypeScript imports and calls as binding diagnostics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-ts-binding-diagnostic-stage-"));
+    await mkdir(join(root, "pkg"));
+    await writeFile(join(root, "pkg/index.d.ts"), "export declare function load(): void;\n");
+    await writeFile(join(root, "app.ts"), "import { load } from '@fixture/decl';\nimport { absent } from './absent';\nload();\nabsent();\nfunction dynamic(name: string) { return import(name); }\n");
+    const context = { ...analysisContext(["app.ts", "pkg/index.d.ts"]), packages: [{ name: "@fixture/decl", rootPath: "pkg", manifestPath: "pkg/package.json", exports: { ".": { types: "./index.d.ts" } }, dependencies: [] }] };
+
+    const result = analyzeTypeScriptProject(root, root, [scannedFile("app.ts"), scannedFile("pkg/index.d.ts")], context);
+
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "unresolved-import", stage: "binding" }),
+      expect.objectContaining({ code: "declaration-only-call", stage: "binding" }),
+      expect.objectContaining({ code: "unresolved-call", stage: "binding" }),
+      expect.objectContaining({ code: "dynamic-import", stage: "binding" })
+    ]));
+  });
+
+  it("records deferred import expressions as imports without querying their call target type", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-ts-deferred-import-"));
+    await writeFile(join(root, "app.ts"), 'const deferred = import.defer("./service");\n');
+    await writeFile(join(root, "service.ts"), "export const ready = true;\n");
+
+    const result = analyzeTypeScriptProject(root, root, [scannedFile("app.ts")], analysisContext(["app.ts", "service.ts"]));
+
+    expect(result.relations).toContainEqual(expect.objectContaining({
+      kind: "import", symbol: "./service", targetFile: "service.ts", targetRef: expect.objectContaining({ kind: "file", filePath: "service.ts" })
+    }));
+    expect(result.relations.some((relation) => relation.kind === "call" && relation.sourceFile === "app.ts")).toBe(false);
+  });
+
+  it("marks unresolved calls as inferred while keeping proven project calls confirmed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-ts-call-confidence-"));
+    await writeFile(join(root, "service.ts"), "export function proven() { return true; }\n");
+    await writeFile(join(root, "app.ts"), "import { proven } from './service';\nload();\nghost();\nproven();\n");
+    const result = analyzeTypeScriptProject(root, root, [scannedFile("app.ts"), scannedFile("service.ts")], analysisContext(["app.ts", "service.ts"]));
+    const calls = result.relations.filter((relation) => relation.kind === "call");
+
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ symbol: "load", confidence: "inferred", targetRef: expect.objectContaining({ kind: "unresolved" }) }),
+      expect.objectContaining({ symbol: "ghost", confidence: "inferred", targetRef: expect.objectContaining({ kind: "unresolved" }) }),
+      expect.objectContaining({ symbol: "proven", confidence: "confirmed", targetRef: expect.objectContaining({ kind: "file", filePath: "service.ts" }) })
+    ]));
   });
 
   it("links callable references to the same symbol IDs as arrow and overload implementations", async () => {
@@ -172,7 +260,16 @@ describe("typescript semantic analysis", () => {
     const scope = { ...analysisContext(["worker/app.ts", "worker/service.ts"]).scopes[0], configurationPaths: ["tsconfig.base.json", "tsconfig.json", "tsconfig.worker.json"] };
     const context = { ...analysisContext(scope.paths), scopes: [scope] };
     const result = analyzeTypeScriptProject(root, root, scope.paths.map(scannedFile), context);
-    expect(result.relations).toContainEqual(expect.objectContaining({ kind: "call", symbol: "service", targetFile: "worker/service.ts" }));
+    expect(result.relations.find((relation) => relation.kind === "call" && relation.symbol === "service")).toMatchObject({
+      confidence: "confirmed",
+      targetRef: {
+        kind: "file",
+        filePath: "worker/service.ts",
+        symbolId: expect.any(String),
+        declarationRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 29 } }
+      },
+      sourceRange: { start: { line: 2, column: 1 }, end: { line: 2, column: 10 } }
+    });
   });
 
   it("does not guess HTTP methods or APIs from mutable aliases and local package names", async () => {
@@ -322,6 +419,11 @@ export const App = () => <User id="1" />;
     expect(index.relations.filter((relation) => relation.kind === "import" && relation.sourceFile === "src/App.tsx")).toEqual([
       expect.objectContaining({ targetFile: "src/components/User.tsx", confidence: "confirmed" })
     ]);
+    expect(index.relations.find((relation) => relation.kind === "call" && relation.sourceFile === "src/components/User.tsx" && relation.symbol === "userService.load")).toMatchObject({
+      confidence: "confirmed",
+      targetRef: { kind: "file", filePath: "src/service.ts", symbolId: expect.any(String) },
+      sourceRange: { start: { line: 4, column: 3 }, end: { line: 4, column: 29 } }
+    });
   });
 
   it("invalidates linked relations when tsconfig aliases change", async () => {
@@ -416,14 +518,21 @@ export const App = () => <User id="1" />;
       expect.objectContaining({
         kind: "import",
         sourceFile: "apps/web/src/app.ts",
-        targetFile: "packages/shared/src/index.ts"
+        targetFile: "packages/shared/src/index.ts",
+        confidence: "confirmed",
+        targetRef: { kind: "file", filePath: "packages/shared/src/index.ts" },
+        sourceRange: { start: { line: 1, column: 46 }, end: { line: 1, column: 60 } }
       }),
       expect.objectContaining({
         kind: "import",
         sourceFile: "packages/shared/src/index.ts",
-        targetFile: "packages/shared/src/value.ts"
+        targetFile: "packages/shared/src/value.ts",
+        confidence: "confirmed",
+        targetRef: { kind: "file", filePath: "packages/shared/src/value.ts" },
+        sourceRange: { start: { line: 1, column: 23 }, end: { line: 1, column: 32 } }
       })
     ]));
+    expect(index.relations.filter((relation) => relation.kind === "call" && relation.sourceFile === "apps/web/src/app.ts")).toHaveLength(0);
   });
 });
 

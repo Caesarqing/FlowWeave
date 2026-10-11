@@ -1,31 +1,54 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { useCanvasStore } from "../../src/stores/canvas.store";
+import { useProjectStore } from "../../src/stores/project.store";
 import type { CanvasLayoutState, GraphEdge, GraphNode } from "../../src/types";
 
 describe("canvas store layout modes", () => {
   afterEach(() => {
     useCanvasStore.getState().setGraph([], [], [], manualLayout);
+    useProjectStore.setState({ projectId: "", isProjectLoading: false, isCanvasTransitioning: false, artifactStatuses: undefined });
+  });
+
+  it("rejects a module edit while the displayed generation is being analyzed", () => {
+    useCanvasStore.getState().setGraph([moduleNode], [], []);
+    useProjectStore.setState({ projectId: "project", isProjectLoading: true,
+      artifactStatuses: { project: "current", canvas: "current", task: "missing", context: "missing", architecture: "current", sequences: "missing" } });
+
+    expect(() => useCanvasStore.getState().updateModule("module", (node) => ({ ...node, title: "Lost" })))
+      .toThrow("not editable");
+    expect(useCanvasStore.getState().modules[0].title).toBe("Module");
+  });
+
+  it("rejects an edit during an asynchronous project-tab transition", () => {
+    useCanvasStore.getState().setGraph([moduleNode], [], []);
+    useProjectStore.setState({ projectId: "project", isProjectLoading: false, isCanvasTransitioning: true,
+      artifactStatuses: { project: "current", canvas: "current", task: "missing", context: "missing", architecture: "current", sequences: "missing" } });
+
+    expect(() => useCanvasStore.getState().updateModule("module", (node) => ({ ...node, title: "Lost" })))
+      .toThrow("not editable");
+    expect(useCanvasStore.getState().modules[0].title).toBe("Module");
   });
 
   it("chooses the initial graph view from the available relationships", () => {
     useCanvasStore.getState().setGraph([moduleNode], [], []);
-    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("architecture");
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("execution");
+    expect(useCanvasStore.getState().selectedNodeId).toBe("");
 
     useCanvasStore.getState().setGraph([moduleNode, { ...moduleNode, id: "next" }], [
       { id: "dependency", source: "module", target: "next", relation: "depends_on" }
     ], []);
-    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("architecture");
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("execution");
 
     useCanvasStore.getState().setGraph([moduleNode, { ...moduleNode, id: "next" }], [
       { id: "runtime", source: "module", target: "next", relation: "calls" }
     ], []);
 
-    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("architecture");
-    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("architecture");
+    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("execution");
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("execution");
   });
 
   it("persists the graph view separately from manual positioning", () => {
-    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, viewMode: "architecture" });
+    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, viewMode: "dependency" });
 
     useCanvasStore.getState().setViewMode("dependency");
 
@@ -35,46 +58,82 @@ describe("canvas store layout modes", () => {
 
   it("records the topology fingerprint that produced an automatic layout", () => {
     useCanvasStore.getState().setGraph([moduleNode], [], []);
+    const handleLayout = {
+      positions: { module: { x: 80, y: 120 } },
+      handles: {},
+      topologyFingerprint: "handle-topology-a"
+    };
 
-    useCanvasStore.getState().applyAutoLayout("execution", { module: { x: 80, y: 120 } }, "topology-a");
+    useCanvasStore.getState().applyAutoLayout("execution", { module: { x: 80, y: 120 } }, "topology-a", handleLayout);
 
     expect(useCanvasStore.getState().canvasLayout.autoLayoutTopologyFingerprints).toEqual({ execution: "topology-a" });
+    expect(useCanvasStore.getState().canvasLayout.autoConnectionHandles?.execution).toEqual(handleLayout);
   });
 
-  it("applies reviewed module wording without replacing the current execution positions", () => {
-    useCanvasStore.getState().setGraph([moduleNode], [], []);
-    useCanvasStore.getState().applyAutoLayout("execution", { module: { x: 80, y: 120 } }, "topology-a");
+  it("retains ELK handle geometry alongside the positions that produced it", () => {
+    const autoConnectionHandles = {
+      execution: {
+        positions: { module: { x: 20, y: 40 } },
+        handles: { module: {
+          source: [{ id: "module-source-edge", edgeId: "edge", position: "right" as const, offsetPercent: 25, count: 1 }],
+          target: []
+        } }
+      }
+    };
+    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, autoConnectionHandles });
 
-    const adopted = useCanvasStore.getState().adoptReviewedGraph([
-      { ...moduleNode, title: "Reviewed module", description: "Reviewed responsibility.", x: 720, y: 300 }
-    ], [], []);
+    expect(useCanvasStore.getState().canvasLayout.autoConnectionHandles).toEqual(autoConnectionHandles);
+  });
 
-    expect(adopted).toBe(true);
-    expect(useCanvasStore.getState().modules[0]).toMatchObject({
-      title: "Reviewed module",
-      description: "Reviewed responsibility.",
-      x: 80,
-      y: 120
+  it("keeps the first-view unlinked module group when restoring the generated layout", () => {
+    useCanvasStore.getState().setGraph([moduleNode], [], [], {
+      ...manualLayout,
+      activeMode: "execution",
+      viewMode: "execution",
+      collapsedGroups: ["view:unlinked"]
     });
-    expect(useCanvasStore.getState().nodes[0]?.position).toEqual({ x: 80, y: 120 });
-    expect(useCanvasStore.getState().canvasLayout.autoLayouts.execution).toEqual({ module: { x: 80, y: 120 } });
+    expect(useCanvasStore.getState().canvasLayout.collapsedGroups).toEqual(["view:unlinked"]);
   });
 
-  it("rejects a reviewed graph that changes the static topology", () => {
-    const graphEdge: GraphEdge = { id: "module-next", source: "module", target: "next", relation: "calls" };
-    useCanvasStore.getState().setGraph([moduleNode, { ...moduleNode, id: "next" }], [graphEdge], []);
-
-    const adopted = useCanvasStore.getState().adoptReviewedGraph([moduleNode], [], []);
-
-    expect(adopted).toBe(false);
-    expect(useCanvasStore.getState().modules.map((node) => node.id)).toEqual(["module", "next"]);
-    expect(useCanvasStore.getState().edges).toHaveLength(1);
+  it("keeps positions for hidden resource nodes when laying out the visible modules", () => {
+    useCanvasStore.getState().setGraph([moduleNode, { ...moduleNode, id: "resource" }], [], [], {
+      ...manualLayout,
+      activeMode: "execution",
+      autoLayouts: { execution: { module: { x: 0, y: 0 }, resource: { x: 400, y: 200 } } }
+    });
+    useCanvasStore.getState().applyAutoLayout("execution", { module: { x: 80, y: 120 } }, "visible-topology");
+    expect(useCanvasStore.getState().canvasLayout.autoLayouts.execution).toEqual({
+      module: { x: 80, y: 120 }, resource: { x: 400, y: 200 }
+    });
   });
 
-  it("preserves a previously stored layout mode when restoring a graph", () => {
-    useCanvasStore.getState().setGraph([moduleNode], [], [], { ...manualLayout, activeMode: "technology" });
+  it("maps obsolete layout modes to the functional view when restoring a graph", () => {
+    const oldLayout = {
+      ...manualLayout,
+      activeMode: "technology",
+      viewMode: "architecture",
+      autoLayouts: {
+        execution: { module: { x: 1, y: 2 } },
+        dependency: { module: { x: 3, y: 4 } },
+        architecture: { module: { x: 5, y: 6 } },
+        technology: { module: { x: 7, y: 8 } },
+        domain: { module: { x: 9, y: 10 } }
+      },
+      autoLayoutTopologyFingerprints: {
+        architecture: "old-architecture",
+        technology: "old-technology",
+        domain: "old-domain"
+      }
+    } as unknown as CanvasLayoutState;
+    useCanvasStore.getState().setGraph([moduleNode], [], [], oldLayout);
 
-    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("technology");
+    expect(useCanvasStore.getState().canvasLayout.activeMode).toBe("execution");
+    expect(useCanvasStore.getState().canvasLayout.viewMode).toBe("execution");
+    expect(useCanvasStore.getState().canvasLayout.autoLayouts).toEqual({
+      execution: { module: { x: 1, y: 2 } },
+      dependency: { module: { x: 3, y: 4 } }
+    });
+    expect(useCanvasStore.getState().canvasLayout.autoLayoutTopologyFingerprints).toBeUndefined();
   });
 
   it("retains orphaned manual edges when restoring a v6 Canvas", () => {
@@ -93,9 +152,24 @@ describe("canvas store layout modes", () => {
 
   it("retains the committed generation identity when restoring a Canvas", () => {
     const generation = { requestId: "request-a", inputFingerprint: "fingerprint-a" };
-    useCanvasStore.getState().setGraph([moduleNode], [], [], manualLayout, [], { generation });
+    const generatedAt = "2026-10-05T02:00:00.000Z";
+    useCanvasStore.getState().setGraph([moduleNode], [], [], manualLayout, [], { generation, generatedAt });
 
     expect(useCanvasStore.getState().generation).toEqual(generation);
+    expect(useCanvasStore.getState().generatedAt).toBe(generatedAt);
+  });
+
+  it("keeps unresolved legacy migration items available after restoring a project", () => {
+    const migrationPendingItems = [{
+      kind: "node" as const,
+      sourceVersion: 4 as const,
+      sourceId: "legacy-note",
+      raw: { id: "legacy-note", title: "Keep this edit" },
+      reason: "Legacy origin cannot be determined."
+    }];
+    useCanvasStore.getState().setGraph([moduleNode], [], [], manualLayout, [], { migrationPendingItems });
+
+    expect(useCanvasStore.getState().migrationPendingItems).toEqual(migrationPendingItems);
   });
 });
 

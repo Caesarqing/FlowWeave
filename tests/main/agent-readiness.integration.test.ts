@@ -1,11 +1,12 @@
-import { mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { AgentHealthCheckResult, CodeflowProject, RuntimeAgentId, ToolAdapter } from "../../src/types";
+import type { AgentHealthCheckResult, RuntimeAgentId, ToolAdapter } from "../../src/types";
 import { checkAgentReadiness } from "../../src/main/services/agent-readiness.service";
 import { installBuiltInAgentPlugin } from "../../src/main/services/agent-plugin.service";
 import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
+import { writeEmptyProtocolFixture } from "./protocol.fixture";
 
 const projectPaths: string[] = [];
 
@@ -62,20 +63,7 @@ describe("agent readiness host isolation with project files", () => {
 async function createProject(): Promise<string> {
   const projectPath = await mkdtemp(join(tmpdir(), "flowweave-agent-readiness-integration-"));
   projectPaths.push(projectPath);
-  await mkdir(join(projectPath, ".flowweave", "context"), { recursive: true });
-  await mkdir(join(projectPath, ".flowweave", "tasks"), { recursive: true });
-  const project: CodeflowProject = {
-    version: 1,
-    projectName: "Readiness Fixture",
-    rootPath: projectPath,
-    generatedAt: new Date().toISOString(),
-    git: { isRepo: true, branch: "main" },
-    summary: { totalFiles: 1, totalFolders: 1, languages: { TypeScript: 1 } },
-    files: []
-  };
-  await writeFile(join(projectPath, ".flowweave", "project.json"), `${JSON.stringify(project, null, 2)}\n`, "utf8");
-  await writeFile(join(projectPath, ".flowweave", "context", "file-tree.md"), "# Project File Tree\n\n- src/\n", "utf8");
-  await writeFile(join(projectPath, ".flowweave", "tasks", "main.task.md"), "# Task\n", "utf8");
+  await writeEmptyProtocolFixture(projectPath, "readiness-scan");
   return projectPath;
 }
 

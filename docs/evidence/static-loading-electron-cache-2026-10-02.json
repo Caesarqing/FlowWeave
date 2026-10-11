@@ -1,0 +1,271 @@
+{
+  "recordedAt": "2026-10-02",
+  "machine": "Apple M4, 16 GiB, macOS 26.6.2",
+  "scope": "20 independent packaged Electron launches per condition, isolated copies of coregist-news_v1.0.0 without .flowweave, .venv, or .git for cold; same copies with generated artifacts for hot; onboarding dismissed by smoke probe; OS file cache not cleared",
+  "clock": "starts after project registration, before Electron window creation; excludes directory selection and registration",
+  "caveats": "Single real project; mainRssMiB is one main-process snapshot, not full-app peak; hot launch timings include Electron startup; viewport readability is assessed separately",
+  "cold": [
+    {
+      "workspaceVisibleMs": 1786,
+      "graphRenderedMs": 3795,
+      "nodeClickableMs": 3817,
+      "mainRssMiB": 238
+    },
+    {
+      "workspaceVisibleMs": 1660,
+      "graphRenderedMs": 3669,
+      "nodeClickableMs": 3762,
+      "mainRssMiB": 323
+    },
+    {
+      "workspaceVisibleMs": 1781,
+      "graphRenderedMs": 3789,
+      "nodeClickableMs": 3868,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1818,
+      "graphRenderedMs": 3823,
+      "nodeClickableMs": 3920,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1577,
+      "graphRenderedMs": 3590,
+      "nodeClickableMs": 3670,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1816,
+      "graphRenderedMs": 3821,
+      "nodeClickableMs": 3850,
+      "mainRssMiB": 240
+    },
+    {
+      "workspaceVisibleMs": 1700,
+      "graphRenderedMs": 3709,
+      "nodeClickableMs": 3737,
+      "mainRssMiB": 240
+    },
+    {
+      "workspaceVisibleMs": 1779,
+      "graphRenderedMs": 3785,
+      "nodeClickableMs": 3878,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1753,
+      "graphRenderedMs": 3758,
+      "nodeClickableMs": 3781,
+      "mainRssMiB": 238
+    },
+    {
+      "workspaceVisibleMs": 1745,
+      "graphRenderedMs": 3755,
+      "nodeClickableMs": 3786,
+      "mainRssMiB": 240
+    },
+    {
+      "workspaceVisibleMs": 1628,
+      "graphRenderedMs": 3634,
+      "nodeClickableMs": 3730,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1580,
+      "graphRenderedMs": 3586,
+      "nodeClickableMs": 3619,
+      "mainRssMiB": 240
+    },
+    {
+      "workspaceVisibleMs": 1768,
+      "graphRenderedMs": 3777,
+      "nodeClickableMs": 3857,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1579,
+      "graphRenderedMs": 3589,
+      "nodeClickableMs": 3682,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1777,
+      "graphRenderedMs": 3782,
+      "nodeClickableMs": 3816,
+      "mainRssMiB": 241
+    },
+    {
+      "workspaceVisibleMs": 1714,
+      "graphRenderedMs": 3721,
+      "nodeClickableMs": 3750,
+      "mainRssMiB": 239
+    },
+    {
+      "workspaceVisibleMs": 2874,
+      "graphRenderedMs": 4882,
+      "nodeClickableMs": 4962,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 1592,
+      "graphRenderedMs": 3601,
+      "nodeClickableMs": 3635,
+      "mainRssMiB": 241
+    },
+    {
+      "workspaceVisibleMs": 1734,
+      "graphRenderedMs": 3742,
+      "nodeClickableMs": 3834,
+      "mainRssMiB": 322
+    },
+    {
+      "workspaceVisibleMs": 2871,
+      "graphRenderedMs": 4874,
+      "nodeClickableMs": 4898,
+      "mainRssMiB": 238
+    }
+  ],
+  "hot": [
+    {
+      "workspaceVisibleMs": 1719,
+      "graphRenderedMs": 1719,
+      "nodeClickableMs": 1747,
+      "mainRssMiB": 241,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1779,
+      "graphRenderedMs": 1779,
+      "nodeClickableMs": 1806,
+      "mainRssMiB": 241,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1820,
+      "graphRenderedMs": 1820,
+      "nodeClickableMs": 1853,
+      "mainRssMiB": 241,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1808,
+      "graphRenderedMs": 1808,
+      "nodeClickableMs": 1842,
+      "mainRssMiB": 241,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1644,
+      "graphRenderedMs": 1644,
+      "nodeClickableMs": 1673,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1663,
+      "graphRenderedMs": 1663,
+      "nodeClickableMs": 1689,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1832,
+      "graphRenderedMs": 1832,
+      "nodeClickableMs": 1865,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1886,
+      "graphRenderedMs": 1886,
+      "nodeClickableMs": 1915,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1833,
+      "graphRenderedMs": 1833,
+      "nodeClickableMs": 1859,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1839,
+      "graphRenderedMs": 1839,
+      "nodeClickableMs": 1872,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1846,
+      "graphRenderedMs": 1846,
+      "nodeClickableMs": 1878,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1992,
+      "graphRenderedMs": 1992,
+      "nodeClickableMs": 2025,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1670,
+      "graphRenderedMs": 1670,
+      "nodeClickableMs": 1702,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1659,
+      "graphRenderedMs": 1659,
+      "nodeClickableMs": 1691,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1672,
+      "graphRenderedMs": 1672,
+      "nodeClickableMs": 1699,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1944,
+      "graphRenderedMs": 1944,
+      "nodeClickableMs": 1972,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1669,
+      "graphRenderedMs": 1669,
+      "nodeClickableMs": 1696,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1812,
+      "graphRenderedMs": 1813,
+      "nodeClickableMs": 1845,
+      "mainRssMiB": 239,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1662,
+      "graphRenderedMs": 1662,
+      "nodeClickableMs": 1695,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    },
+    {
+      "workspaceVisibleMs": 1743,
+      "graphRenderedMs": 1743,
+      "nodeClickableMs": 1769,
+      "mainRssMiB": 240,
+      "staleBanner": true
+    }
+  ]
+}

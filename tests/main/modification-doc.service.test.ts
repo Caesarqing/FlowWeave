@@ -1,15 +1,20 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { writeModificationDocs } from "../../src/main/services/modification-doc.service";
+import { acknowledgeModificationChanges, readModificationDelta } from "../../src/main/services/modification-delta.service";
 import type { CodeflowCanvas, GraphNode, SequenceDiagramBundle } from "../../src/types";
+import { writeCanvasProtocolFixture } from "./protocol.fixture";
 
 describe("modification-doc.service", () => {
   it("writes canonical delta docs without repeating baseline Canvas or Sequence artifacts", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-"));
+    const canvas = await writeCanvasProtocolFixture(projectPath, canvasFixture(projectPath));
+    await acknowledgeInitialCanvas(projectPath, canvas);
     const paths = await writeModificationDocs(projectPath, {
-      canvas: canvasFixture(projectPath),
+      canvas,
       sequence: sequenceFixture(projectPath),
       sequenceInstruction: "Split payment into authorize and capture."
     });
@@ -29,11 +34,13 @@ describe("modification-doc.service", () => {
 
   it("writes canvas docs when the optional sequence artifact is unreadable", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-corrupt-sequence-"));
+    const canvas = await writeCanvasProtocolFixture(projectPath, canvasFixture(projectPath));
+    await acknowledgeInitialCanvas(projectPath, canvas);
     await mkdir(join(projectPath, ".flowweave"), { recursive: true });
     await writeFile(join(projectPath, ".flowweave", "sequence-diagrams.json"), "{invalid-json", "utf8");
 
     const paths = await writeModificationDocs(projectPath, {
-      canvas: canvasFixture(projectPath)
+      canvas
     });
     const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
 
@@ -43,20 +50,29 @@ describe("modification-doc.service", () => {
 
   it("preserves an unreadable Canvas and rejects export without acknowledging it", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-corrupt-canvas-"));
-    await mkdir(join(projectPath, ".flowweave", "canvas"), { recursive: true });
-    await writeFile(join(projectPath, ".flowweave", "canvas", "main.canvas.json"), "{invalid-json", "utf8");
+    const canvas = await writeCanvasProtocolFixture(projectPath, canvasFixture(projectPath));
+    const userStatePath = join(projectPath, ".flowweave", "canvas", "user-state.json");
+    const invalidUserState = "{invalid-json";
+    await writeFile(userStatePath, invalidUserState, "utf8");
+    const manifestPath = join(projectPath, ".flowweave", "generation.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.artifacts.canvasUserState = createHash("sha256").update(invalidUserState).digest("hex");
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
 
     await expect(writeModificationDocs(projectPath, {
       sequence: sequenceFixture(projectPath),
       sequenceInstruction: "Keep checkout as one diagram."
-    })).rejects.toThrow("FlowWeave artifact is unreadable and was preserved:");
-    await expect(readFile(join(projectPath, ".flowweave", "canvas", "main.canvas.json"), "utf8")).resolves.toBe("{invalid-json");
+    })).rejects.toThrow("FlowWeave committed artifact is malformed and was preserved:");
+    await expect(readFile(userStatePath, "utf8")).resolves.toBe(invalidUserState);
     await expect(readFile(join(projectPath, ".flowweave", "modification-baseline.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("exports sequence instructions when the Canvas artifact does not exist", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-no-canvas-"));
-    const paths = await writeModificationDocs(projectPath, { sequence: sequenceFixture(projectPath), sequenceInstruction: "Keep checkout as one diagram." });
+    const canvas = await writeCanvasProtocolFixture(projectPath, canvasFixture(projectPath));
+    await acknowledgeInitialCanvas(projectPath, canvas);
+    await rm(join(projectPath, ".flowweave", "canvas", "user-state.json"));
+    const paths = await writeModificationDocs(projectPath, { canvas, sequence: sequenceFixture(projectPath), sequenceInstruction: "Keep checkout as one diagram." });
     const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
     expect(context.delta.modules.added).toEqual([]);
     expect(context.delta.sequenceInstruction).toBe("Keep checkout as one diagram.");
@@ -64,8 +80,10 @@ describe("modification-doc.service", () => {
 
   it("does not mark a selected module when generated from persisted artifacts", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-selection-"));
+    const canvas = await writeCanvasProtocolFixture(projectPath, canvasFixture(projectPath));
+    await acknowledgeInitialCanvas(projectPath, canvas);
     const paths = await writeModificationDocs(projectPath, {
-      canvas: canvasFixture(projectPath),
+      canvas,
       sequence: sequenceFixture(projectPath)
     });
     const context = JSON.parse(await readFile(paths.contextPath, "utf8"));
@@ -76,8 +94,10 @@ describe("modification-doc.service", () => {
 
   it("persists a sequence instruction without invoking sequence revision", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-modification-doc-instruction-"));
+    const canvas = await writeCanvasProtocolFixture(projectPath, canvasFixture(projectPath));
+    await acknowledgeInitialCanvas(projectPath, canvas);
     const paths = await writeModificationDocs(projectPath, {
-      canvas: canvasFixture(projectPath),
+      canvas,
       sequence: sequenceFixture(projectPath),
       sequenceInstruction: "Keep payment as one step."
     });
@@ -91,7 +111,6 @@ describe("modification-doc.service", () => {
 
 function canvasFixture(projectPath: string): CodeflowCanvas {
   return {
-    version: 3,
     id: "main",
     title: "Main Canvas",
     projectPath,
@@ -150,4 +169,9 @@ function sequenceFixture(projectPath: string): SequenceDiagramBundle {
       evidence: [{ filePath: "src/api.ts", symbol: "handler", detail: "Entry point." }]
     }
   };
+}
+
+async function acknowledgeInitialCanvas(projectPath: string, canvas: CodeflowCanvas): Promise<void> {
+  const current = await readModificationDelta(projectPath, "", canvas);
+  await acknowledgeModificationChanges(projectPath, current.snapshot, { kind: "all" });
 }

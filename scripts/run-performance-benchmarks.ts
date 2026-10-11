@@ -18,12 +18,13 @@ import {
 import { buildSemanticIndex } from "../src/main/services/semantic-index.service";
 import { scanProject } from "../src/main/services/project-scanner.service";
 import { writeBatchAtomic } from "../src/main/storage/flowweave-store";
+import { configureTransactionAuthorityRoot } from "../src/main/storage/transaction-authority";
 import { withArchitectureArtifactLock } from "../src/main/services/architecture-review.service";
 import type { ArchitectureModule, ArchitectureRelationship, SequenceDiagram } from "../src/types";
 
 const FILE_COUNTS = [1_000, 5_000, 10_000];
 const NODE_COUNTS = [100, 500, 1_000];
-const SCAN_COLD_ITERATIONS = 5;
+const SCAN_COLD_ITERATIONS = 20;
 const WARM_ITERATIONS = 20;
 const REFERENCE_INDEX_FILES = 250;
 const WRITE_CONCURRENCY = 64;
@@ -54,6 +55,7 @@ type BenchmarkResult = {
 };
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "flowweave-benchmark-"));
+configureTransactionAuthorityRoot(join(temporaryRoot, "user-data"));
 const results: BenchmarkResult[] = [];
 
 try {
@@ -162,7 +164,7 @@ async function benchmarkSemanticIndex(
       throwGateFailure(row, index.relations.length, expectedEdgeCount, "cold independent roots produced different relation counts");
     }
   }
-  output.push(resultRow("semantic-index-cold", REFERENCE_INDEX_FILES, coldDurations, REFERENCE_INDEX_FILES, REFERENCE_INDEX_FILES, expectedEdgeCount ?? 0, expectedEdgeCount ?? 0, "5 independent roots"));
+  output.push(resultRow("semantic-index-cold", REFERENCE_INDEX_FILES, coldDurations, REFERENCE_INDEX_FILES, REFERENCE_INDEX_FILES, expectedEdgeCount ?? 0, expectedEdgeCount ?? 0, `${SCAN_COLD_ITERATIONS} independent roots`));
 
   const warmRoot = await mkdtemp(join(root, `index-warm-${REFERENCE_INDEX_FILES}-`));
   await createCodeFiles(warmRoot, REFERENCE_INDEX_FILES);

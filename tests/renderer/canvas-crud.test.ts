@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GraphEdge, GraphNode } from "../../src/types";
+import type { CodeflowCanvas, GraphEdge, GraphNode } from "../../src/types";
 import {
   buildAgentPrompt,
   buildLegacyCanvasTaskJson,
@@ -7,7 +7,7 @@ import {
   buildModificationContextJson,
   buildModificationGuidanceMarkdown
 } from "../../src/utils/export-artifacts";
-import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../../src/utils/canvas-graph-crud";
+import { deleteModuleFromCanvasGraph, restoreGeneratedCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../../src/utils/canvas-graph-crud";
 import { buildModuleFileTree } from "../../src/utils/module-file-tree";
 import { relationOptions, relationStyle } from "../../src/utils/relation-styles";
 
@@ -67,6 +67,35 @@ describe("canvas graph CRUD helpers", () => {
       guidanceNote: "Repository tests API contract."
     });
     expect(unchanged).toEqual(updated);
+  });
+
+  it("removes automatic confirmation and source evidence after a user changes a generated relation", () => {
+    const edge = { ...edgesFixture()[0], confidence: "confirmed" as const, evidence: [{ filePath: "src/api.ts", line: 8, detail: "Original call" }] };
+    const [updated] = updateGraphEdge([edge], edge.id, { relation: "imports" });
+    expect(updated).toMatchObject({ relation: "imports", confidence: "inferred", evidence: [] });
+  });
+  it("restores deleted generated items while retaining visible edits and manual items", () => {
+    const [api, service, , docs] = modulesFixture();
+    const generatedEdge = edgesFixture()[0];
+    const current: CodeflowCanvas = {
+      id: "main", title: "Main", projectPath: "/tmp/project", generatedAt: "2026-10-03",
+      nodes: [{ ...api, title: "Edited API" }, { ...docs, origin: "manual" }], edges: [],
+      hiddenGeneratedNodeIds: [service.id], hiddenGeneratedEdgeIds: [generatedEdge.id]
+    };
+    const restored = restoreGeneratedCanvasGraph(current, { nodes: [api, service], edges: [generatedEdge] });
+    expect(restored.nodes.map((node) => node.id)).toEqual([api.id, docs.id, service.id]);
+    expect(restored.nodes[0].title).toBe("Edited API");
+    expect(restored.edges).toEqual([generatedEdge]);
+    expect(restored.hiddenGeneratedNodeIds).toEqual([]);
+    expect(restored.hiddenGeneratedEdgeIds).toEqual([]);
+  });
+  it("rejects restoring a generated item when its ID is occupied by a manual item", () => {
+    const [api] = modulesFixture();
+    const current: CodeflowCanvas = {
+      id: "main", title: "Main", projectPath: "/tmp/project", generatedAt: "2026-10-03",
+      nodes: [{ ...api, origin: "manual" }], edges: [], hiddenGeneratedNodeIds: [api.id]
+    };
+    expect(() => restoreGeneratedCanvasGraph(current, { nodes: [api], edges: [] })).toThrow("manual node ID");
   });
 });
 

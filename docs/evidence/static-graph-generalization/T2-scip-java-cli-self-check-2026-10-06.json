@@ -1,0 +1,84 @@
+{
+  "schema": "flowweave-static-graph-tool-self-check/v1",
+  "recorded_at": "2026-10-06",
+  "scope": "SCIP-Java CLI self-check only; no project indexing",
+  "tool": {
+    "distribution_label": "scip-java-v0.13.1",
+    "path": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/tools/scip-java-v0.13.1",
+    "sha256": "a694cae143c32c5b6226362fb4bd268a8d13d3cd9b482819b3b0029a9a97b8fe",
+    "download_copy_sha256_matches": true,
+    "cli_reported_version": "scip-java version 0.0.0-SNAPSHOT"
+  },
+  "runtime": {
+    "java_home": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/tools/jdk/jdk-17.0.20.1+1/Contents/Home",
+    "jdk_version_basis": "Temurin 17.0.20.1+1 per task precondition; not re-probed in this CLI-only check",
+    "working_directory": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated",
+    "home_and_tmp_confined_to": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/runtime-home",
+    "environment": {
+      "HOME": "$PWD/runtime-home",
+      "TMPDIR": "$PWD/runtime-home/tmp",
+      "JAVA_HOME": "$PWD/tools/jdk/jdk-17.0.20.1+1/Contents/Home",
+      "COURSIER_CACHE": "$PWD/runtime-home/coursier-cache",
+      "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+      "LC_ALL": "C"
+    },
+    "network_sandbox": {
+      "mechanism": "/usr/bin/sandbox-exec (macOS Seatbelt)",
+      "profile": "(version 1) (allow default) (deny network*)",
+      "profile_smoke_exit_code": 0,
+      "network_attempted": false
+    }
+  },
+  "probes": [
+    {
+      "shell_command": "/usr/bin/time -p /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \"$PWD/tools/scip-java-v0.13.1\" --help",
+      "argv": ["/usr/bin/sandbox-exec", "-p", "(version 1) (allow default) (deny network*)", "$PWD/tools/scip-java-v0.13.1", "--help"],
+      "exit_code": 0,
+      "elapsed_seconds": 0.64,
+      "stdout": "Usage: scip-java [<options>] <command> [<args>]...\n\n  scip-java: index Java/Kotlin codebases into SCIP.\n\nOptions:\n  -v, --version  Show the version and exit\n  -h, --help     Show this message and exit\n\nCommands:\n  index      Automatically generate an SCIP index in the current working\n             directory.\n  aggregate  Aggregates per-source SCIP shards into a single SCIP index file.\n  snapshot   Generates annotated snapshots for each `*.scip` file in the given\n             target roots.",
+      "time_stderr": "real 0.64\nuser 0.79\nsys 0.04"
+    },
+    {
+      "shell_command": "/usr/bin/time -p /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \"$PWD/tools/scip-java-v0.13.1\" --version",
+      "argv": ["/usr/bin/sandbox-exec", "-p", "(version 1) (allow default) (deny network*)", "$PWD/tools/scip-java-v0.13.1", "--version"],
+      "exit_code": 0,
+      "elapsed_seconds": 0.15,
+      "stdout": "scip-java version 0.0.0-SNAPSHOT",
+      "time_stderr": "real 0.15\nuser 0.30\nsys 0.01"
+    },
+    {
+      "shell_command": "/usr/bin/time -p /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \"/Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/.superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/tools/scip-java-v0.13.1\" index --help",
+      "argv": ["/usr/bin/sandbox-exec", "-p", "(version 1) (allow default) (deny network*)", "/Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/.superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/tools/scip-java-v0.13.1", "index", "--help"],
+      "cwd": "/Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/.superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/runtime-home",
+      "environment": {
+        "HOME": "$PWD",
+        "TMPDIR": "$PWD/tmp",
+        "JAVA_HOME": "/Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/.superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/tools/jdk/jdk-17.0.20.1+1/Contents/Home",
+        "COURSIER_CACHE": "$PWD/coursier-cache",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "LC_ALL": "C"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 0.63,
+      "stdout": "Usage: scip-java index [<options>] [<buildcommand>]...\n\n  Automatically generate an SCIP index in the current working directory.\n\nOptions:\n  --output=<path>                The path where to generate the SCIP index.\n  --targetroot=<path>            The directory where to generate SCIP files.\n                                 Defaults to a build-specific path. For\n                                 example, the default value for Gradle is\n                                 'build/scip-targetroot' and for Maven it's\n                                 'target/scip-targetroot'.\n  --build-tool=<gradle>          Explicitly specify which build tool to use. By\n                                 default, the build tool is automatically\n                                 detected. Use this flag if the automatic build\n                                 tool detection is not working correctly.\n  --cleanup, --no-cleanup / --no-cleanup\n                                 Whether to remove generated temporary files on\n                                 exit.\n  --scip-ignored-javac-option-prefixes=<text>\n                                 List of Java compiler option prefixes that\n                                 should be excluded from compilation during\n                                 indexing. This flag is only used when indexing\n                                 via scip-java.json files or Bazel.\n  --scip-ignored-annotation-processors=<text>\n                                 List of fully qualified annotation processors\n                                 that should be ignored when indexing a\n                                 codebase. This flag is only used when indexing\n                                 via scip-java.json files or Bazel.\n  --scip-config=<path>           Path to a scip-java.json file with build\n                                 configuration. By default, the path\n                                 scip-java.json is used.\n  --bazel-scip-java-binary=<text>\n                                 Optional path to a `scip-java` binary.\n                                 Required to index a Bazel codebase.\n  --bazel-aspect=<path>          Relative path to a Bazel aspect file with an\n                                 aspect named 'scip_java_aspect'.\n  --bazel-overwrite-aspect-file  If true, overwrites the existing Bazel aspect\n                                 file (if any).\n  --bazel-autorun-sandbox-command, --no-bazel-autorun-sandbox-command /\n--no-bazel-autorun-sandbox-command\n                                 If true, automatically tries to extract the\n                                 printed out sandbox command and re-run the\n                                 command to reveal the underlying problem.\n  -h, --help                     Show this message and exit\n\nArguments:\n  <buildcommand>  Optional. The build command to use to compile all sources.\n                  Defaults to a build-specific command.",
+      "time_stderr": "real 0.63\nuser 0.72\nsys 0.03",
+      "interpretation": "Help documents a scip-java.json build-configuration path and says the optional buildcommand compiles sources and defaults to a build-specific command. It does not confirm a static/prebuilt-input mode that avoids project scripts; no index was run."
+    }
+  ],
+  "activity": {
+    "candidate_source_read": false,
+    "candidate_project_commands": false,
+    "go_list": false,
+    "maven_or_gradle": false,
+    "project_build_scripts": false,
+    "indexing": false,
+    "index_output_created": false,
+    "product_dependencies_or_lockfiles_modified": false
+  },
+  "preliminary_wrapper_error": {
+    "command": "scip-java --help from repository root",
+    "tool_help_output_observed": true,
+    "shell_error": "zsh:1: read-only variable: status",
+    "handling": "Repeated from the isolated tool directory with a non-reserved result variable; the recorded help and version probes both exited 0."
+  }
+}

@@ -132,11 +132,13 @@ export function createScanFingerprint(value: unknown): string {
 export function createStructureFingerprint(
   projectName: string,
   languages: Record<string, number>,
-  files: Array<{ path: string; language?: string; size?: number; modifiedAt?: string }>
+  files: Array<{ path: string; language?: string; size?: number; modifiedAt?: string }>,
+  selection: { scopeSha256: string; sourceInventorySha256: string } | undefined
 ): string {
   return createScanFingerprint({
     projectName,
     languages,
+    selection,
     files: files
       .map((file) => ({
         path: file.path,

@@ -2,8 +2,9 @@ import { execFile } from "node:child_process";
 import { lstat, realpath, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
-import fg from "fast-glob";
+import { glob } from "tinyglobby";
 import type { CodeflowProject, GitSummary, ProjectFileNode, ProjectScanSummary } from "../storage/schemas";
+import type { ProjectScanSelection } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
 import { sortProjectFileNodes } from "../../utils/project-file-sort";
 import { createStructureFingerprint } from "./project-registry.service";
@@ -51,23 +52,24 @@ const LANGUAGE_BY_EXT: Record<string, string> = {
 export type ScanProjectOptions = {
   concurrency?: number;
   ignore?: string[];
+  selection?: ProjectScanSelection;
 };
 
 export async function scanProject(rootPath: string, options?: ScanProjectOptions): Promise<CodeflowProject> {
   const ignore = [...DEFAULT_IGNORE, ...(options?.ignore ?? [])];
   const concurrency = normalizeConcurrency(options?.concurrency);
-  const entries = await fg("**/*", {
-    cwd: rootPath,
-    dot: true,
-    ignore,
-    markDirectories: true,
-    onlyFiles: false,
-    stats: false,
-    unique: true,
-    followSymbolicLinks: false
-  });
+  const entries = options?.selection
+    ? selectedProjectEntries(options.selection)
+    : await glob("**/*", {
+        cwd: rootPath,
+        dot: true,
+        ignore,
+        onlyFiles: false,
+        followSymbolicLinks: false,
+        expandDirectories: false
+      });
 
-  const nonSymlinkEntries = await filterSafeEntries(rootPath, entries, concurrency);
+  const nonSymlinkEntries = await filterSafeEntries(rootPath, entries, concurrency, options?.selection !== undefined);
   const visibleEntries = nonSymlinkEntries;
 
   const metadata = await readEntryMetadata(rootPath, visibleEntries, concurrency);
@@ -89,7 +91,11 @@ export async function scanProject(rootPath: string, options?: ScanProjectOptions
   project.scanFingerprint = createStructureFingerprint(
     project.projectName,
     project.summary.languages,
-    flattenFiles(project.files)
+    flattenFiles(project.files),
+    options?.selection ? {
+      scopeSha256: options.selection.scopeSha256,
+      sourceInventorySha256: options.selection.sourceInventorySha256
+    } : undefined
   );
   return project;
 }
@@ -103,17 +109,54 @@ async function readEntryMetadata(rootPath: string, entries: string[], concurrenc
   return new Map(results);
 }
 
-async function filterSafeEntries(rootPath: string, entries: string[], concurrency: number): Promise<string[]> {
+function selectedProjectEntries(selection: ProjectScanSelection): string[] {
+  if (!Array.isArray(selection.sourcePaths) || selection.sourcePaths.length === 0 ||
+    !Array.isArray(selection.configurationPaths) ||
+    !/^[a-f\d]{64}$/i.test(selection.scopeSha256) || !/^[a-f\d]{64}$/i.test(selection.sourceInventorySha256)) {
+    throw new TypeError("Frozen project scan selection is incomplete or has an invalid identity hash.");
+  }
+  const selectedFiles = [...selection.sourcePaths, ...selection.configurationPaths];
+  if (selectedFiles.some((path) => !isSafeSelectedFilePath(path)) || new Set(selectedFiles).size !== selectedFiles.length) {
+    throw new TypeError("Frozen project scan selection contains an unsafe or duplicate file path.");
+  }
+  const directories = new Set<string>();
+  for (const path of selectedFiles) {
+    const segments = path.split("/");
+    for (let index = 1; index < segments.length; index += 1) {
+      directories.add(`${segments.slice(0, index).join("/")}/`);
+    }
+  }
+  return [...directories, ...selectedFiles].sort();
+}
+
+function isSafeSelectedFilePath(value: string): boolean {
+  return value.trim() === value && value.length > 0 && !value.startsWith("/") && !value.includes("\\") &&
+    !value.split("/").some((segment) => !segment || segment === "." || segment === "..");
+}
+
+async function filterSafeEntries(
+  rootPath: string,
+  entries: string[],
+  concurrency: number,
+  rejectUnsafe: boolean
+): Promise<string[]> {
   const canonicalRoot = await realpath(rootPath);
   const results = await mapWithConcurrency(entries, concurrency, async (entry) => {
     const relativeEntry = entry.endsWith("/") ? entry.slice(0, -1) : entry;
     const absoluteEntry = join(rootPath, ...relativeEntry.split("/"));
     const info = await lstat(absoluteEntry);
-    if (info.isSymbolicLink()) return undefined;
+    if (info.isSymbolicLink() || (rejectUnsafe && (entry.endsWith("/") ? !info.isDirectory() : !info.isFile())) ||
+      (!rejectUnsafe && !info.isDirectory() && !info.isFile())) {
+      if (rejectUnsafe) throw new Error(`Frozen project scan selection path is not a regular in-root entry: ${entry}`);
+      return undefined;
+    }
     const canonicalEntry = await realpath(absoluteEntry);
     const fromRoot = relative(canonicalRoot, canonicalEntry);
-    if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) return undefined;
-    return entry;
+    if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+      if (rejectUnsafe) throw new Error(`Frozen project scan selection escapes the checkout: ${entry}`);
+      return undefined;
+    }
+    return !rejectUnsafe && info.isDirectory() ? `${entry}/` : entry;
   });
   return results.filter((entry): entry is string => Boolean(entry));
 }

@@ -158,7 +158,7 @@ export function treeSitterSyntaxDiagnostics(root: SyntaxNode, filePath: string, 
     }
     return undefined;
   }
-  return [{ code: "syntax-error", severity: "error", filePath, range: syntaxNodeRange(firstError(root) ?? root, content), message: `Tree-sitter found syntax errors in ${filePath}` }];
+  return [{ code: "syntax-error", severity: "error", stage: "parsing", filePath, range: syntaxNodeRange(firstError(root) ?? root, content), message: `Tree-sitter found syntax errors in ${filePath}` }];
 }
 
 let parserInitialization: Promise<void> | undefined;

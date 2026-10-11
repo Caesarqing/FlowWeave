@@ -63,6 +63,7 @@ export type RiskAssessment = {
     level: Exclude<AssessmentLevel, "unknown">;
     reason: string;
     createdAt: string;
+    systemLevelAtOverride?: AssessmentLevel;
   };
 };
 export type ModuleAssessment = {
@@ -75,7 +76,7 @@ export type ModuleAssessment = {
 };
 export type TechnologyStack = "frontend" | "backend" | "mobile" | "data" | "infrastructure" | "shared" | "unknown";
 export type ArchitectureLayer = "presentation" | "api" | "domain" | "data" | "integration" | "infrastructure" | "test" | "unknown";
-export type CanvasLayoutMode = "execution" | "dependency" | "architecture" | "technology" | "domain";
+export type CanvasLayoutMode = "execution" | "dependency";
 export type CanvasClassification = {
   role: ArchitectureLayer;
   runtimeTags: TechnologyStack[];
@@ -88,17 +89,19 @@ export type CanvasLayoutState = {
   manualPositions: Record<string, CanvasPosition>;
   autoLayouts: Partial<Record<CanvasLayoutMode, Record<string, CanvasPosition>>>;
   autoLayoutTopologyFingerprints?: Partial<Record<CanvasLayoutMode, string>>;
+  autoConnectionHandles?: Partial<Record<CanvasLayoutMode, AutoConnectionHandleLayout>>;
   collapsedGroups: string[];
 };
 export type GraphPresentationPhase = "local-static" | "reviewed";
-export type GraphEdgeRelation = "depends_on" | "calls" | "reads_writes" | "external_api" | "publishes_event" | "subscribes_event" | "tests";
-export type GraphViewMode = "execution" | "dependency" | "architecture" | "technology" | "domain";
+export type GraphEdgeRelation = "depends_on" | "calls" | "reads" | "writes" | "reads_writes" | "http_contract" | "process_invocation" | "external_api" | "publishes_event" | "subscribes_event" | "tests";
+export type GraphViewMode = "execution" | "dependency";
 export type GraphEdgeClass = "runtime" | "data" | "external" | "event" | "dependency" | "test";
 export type CanvasNodeKind = "module" | "requirement" | "task" | "file" | "doc" | "agent" | "diff";
 
 export type ConnectionHandleSlot = {
   id: string;
   edgeId?: string;
+  position?: "left" | "right" | "top" | "bottom";
   offsetPercent: number;
   collapsed?: boolean;
   count: number;
@@ -108,6 +111,12 @@ export type ConnectionHandleSlot = {
 export type ConnectionHandleLayout = {
   source: ConnectionHandleSlot[];
   target: ConnectionHandleSlot[];
+};
+
+export type AutoConnectionHandleLayout = {
+  positions: Record<string, CanvasPosition>;
+  handles: Record<string, ConnectionHandleLayout>;
+  topologyFingerprint?: string;
 };
 
 export type SelectedEdgeState = {
@@ -134,9 +143,10 @@ export type ModuleIdentity = {
 };
 
 export type ModuleClusteringDiagnostic = {
-  code: "unknown-files" | "oversized-module" | "lineage-split" | "lineage-merge" | "ambiguous-ownership";
+  code: "unknown-files" | "oversized-module" | "lineage-split" | "lineage-merge" | "ambiguous-ownership" | "mixed-role-signals";
   moduleIds: string[];
   filePaths: string[];
+  roleSignals?: ArchitectureModuleCategory[];
   message: string;
 };
 
@@ -190,10 +200,13 @@ export type ArchitectureEvidence = {
 };
 
 export type GraphNode = {
+  identity?: ModuleIdentity;
   relationSummary?: { dependencies: number; internalRelations: number; unresolvedRelations: number; externalRelations: number };
   relationDiagnostics?: SemanticDiagnostic[];
   resource?: SemanticResource;
+  areaId?: string;
   groupPath?: ArchitectureGroupReference[];
+  overviewGroup?: ArchitectureGroupReference;
   id: string;
   title: string;
   subtitle: string;
@@ -222,6 +235,7 @@ export type GraphNode = {
   evidence?: ArchitectureEvidence[];
   confidence?: number;
   assessment?: ModuleAssessment;
+  assessmentPending?: boolean;
   technologyStack?: TechnologyStack;
   technologyTags?: TechnologyStack[];
   architectureLayer?: ArchitectureLayer;
@@ -355,6 +369,14 @@ export type ProjectScanSummary = {
 export type ProjectScanOptions = {
   concurrency: number;
   agentPlanTimeoutMs?: number;
+  selection?: ProjectScanSelection;
+};
+
+export type ProjectScanSelection = {
+  sourcePaths: string[];
+  configurationPaths: string[];
+  scopeSha256: string;
+  sourceInventorySha256: string;
 };
 
 export type CodeflowProject = {
@@ -459,6 +481,7 @@ export type ArchitectureGroupReference = {
   title: string;
   rootPath: string;
   parentId?: string;
+  titleSources?: string[];
 };
 export type ArchitectureGroup = ArchitectureGroupReference & {
   moduleIds: string[];
@@ -484,10 +507,27 @@ export type StaticAnalysisQuality = {
   complete: boolean;
 };
 
+export type SemanticAnalysisCapability = {
+  language: string;
+  scopeId?: string;
+  parserId: string;
+  status: "available" | "partial" | "unsupported" | "unavailable";
+  sourceFiles: number;
+  parsedFiles: number;
+  failedFiles: number;
+  unsupportedFiles: number;
+  capabilities: string[];
+  limitations: Array<{ code: string; reason: string; count: number }>;
+  configurationPaths: string[];
+  configurationStatus: "not-present" | "readable" | "unavailable";
+  offline: true;
+};
+
 export type SemanticDiagnostic = {
   relationId?: string;
   range?: SourceRange;
   candidates?: string[];
+  stage?: "parsing" | "binding";
   code: string;
   severity: "warning" | "error";
   message: string;
@@ -554,6 +594,7 @@ export type SemanticIndex = {
   scopes?: AnalysisScope[];
   resources?: SemanticResource[];
   quality?: StaticAnalysisQuality;
+  analysisCapabilities?: SemanticAnalysisCapability[];
   generatorVersion: string;
   projectName: string;
   rootPath: string;
@@ -586,6 +627,7 @@ export type SemanticIndexManifest = {
   inputState?: {
     filePaths: string[];
     observations: Array<[string, string]>;
+    trackedFileHashes?: Array<[string, string, string]>;
   };
   files: SemanticIndexManifestEntry[];
 };
@@ -599,10 +641,14 @@ export type ScanDelta = {
 
 export type CodeflowCanvas = {
   generation?: GenerationIdentity;
+  userRevision?: number;
+  hiddenGeneratedNodeIds?: string[];
+  hiddenGeneratedEdgeIds?: string[];
+  preservedCounts?: { pending: number; nodeEdits: number; edges: number };
   groups?: ArchitectureGroup[];
   quality?: StaticAnalysisQuality;
   orphanedNodeEdits?: OrphanedNodeEdit[];
-  version: 6;
+  migrationReviewActions?: CanvasMigrationReviewAction[];
   generatorVersion?: string;
   inputFingerprint?: string;
   id: string;
@@ -615,6 +661,122 @@ export type CodeflowCanvas = {
   nodes: GraphNode[];
   edges: GraphEdge[];
   orphanedEdges?: GraphEdge[];
+  migrationPendingItems?: CanvasMigrationPendingItem[];
+};
+
+export type CanvasMigrationPendingItem = {
+  kind: "node" | "edge";
+  sourceVersion: 1 | 2 | 3 | 4 | 7;
+  sourceGenerationId?: string;
+  sourceId?: string;
+  raw: unknown;
+  reason: string;
+};
+
+export type CanvasMigrationReviewRequest = {
+  generationId: string;
+  userRevision: number;
+  item: { kind: "node-edit" | "edge" | "migration-pending"; id: string };
+  action: "rebind" | "keep" | "discard";
+  targetNodeId?: string;
+  sourceNodeId?: string;
+};
+
+export type CanvasMigrationReviewAction = {
+  kind: "node-edit" | "edge" | "migration-pending";
+  itemId: string;
+  action: "rebind" | "keep" | "discard";
+  generationId: string;
+  revision: number;
+  targetNodeId?: string;
+  sourceNodeId?: string;
+};
+
+export type StaticSnapshotV1 = {
+  schemaVersion: 1;
+  generationId: string;
+  inputFingerprint: string;
+  generatedAt: string;
+  project: CodeflowProject;
+  semanticIndex: SemanticIndex;
+  localArchitecture: ArchitectureMap;
+};
+
+export type GraphOverviewNode = Pick<GraphNode,
+  "id" | "title" | "subtitle" | "kind" | "nodeType" | "risk" | "description" |
+  "files" | "status" | "x" | "y" | "areaId" | "groupPath" | "overviewGroup" | "confidence" | "role" | "category" | "origin" |
+  "resource" | "relationSummary" | "technologyStack" | "technologyTags" | "architectureLayer" | "classification" | "identity">;
+
+export type GraphOverviewEdge = Pick<GraphEdge,
+  "id" | "source" | "target" | "relation" | "confidence" | "aggregatedEdgeIds" | "sourceRelationIds"> & {
+  evidence?: Array<Pick<ArchitectureEvidence, "eventId" | "detail">>;
+};
+
+export type GraphOverviewV1 = {
+  schemaVersion: 1;
+  generationId: string;
+  inputFingerprint: string;
+  scanFingerprint: string;
+  generatedAt: string;
+  generatorVersion: string;
+  project?: CodeflowProject;
+  architectureInputFingerprint?: string;
+  nodes: GraphOverviewNode[];
+  edges: GraphOverviewEdge[];
+  groups?: ArchitectureGroup[];
+  quality?: StaticAnalysisQuality;
+  relationDiagnostics?: ArchitectureRelationDiagnostic[];
+  resources?: SemanticResource[];
+};
+
+export type CanvasUserStateV1 = {
+  schemaVersion: 1;
+  generationId: string;
+  revision: number;
+  updatedAt: string;
+  layout?: CanvasLayoutState;
+  nodeEdits: Record<string, Partial<GraphNode>>;
+  edgeEdits: Record<string, Partial<Pick<GraphEdge, "guidanceNote" | "source" | "target" | "relation">>>;
+  assessmentInvalidations?: Record<string, string>;
+  riskOverrides?: Record<string, NonNullable<ModuleAssessment["risk"]["override"]>>;
+  hiddenGeneratedNodeIds?: string[];
+  hiddenGeneratedEdgeIds?: string[];
+  manualNodes: GraphNode[];
+  manualEdges: GraphEdge[];
+  orphanedEdges: GraphEdge[];
+  orphanedNodeEdits: NonNullable<CodeflowCanvas["orphanedNodeEdits"]>;
+  migrationReviewActions: CanvasMigrationReviewAction[];
+  migrationPendingItems: CanvasMigrationPendingItem[];
+};
+
+export type CanvasSaveReceipt = { path: string; userRevision: number; generationId: string };
+export type CanvasNodeDetail = Pick<GraphNode, "symbols" | "fileRoles" | "evidence" | "assessment" | "relationDiagnostics">;
+export type CanvasEdgeDetail = Pick<GraphEdge, "source" | "target" | "relation" | "evidence" | "semanticKinds" | "operations" | "importUsages" | "sourceRelationIds" | "confidence">;
+export type CanvasNodeDetailResponse = { generationId: string; userRevision: number; nodeId: string; detail?: CanvasNodeDetail };
+export type CanvasEdgeDetailResponse = { generationId: string; userRevision: number; edgeId: string; detail?: CanvasEdgeDetail };
+export type StaticGraphDetailUiTiming = {
+  projectId: string;
+  generationId: string;
+  userRevision: number;
+  nodeId: string;
+  clickStartedAtEpochMs: number;
+  ipcStartedAtEpochMs: number;
+  ipcResponseAtEpochMs: number;
+  panelPresentedAtEpochMs: number;
+};
+
+export type ProjectGenerationManifestV7 = {
+  storageProtocol: 7;
+  generationId: string;
+  inputFingerprint: string;
+  rulesVersion: string;
+  analyzerVersion: string;
+  artifacts: {
+    staticSnapshot: string;
+    graphOverview: string;
+    canvasUserState: string;
+  };
+  committedAt: string;
 };
 
 export type ProjectArtifactState = "current" | "stale" | "missing" | "failed";
@@ -795,6 +957,7 @@ export type ProjectStructureFacts = {
   scopes?: AnalysisScope[];
   resources?: SemanticResource[];
   quality?: StaticAnalysisQuality;
+  analysisCapabilities?: SemanticAnalysisCapability[];
   projectName: string;
   rootPath: string;
   languages: Record<string, number>;
@@ -833,6 +996,7 @@ export type ArchitectureRelationDiagnostic = {
 
 export type OrphanedNodeEdit = {
   node: GraphNode;
+  edits?: Partial<Pick<GraphNode, "title" | "description" | "subtitle" | "nodeType" | "files" | "fileRoles" | "guidanceDraft" | "risk" | "assessment" | "x" | "y">>;
   reason: "split-or-merge" | "removed";
 };
 
@@ -1053,16 +1217,31 @@ export type CodeflowTask = {
   acceptanceCriteria: string[];
 };
 
+export type TaskArtifactWriteResult = {
+  taskPath: string;
+  markdownPath: string;
+  generationId: string;
+  userRevision: number;
+};
+
 export type CodeflowWriteResult = {
-  projectJsonPath: string;
-  canvasJsonPath: string;
-  taskMarkdownPath: string;
-  taskJsonPath: string;
-  contextFileTreePath: string;
+  generationManifestPath: string;
+  staticSnapshotPath: string;
+  graphOverviewPath: string;
+  canvasUserStatePath: string;
 };
 
 export type FlowWeaveProjectOpenResult =
   | { canceled: true }
+  | {
+      canceled: false;
+      status: "analyzing";
+      projectId: string;
+      projectPath: string;
+      projectName: string;
+      requestId: string;
+      cachedCanvas?: CodeflowCanvas;
+    }
   | { canceled: false; status: "superseded"; projectId: string; requestId: string }
   | {
       canceled: false;
@@ -1074,23 +1253,21 @@ export type FlowWeaveProjectOpenResult =
       architectureReview: ArchitectureReviewStatus;
       sequenceReview: SequenceReviewStatus;
       project: CodeflowProject;
-      graph: {
-        nodes: GraphNode[];
-        edges: GraphEdge[];
-      };
+      canvas: CanvasReadResult;
       relationDiagnostics: ArchitectureRelationDiagnostic[];
-      quality?: StaticAnalysisQuality;
-      groups?: ArchitectureGroup[];
-      resources?: SemanticResource[];
       written: CodeflowWriteResult;
     };
 
-export type LegacyCanvasV5 = Omit<CodeflowCanvas, "version"> & { version: 5 };
-export type CanvasReadResult =
-  | { mode: "editable"; canvas: CodeflowCanvas }
-  | { mode: "legacy-readonly"; canvas: LegacyCanvasV5 };
+export type ProjectAnalysisCommittedResult = Extract<FlowWeaveProjectOpenResult, { canvas: CanvasReadResult }>;
+export type ProjectAnalysisEvent =
+  | { status: "completed"; projectId: string; requestId: string; result: ProjectAnalysisCommittedResult }
+  | { status: "superseded"; projectId: string; requestId: string }
+  | { status: "cancelled"; projectId: string; requestId: string }
+  | { status: "failed"; projectId: string; requestId: string; message: string };
+
+export type CanvasReadResult = { mode: "editable"; canvas: CodeflowCanvas };
 export type FlowWeaveStoredProject = Omit<
-  Extract<FlowWeaveProjectOpenResult, { graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>,
+  ProjectAnalysisCommittedResult,
   "canceled" | "status" | "written"
 > & { canvas: CanvasReadResult };
 
@@ -1525,7 +1702,9 @@ export type FlowWeaveApi = {
   readProjectWorkspaceSession(): Promise<ProjectWorkspaceSession>;
   saveProjectWorkspaceSession(session: ProjectWorkspaceSession): Promise<void>;
   scanProject(projectId: string, options: ProjectScanOptions): Promise<FlowWeaveProjectOpenResult>;
+  cancelProjectAnalysis(projectId: string): Promise<boolean>;
   onOperationProgress(listener: (operation: AnalysisOperation) => void): () => void;
+  onProjectAnalysis(listener: (event: ProjectAnalysisEvent) => void): () => void;
   onArchitectureReview(listener: (event: ArchitectureReviewEvent) => void): () => void;
   onSequenceReview(listener: (event: SequenceReviewEvent) => void): () => void;
   listAgents(): Promise<AgentDefinition[]>;
@@ -1566,6 +1745,7 @@ export type FlowWeaveApi = {
   analyzeArchitectureWithAgent(projectId: string, agentId: RuntimeAgentId, timeoutMs?: number): Promise<ArchitectureAnalysisResult>;
   readArchitectureMap(projectId: string): Promise<ArchitectureMap | undefined>;
   generateSequenceDiagrams(projectId: string, agentId: RuntimeAgentId, timeoutMs?: number): Promise<SequenceDiagramGenerationResult>;
+  generateTaskArtifact(projectId: string, generationId: string, userRevision: number): Promise<TaskArtifactWriteResult>;
   reviseSequenceDiagram(projectId: string, agentId: RuntimeAgentId, instruction: string, timeoutMs?: number): Promise<SequenceDiagramBundle>;
   readSequenceDiagrams(projectId: string): Promise<SequenceDiagramBundle | undefined>;
   readProjectFile(projectId: string, filePath: string): Promise<string | undefined>;
@@ -1585,8 +1765,12 @@ export type FlowWeaveApi = {
     scope: ModificationAcknowledgementScope
   ): Promise<ModificationBaseline>;
   readCanvas(projectId: string): Promise<CanvasReadResult | undefined>;
+  readCanvasNodeDetail(projectId: string, generationId: string, userRevision: number, nodeId: string): Promise<CanvasNodeDetailResponse>;
+  readGeneratedCanvasGraph(projectId: string, generationId: string): Promise<Pick<CodeflowCanvas, "nodes" | "edges">>;
+  readCanvasEdgeDetail(projectId: string, generationId: string, userRevision: number, edgeId: string): Promise<CanvasEdgeDetailResponse>;
   readRegisteredProject(projectId: string): Promise<FlowWeaveStoredProject | undefined>;
-  saveCanvas(projectId: string, canvas: CodeflowCanvas, options?: { allowStaleNoop?: boolean }): Promise<string>;
+  saveCanvas(projectId: string, canvas: CodeflowCanvas): Promise<CanvasSaveReceipt>;
+  resolveCanvasMigrationItem(projectId: string, request: CanvasMigrationReviewRequest): Promise<CanvasSaveReceipt>;
   exportDiagnostics(projectId: string): Promise<string>;
   getProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;
   enableProjectAgentConnection(projectId: string): Promise<ProjectAgentConnectionStatus>;

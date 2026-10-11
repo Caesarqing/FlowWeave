@@ -6,9 +6,10 @@ import {
   type NodeChange
 } from "@xyflow/react";
 import { useMemo, useState } from "react";
-import type { CanvasLayoutMode, CanvasLayoutState, CodeflowCanvas, GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
+import type { AutoConnectionHandleLayout, CanvasLayoutMode, CanvasLayoutState, CanvasMigrationReviewRequest, CodeflowCanvas, GraphEdge, GraphEdgeRelation, GraphNode, ProjectFileNode } from "../types";
 import { usePreferencesStore } from "../stores/preferences.store";
 import { useCanvasStore } from "../stores/canvas.store";
+import { assertCanvasEditable, canvasEditingEnabled, useProjectStore } from "../stores/project.store";
 import { deleteModuleFromCanvasGraph, updateGraphEdge, updateModuleInCanvasGraph } from "../utils/canvas-graph-crud";
 import { createFlowEdge, createFlowNode, decorateFlowGraph, graphEdgeFromFlow, type FlowWeaveNode } from "../utils/graph-converters";
 import { useI18n } from "../utils/i18n";
@@ -21,6 +22,7 @@ export function useFlowWeaveState() {
   const [connectionPanelMode, setConnectionPanelMode] = useState<"create" | "edit">();
   const defaultRelation = usePreferencesStore((state) => state.defaultRelation);
   const modules = useCanvasStore((state) => state.modules);
+  const hydrationVersion = useCanvasStore((state) => state.hydrationVersion);
   const projectFiles = useCanvasStore((state) => state.projectFiles);
   const expandedPaths = useCanvasStore((state) => state.expandedPaths);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
@@ -37,14 +39,19 @@ export function useFlowWeaveState() {
   const groups = useCanvasStore((state) => state.groups);
   const quality = useCanvasStore((state) => state.quality);
   const generation = useCanvasStore((state) => state.generation);
+  const generatedAt = useCanvasStore((state) => state.generatedAt);
+  const userRevision = useCanvasStore((state) => state.userRevision);
+  const hiddenGeneratedNodeIds = useCanvasStore((state) => state.hiddenGeneratedNodeIds);
+  const hiddenGeneratedEdgeIds = useCanvasStore((state) => state.hiddenGeneratedEdgeIds);
   const orphanedNodeEdits = useCanvasStore((state) => state.orphanedNodeEdits);
-  const canvasMetadata = useMemo(() => ({ generation, groups, quality, orphanedNodeEdits }), [generation, groups, quality, orphanedNodeEdits]);
+  const migrationPendingItems = useCanvasStore((state) => state.migrationPendingItems);
+  const preservedCounts = useCanvasStore((state) => state.preservedCounts);
+  const canvasMetadata = useMemo(() => ({ generation, generatedAt, groups, quality, orphanedNodeEdits, migrationPendingItems, preservedCounts, hiddenGeneratedNodeIds, hiddenGeneratedEdgeIds }), [generation, generatedAt, groups, quality, orphanedNodeEdits, migrationPendingItems, preservedCounts, hiddenGeneratedNodeIds, hiddenGeneratedEdgeIds]);
   const orphanedEdges = useCanvasStore((state) => state.orphanedEdges);
   const applyAutoLayout = useCanvasStore((state) => state.applyAutoLayout);
   const restoreManualLayout = useCanvasStore((state) => state.restoreManualLayout);
   const setCollapsedGroups = useCanvasStore((state) => state.setCollapsedGroups);
   const setViewMode = useCanvasStore((state) => state.setViewMode);
-  const adoptReviewedGraph = useCanvasStore((state) => state.adoptReviewedGraph);
   const graphRelations = useMemo(() => edges.map(graphEdgeFromFlow), [edges]);
   const decoratedGraph = useMemo(() => decorateFlowGraph(nodes, edges, selectedEdgeId), [edges, nodes, selectedEdgeId]);
   const selectedEdge = useMemo(() => {
@@ -52,7 +59,7 @@ export function useFlowWeaveState() {
     const edge = edges.find((item) => item.id === selectedEdgeId);
     return edge ? graphEdgeFromFlow(edge) : undefined;
   }, [edges, selectedEdgeId, selectedProjectedEdge]);
-  const selectedNode = modules.find((node) => node.id === selectedNodeId) ?? modules[0];
+  const selectedNode = modules.find((node) => node.id === selectedNodeId);
 
   function loadInitialStaticGraph(
     nextModules: GraphNode[],
@@ -60,33 +67,48 @@ export function useFlowWeaveState() {
     nextFiles: ProjectFileNode[],
     layout?: CanvasLayoutState,
     nextOrphanedEdges?: GraphEdge[],
-    metadata?: Pick<CodeflowCanvas, "generation" | "groups" | "quality" | "orphanedNodeEdits">
+    metadata?: Pick<CodeflowCanvas, "generation" | "generatedAt" | "userRevision" | "groups" | "quality" | "orphanedNodeEdits" | "migrationPendingItems" | "preservedCounts" | "hiddenGeneratedNodeIds" | "hiddenGeneratedEdgeIds">
   ) {
     setGraph(nextModules, nextEdges, nextFiles, layout, nextOrphanedEdges, metadata);
   }
 
-  function adoptReviewedProjectGraph(
-    nextModules: GraphNode[],
-    nextEdges: GraphEdge[],
-    nextFiles: ProjectFileNode[]
-  ): boolean {
-    return adoptReviewedGraph(nextModules, nextEdges, nextFiles);
+  async function resolveCanvasMigrationItem(request: CanvasMigrationReviewRequest): Promise<CodeflowCanvas> {
+    const projectId = useProjectStore.getState().projectId;
+    if (!window.flowweave || !projectId) throw new Error("Project data is unavailable for migration review.");
+    const current = useCanvasStore.getState();
+    if (current.generation?.requestId !== request.generationId || current.userRevision !== request.userRevision) {
+      throw new Error("The project graph changed while preparing migration review. Refresh the review and retry.");
+    }
+    const receipt = await window.flowweave.resolveCanvasMigrationItem(projectId, request);
+    const loaded = await window.flowweave.readCanvas(projectId);
+    const active = useCanvasStore.getState();
+    if (useProjectStore.getState().projectId !== projectId || !loaded ||
+      loaded.canvas.generation?.requestId !== receipt.generationId || loaded.canvas.userRevision !== receipt.userRevision ||
+      active.generation?.requestId !== receipt.generationId) {
+      throw new Error("The project graph changed while applying migration review. Reopen the project graph to reload its state.");
+    }
+    active.setGraph(loaded.canvas.nodes, loaded.canvas.edges, active.projectFiles, loaded.canvas.layout,
+      loaded.canvas.orphanedEdges, loaded.canvas);
+    return loaded.canvas;
   }
 
   function handleAutoLayout(
     mode: CanvasLayoutMode,
     positions: Record<string, { x: number; y: number }>,
-    topologyFingerprint: string
+    topologyFingerprint: string,
+    handleLayout: AutoConnectionHandleLayout
   ) {
-    applyAutoLayout(mode, positions, topologyFingerprint);
+    applyAutoLayout(mode, positions, topologyFingerprint, handleLayout);
   }
 
   function handleCanvasNodesChange(changes: NodeChange<FlowWeaveNode>[]) {
-    setNodes((currentNodes) => applyNodeChanges(changes, currentNodes));
-    syncNodePositions(changes);
+    const allowed = canvasEditingEnabled() ? changes : changes.filter((change) => change.type === "select" || change.type === "dimensions");
+    setNodes((currentNodes) => applyNodeChanges(allowed, currentNodes));
+    if (canvasEditingEnabled()) syncNodePositions(allowed);
   }
 
   function handleConnect(connection: Connection) {
+    assertCanvasEditable();
     if (!connection.source || !connection.target || connection.source === connection.target) return;
     const nextEdge = createFlowEdge({
       id: `${connection.source}-${connection.target}-${Date.now()}`,
@@ -102,6 +124,7 @@ export function useFlowWeaveState() {
   }
 
   function addModuleNode() {
+    assertCanvasEditable();
     const index = modules.filter((node) => node.id.startsWith("module-")).length + 1;
     const newModule: GraphNode = {
       id: `module-${index}`,
@@ -142,6 +165,7 @@ export function useFlowWeaveState() {
   }
 
   function addConnection(input: { source: string; target: string; relation: GraphEdgeRelation; guidanceNote?: string }) {
+    assertCanvasEditable();
     if (!input.source || !input.target || input.source === input.target) return;
     const nextEdge = createFlowEdge({
       id: `${input.source}-${input.target}-${Date.now()}`,
@@ -158,6 +182,7 @@ export function useFlowWeaveState() {
   }
 
   function updateEdgeRelation(edgeId: string, relation: GraphEdgeRelation) {
+    assertCanvasEditable();
     const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) =>
       updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { relation }).map(createFlowEdge)
@@ -166,14 +191,14 @@ export function useFlowWeaveState() {
   }
 
   function updateEdgeGuidance(edgeId: string, guidanceNote: string) {
-    const edge = graphRelations.find((item) => item.id === edgeId);
+    assertCanvasEditable();
     setEdges((currentEdges) =>
       updateGraphEdge(currentEdges.map(graphEdgeFromFlow), edgeId, { guidanceNote }).map(createFlowEdge)
     );
-    if (edge) invalidateAssessments([edge.source, edge.target]);
   }
 
   function updateEdgeEndpoints(edgeId: string, source: string, target: string) {
+    assertCanvasEditable();
     if (!source || !target || source === target) return;
     const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) =>
@@ -183,6 +208,7 @@ export function useFlowWeaveState() {
   }
 
   function deleteEdge(edgeId: string) {
+    assertCanvasEditable();
     const edge = graphRelations.find((item) => item.id === edgeId);
     setEdges((currentEdges) => currentEdges.filter((edge) => edge.id !== edgeId));
     if (edge) invalidateAssessments([edge.source, edge.target]);
@@ -190,10 +216,12 @@ export function useFlowWeaveState() {
   }
 
   function updateModuleFields(nodeId: string, patch: Partial<GraphNode>) {
+    assertCanvasEditable();
     updateModule(nodeId, (node) => updateModuleInCanvasGraph([node], nodeId, patch)[0] ?? node);
   }
 
   function deleteModuleNode(nodeId: string) {
+    assertCanvasEditable();
     const graphEdges = useCanvasStore.getState().edges.map(graphEdgeFromFlow);
     const deletedGraph = deleteModuleFromCanvasGraph(useCanvasStore.getState().modules, graphEdges, nodeId);
     useCanvasStore.setState((state) => ({
@@ -208,6 +236,7 @@ export function useFlowWeaveState() {
   }
 
   function handleEdgesChange(changes: EdgeChange[]) {
+    if (!canvasEditingEnabled() && changes.some((change) => change.type !== "select")) return;
     if (selectedEdgeId && changes.some((change) => change.type === "remove" && change.id === selectedEdgeId)) {
       clearConnectionSelection();
     }
@@ -240,6 +269,7 @@ export function useFlowWeaveState() {
     addModuleNode,
     canvasLayout,
     canvasMetadata,
+    userRevision,
     addConnection,
     clearConnectionSelection,
     connectionPanelMode,
@@ -253,14 +283,15 @@ export function useFlowWeaveState() {
     handleAutoLayout,
     handleConnect,
     modules,
+    hydrationVersion,
     nodes: decoratedGraph.nodes,
     onEdgesChange: handleEdgesChange,
     openConnectionCreator,
     orphanedEdges,
     projectFiles,
-    adoptReviewedProjectGraph,
     loadInitialStaticGraph,
     restoreManualLayout,
+    resolveCanvasMigrationItem,
     selectEdge,
     selectedEdge,
     selectedEdgeId,

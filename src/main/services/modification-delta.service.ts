@@ -1,9 +1,7 @@
 import { assertArtifactGeneration } from "./project-generation.service";
 import { withArchitectureArtifactLock } from "./architecture-review.service";
-import type { StoredCanvas } from "./canvas-migration.service";
 import { basename, join } from "node:path";
 import type {
-  ArchitectureMap,
   CodeflowCanvas,
   ModificationAcknowledgementScope,
   ModificationBaseline,
@@ -13,6 +11,7 @@ import type {
 import {
   acknowledgeModificationDelta,
   buildModificationDelta,
+  GRAPH_MODEL_VERSION,
   hasModificationDelta,
   migrateModificationBaseline,
   normalizeModificationSnapshot
@@ -20,6 +19,7 @@ import {
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { architectureMapToGraph } from "./static-architecture.service";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { readProjectProtocolCanvas, readProjectProtocolSnapshot } from "../storage/flowweave-store";
 
 const MODIFICATION_BASELINE_FILE = "modification-baseline.json";
 
@@ -30,19 +30,34 @@ export async function readModificationDelta(
 ): Promise<ModificationDeltaResult> {
   return withArchitectureArtifactLock(projectPath, async () => {
     const currentCanvas = canvas ?? await readCurrentCanvas(projectPath);
-    await assertArtifactGeneration(projectPath, "canvas/main.canvas.json", currentCanvas);
+    await assertArtifactGeneration(projectPath, "canvas/user-state.json", currentCanvas);
     const snapshot = normalizeModificationSnapshot(currentCanvas, sequenceInstruction);
     const existing = await readBaseline(projectPath);
-    if (currentCanvas.generation && !existing) throw new Error(`Committed modification baseline is missing: project ${projectPath}, generation ${currentCanvas.generation.requestId}`);
-    if (existing) await assertArtifactGeneration(projectPath, MODIFICATION_BASELINE_FILE, existing);
-    const baseline: ModificationBaseline = existing ?? {
-      ...(await readGeneratedSnapshot(projectPath, currentCanvas) ?? snapshot),
-      generation: currentCanvas.generation, version: 1, graphModelVersion: currentCanvas.version,
+    let baseline: ModificationBaseline;
+    if (existing && existing.graphModelVersion === GRAPH_MODEL_VERSION && sameGeneration(existing.generation, currentCanvas.generation)) {
+      await assertArtifactGeneration(projectPath, MODIFICATION_BASELINE_FILE, existing);
+      baseline = existing;
+    } else if (existing) {
+      baseline = {
+        ...migrateModificationBaseline(existing, snapshot, await readGeneratedSnapshot(projectPath, currentCanvas)),
+        generation: currentCanvas.generation
+      };
+      await writeJsonAtomic(baselinePath(projectPath), baseline);
+    } else {
+      baseline = {
+        ...(await readGeneratedSnapshot(projectPath, currentCanvas) ?? snapshot),
+      generation: currentCanvas.generation, version: 1, graphModelVersion: GRAPH_MODEL_VERSION,
       acknowledgedAt: new Date(0).toISOString(), sequenceInstruction: undefined
-    };
+      };
+      await writeJsonAtomic(baselinePath(projectPath), baseline);
+    }
     const delta = buildModificationDelta(baseline, snapshot);
     return { baseline, snapshot, delta, hasChanges: hasModificationDelta(delta) };
   });
+}
+
+function sameGeneration(left: ModificationSnapshot["generation"], right: ModificationSnapshot["generation"]): boolean {
+  return Boolean(left && right && left.requestId === right.requestId && left.inputFingerprint === right.inputFingerprint);
 }
 
 /** Called under the artifact lock; prepares the independent confirmation baseline without acknowledging edits. */
@@ -53,7 +68,7 @@ export async function prepareModificationBaseline(
   const current = normalizeModificationSnapshot(canvas, "");
   const generated = normalizeModificationSnapshot(generatedCanvas, "");
   const baseline = existing ? migrateModificationBaseline(existing, current, generated) : {
-    ...generated, version: 1 as const, graphModelVersion: 6, acknowledgedAt: new Date().toISOString()
+    ...generated, version: 1 as const, graphModelVersion: GRAPH_MODEL_VERSION, acknowledgedAt: new Date().toISOString()
   };
   return { ...baseline, generation: canvas.generation };
 }
@@ -65,8 +80,7 @@ export async function acknowledgeModificationChanges(
 ): Promise<ModificationBaseline> {
   return withArchitectureArtifactLock(projectPath, async () => {
     const canvas = await readCurrentCanvas(projectPath);
-    if (canvas.version !== 6) throw new Error(`Legacy Canvas is read-only; re-scan before acknowledging changes: ${projectPath}`);
-    await assertArtifactGeneration(projectPath, "canvas/main.canvas.json", canvas);
+    await assertArtifactGeneration(projectPath, "canvas/user-state.json", canvas);
     await assertArtifactGeneration(projectPath, "acknowledgement snapshot", sentSnapshot);
     const baseline = await readBaseline(projectPath);
     if (!baseline) throw new Error(`Modification baseline does not exist for project: ${projectPath}`);
@@ -87,39 +101,18 @@ async function readBaseline(projectPath: string): Promise<ModificationBaseline |
   return value;
 }
 
-async function readCurrentCanvas(projectPath: string): Promise<StoredCanvas> {
-  const path = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
-  const value = await readJsonArtifact(path);
-  if (value === undefined) return emptyCanvas(projectPath);
-  if (!value || typeof value !== "object") throw new Error(`FlowWeave Canvas is invalid and was preserved: ${path}`);
-  const canvas = value as Partial<StoredCanvas>;
-  if (canvas.version !== 5 && canvas.version !== 6) throw new Error(`FlowWeave Canvas must be v6. Re-scan the project to rebuild it: ${path}`);
-  return canvas as StoredCanvas;
+async function readCurrentCanvas(projectPath: string): Promise<CodeflowCanvas> {
+  const canvas = await readProjectProtocolCanvas(projectPath);
+  if (!canvas) throw new Error(`Project has not been migrated to FlowWeave protocol v7: ${projectPath}`);
+  return canvas;
 }
 
-async function readGeneratedSnapshot(projectPath: string, canvas: StoredCanvas): Promise<ModificationSnapshot | undefined> {
-  const path = join(projectPath, FLOWWEAVE_DIR, "architecture-local.json");
-  const value = await readJsonArtifact(path);
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== "object" || !("version" in value) || ![2, 3].includes(Number(value.version)) || !("modules" in value) || !Array.isArray(value.modules) || !("relationships" in value) || !Array.isArray(value.relationships)) {
-    throw new Error(`FlowWeave generated architecture baseline is invalid and was preserved: ${path}`);
-  }
-  await assertArtifactGeneration(projectPath, "architecture-local.json", value as ArchitectureMap);
-  const graph = architectureMapToGraph(value as ArchitectureMap);
-  return normalizeModificationSnapshot({ ...canvas, ...graph, orphanedEdges: [], orphanedNodeEdits: [] }, "");
-}
-
-function emptyCanvas(projectPath: string): CodeflowCanvas {
-  return {
-    version: 6,
-    id: "main",
-    title: "Main Canvas",
-    projectPath,
-    generatedAt: new Date(0).toISOString(),
-    artifactState: "current",
-    nodes: [],
-    edges: []
-  };
+async function readGeneratedSnapshot(projectPath: string, canvas: CodeflowCanvas): Promise<ModificationSnapshot | undefined> {
+  const staticSnapshot = await readProjectProtocolSnapshot(projectPath);
+  if (!staticSnapshot) return undefined;
+  await assertArtifactGeneration(projectPath, "static-snapshot.json", staticSnapshot.localArchitecture);
+  const graph = architectureMapToGraph(staticSnapshot.localArchitecture);
+  return normalizeModificationSnapshot({ ...canvas, ...graph, nodes: graph.nodes.map((node) => ({ ...node, guidanceDraft: "" })), orphanedEdges: [], orphanedNodeEdits: [] }, "");
 }
 
 function baselinePath(projectPath: string): string {

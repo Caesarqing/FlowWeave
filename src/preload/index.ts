@@ -17,6 +17,7 @@ import type {
   FlowWeaveProjectOpenResult,
   FlowWeaveStoredProject,
   FlowWeaveErrorData,
+  ProjectAnalysisEvent,
   ProjectScanOptions,
   SequenceReviewEvent,
   RuntimeAgentId,
@@ -28,7 +29,8 @@ import type {
   ToolRunArtifact,
   ToolRunSummary,
   AgentPluginStatus,
-  AgentDiscoveryResult
+  AgentDiscoveryResult,
+  TaskArtifactWriteResult
 } from "../types";
 import type { StartToolPlanOptions, StartToolPlanResult } from "../main/services/agent-run.service";
 import { GIT_CHANNELS, PROJECT_CHANNELS, TOOL_CHANNELS } from "../common/ipc-channels";
@@ -88,10 +90,17 @@ const flowweaveApi = {
     ipcRenderer.invoke(TOOL_CHANNELS.openAgentInbox, projectId, runId) as Promise<void>,
   scanProject: (projectId: string, options: ProjectScanOptions) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.scanProject, projectId, options) as Promise<FlowWeaveProjectOpenResult>,
+  cancelProjectAnalysis: (projectId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.cancelProjectAnalysis, projectId) as Promise<boolean>,
   onOperationProgress: (listener: (operation: AnalysisOperation) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, operation: AnalysisOperation) => listener(operation);
     ipcRenderer.on(PROJECT_CHANNELS.operationProgress, handler);
     return () => ipcRenderer.removeListener(PROJECT_CHANNELS.operationProgress, handler);
+  },
+  onProjectAnalysis: (listener: (event: ProjectAnalysisEvent) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, result: ProjectAnalysisEvent) => listener(result);
+    ipcRenderer.on(PROJECT_CHANNELS.analysisResult, handler);
+    return () => ipcRenderer.removeListener(PROJECT_CHANNELS.analysisResult, handler);
   },
   onArchitectureReview: (listener: (event: ArchitectureReviewEvent) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, reviewEvent: ArchitectureReviewEvent) => listener(reviewEvent);
@@ -117,6 +126,8 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.readArchitectureMap, projectId) as Promise<ArchitectureMap | undefined>,
   generateSequenceDiagrams: (projectId: string, agentId: AgentId | "mock", timeoutMs?: number) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.generateSequenceDiagrams, projectId, agentId, timeoutMs) as Promise<SequenceDiagramGenerationResult>,
+  generateTaskArtifact: (projectId: string, generationId: string, userRevision: number) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.generateTaskArtifact, projectId, generationId, userRevision) as Promise<TaskArtifactWriteResult>,
   reviseSequenceDiagram: (projectId: string, agentId: AgentId | "mock", instruction: string, timeoutMs?: number) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.reviseSequenceDiagram, projectId, agentId, instruction, timeoutMs) as Promise<SequenceDiagramBundle>,
   readSequenceDiagrams: (projectId: string) =>
@@ -140,10 +151,18 @@ const flowweaveApi = {
     ipcRenderer.invoke(PROJECT_CHANNELS.acknowledgeModificationChanges, projectId, snapshot, scope) as Promise<import("../types").ModificationBaseline>,
   readCanvas: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readCanvas, projectId) as Promise<CanvasReadResult | undefined>,
+  readCanvasNodeDetail: (projectId: string, generationId: string, userRevision: number, nodeId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.readCanvasNodeDetail, projectId, generationId, userRevision, nodeId) as Promise<import("../types").CanvasNodeDetailResponse>,
+  readGeneratedCanvasGraph: (projectId: string, generationId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.readGeneratedCanvasGraph, projectId, generationId) as Promise<Pick<CodeflowCanvas, "nodes" | "edges">>,
+  readCanvasEdgeDetail: (projectId: string, generationId: string, userRevision: number, edgeId: string) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.readCanvasEdgeDetail, projectId, generationId, userRevision, edgeId) as Promise<import("../types").CanvasEdgeDetailResponse>,
   readRegisteredProject: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.readRegisteredProject, projectId) as Promise<FlowWeaveStoredProject | undefined>,
-  saveCanvas: (projectId: string, canvas: CodeflowCanvas, options?: { allowStaleNoop?: boolean }) =>
-    ipcRenderer.invoke(PROJECT_CHANNELS.saveCanvas, projectId, canvas, options) as Promise<string>,
+  saveCanvas: (projectId: string, canvas: CodeflowCanvas) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.saveCanvas, projectId, canvas) as Promise<import("../types").CanvasSaveReceipt>,
+  resolveCanvasMigrationItem: (projectId: string, request: import("../types").CanvasMigrationReviewRequest) =>
+    ipcRenderer.invoke(PROJECT_CHANNELS.resolveCanvasMigrationItem, projectId, request) as Promise<import("../types").CanvasSaveReceipt>,
   exportDiagnostics: (projectId: string) =>
     ipcRenderer.invoke(PROJECT_CHANNELS.exportDiagnostics, projectId) as Promise<string>,
   getProjectAgentConnection: (projectId: string) =>

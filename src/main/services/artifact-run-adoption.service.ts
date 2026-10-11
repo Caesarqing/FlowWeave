@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type {
   ArchitectureReviewStatus,
   ArtifactAdoption,
@@ -10,8 +9,7 @@ import type {
   SequenceReviewStatus,
   ToolRunResult
 } from "../../types";
-import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { readJsonArtifact } from "../storage/artifact-store";
+import { readProjectProtocolSnapshot } from "../storage/flowweave-store";
 import {
   assessArchitectureMap,
   buildArchitectureInputFingerprint,
@@ -105,7 +103,7 @@ async function adoptArchitectureRun(
     return { status: "rejected", message: "Run is missing architecture review identity metadata." };
   }
 
-  const localValue = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "architecture-local.json"));
+  const localValue = (await readProjectProtocolSnapshot(projectPath))?.localArchitecture;
   if (!isArchitectureMap(localValue) || localValue.source !== "local") {
     return { status: "rejected", message: "Current local architecture baseline is missing or invalid." };
   }
@@ -251,8 +249,8 @@ async function adoptionFacts(
 }
 
 async function staleScanMessage(projectPath: string, inputFingerprint: string): Promise<ArtifactAdoption | undefined> {
-  const value = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "project.json"));
-  if (value && typeof value === "object" && "scanFingerprint" in value && value.scanFingerprint !== inputFingerprint) {
+  const committed = await readCommittedAnalysis(projectPath);
+  if (committed?.project.scanFingerprint !== inputFingerprint) {
     return {
       status: "stale",
       message: "Run completed but not applied because the project scan changed."

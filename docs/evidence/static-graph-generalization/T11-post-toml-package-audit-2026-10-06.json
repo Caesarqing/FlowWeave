@@ -1,0 +1,724 @@
+{
+  "task": "T11",
+  "date": "2026-10-06",
+  "status": "latest_post_toml_package_resource_and_license_audit_passed_release_gate_open",
+  "package": {
+    "bundlePath": "/tmp/flowweave-static-loading-post-toml-2026-10-06/mac-arm64/FlowWeave.app",
+    "architecture": "arm64",
+    "signature": "ad-hoc",
+    "teamIdentifier": "not set",
+    "notarized": false,
+    "packagedStartupSmoke": "passed",
+    "strictDeepSignatureVerification": "failed: code has no resources but signature indicates they must be present"
+  },
+  "hashes": {
+    "appAsarSha256": "df180ddb2e72e11de7f47a9bd19fac82f3ffd07954e906d2611c1b092bc984f0",
+    "executableSha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157"
+  },
+  "asar": {
+    "entryCount": 5751,
+    "packageJsonEntryCount": 74,
+    "canonicalPackageRootCount": 66,
+    "packagesMissingLicenseMetadata": [],
+    "packagesWithoutIncludedLicenseFile": [],
+    "packages": [
+      {
+        "name": "@babel/helper-string-parser",
+        "version": "7.29.7",
+        "license": "MIT",
+        "root": "node_modules/@babel/helper-string-parser",
+        "licenseFiles": [
+          "node_modules/@babel/helper-string-parser/LICENSE"
+        ]
+      },
+      {
+        "name": "@babel/helper-validator-identifier",
+        "version": "7.29.7",
+        "license": "MIT",
+        "root": "node_modules/@babel/helper-validator-identifier",
+        "licenseFiles": [
+          "node_modules/@babel/helper-validator-identifier/LICENSE"
+        ]
+      },
+      {
+        "name": "@babel/parser",
+        "version": "7.29.8",
+        "license": "MIT",
+        "root": "node_modules/@babel/parser",
+        "licenseFiles": [
+          "node_modules/@babel/parser/LICENSE"
+        ]
+      },
+      {
+        "name": "@babel/types",
+        "version": "7.29.8",
+        "license": "MIT",
+        "root": "node_modules/@babel/types",
+        "licenseFiles": [
+          "node_modules/@babel/types/LICENSE"
+        ]
+      },
+      {
+        "name": "@jridgewell/sourcemap-codec",
+        "version": "1.5.5",
+        "license": "MIT",
+        "root": "node_modules/@jridgewell/sourcemap-codec",
+        "licenseFiles": [
+          "node_modules/@jridgewell/sourcemap-codec/LICENSE"
+        ]
+      },
+      {
+        "name": "@monaco-editor/loader",
+        "version": "1.7.0",
+        "license": "MIT",
+        "root": "node_modules/@monaco-editor/loader",
+        "licenseFiles": [
+          "node_modules/@monaco-editor/loader/LICENSE"
+        ]
+      },
+      {
+        "name": "@monaco-editor/react",
+        "version": "4.7.0",
+        "license": "MIT",
+        "root": "node_modules/@monaco-editor/react",
+        "licenseFiles": [
+          "node_modules/@monaco-editor/react/LICENSE"
+        ]
+      },
+      {
+        "name": "@nodelib/fs.scandir",
+        "version": "2.1.5",
+        "license": "MIT",
+        "root": "node_modules/@nodelib/fs.scandir",
+        "licenseFiles": [
+          "node_modules/@nodelib/fs.scandir/LICENSE"
+        ]
+      },
+      {
+        "name": "@nodelib/fs.stat",
+        "version": "2.0.5",
+        "license": "MIT",
+        "root": "node_modules/@nodelib/fs.stat",
+        "licenseFiles": [
+          "node_modules/@nodelib/fs.stat/LICENSE"
+        ]
+      },
+      {
+        "name": "@nodelib/fs.walk",
+        "version": "1.2.8",
+        "license": "MIT",
+        "root": "node_modules/@nodelib/fs.walk",
+        "licenseFiles": [
+          "node_modules/@nodelib/fs.walk/LICENSE"
+        ]
+      },
+      {
+        "name": "@types/d3-color",
+        "version": "3.1.3",
+        "license": "MIT",
+        "root": "node_modules/@types/d3-color",
+        "licenseFiles": [
+          "node_modules/@types/d3-color/LICENSE"
+        ]
+      },
+      {
+        "name": "@types/d3-drag",
+        "version": "3.0.7",
+        "license": "MIT",
+        "root": "node_modules/@types/d3-drag",
+        "licenseFiles": [
+          "node_modules/@types/d3-drag/LICENSE"
+        ]
+      },
+      {
+        "name": "@types/d3-interpolate",
+        "version": "3.0.4",
+        "license": "MIT",
+        "root": "node_modules/@types/d3-interpolate",
+        "licenseFiles": [
+          "node_modules/@types/d3-interpolate/LICENSE"
+        ]
+      },
+      {
+        "name": "@types/d3-selection",
+        "version": "3.0.11",
+        "license": "MIT",
+        "root": "node_modules/@types/d3-selection",
+        "licenseFiles": [
+          "node_modules/@types/d3-selection/LICENSE"
+        ]
+      },
+      {
+        "name": "@types/d3-transition",
+        "version": "3.0.9",
+        "license": "MIT",
+        "root": "node_modules/@types/d3-transition",
+        "licenseFiles": [
+          "node_modules/@types/d3-transition/LICENSE"
+        ]
+      },
+      {
+        "name": "@types/d3-zoom",
+        "version": "3.0.8",
+        "license": "MIT",
+        "root": "node_modules/@types/d3-zoom",
+        "licenseFiles": [
+          "node_modules/@types/d3-zoom/LICENSE"
+        ]
+      },
+      {
+        "name": "@vue/compiler-core",
+        "version": "3.5.36",
+        "license": "MIT",
+        "root": "node_modules/@vue/compiler-core",
+        "licenseFiles": [
+          "node_modules/@vue/compiler-core/LICENSE"
+        ]
+      },
+      {
+        "name": "@vue/compiler-dom",
+        "version": "3.5.36",
+        "license": "MIT",
+        "root": "node_modules/@vue/compiler-dom",
+        "licenseFiles": [
+          "node_modules/@vue/compiler-dom/LICENSE"
+        ]
+      },
+      {
+        "name": "@vue/compiler-sfc",
+        "version": "3.5.36",
+        "license": "MIT",
+        "root": "node_modules/@vue/compiler-sfc",
+        "licenseFiles": [
+          "node_modules/@vue/compiler-sfc/LICENSE"
+        ]
+      },
+      {
+        "name": "@vue/compiler-ssr",
+        "version": "3.5.36",
+        "license": "MIT",
+        "root": "node_modules/@vue/compiler-ssr",
+        "licenseFiles": [
+          "node_modules/@vue/compiler-ssr/LICENSE"
+        ]
+      },
+      {
+        "name": "@vue/shared",
+        "version": "3.5.36",
+        "license": "MIT",
+        "root": "node_modules/@vue/shared",
+        "licenseFiles": [
+          "node_modules/@vue/shared/LICENSE"
+        ]
+      },
+      {
+        "name": "@xyflow/react",
+        "version": "12.10.2",
+        "license": "MIT",
+        "root": "node_modules/@xyflow/react",
+        "licenseFiles": [
+          "node_modules/@xyflow/react/LICENSE"
+        ]
+      },
+      {
+        "name": "zustand",
+        "version": "4.5.7",
+        "license": "MIT",
+        "root": "node_modules/@xyflow/react/node_modules/zustand",
+        "licenseFiles": [
+          "node_modules/@xyflow/react/node_modules/zustand/LICENSE"
+        ]
+      },
+      {
+        "name": "@xyflow/system",
+        "version": "0.0.76",
+        "license": "MIT",
+        "root": "node_modules/@xyflow/system",
+        "licenseFiles": [
+          "node_modules/@xyflow/system/LICENSE"
+        ]
+      },
+      {
+        "name": "braces",
+        "version": "3.0.3",
+        "license": "MIT",
+        "root": "node_modules/braces",
+        "licenseFiles": [
+          "node_modules/braces/LICENSE"
+        ]
+      },
+      {
+        "name": "classcat",
+        "version": "5.0.5",
+        "license": "MIT",
+        "root": "node_modules/classcat",
+        "licenseFiles": [
+          "node_modules/classcat/LICENSE.md"
+        ]
+      },
+      {
+        "name": "d3-color",
+        "version": "3.1.0",
+        "license": "ISC",
+        "root": "node_modules/d3-color",
+        "licenseFiles": [
+          "node_modules/d3-color/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-dispatch",
+        "version": "3.0.1",
+        "license": "ISC",
+        "root": "node_modules/d3-dispatch",
+        "licenseFiles": [
+          "node_modules/d3-dispatch/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-drag",
+        "version": "3.0.0",
+        "license": "ISC",
+        "root": "node_modules/d3-drag",
+        "licenseFiles": [
+          "node_modules/d3-drag/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-ease",
+        "version": "3.0.1",
+        "license": "BSD-3-Clause",
+        "root": "node_modules/d3-ease",
+        "licenseFiles": [
+          "node_modules/d3-ease/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-interpolate",
+        "version": "3.0.1",
+        "license": "ISC",
+        "root": "node_modules/d3-interpolate",
+        "licenseFiles": [
+          "node_modules/d3-interpolate/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-selection",
+        "version": "3.0.0",
+        "license": "ISC",
+        "root": "node_modules/d3-selection",
+        "licenseFiles": [
+          "node_modules/d3-selection/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-timer",
+        "version": "3.0.1",
+        "license": "ISC",
+        "root": "node_modules/d3-timer",
+        "licenseFiles": [
+          "node_modules/d3-timer/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-transition",
+        "version": "3.0.1",
+        "license": "ISC",
+        "root": "node_modules/d3-transition",
+        "licenseFiles": [
+          "node_modules/d3-transition/LICENSE"
+        ]
+      },
+      {
+        "name": "d3-zoom",
+        "version": "3.0.0",
+        "license": "ISC",
+        "root": "node_modules/d3-zoom",
+        "licenseFiles": [
+          "node_modules/d3-zoom/LICENSE"
+        ]
+      },
+      {
+        "name": "elkjs",
+        "version": "0.11.1",
+        "license": "EPL-2.0",
+        "root": "node_modules/elkjs",
+        "licenseFiles": [
+          "node_modules/elkjs/LICENSE.md"
+        ]
+      },
+      {
+        "name": "entities",
+        "version": "7.0.1",
+        "license": "BSD-2-Clause",
+        "root": "node_modules/entities",
+        "licenseFiles": [
+          "node_modules/entities/LICENSE"
+        ]
+      },
+      {
+        "name": "estree-walker",
+        "version": "2.0.2",
+        "license": "MIT",
+        "root": "node_modules/estree-walker",
+        "licenseFiles": [
+          "node_modules/estree-walker/LICENSE"
+        ]
+      },
+      {
+        "name": "fast-glob",
+        "version": "3.3.3",
+        "license": "MIT",
+        "root": "node_modules/fast-glob",
+        "licenseFiles": [
+          "node_modules/fast-glob/LICENSE"
+        ]
+      },
+      {
+        "name": "fastq",
+        "version": "1.20.1",
+        "license": "ISC",
+        "root": "node_modules/fastq",
+        "licenseFiles": [
+          "node_modules/fastq/LICENSE"
+        ]
+      },
+      {
+        "name": "fill-range",
+        "version": "7.1.1",
+        "license": "MIT",
+        "root": "node_modules/fill-range",
+        "licenseFiles": [
+          "node_modules/fill-range/LICENSE"
+        ]
+      },
+      {
+        "name": "glob-parent",
+        "version": "5.1.2",
+        "license": "ISC",
+        "root": "node_modules/glob-parent",
+        "licenseFiles": [
+          "node_modules/glob-parent/LICENSE"
+        ]
+      },
+      {
+        "name": "is-extglob",
+        "version": "2.1.1",
+        "license": "MIT",
+        "root": "node_modules/is-extglob",
+        "licenseFiles": [
+          "node_modules/is-extglob/LICENSE"
+        ]
+      },
+      {
+        "name": "is-glob",
+        "version": "4.0.3",
+        "license": "MIT",
+        "root": "node_modules/is-glob",
+        "licenseFiles": [
+          "node_modules/is-glob/LICENSE"
+        ]
+      },
+      {
+        "name": "is-number",
+        "version": "7.0.0",
+        "license": "MIT",
+        "root": "node_modules/is-number",
+        "licenseFiles": [
+          "node_modules/is-number/LICENSE"
+        ]
+      },
+      {
+        "name": "lucide-react",
+        "version": "0.561.0",
+        "license": "ISC",
+        "root": "node_modules/lucide-react",
+        "licenseFiles": [
+          "node_modules/lucide-react/LICENSE"
+        ]
+      },
+      {
+        "name": "magic-string",
+        "version": "0.30.21",
+        "license": "MIT",
+        "root": "node_modules/magic-string",
+        "licenseFiles": [
+          "node_modules/magic-string/LICENSE"
+        ]
+      },
+      {
+        "name": "merge2",
+        "version": "1.4.1",
+        "license": "MIT",
+        "root": "node_modules/merge2",
+        "licenseFiles": [
+          "node_modules/merge2/LICENSE"
+        ]
+      },
+      {
+        "name": "micromatch",
+        "version": "4.0.8",
+        "license": "MIT",
+        "root": "node_modules/micromatch",
+        "licenseFiles": [
+          "node_modules/micromatch/LICENSE"
+        ]
+      },
+      {
+        "name": "nanoid",
+        "version": "3.3.17",
+        "license": "MIT",
+        "root": "node_modules/nanoid",
+        "licenseFiles": [
+          "node_modules/nanoid/LICENSE"
+        ]
+      },
+      {
+        "name": "picocolors",
+        "version": "1.1.1",
+        "license": "ISC",
+        "root": "node_modules/picocolors",
+        "licenseFiles": [
+          "node_modules/picocolors/LICENSE"
+        ]
+      },
+      {
+        "name": "picomatch",
+        "version": "2.3.2",
+        "license": "MIT",
+        "root": "node_modules/picomatch",
+        "licenseFiles": [
+          "node_modules/picomatch/LICENSE"
+        ]
+      },
+      {
+        "name": "postcss",
+        "version": "8.5.25",
+        "license": "MIT",
+        "root": "node_modules/postcss",
+        "licenseFiles": [
+          "node_modules/postcss/LICENSE"
+        ]
+      },
+      {
+        "name": "queue-microtask",
+        "version": "1.2.3",
+        "license": "MIT",
+        "root": "node_modules/queue-microtask",
+        "licenseFiles": [
+          "node_modules/queue-microtask/LICENSE"
+        ]
+      },
+      {
+        "name": "react",
+        "version": "19.2.6",
+        "license": "MIT",
+        "root": "node_modules/react",
+        "licenseFiles": [
+          "node_modules/react/LICENSE"
+        ]
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.6",
+        "license": "MIT",
+        "root": "node_modules/react-dom",
+        "licenseFiles": [
+          "node_modules/react-dom/LICENSE"
+        ]
+      },
+      {
+        "name": "reusify",
+        "version": "1.1.0",
+        "license": "MIT",
+        "root": "node_modules/reusify",
+        "licenseFiles": [
+          "node_modules/reusify/LICENSE"
+        ]
+      },
+      {
+        "name": "run-parallel",
+        "version": "1.2.0",
+        "license": "MIT",
+        "root": "node_modules/run-parallel",
+        "licenseFiles": [
+          "node_modules/run-parallel/LICENSE"
+        ]
+      },
+      {
+        "name": "scheduler",
+        "version": "0.27.0",
+        "license": "MIT",
+        "root": "node_modules/scheduler",
+        "licenseFiles": [
+          "node_modules/scheduler/LICENSE"
+        ]
+      },
+      {
+        "name": "source-map-js",
+        "version": "1.2.1",
+        "license": "BSD-3-Clause",
+        "root": "node_modules/source-map-js",
+        "licenseFiles": [
+          "node_modules/source-map-js/LICENSE"
+        ]
+      },
+      {
+        "name": "state-local",
+        "version": "1.0.7",
+        "license": "MIT",
+        "root": "node_modules/state-local",
+        "licenseFiles": [
+          "node_modules/state-local/LICENSE"
+        ]
+      },
+      {
+        "name": "to-regex-range",
+        "version": "5.0.1",
+        "license": "MIT",
+        "root": "node_modules/to-regex-range",
+        "licenseFiles": [
+          "node_modules/to-regex-range/LICENSE"
+        ]
+      },
+      {
+        "name": "typescript",
+        "version": "5.9.3",
+        "license": "Apache-2.0",
+        "root": "node_modules/typescript",
+        "licenseFiles": [
+          "node_modules/typescript/LICENSE.txt"
+        ]
+      },
+      {
+        "name": "use-sync-external-store",
+        "version": "1.6.0",
+        "license": "MIT",
+        "root": "node_modules/use-sync-external-store",
+        "licenseFiles": [
+          "node_modules/use-sync-external-store/LICENSE"
+        ]
+      },
+      {
+        "name": "web-tree-sitter",
+        "version": "0.26.9",
+        "license": "MIT",
+        "root": "node_modules/web-tree-sitter",
+        "licenseFiles": [
+          "node_modules/web-tree-sitter/LICENSE"
+        ]
+      },
+      {
+        "name": "zustand",
+        "version": "5.0.13",
+        "license": "MIT",
+        "root": "node_modules/zustand",
+        "licenseFiles": [
+          "node_modules/zustand/LICENSE"
+        ]
+      }
+    ]
+  },
+  "resources": [
+    {
+      "path": "Resources/app.asar",
+      "sizeBytes": 87852175,
+      "sha256": "df180ddb2e72e11de7f47a9bd19fac82f3ffd07954e906d2611c1b092bc984f0"
+    },
+    {
+      "path": "Resources/default_app.asar",
+      "sizeBytes": 111073,
+      "sha256": "06d4a28be095a80eff94dbd18edcfac5b5805e1b5538e0fb7cee7c7ae81db76a"
+    },
+    {
+      "path": "Resources/flowweave-app-icon.png",
+      "sizeBytes": 221738,
+      "sha256": "7eb4eaa2b8a89940a18899d73ab2f3e3a6ea75ff4085c32f4d13657f244a24e7"
+    },
+    {
+      "path": "Resources/flowweave-plugin/.claude-plugin/plugin.json",
+      "sizeBytes": 154,
+      "sha256": "be6b562e44a1a3f9417bced4b7e64345dd5dd3235c497606a739c0f311781740"
+    },
+    {
+      "path": "Resources/flowweave-plugin/.codex-plugin/plugin.json",
+      "sizeBytes": 649,
+      "sha256": "aac2701d4d64c90167eca360550b80ed9b994f4e54e9da7caec03e070c726d8d"
+    },
+    {
+      "path": "Resources/flowweave-plugin/hosts/claude.md",
+      "sizeBytes": 398,
+      "sha256": "0b06bd9ca8ccc7e8d6d697e86987c3c5869ebf92d6b5b687afe60c3a372494f8"
+    },
+    {
+      "path": "Resources/flowweave-plugin/hosts/codex.md",
+      "sizeBytes": 385,
+      "sha256": "9a4ce75cc4817b34be3ec9539e1e4c8654624e75fcdf396e61661fb4b57fbe00"
+    },
+    {
+      "path": "Resources/flowweave-plugin/hosts/cursor.md",
+      "sizeBytes": 325,
+      "sha256": "ae127e22223cb0661c8d7de2a476b26428020c3b43d7a80722a85a204c39b732"
+    },
+    {
+      "path": "Resources/flowweave-plugin/hosts/gemini.md",
+      "sizeBytes": 318,
+      "sha256": "dc80fa69d8d53ed9b1179bc405ac532b06f05ac8f4058672a2d2aa15382bed3d"
+    },
+    {
+      "path": "Resources/flowweave-plugin/manifest.json",
+      "sizeBytes": 1183,
+      "sha256": "711c8819ce02c9d0d4d434bf7fecd955516b7566a06512385d69be50c931feb2"
+    },
+    {
+      "path": "Resources/flowweave-plugin/package.json",
+      "sizeBytes": 173,
+      "sha256": "81df17e28e797bc5abe0e704fbd8e06c2c270d212909aa897e358d23e65b4013"
+    },
+    {
+      "path": "Resources/flowweave-plugin/skills/flowweave/SKILL.md",
+      "sizeBytes": 2020,
+      "sha256": "962696ee1d8124b036aaf78b40a16b35343bf37140885ae98c8b1108c3627493"
+    },
+    {
+      "path": "Resources/icon.icns",
+      "sizeBytes": 441923,
+      "sha256": "60d8cde4ab90b38cd2d1b482940e37c9cc5c9d4ef609456aed424a9e9970dce0"
+    },
+    {
+      "path": "Resources/parsers/licenses/tree-sitter-go/LICENSE",
+      "sizeBytes": 1080,
+      "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+    },
+    {
+      "path": "Resources/parsers/licenses/tree-sitter-java/LICENSE",
+      "sizeBytes": 1069,
+      "sha256": "52ed137b039cd9c46409bc22e89938af911c95b157feae2d040b51e6084369a7"
+    },
+    {
+      "path": "Resources/parsers/licenses/tree-sitter-python/LICENSE",
+      "sizeBytes": 1080,
+      "sha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+    },
+    {
+      "path": "Resources/parsers/tree-sitter-go.wasm",
+      "sizeBytes": 217182,
+      "sha256": "9504573f352b20be7f2f1911754d710622aedc15afff16d5ed8fb5645681aee7"
+    },
+    {
+      "path": "Resources/parsers/tree-sitter-java.wasm",
+      "sizeBytes": 414641,
+      "sha256": "4fdeac4ca6ca089f06c6f7e562abcac1733cd465728cc7031ebb73c2019122c4"
+    },
+    {
+      "path": "Resources/parsers/tree-sitter-python.wasm",
+      "sizeBytes": 457883,
+      "sha256": "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47"
+    },
+    {
+      "path": "Resources/parsers/web-tree-sitter.wasm",
+      "sizeBytes": 200297,
+      "sha256": "1ed02fe75a60642bea084670e33267795aab26c19012805b9fb513ab458680ee"
+    }
+  ],
+  "method": "Enumerated package manifests and canonical direct/nested node_modules roots; checked license metadata and included license/copying/notice files; SHA-256 hashed each regular file under Contents/Resources and the arm64 executable."
+}

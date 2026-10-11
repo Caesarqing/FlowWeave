@@ -7,6 +7,7 @@ import { buildRunPrompt, startToolPlan } from "../../src/main/services/agent-run
 import { registerProject } from "../../src/main/services/project-registry.service";
 import { enableProjectAgentConnection } from "../../src/main/services/project-agent-connection.service";
 import { createNodeCliFixture } from "./test-cli-fixture";
+import { writeEmptyProtocolFixture } from "./protocol.fixture";
 
 describe("agent-run.service", () => {
   const originalPath = process.env.PATH;
@@ -190,19 +191,7 @@ describe("agent-run.service", () => {
 
 async function createProjectWithConnection() {
   const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-connected-"));
-  await mkdir(join(projectPath, FLOWWEAVE_DIR, "canvas"), { recursive: true });
-  await mkdir(join(projectPath, FLOWWEAVE_DIR, "context"), { recursive: true });
-  await mkdir(join(projectPath, FLOWWEAVE_DIR, "tasks"), { recursive: true });
-  await writeFile(join(projectPath, FLOWWEAVE_DIR, "project.json"), JSON.stringify({
-    version: 1,
-    projectName: "Connected Project",
-    rootPath: projectPath,
-    generatedAt: new Date().toISOString(),
-    git: { isRepo: true, branch: "main" },
-    summary: { totalFiles: 0, totalFolders: 0, languages: {} },
-    files: []
-  }, null, 2), "utf8");
-  await writeFile(join(projectPath, FLOWWEAVE_DIR, "context", "file-tree.md"), "# Project File Tree\n", "utf8");
+  await writeEmptyProtocolFixture(projectPath, "connected-scan");
   await enableProjectAgentConnection(projectPath);
   return projectPath;
 }

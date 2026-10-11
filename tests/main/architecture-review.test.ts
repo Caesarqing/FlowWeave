@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -9,10 +10,14 @@ import {
   isArchitectureReviewActive,
   markArchitectureReviewFailedIfCurrent,
   readArchitectureReviewStatus,
-  startArchitectureReview,
-  writeArchitectureReviewStatus
+  startArchitectureReview as startArchitectureReviewV7,
+  withArchitectureArtifactLock,
+  writeArchitectureReviewStatus as writeArchitectureReviewStatusV7,
+  type StartArchitectureReviewInput
 } from "../../src/main/services/architecture-review.service";
-import type { ArchitectureMap, ArtifactGenerationMetadata, ArchitectureReviewStatus } from "../../src/types";
+import type { ArchitectureMap, ArtifactGenerationMetadata, ArchitectureReviewStatus, CodeflowCanvas, CodeflowProject } from "../../src/types";
+import { readProjectProtocolCanvas } from "../../src/main/storage/flowweave-store";
+import { writeArchitectureProtocolFixture, writeEmptyProtocolFixture } from "./protocol.fixture";
 
 const architectureStatusWriteFault = vi.hoisted(() => ({
   path: "",
@@ -34,6 +39,30 @@ vi.mock("../../src/main/storage/artifact-store", async (importOriginal) => {
 });
 
 describe("architecture-review.service", () => {
+  it("waits for an existing artifact lock when measurement is disabled", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-unmeasured-artifact-lock-"));
+    let signalLockHeld: (() => void) | undefined;
+    let releaseLock: (() => void) | undefined;
+    let acquiredBySecondCall = false;
+    const lockHeld = new Promise<void>((resolve) => { signalLockHeld = resolve; });
+    const releaseGate = new Promise<void>((resolve) => { releaseLock = resolve; });
+    const first = withArchitectureArtifactLock(root, async () => {
+      signalLockHeld?.();
+      await releaseGate;
+    });
+    await lockHeld;
+    const second = withArchitectureArtifactLock(root, async () => { acquiredBySecondCall = true; })
+      .then(() => undefined, (error: unknown) => error);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(acquiredBySecondCall).toBe(false);
+    releaseLock?.();
+    await first;
+    expect(await second).toBeUndefined();
+    expect(acquiredBySecondCall).toBe(true);
+    await rm(root, { recursive: true, force: true });
+  });
+
   it("summarizes added, removed, and modified modules and relationships", () => {
     const local = architectureMap(
       [
@@ -66,9 +95,12 @@ describe("architecture-review.service", () => {
       ...architectureMap([architectureModule("local", "Local", "Local")], []),
       metadata: { source: "local", scanFingerprint: "scan-1", inputFingerprint: "input-1" }
     };
+    const protocolCanvas = await ensureProtocolFixture(root, "scan-1", local);
+    const localArchitecture = { ...local, generation: protocolCanvas.generation };
     const reviewed: ArchitectureMap = {
       ...architectureMap([architectureModule("reviewed", "Reviewed", "Reviewed")], []),
       source: "agent",
+      generation: protocolCanvas.generation,
       metadata: {
         source: "agent",
         agentId: "mock",
@@ -91,13 +123,9 @@ describe("architecture-review.service", () => {
       scanFingerprint: "scan-1",
       inputFingerprint: "input-1",
       agentId: "mock",
-      localArchitecture: local,
+      localArchitecture,
       startedAt: "2026-06-25T00:00:00.000Z",
-      persistLocal: async () => {
-        await mkdir(join(root, ".flowweave"), { recursive: true });
-        await writeFile(join(root, ".flowweave", "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
-        await writeFile(join(root, ".flowweave", "architecture-local.json"), JSON.stringify(local), "utf8");
-      },
+      persistLocal: async () => undefined,
       persist: async (architectureMap) => {
         await mkdir(join(root, ".flowweave"), { recursive: true });
         await writeFile(
@@ -219,18 +247,15 @@ describe("architecture-review.service", () => {
 
   it("preserves local topology through the shared adoption gate", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-review-topology-"));
-    const flowweaveRoot = join(root, ".flowweave");
-    await mkdir(flowweaveRoot, { recursive: true });
-    await writeFile(join(flowweaveRoot, "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
-
-    const local = {
+    const localDefinition = {
       ...architectureMap([
         { ...architectureModule("core", "Core", "Local core"), files: ["src/core.ts"] },
         { ...architectureModule("data", "Data", "Local data"), files: ["src/data.ts"] }
       ], [architectureRelationship("core-data", "core", "data", "Local dependency")]),
       metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
     };
-    await writeFile(join(flowweaveRoot, "architecture-local.json"), JSON.stringify(local), "utf8");
+    const protocolCanvas = await ensureProtocolFixture(root, "scan-1", localDefinition);
+    const local = { ...localDefinition, generation: protocolCanvas.generation };
     const identity = {
       projectId: "project-1",
       artifactTarget: "architecture-map" as const,
@@ -251,6 +276,7 @@ describe("architecture-review.service", () => {
         { ...architectureModule("extra", "Extra", "Agent invented module"), files: ["src/extra.ts"] }
       ], []),
       source: "agent",
+      generation: protocolCanvas.generation,
       metadata: {
         source: "agent",
         agentId: "mock",
@@ -280,66 +306,56 @@ describe("architecture-review.service", () => {
     expect(persisted?.relationships).toEqual(local.relationships);
   });
 
-  it.each(["project.json", "architecture-local.json"])(
-    "rejects adoption when persisted %s evidence is missing",
-    async (missingFile) => {
-      const root = await mkdtemp(join(tmpdir(), "flowweave-review-missing-evidence-"));
-      const flowweaveRoot = join(root, ".flowweave");
-      await mkdir(flowweaveRoot, { recursive: true });
-      const local = {
-        ...architectureMap([], []),
-        metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
-      };
-      if (missingFile !== "project.json") {
-        await writeFile(join(flowweaveRoot, "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
-      }
-      if (missingFile !== "architecture-local.json") {
-        await writeFile(join(flowweaveRoot, "architecture-local.json"), JSON.stringify(local), "utf8");
-      }
+  it("rejects adoption when committed local architecture evidence is missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-review-missing-evidence-"));
+    const protocolCanvas = await writeEmptyProtocolFixture(root, "scan-1");
+    const flowweaveRoot = join(root, ".flowweave");
+    const snapshotPath = join(flowweaveRoot, "static-snapshot.json");
+    const manifestPath = join(flowweaveRoot, "generation.json");
+    const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    snapshot.localArchitecture = { generation: protocolCanvas.generation };
+    const snapshotContent = `${JSON.stringify(snapshot, null, 2)}\n`;
+    manifest.artifacts.staticSnapshot = createHash("sha256").update(snapshotContent).digest("hex");
+    await writeFile(snapshotPath, snapshotContent, "utf8");
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
-      const identity = {
-        projectId: "project-1",
-        artifactTarget: "architecture-map" as const,
+    const identity = reviewIdentity();
+    await writeArchitectureReviewStatus(root, {
+      ...identity,
+      state: "reviewing",
+      startedAt: "2026-06-25T00:00:00.000Z"
+    });
+    const reviewedMap: ArchitectureMap = {
+      ...architectureMap([], []),
+      source: "agent",
+      generation: protocolCanvas.generation,
+      metadata: {
+        source: "agent",
+        agentId: "mock",
+        runId: "run-1",
+        reviewId: "review-1",
+        generatedAt: "2026-06-25T00:00:01.000Z",
         scanFingerprint: "scan-1",
         inputFingerprint: "input-1",
-        agentId: "mock" as const,
-        reviewId: "review-1"
-      };
-      await writeArchitectureReviewStatus(root, {
-        ...identity,
-        state: "reviewing",
-        startedAt: "2026-06-25T00:00:00.000Z"
-      });
-      const reviewedMap: ArchitectureMap = {
-        ...architectureMap([], []),
-        source: "agent",
-        metadata: {
-          source: "agent",
-          agentId: "mock",
-          runId: "run-1",
-          reviewId: "review-1",
-          generatedAt: "2026-06-25T00:00:01.000Z",
-          scanFingerprint: "scan-1",
-          inputFingerprint: "input-1",
-          fileCoverage: 1,
-          evidenceCoverage: 1
-        }
-      };
-      let wasPersisted = false;
+        fileCoverage: 1,
+        evidenceCoverage: 1
+      }
+    };
+    let wasPersisted = false;
 
-      const adoption = await adoptArchitectureReview({
-        ...identity,
-        projectPath: root,
-        runId: "run-1",
-        architectureMap: reviewedMap,
-        localArchitecture: local,
-        persist: async () => { wasPersisted = true; }
-      });
+    const adoption = await adoptArchitectureReview({
+      ...identity,
+      projectPath: root,
+      runId: "run-1",
+      architectureMap: reviewedMap,
+      localArchitecture: architectureMap([], []),
+      persist: async () => { wasPersisted = true; }
+    });
 
-      expect(adoption.status).toBe("rejected");
-      expect(wasPersisted).toBe(false);
-    }
-  );
+    expect(adoption).toMatchObject({ status: "rejected", message: "Current local architecture baseline is missing or invalid." });
+    expect(wasPersisted).toBe(false);
+  });
 
   it.each([
     { name: "a newer scan", scanFingerprint: "scan-2", inputFingerprint: "input-2", agentId: "mock" as const },
@@ -672,13 +688,13 @@ describe("architecture-review.service", () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-review-status-write-failure-"));
     const flowweaveRoot = join(root, ".flowweave");
     await mkdir(flowweaveRoot, { recursive: true });
-    const local = {
+    const localDefinition = {
       ...architectureMap([], []),
       metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
     };
-    const agentMap = reviewArtifact("agent", {});
-    await writeFile(join(flowweaveRoot, "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
-    await writeFile(join(flowweaveRoot, "architecture-local.json"), JSON.stringify(local), "utf8");
+    const protocolCanvas = await ensureProtocolFixture(root, "scan-1", localDefinition);
+    const local = { ...localDefinition, generation: protocolCanvas.generation };
+    const agentMap = { ...reviewArtifact("agent", {}), generation: protocolCanvas.generation };
     await writeArchitectureReviewStatus(root, reviewStatus("reviewing"));
 
     const statusPath = join(flowweaveRoot, "architecture-review.json");
@@ -720,7 +736,9 @@ describe("architecture-review.service", () => {
       rootPath: root,
       metadata: { source: "local" as const, scanFingerprint: "scan-1", inputFingerprint: "input-1" }
     };
-    const agentMap = reviewArtifact("agent", {});
+    const protocolCanvas = await ensureProtocolFixture(root, "scan-1", local);
+    const localArchitecture = { ...local, generation: protocolCanvas.generation };
+    const agentMap = { ...reviewArtifact("agent", {}), generation: protocolCanvas.generation };
     const adoptionEvents: Array<{ outcome: string; message: string }> = [];
     const warning = "firstStatusWriteError=first retryStatusWriteError=second";
 
@@ -737,7 +755,7 @@ describe("architecture-review.service", () => {
       ...reviewIdentity(),
       projectPath: root,
       reviewId: "review-1",
-      localArchitecture: local,
+      localArchitecture,
       startedAt: "2026-06-25T00:00:00.000Z",
       persistLocal: async () => undefined,
       run: async (onRunId) => {
@@ -774,6 +792,45 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     if (Date.now() >= deadline) throw new Error("Timed out waiting for architecture review event.");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+}
+
+async function startArchitectureReview(input: StartArchitectureReviewInput): Promise<ArchitectureReviewStatus> {
+  const canvas = await ensureProtocolFixture(input.projectPath, input.scanFingerprint, input.localArchitecture);
+  return startArchitectureReviewV7({
+    ...input,
+    localArchitecture: { ...input.localArchitecture, generation: canvas.generation }
+  });
+}
+
+async function writeArchitectureReviewStatus(projectPath: string, status: ArchitectureReviewStatus): Promise<void> {
+  const canvas = await ensureProtocolFixture(projectPath, status.scanFingerprint ?? "scan-1", undefined);
+  await writeArchitectureReviewStatusV7(projectPath, { ...status, generation: status.generation ?? canvas.generation });
+}
+
+async function ensureProtocolFixture(
+  projectPath: string,
+  scanFingerprint: string,
+  localArchitecture: ArchitectureMap | undefined
+): Promise<CodeflowCanvas> {
+  const current = await readProjectProtocolCanvas(projectPath);
+  if (current) return current;
+  if (!localArchitecture) return writeEmptyProtocolFixture(projectPath, scanFingerprint);
+  const generatedAt = "2026-10-01T00:00:00.000Z";
+  const project: CodeflowProject = {
+    version: 2,
+    projectName: "Fixture",
+    rootPath: projectPath,
+    generatedAt,
+    git: { isRepo: false },
+    summary: { totalFiles: 0, totalFolders: 0, languages: {} },
+    files: [],
+    scanFingerprint
+  };
+  const canvas: CodeflowCanvas = {
+    id: "main", title: "Fixture", projectPath, generatedAt,
+    scanFingerprint, artifactState: "current", nodes: [], edges: []
+  };
+  return (await writeArchitectureProtocolFixture(projectPath, project, canvas, localArchitecture)).canvas;
 }
 
 function deferred<T>() {

@@ -1,5 +1,6 @@
-import { MarkerType, type Edge, type Node } from "@xyflow/react";
+import { MarkerType, Position, type Edge, type Node } from "@xyflow/react";
 import type { ArchitectureGroupReference, CanvasLayoutMode, ConnectionHandleLayout, GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
+import { CANVAS_NODE_SIZE } from "../common/canvas-geometry";
 import { cn } from "./classnames";
 import { nodeGroupKey, traceNodeIds, type TraceDirection } from "./canvas-layout";
 import { relationStyle } from "./relation-styles";
@@ -72,14 +73,13 @@ export function graphEdgeFromFlow(edge: Edge): GraphEdge {
   };
 }
 
-export { chooseInitialCollapsedGroups } from "./graph-view-projection";
-
 export function nodeDisplayGroups(node: GraphNode, mode: CanvasLayoutMode): ArchitectureGroupReference[] {
   if (mode === "dependency" || node.origin === "manual" || "syntheticKind" in node) return [];
-  if (mode === "architecture" && node.groupPath?.length) return node.groupPath;
   if (node.resource) return [];
-  const id = nodeGroupKey(node, mode);
-  return [{ id, title: id.slice(id.indexOf(":") + 1), rootPath: "" }];
+  const id = nodeGroupKey(node);
+  const area = node.groupPath?.find((group) => group.id === id);
+  const functionalArea = { id, title: area?.title ?? node.title, rootPath: area?.rootPath ?? "" };
+  return node.overviewGroup ? [node.overviewGroup, functionalArea] : [functionalArea];
 }
 
 export function expandedGroupsForNode(node: GraphNode, mode: CanvasLayoutMode, collapsedGroups: string[]): string[] {
@@ -179,11 +179,13 @@ export function projectCollapsedFlowGraph(
       }
     });
   }
-  const groupNodes = [...membersByGroupId.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([groupId, members]): FlowWeaveNode => {
+  const groupNodes = [...membersByGroupId.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([groupId, groupMembers]): FlowWeaveNode => {
+    const members = [...groupMembers].sort((left, right) => left.id.localeCompare(right.id));
     const group = groupByNodeId.get(members[0].id)!;
     const id = `group:${groupId}`;
     return {
-      id, type: "groupNode", position: { ...members[0].position }, draggable: false, connectable: false, selected: members.some((node) => node.selected),
+      id, type: "groupNode", position: { ...members[0].position }, initialWidth: CANVAS_NODE_SIZE.width, initialHeight: CANVAS_NODE_SIZE.height,
+      draggable: false, connectable: false, selected: members.some((node) => node.selected),
       data: {
         id, title: group.title, subtitle: group.rootPath, description: group.rootPath,
         kind: "module", nodeType: "module", risk: "unknown", status: "mapped", guidanceDraft: "",
@@ -202,8 +204,13 @@ export function projectCollapsedFlowGraph(
   };
 }
 
-export function decorateFlowGraph(nodes: FlowWeaveNode[], edges: Edge[], selectedEdgeId?: string) {
-  const { handlesByEdge, handlesByNode } = buildConnectionHandles(nodes, edges);
+export function decorateFlowGraph(
+  nodes: FlowWeaveNode[],
+  edges: Edge[],
+  selectedEdgeId?: string,
+  layoutHandles?: Record<string, ConnectionHandleLayout>
+) {
+  const { handlesByEdge, handlesByNode } = buildConnectionHandles(nodes, edges, layoutHandles);
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined;
   const selectedPair = selectedEdge ? new Set([selectedEdge.source, selectedEdge.target]) : new Set<string>();
 
@@ -227,11 +234,20 @@ export function decorateFlowGraph(nodes: FlowWeaveNode[], edges: Edge[], selecte
     nodes: nodes.map((node) => {
       const selectedEdgeRole: "source" | "target" | undefined =
         selectedEdge?.source === node.id ? "source" : selectedEdge?.target === node.id ? "target" : undefined;
+      const connectionHandles = handlesByNode.get(node.id) ?? createEmptyHandleLayout(node.id);
+      const handleSize = {
+        width: node.measured?.width ?? node.width ?? CANVAS_NODE_SIZE.width,
+        height: node.measured?.height ?? node.height ?? CANVAS_NODE_SIZE.height
+      };
       return {
         ...node,
+        ...(node.data.syntheticKind === "group" ? { handles: [
+          ...connectionHandles.target.map((slot) => groupHandle(slot, "target", handleSize.width, handleSize.height)),
+          ...connectionHandles.source.map((slot) => groupHandle(slot, "source", handleSize.width, handleSize.height))
+        ] } : {}),
         data: {
           ...node.data,
-          connectionHandles: handlesByNode.get(node.id) ?? createEmptyHandleLayout(node.id),
+          connectionHandles,
           edgeConnected: selectedPair.has(node.id),
           selectedEdgeId,
           selectedEdgeColor: selectedEdge ? relationStyle[((selectedEdge.data?.relation as GraphEdgeRelation | undefined) ?? "depends_on")].color : undefined,
@@ -242,7 +258,8 @@ export function decorateFlowGraph(nodes: FlowWeaveNode[], edges: Edge[], selecte
   };
 }
 
-function buildConnectionHandles(nodes: FlowWeaveNode[], edges: Edge[]) {
+function buildConnectionHandles(nodes: FlowWeaveNode[], edges: Edge[], layoutHandles?: Record<string, ConnectionHandleLayout>) {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const sourceGroups = new Map<string, Edge[]>();
   const targetGroups = new Map<string, Edge[]>();
   for (const node of nodes) {
@@ -258,8 +275,8 @@ function buildConnectionHandles(nodes: FlowWeaveNode[], edges: Edge[]) {
   const handlesByNode = new Map<string, ConnectionHandleLayout>();
 
   for (const node of nodes) {
-    const source = createSlots(node.id, "source", sourceGroups.get(node.id) ?? []);
-    const target = createSlots(node.id, "target", targetGroups.get(node.id) ?? []);
+    const source = createLayoutSlots(node.id, "source", sourceGroups.get(node.id) ?? [], nodeById, layoutHandles?.[node.id]?.source);
+    const target = createLayoutSlots(node.id, "target", targetGroups.get(node.id) ?? [], nodeById, layoutHandles?.[node.id]?.target);
     handlesByNode.set(node.id, { source, target });
     for (const slot of source) {
       if (slot.edgeId) {
@@ -286,16 +303,61 @@ function buildConnectionHandles(nodes: FlowWeaveNode[], edges: Edge[]) {
   return { handlesByEdge, handlesByNode };
 }
 
-function createSlots(nodeId: string, side: "source" | "target", edges: Edge[]): ConnectionHandleLayout["source"] {
+function createLayoutSlots(
+  nodeId: string,
+  side: "source" | "target",
+  edges: Edge[],
+  nodeById: ReadonlyMap<string, FlowWeaveNode>,
+  plannedSlots: ConnectionHandleLayout["source"] | undefined
+): ConnectionHandleLayout["source"] {
+  if (!plannedSlots) return createSlots(nodeId, side, edges, nodeById);
+  const edgeIds = new Set(edges.map((edge) => edge.id));
+  const slotsByEdgeId = new Map(plannedSlots.flatMap((slot) => slot.edgeId ? [[slot.edgeId, slot] as const] : []));
+  const exactSlots = [...slotsByEdgeId.entries()].flatMap(([edgeId, slot]) => edgeIds.has(edgeId) ? [slot] : []);
+  const mappedIds = new Set(exactSlots.flatMap((slot) => slot.edgeId ? [slot.edgeId] : []));
+  const remainingEdges = edges.filter((edge) => !mappedIds.has(edge.id));
+  if (remainingEdges.length === 0 && exactSlots.length > 0) return exactSlots;
+  return [...exactSlots, ...createSlots(nodeId, side, remainingEdges, nodeById)]
+    .sort((left, right) => left.offsetPercent - right.offsetPercent || left.id.localeCompare(right.id));
+}
+
+function groupHandle(slot: ConnectionHandleLayout["source"][number], type: "source" | "target", width: number, height: number) {
+  const side = slot.position ?? (type === "source" ? "right" : "left");
+  return {
+    id: slot.id,
+    type,
+    position: side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom,
+    x: side === "left" ? 0 : side === "right" ? width : width * slot.offsetPercent / 100,
+    y: side === "top" ? 0 : side === "bottom" ? height : height * slot.offsetPercent / 100,
+    width: 1,
+    height: 1
+  };
+}
+
+function createSlots(
+  nodeId: string,
+  side: "source" | "target",
+  edges: Edge[],
+  nodeById: ReadonlyMap<string, FlowWeaveNode>
+): ConnectionHandleLayout["source"] {
   if (edges.length === 0) {
     return [{ id: `${nodeId}-${side}-idle`, offsetPercent: 50, count: 0 }];
   }
   if (edges.length > HANDLE_COLLAPSE_THRESHOLD) {
     return [{ id: `${nodeId}-${side}-bulk`, offsetPercent: 50, collapsed: true, count: edges.length }];
   }
-  const step = 100 / (edges.length + 1);
-  return edges.map((edge, index) => ({
-    id: `${nodeId}-${side}-${index}-${edge.id}`,
+  const orderedEdges = [...edges].sort((left, right) => {
+    const leftNeighborId = side === "source" ? left.target : left.source;
+    const rightNeighborId = side === "source" ? right.target : right.source;
+    const leftNeighbor = nodeById.get(leftNeighborId);
+    const rightNeighbor = nodeById.get(rightNeighborId);
+    const leftY = leftNeighbor ? leftNeighbor.position.y + (leftNeighbor.measured?.height ?? leftNeighbor.height ?? CANVAS_NODE_SIZE.height) / 2 : 0;
+    const rightY = rightNeighbor ? rightNeighbor.position.y + (rightNeighbor.measured?.height ?? rightNeighbor.height ?? CANVAS_NODE_SIZE.height) / 2 : 0;
+    return leftY - rightY || left.id.localeCompare(right.id);
+  });
+  const step = 100 / (orderedEdges.length + 1);
+  return orderedEdges.map((edge, index) => ({
+    id: `${nodeId}-${side}-${edge.id}`,
     edgeId: edge.id,
     offsetPercent: Math.round(step * (index + 1)),
     count: 1,

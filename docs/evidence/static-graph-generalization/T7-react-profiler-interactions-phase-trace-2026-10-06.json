@@ -1,0 +1,583 @@
+{
+  "status": "failed",
+  "fixture": "viewport-only",
+  "workspaceVisibleMs": 2090,
+  "lastState": {
+    "onboardingVisible": false,
+    "nodes": 3,
+    "nodeIds": [
+      "module-105cc96e2949c3e9",
+      "module-c05bc0dca2d8b5e0",
+      "group:view:unlinked"
+    ],
+    "viewportNodeIds": [
+      "module-105cc96e2949c3e9",
+      "module-c05bc0dca2d8b5e0",
+      "group:view:unlinked"
+    ],
+    "groups": 1,
+    "groupCards": [
+      {
+        "id": "group:view:unlinked",
+        "text": "Group3 modulesNo confirmed callsExpand to inspect these modu",
+        "x": 548.4044189453125,
+        "y": 572.6824951171875,
+        "opacity": "1",
+        "visibility": "visible"
+      }
+    ],
+    "edges": [
+      {
+        "id": "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed",
+        "label": "Edge from module-105cc96e2949c3e9 to module-c05bc0dca2d8b5e0",
+        "path": "M307 130.8203125L327 130.8203125L363 130.8203125L363 130.8203125L399 130.8203125L419 130.8203125",
+        "markerEnd": "url('#1__color=#42f5a7&type=arrowclosed')"
+      }
+    ],
+    "edgePaths": 1,
+    "layoutPending": false,
+    "emptyText": "",
+    "viewMode": "execution",
+    "projectStatus": "Read 21 files and generated 10 module nodes.",
+    "workspaceVisible": true,
+    "staleBanner": false,
+    "modulePanelVisible": false
+  },
+  "reactProfiler": {
+    "status": "failed",
+    "error": "React Profiler smoke did not finish action: clear-smoke-filter",
+    "reactVersion": "unavailable",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) flowweave/0.1.0 Chrome/148.0.7778.280 Electron/42.8.1 Safari/537.36",
+    "actions": [
+      {
+        "name": "initial-render",
+        "durationMs": 0,
+        "visibleNodeCountBefore": 0,
+        "visibleNodeCountAfter": 3,
+        "visibleNodeIdsBefore": [],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 0,
+        "actualDurationMs": 0,
+        "startedAt": 2599.199999999255
+      },
+      {
+        "name": "expand-group",
+        "durationMs": 790.3999999985099,
+        "visibleNodeCountBefore": 3,
+        "visibleNodeCountAfter": 5,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:group:function:java:java:example",
+          "group:group:function:python:python:sample",
+          "group:group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      },
+      {
+        "name": "collapse-group",
+        "durationMs": 575.8999999985099,
+        "visibleNodeCountBefore": 5,
+        "visibleNodeCountAfter": 3,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:group:function:java:java:example",
+          "group:group:function:python:python:sample",
+          "group:group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      },
+      {
+        "name": "filter-technology",
+        "durationMs": 108.40000000223517,
+        "visibleNodeCountBefore": 3,
+        "visibleNodeCountAfter": 0,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleNodeIdsAfter": [],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      },
+      {
+        "name": "automatic-layout-refresh",
+        "durationMs": 763.2999999970198,
+        "visibleNodeCountBefore": 0,
+        "visibleNodeCountAfter": 0,
+        "visibleNodeIdsBefore": [],
+        "visibleNodeIdsAfter": [],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      }
+    ],
+    "samples": [],
+    "layoutSnapshots": [
+      {
+        "action": "expand-group",
+        "status": "persisted",
+        "layoutMode": "execution",
+        "userRevision": 1,
+        "positionCount": 14,
+        "handlePositionCount": 5,
+        "matchingPositionCount": 5,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,172],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,172],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:6b1346de632c9983a717d154\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ce53b8357e9a3b169f5ec0ee\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ee60665b49b0ae82a677e927\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,172],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,172],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:6b1346de632c9983a717d154\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ce53b8357e9a3b169f5ec0ee\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ee60665b49b0ae82a677e927\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-baf1335a-023b-4ab7-94b4-7ae17cad5714\",\"generationId\":\"7f0698f5b86b488d15945f163b8b0cedf828461aa8a79873be7a8b6fcbd9bfc4\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "runtimeLayoutContext": false,
+        "topologyChanged": true,
+        "collapsedGroups": [
+          "group:function:java:java:example",
+          "group:function:python:python:sample",
+          "group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "targetGroupPresent": false
+      },
+      {
+        "action": "collapse-group",
+        "status": "persisted",
+        "layoutMode": "execution",
+        "userRevision": 2,
+        "positionCount": 14,
+        "handlePositionCount": 3,
+        "matchingPositionCount": 3,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-baf1335a-023b-4ab7-94b4-7ae17cad5714\",\"generationId\":\"7f0698f5b86b488d15945f163b8b0cedf828461aa8a79873be7a8b6fcbd9bfc4\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-baf1335a-023b-4ab7-94b4-7ae17cad5714\",\"generationId\":\"7f0698f5b86b488d15945f163b8b0cedf828461aa8a79873be7a8b6fcbd9bfc4\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "runtimeLayoutContext": false,
+        "topologyChanged": true,
+        "collapsedGroups": [],
+        "targetGroupPresent": true
+      },
+      {
+        "action": "automatic-layout-refresh",
+        "status": "persisted",
+        "layoutMode": "dependency",
+        "userRevision": 3,
+        "positionCount": 10,
+        "handlePositionCount": 7,
+        "matchingPositionCount": 7,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-baf1335a-023b-4ab7-94b4-7ae17cad5714\",\"generationId\":\"7f0698f5b86b488d15945f163b8b0cedf828461aa8a79873be7a8b6fcbd9bfc4\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:4466ac188deb76262f540325\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:a4980f41d504d05e7f07424c\\u0000depends_on\"],\"context\":{\"projectId\":\"project-baf1335a-023b-4ab7-94b4-7ae17cad5714\",\"generationId\":\"7f0698f5b86b488d15945f163b8b0cedf828461aa8a79873be7a8b6fcbd9bfc4\",\"viewport\":{\"width\":1104,\"height\":647},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:4466ac188deb76262f540325\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:a4980f41d504d05e7f07424c\\u0000depends_on\"]}",
+        "runtimeLayoutContext": true,
+        "topologyChanged": true,
+        "collapsedGroups": []
+      }
+    ],
+    "appVersion": "0.1.0",
+    "electronVersion": "42.8.1",
+    "chromeVersion": "148.0.7778.280",
+    "nodeVersion": "24.18.1"
+  },
+  "phaseTrace": [
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:start",
+      "monotonicMs": 1613.800000000745,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 1881.740875
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:completed",
+      "monotonicMs": 1616.300000000745,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 1884.396667
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.readRegisteredProject:start",
+      "monotonicMs": 1616.3999999985099,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 1884.4145
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.readRegisteredProject:completed",
+      "monotonicMs": 1625,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 1892.635042
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.restoreRegisteredProject:start",
+      "monotonicMs": 1625,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 1892.658542
+    },
+    {
+      "source": "main",
+      "stage": "registryRestore:start",
+      "monotonicMs": 1892.734833,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714"
+    },
+    {
+      "source": "main",
+      "stage": "registryRestore:completed",
+      "monotonicMs": 1893.573375,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714"
+    },
+    {
+      "source": "main",
+      "stage": "generationRegistration:start",
+      "monotonicMs": 1893.660708,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714"
+    },
+    {
+      "source": "main",
+      "stage": "generationRegistration:completed",
+      "monotonicMs": 1898.156417,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "cachedCanvasRead:start",
+      "monotonicMs": 1898.1605,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "cachedCanvasRead:completed",
+      "monotonicMs": 1899.88875,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "progressDispatched",
+      "monotonicMs": 1899.9815,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerLaunch:completed",
+      "monotonicMs": 1900.240167,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.restoreRegisteredProject:completed",
+      "monotonicMs": 1644.199999999255,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3",
+      "observedAtMainMonotonicMs": 1911.804792
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2073.175583,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:scanned",
+      "monotonicMs": 2073.217958,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2139.100667,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2143.006375,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2143.0615,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2143.077375,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2143.089792,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2143.412417,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2148.954458,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2149.003625,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2149.823542,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2149.850042,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2150.764625,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2150.781792,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2150.794208,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2150.855208,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2324.021958,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2324.140458,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2326.015083,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2331.140375,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2331.905125,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2334.669333,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2335.368875,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2371.90075,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2373.007208,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 2373.029333,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2376.21225,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2377.055792,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 2429.704167,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:result",
+      "monotonicMs": 2429.731958,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "analysisCommit:completed",
+      "monotonicMs": 2433.976375,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "terminalAnalysisEvent:completed:sent",
+      "monotonicMs": 2438.329042,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "main",
+      "stage": "workerExit:0",
+      "monotonicMs": 2438.367083,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3"
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.analysisEvent.completed:received",
+      "monotonicMs": 2171.300000000745,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3",
+      "observedAtMainMonotonicMs": 2438.8665
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.applyProjectOpenResult:start",
+      "monotonicMs": 2171.300000000745,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3",
+      "observedAtMainMonotonicMs": 2438.886083
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.applyProjectOpenResult:completed",
+      "monotonicMs": 2177.599999997765,
+      "projectId": "project-baf1335a-023b-4ab7-94b4-7ae17cad5714",
+      "localRequestId": 1,
+      "requestId": "2fd22769-10c8-4594-8e89-cf6c432ac8d3",
+      "observedAtMainMonotonicMs": 2445.130833
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "React Profiler smoke failed after 5 actions and 0 commits: React Profiler smoke did not finish action: clear-smoke-filter.",
+    "stack": "Error: React Profiler smoke failed after 5 actions and 0 commits: React Profiler smoke did not finish action: clear-smoke-filter.\n    at file:///Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/out/main/index.js:10665:19"
+  }
+}

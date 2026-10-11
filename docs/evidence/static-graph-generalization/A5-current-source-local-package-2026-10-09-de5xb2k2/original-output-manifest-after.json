@@ -1,0 +1,1563 @@
+[
+  {
+    "path": "out/main/chunks/project-generation.service-DI9zT6T-.js",
+    "bytes": 527809,
+    "sha256": "99870218f80150d9c36fac19d05105a5b48c041f0bd6a1e42e6f80414baef957"
+  },
+  {
+    "path": "out/main/index.js",
+    "bytes": 531633,
+    "sha256": "442c6adf12b3edcef618fef9e719833acba5e0b942f39a9a02e3fca32dc5c327"
+  },
+  {
+    "path": "out/main/project-analysis.worker.js",
+    "bytes": 2643,
+    "sha256": "09ed80e3d7aa2d21a4d8fee6905d90a14d0802cb056f29404783a18e912d1a40"
+  },
+  {
+    "path": "out/preload/index.cjs",
+    "bytes": 11718,
+    "sha256": "07cd8aec95d1bf321fc24e64c2c1f0e1041cd57cb88c9393e57fb07897b145ef"
+  },
+  {
+    "path": "out/renderer/assets/AgentGuidanceComposer-BwI2sIUa.js",
+    "bytes": 1769,
+    "sha256": "08e659c97bffa7facc5ad445cad3e2cb18d2f7c64b0ef5d76c5cd4179e43734e"
+  },
+  {
+    "path": "out/renderer/assets/AgentPage-B3-ofwjK.js",
+    "bytes": 45763,
+    "sha256": "ab17b066ceaa67633e886f7f00614d89afff03894ca70036e00a8cfc916b1d82"
+  },
+  {
+    "path": "out/renderer/assets/CanvasWorkspace-CVZfTvDM.js",
+    "bytes": 94026,
+    "sha256": "3b1a69ec0bc3938a5da983f81be8f849a371675a51919e0657a0d7e564321c1f"
+  },
+  {
+    "path": "out/renderer/assets/ConnectionPanel-BRE_0-_Q.js",
+    "bytes": 17171,
+    "sha256": "feaa4935ee61647118fd143d57debb83b2b5add588bbd45d9f8705f228ebab42"
+  },
+  {
+    "path": "out/renderer/assets/DocumentWorkspace-BFFShTQz.js",
+    "bytes": 4448,
+    "sha256": "f115f22bef83de84cf5198f1fb59cb96407fa6abb68c8eabe21f26194bb02b56"
+  },
+  {
+    "path": "out/renderer/assets/GitReviewWorkspace-DzAzLw63.js",
+    "bytes": 11282,
+    "sha256": "ffdde45febb17e2ff7f70f2fa56b91f0dd8b295ffda69b40ce4cb1b08b8740be"
+  },
+  {
+    "path": "out/renderer/assets/ModulePanel-DPJSjssE.js",
+    "bytes": 25938,
+    "sha256": "735c6a2e6828da187d225911277c67bec579862ef9ca78a96e8adf2e0ea2c7c0"
+  },
+  {
+    "path": "out/renderer/assets/StructureWorkspace-J5YA3lG6.js",
+    "bytes": 24739,
+    "sha256": "803223ac93954fe64dced9bf996c91632ba5a99044ab582f5108d9cbec2a4bd2"
+  },
+  {
+    "path": "out/renderer/assets/elk-worker.min-C9JGDOE-.js",
+    "bytes": 1593716,
+    "sha256": "458fbe927f19d11d8d054e34b7587011b9a4d1ecbdfb688b60e491fbdfb2a8d7"
+  },
+  {
+    "path": "out/renderer/assets/index-CVyqrfoF.css",
+    "bytes": 105606,
+    "sha256": "529377075ca769a8ded655d9e5c85d5da033b8ea9c72cb22bda96cc03e9adccc"
+  },
+  {
+    "path": "out/renderer/assets/index-DanPnrx1.js",
+    "bytes": 389943,
+    "sha256": "7d442fcc9f6471db3700bbadd82f4defd23137f0b9c7d471cb634ec82329e8f4"
+  },
+  {
+    "path": "out/renderer/assets/module-text-Daz6IUj2.js",
+    "bytes": 2162,
+    "sha256": "f7b24d6249a9657aba7cbb1a17dfc8b6c9664dffd11e138f3d5ef3f855ce8a6e"
+  },
+  {
+    "path": "out/renderer/assets/monaco-DhWh2oL4.js",
+    "bytes": 22792,
+    "sha256": "2445125aab8093b7ab935b804665ba93f16f390627fbb1ef24f48d818bec5ab8"
+  },
+  {
+    "path": "out/renderer/assets/react-flow-DR3c6x9j.js",
+    "bytes": 351360,
+    "sha256": "da49ff9fbc789afc93433417a1f4dc6fe4ec4d04647534dd6eff484ab18ba65f"
+  },
+  {
+    "path": "out/renderer/assets/react-flow-DjDsNOP-.css",
+    "bytes": 18574,
+    "sha256": "2564ed9330da5b0134de5a00fd3c5abeac3ca91032660ce446753a90aa62c8dd"
+  },
+  {
+    "path": "out/renderer/assets/vendor-CwJc-vDj.js",
+    "bytes": 576813,
+    "sha256": "e29f58d61971d28634133dd032e2505098042c751c0a3c47538ba0bac834c527"
+  },
+  {
+    "path": "out/renderer/flowweave-app-icon.ico",
+    "bytes": 21461,
+    "sha256": "df559eed1900d4cc08ee4ad182f9b7a8522eb4671c0bdcd6c92ff4eeb25b3d54"
+  },
+  {
+    "path": "out/renderer/flowweave-app-icon.png",
+    "bytes": 221738,
+    "sha256": "7eb4eaa2b8a89940a18899d73ab2f3e3a6ea75ff4085c32f4d13657f244a24e7"
+  },
+  {
+    "path": "out/renderer/flowweave_black_line_on_white.png",
+    "bytes": 578350,
+    "sha256": "67925d5d191e2a3d40dd91d7ad0b0dd1157795242b6185a14926a4401b7a7601"
+  },
+  {
+    "path": "out/renderer/flowweave_white_on_black.png",
+    "bytes": 683529,
+    "sha256": "b5b30726287fcdf5d8e0642a6ab58d9481e457c3ec55b809aafef22fcf2cb12e"
+  },
+  {
+    "path": "out/renderer/index.html",
+    "bytes": 715,
+    "sha256": "8cf84ab5945f925d4fe4e5e2ebbf4a5c5d0a1d1778013fa3cd5fcda46abe5b60"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+    "symlink": "Versions/Current/Electron Framework"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Helpers",
+    "symlink": "Versions/Current/Helpers"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Libraries",
+    "symlink": "Versions/Current/Libraries"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Resources",
+    "symlink": "Versions/Current/Resources"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework",
+    "bytes": 189136528,
+    "sha256": "2518057055de23ef474232ace936592dc35ccba03098a03fd542efc33f87e6b7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Helpers/chrome_crashpad_handler",
+    "bytes": 1210688,
+    "sha256": "5fe4225b669f603c2e250e5688827637b37b387d460e000d0a3e7311ae09b682"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libEGL.dylib",
+    "bytes": 91952,
+    "sha256": "6d6dedaebcb0db4e0cd6275a1111954c0198f44196e339b765afc6d05fd776b8"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libGLESv2.dylib",
+    "bytes": 6212352,
+    "sha256": "ff03601645dbb7c0ebba91220474f62322e87eaf4b48204468713599eab3cb4a"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libffmpeg.dylib",
+    "bytes": 2213616,
+    "sha256": "1d2aea2d448168e89406993ff626b2dc72e5d7f3540e8a0356f6b634f11e8dae"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libvk_swiftshader.dylib",
+    "bytes": 16607280,
+    "sha256": "6e133f5cc5cd9df703ab1714b9bdf6733f5974b0567a8ea64befd166f7222d24"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/vk_swiftshader_icd.json",
+    "bytes": 110,
+    "sha256": "d717d915e31e7c27948b80b36ab34e2d897888114c5c7d0af835f93eb53e58f5"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/Info.plist",
+    "bytes": 920,
+    "sha256": "8b7e5dfa9f05411744472565b65517100171c18f21d16db601742292457875ba"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/MainMenu.nib",
+    "bytes": 2005,
+    "sha256": "4b2168de2d6d9a09b20faaa23139d5f25f73b2595671de25872d191b6939d819"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af.lproj/locale.pak",
+    "bytes": 617187,
+    "sha256": "303c85153c70ac0761f2bbf3c7d3bd739e5f3654a422c2ddcb8a26bb52c2e4ed"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am.lproj/locale.pak",
+    "bytes": 1003003,
+    "sha256": "85a78242d4a2b6b932245be1954fa2b94e02695bc58b60d0516929b8ecc99187"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar.lproj/locale.pak",
+    "bytes": 1104879,
+    "sha256": "40201c84776ab57da0d256cfbece4f7fee94e21e37b06a41b1aa709d3674d547"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg.lproj/locale.pak",
+    "bytes": 1144795,
+    "sha256": "877e55cfb045bf7dd5880fc31526d731fc852b234765328b8448e982430ef7b8"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn.lproj/locale.pak",
+    "bytes": 1472028,
+    "sha256": "384dac199487d27de1621b5dd8fbbd964c9c0d6c96a63fe916597b3be8e424e1"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca.lproj/locale.pak",
+    "bytes": 695884,
+    "sha256": "ada9dd88cd1ae8bcec9ed6811fb4d4a16da9bd598439ef187d762f356de2bf1d"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/chrome_100_percent.pak",
+    "bytes": 119827,
+    "sha256": "7933458bfc67ca942bfe1381c001c03ea3eaf0618dbe38c99432c1ce23fbd9d6"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/chrome_200_percent.pak",
+    "bytes": 196919,
+    "sha256": "8e21c201cf71457e6487835d622f8f5b96d46323264761d9ea4b17a1dcaa6db3"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs.lproj/locale.pak",
+    "bytes": 722644,
+    "sha256": "89a73a2ca4a3ab7107caab832fe7433e47efc9dba32d39918f8535ce92958691"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da.lproj/locale.pak",
+    "bytes": 649023,
+    "sha256": "3ee374f45ac23400c4cccbc6189ce1eaa068b33741ccf215ba31925740fd3e65"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de.lproj/locale.pak",
+    "bytes": 696845,
+    "sha256": "6383f60e15cf893389798036681e5801567b723c40938eb9bec87e1d35bb3663"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el.lproj/locale.pak",
+    "bytes": 1257904,
+    "sha256": "96ee3b992ae716985fd8ada4151dc4d6a91ff447d0f01bdea83d79216e4c9207"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en.lproj/locale.pak",
+    "bytes": 569838,
+    "sha256": "b2a57e1d8c0ce4367681a5b061cd5702330df615c4a9da1132b5331df6c076c7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB.lproj/locale.pak",
+    "bytes": 563000,
+    "sha256": "5a369722fc50172a4bc959154dfac473dbe4db384cc271a2cc4756254fae3377"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es.lproj/locale.pak",
+    "bytes": 683184,
+    "sha256": "c82298ed5f0572b7f0d9a722d98c36beeb7bb463da151ee0f536ef784b414fad"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419.lproj/locale.pak",
+    "bytes": 687405,
+    "sha256": "a5e3043bc2a6cee62cb5c130a758a9ccdfecaeae875d9586365a679fdaea0be5"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et.lproj/locale.pak",
+    "bytes": 624332,
+    "sha256": "e13b649e4b879063ef5458687740c3cdbb55e75839052f43171adc6a06da7437"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa.lproj/locale.pak",
+    "bytes": 1033364,
+    "sha256": "03f5e0c8dd964452d5aa0cba8e320b35ca9919b059f1aca96a68f6ad493ab3e3"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi.lproj/locale.pak",
+    "bytes": 635720,
+    "sha256": "5b7c077343d9a5266a1223aa3af2d1640ddc99ceab064079dcacc0c3f713a07c"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil.lproj/locale.pak",
+    "bytes": 721503,
+    "sha256": "9bc6c117ef79da9d6d0075a2437482e6fa15b3ee136da992dbbd23e754cae17e"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr.lproj/locale.pak",
+    "bytes": 742386,
+    "sha256": "da0e2b9385fcb0f8dd9cf2faba3044a1d0bfe7431c2611c2f968d2b7e61d1c20"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu.lproj/locale.pak",
+    "bytes": 1453497,
+    "sha256": "875b1ca6c91f71c4856d8dcdf7e3e125fd946ff5a33827b9622efda437a79d8b"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he.lproj/locale.pak",
+    "bytes": 903778,
+    "sha256": "6438c7b0d190f136a49f2cb6f4bb75c335554b7219dad38b61f6c928ac4ddd62"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi.lproj/locale.pak",
+    "bytes": 1539499,
+    "sha256": "7bcc2d88018d8187c3742f0a000f577197ac27f019ec1eb3cc4d839607d35507"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr.lproj/locale.pak",
+    "bytes": 695162,
+    "sha256": "b3c5f80c5b8a9e2a6383c53905bf702c1a9f7ea030a72861890fb2323908f9fc"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu.lproj/locale.pak",
+    "bytes": 743727,
+    "sha256": "533ff94cdba0eb80b5887b9373cd1c7675d6c8b9803b18a66f7ab1b119c34a99"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/icudtl.dat",
+    "bytes": 10876560,
+    "sha256": "bd8c145abdf3f8383276ce01dfa4ae48709bef9fef1c0711eb7c3fab4f6eb7c2"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id.lproj/locale.pak",
+    "bytes": 617009,
+    "sha256": "a0ddf7ea0540f7e44baadfe0cf1298097003c24171c3effd674ecc1c4f7c946a"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it.lproj/locale.pak",
+    "bytes": 672157,
+    "sha256": "d938d667498bdeb12d76097e72962ddce13bbb069deba6ee41aaac315c3dce0c"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja.lproj/locale.pak",
+    "bytes": 818408,
+    "sha256": "d12464e827484453236074bdfeacc99f5b9dd902c39f758b6886b4abedf75eaf"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn.lproj/locale.pak",
+    "bytes": 1672530,
+    "sha256": "568b7f42487c8dc8742c8a81761173d3accad303cd4d056505ce5c8a5aaef108"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko.lproj/locale.pak",
+    "bytes": 696303,
+    "sha256": "941e53dbdc11dd65f060e8b1ae8184cc6cb49424e9f993f7b64eb381be3a3d94"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt.lproj/locale.pak",
+    "bytes": 756944,
+    "sha256": "361922d2bb86c7857381610c9ea3b4feb0584c91680ad61b3df133a2bd75d461"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv.lproj/locale.pak",
+    "bytes": 753920,
+    "sha256": "83e929e4373304b69cb34ccbf04e7cca0a86e72b89b7126cf5b5928da0501488"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml.lproj/locale.pak",
+    "bytes": 1721404,
+    "sha256": "636721e2c6df8585258a3d9b2e7c63d1c7bdcabe287cd7d50f8d0c5b9a241655"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr.lproj/locale.pak",
+    "bytes": 1423109,
+    "sha256": "17f26ad2011f032cdc28f7303d15b09f6d4cf000e9c87a873453b4d6d3d690c0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms.lproj/locale.pak",
+    "bytes": 649486,
+    "sha256": "793e0dda6d0e666e9d4c1992992414681e40cd5520448e898fe044c0ae028b5a"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb.lproj/locale.pak",
+    "bytes": 619388,
+    "sha256": "2265717a518c073af328637c3759a0b8641b96923168d38537ff8b1a60291d4f"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl.lproj/locale.pak",
+    "bytes": 645655,
+    "sha256": "50ef15f7dd549727ee0aeffc5d248cd46b84294dc3e498e42f3b302df945a95e"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl.lproj/locale.pak",
+    "bytes": 722044,
+    "sha256": "39c26ab5670e4bb147ba7c679c34bb62f7edb115d18e803fc6f40899911b98c1"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR.lproj/locale.pak",
+    "bytes": 677171,
+    "sha256": "cc4d92333b767571d9e25436e025cf8f6c98865cbc4661263fa0cdf34a2040f9"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT.lproj/locale.pak",
+    "bytes": 680895,
+    "sha256": "6d5af0f39f695f8b88336ebaa900228eabed705ab5a15a3dc4d83f721742ebf3"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/resources.pak",
+    "bytes": 6868234,
+    "sha256": "9629d5062cb0785c84340ae66e8fa3a66988a9cafdf82f0889789a215909e8e9"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro.lproj/locale.pak",
+    "bytes": 706544,
+    "sha256": "ad8cc066e34d54efd7fe35d1f71f24847d3329a37360624d884e26fbf1889bed"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru.lproj/locale.pak",
+    "bytes": 1171499,
+    "sha256": "f1c599424c65011cebb16880504e3f91f24375f25569d75089d6383bfdc939ca"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk.lproj/locale.pak",
+    "bytes": 734843,
+    "sha256": "c360422a79c72c5da56111d40ef71c11f0289d76a8ebb74cd26fd02fbaa200f0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl.lproj/locale.pak",
+    "bytes": 703394,
+    "sha256": "ba9c7e6460a77f31aeb7c8459c793fc8771c9e4a86efdd3ba185650795f5e6dc"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr.lproj/locale.pak",
+    "bytes": 1082450,
+    "sha256": "976b5ff01af7e85e68467084806e12eb0298153f64c7e3d3523e879531c4bc0b"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv.lproj/locale.pak",
+    "bytes": 627220,
+    "sha256": "e1d3d87a1e4084e799f2f2e1bf2c71e356605d91a96d629022f9e9208c2ce7c1"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw.lproj/locale.pak",
+    "bytes": 666300,
+    "sha256": "a9ae824a17abc0067fc35dd35b479a91608fd189e4fdde49a590ee3ea3dad005"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta.lproj/locale.pak",
+    "bytes": 1713263,
+    "sha256": "98f3f1f1e87872d23e74ea2c41319d772e84c8fa0b8cd68c68b11f97c0c43a80"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te.lproj/locale.pak",
+    "bytes": 1584383,
+    "sha256": "63eecdbf83e6e581545298c6f246b07a0a19550167581225b326493c24ccb3a5"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th.lproj/locale.pak",
+    "bytes": 1329170,
+    "sha256": "cd3111af98a2cb784bf66b6e13d09fbc29c66695fd165bbfab2222a6c603fa2e"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr.lproj/locale.pak",
+    "bytes": 677435,
+    "sha256": "774a757cd406d073e5ddc4990212f7f71322da4e29c7829afcb13db042f81acc"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk.lproj/locale.pak",
+    "bytes": 1180309,
+    "sha256": "9e0f0ba7f31efc3ce01367ba2aa3abefc47575fa9943b2d27b38020fd8920227"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur.lproj/locale.pak",
+    "bytes": 1015513,
+    "sha256": "89453442a9a6e9dc799bf4f768f939bab755c789c517064bbff4d63e3ef19fc1"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/v8_context_snapshot.arm64.bin",
+    "bytes": 721176,
+    "sha256": "e4fe2241e27e30ab32610b6d90a139d2128b91608655dc385aaccdf345ea7dc3"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi.lproj/locale.pak",
+    "bytes": 804039,
+    "sha256": "8adf4eb240eb57496a04bd34a38b3ae2870497bd23252612d698d42e19f92fad"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN.lproj/locale.pak",
+    "bytes": 575292,
+    "sha256": "b4dc6cac3a04bdf01aa3b493003781164ea60e457ce275ba93060945450cd5c7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW.lproj/locale.pak",
+    "bytes": 567368,
+    "sha256": "09e68c0dba9e26c53e8aadbf6560426fc1d9daf14524916fedfe1de5d9846d48"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW_FEMININE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW_MASCULINE.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW_NEUTER.lproj/locale.pak",
+    "bytes": 18,
+    "sha256": "ca73097bd968b363b7145e86b64f3c595e533808b0763dc8863a27fc363cfa51"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Electron Framework.framework/Versions/Current",
+    "symlink": "A"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (GPU).app/Contents/Info.plist",
+    "bytes": 1129,
+    "sha256": "84036d47b714bbe287f6719abe5b2fb3d51f4f8c3fe6a684ea12f909bb079e19"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (GPU).app/Contents/MacOS/FlowWeave Helper (GPU)",
+    "bytes": 203600,
+    "sha256": "598a3a437d2f2ec2769d53cb8fef261622edf7eb2cc3ba8df31dcb6f64a4cbbd"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (GPU).app/Contents/PkgInfo",
+    "bytes": 8,
+    "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (Plugin).app/Contents/Info.plist",
+    "bytes": 1141,
+    "sha256": "6af819893813395dc46bb58e5b2854390c9f33ac59da791c3f635319204d4d11"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (Plugin).app/Contents/MacOS/FlowWeave Helper (Plugin)",
+    "bytes": 203600,
+    "sha256": "07926c509d9cf920274c98b102481bddd4f879ce318fcca3d47d050d84409fbf"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (Plugin).app/Contents/PkgInfo",
+    "bytes": 8,
+    "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (Renderer).app/Contents/Info.plist",
+    "bytes": 1149,
+    "sha256": "0718be220fb85b7402768652deb95473435ab46957603e2ff11765bb31c2f2a6"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (Renderer).app/Contents/MacOS/FlowWeave Helper (Renderer)",
+    "bytes": 203600,
+    "sha256": "7fb2671ee3a2de395b7241a6589f12222de13cea542684d9e8c7ec82869b5309"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper (Renderer).app/Contents/PkgInfo",
+    "bytes": 8,
+    "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper.app/Contents/Info.plist",
+    "bytes": 1107,
+    "sha256": "462ce34d42292b8544f152b361770c29dafefef2aea03a9194851f3008b4b35d"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper.app/Contents/MacOS/FlowWeave Helper",
+    "bytes": 203584,
+    "sha256": "2faa03c94be079277cc445583311a1d20d19daf6c788c7122f25485a1ea99776"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/FlowWeave Helper.app/Contents/PkgInfo",
+    "bytes": 8,
+    "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Mantle.framework/Mantle",
+    "symlink": "Versions/Current/Mantle"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Mantle.framework/Resources",
+    "symlink": "Versions/Current/Resources"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Mantle.framework/Versions/A/Mantle",
+    "bytes": 126448,
+    "sha256": "5c60de1145462c5385378cc201676bedb1b6d6b8453d031d7bad05bbbda206c9"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Mantle.framework/Versions/A/Resources/Info.plist",
+    "bytes": 1020,
+    "sha256": "e93f0b4aaebea9bc158392ffa0c1150c16a0f30aecf11501b7871ce485f1a823"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Mantle.framework/Versions/Current",
+    "symlink": "A"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/ReactiveObjC.framework/ReactiveObjC",
+    "symlink": "Versions/Current/ReactiveObjC"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/ReactiveObjC.framework/Resources",
+    "symlink": "Versions/Current/Resources"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/ReactiveObjC.framework/Versions/A/ReactiveObjC",
+    "bytes": 352544,
+    "sha256": "3f6b636e5a8a1bec7bde9ea847a46bac18dd65ba18f7b9def2e96497b42fb3e7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/ReactiveObjC.framework/Versions/A/Resources/Info.plist",
+    "bytes": 1138,
+    "sha256": "4ded0fe1f4647f5b1862a2a98998aa7c3ade9bd925d097258e24667c446e7496"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/ReactiveObjC.framework/Versions/Current",
+    "symlink": "A"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Squirrel.framework/Resources",
+    "symlink": "Versions/Current/Resources"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Squirrel.framework/Squirrel",
+    "symlink": "Versions/Current/Squirrel"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Squirrel.framework/Versions/A/Resources/Info.plist",
+    "bytes": 1175,
+    "sha256": "f61ab349887360a2d84603ecff17ab6633cb7fe2e8e72861f4e38e9120f472bf"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Squirrel.framework/Versions/A/Resources/ShipIt",
+    "bytes": 125584,
+    "sha256": "dc63b8fe5c9bf9eaa594df9d733956676378da06fba5bbb3679705d300161d6e"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Squirrel.framework/Versions/A/Squirrel",
+    "bytes": 145008,
+    "sha256": "ba1715c5994a78f9fca697ad3668e47388984165b3e579aa049a45113a851e76"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Frameworks/Squirrel.framework/Versions/Current",
+    "symlink": "A"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Info.plist",
+    "bytes": 4078,
+    "sha256": "2585a1891bdbbbbefb0841186334322b00c00e1a52f5ec31923bc9ebb810fba4"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/MacOS/FlowWeave",
+    "bytes": 33968,
+    "sha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/PkgInfo",
+    "bytes": 8,
+    "sha256": "82502191c9484b04d685374f9879a0066069c49b8acae7a04b01d38d07e8eca0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/app.asar",
+    "bytes": 87572095,
+    "sha256": "7edc029266c72a42de3a48445b01f9f56b914a777058a68f81c1dc172966c865"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/default_app.asar",
+    "bytes": 111073,
+    "sha256": "06d4a28be095a80eff94dbd18edcfac5b5805e1b5538e0fb7cee7c7ae81db76a"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-app-icon.png",
+    "bytes": 221738,
+    "sha256": "7eb4eaa2b8a89940a18899d73ab2f3e3a6ea75ff4085c32f4d13657f244a24e7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/.claude-plugin/plugin.json",
+    "bytes": 154,
+    "sha256": "be6b562e44a1a3f9417bced4b7e64345dd5dd3235c497606a739c0f311781740"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/.codex-plugin/plugin.json",
+    "bytes": 649,
+    "sha256": "aac2701d4d64c90167eca360550b80ed9b994f4e54e9da7caec03e070c726d8d"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/hosts/claude.md",
+    "bytes": 398,
+    "sha256": "0b06bd9ca8ccc7e8d6d697e86987c3c5869ebf92d6b5b687afe60c3a372494f8"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/hosts/codex.md",
+    "bytes": 385,
+    "sha256": "9a4ce75cc4817b34be3ec9539e1e4c8654624e75fcdf396e61661fb4b57fbe00"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/hosts/cursor.md",
+    "bytes": 325,
+    "sha256": "ae127e22223cb0661c8d7de2a476b26428020c3b43d7a80722a85a204c39b732"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/hosts/gemini.md",
+    "bytes": 318,
+    "sha256": "dc80fa69d8d53ed9b1179bc405ac532b06f05ac8f4058672a2d2aa15382bed3d"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/manifest.json",
+    "bytes": 1183,
+    "sha256": "711c8819ce02c9d0d4d434bf7fecd955516b7566a06512385d69be50c931feb2"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/package.json",
+    "bytes": 173,
+    "sha256": "81df17e28e797bc5abe0e704fbd8e06c2c270d212909aa897e358d23e65b4013"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/flowweave-plugin/skills/flowweave/SKILL.md",
+    "bytes": 2020,
+    "sha256": "962696ee1d8124b036aaf78b40a16b35343bf37140885ae98c8b1108c3627493"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/icon.icns",
+    "bytes": 441923,
+    "sha256": "60d8cde4ab90b38cd2d1b482940e37c9cc5c9d4ef609456aed424a9e9970dce0"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/licenses/tree-sitter-go/LICENSE",
+    "bytes": 1080,
+    "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/licenses/tree-sitter-java/LICENSE",
+    "bytes": 1069,
+    "sha256": "52ed137b039cd9c46409bc22e89938af911c95b157feae2d040b51e6084369a7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/licenses/tree-sitter-python/LICENSE",
+    "bytes": 1080,
+    "sha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/tree-sitter-go.wasm",
+    "bytes": 217182,
+    "sha256": "9504573f352b20be7f2f1911754d710622aedc15afff16d5ed8fb5645681aee7"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/tree-sitter-java.wasm",
+    "bytes": 414641,
+    "sha256": "4fdeac4ca6ca089f06c6f7e562abcac1733cd465728cc7031ebb73c2019122c4"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/tree-sitter-python.wasm",
+    "bytes": 457883,
+    "sha256": "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47"
+  },
+  {
+    "path": "release/mac-arm64/FlowWeave.app/Contents/Resources/parsers/web-tree-sitter.wasm",
+    "bytes": 200297,
+    "sha256": "1ed02fe75a60642bea084670e33267795aab26c19012805b9fb513ab458680ee"
+  }
+]

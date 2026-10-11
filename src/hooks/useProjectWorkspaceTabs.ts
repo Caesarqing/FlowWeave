@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FlowWeaveProjectOpenResult, GraphEdge, GraphNode, ProjectWorkspaceSession, RegisteredProject } from '../types';
+import type { FlowWeaveProjectOpenResult, ProjectAnalysisCommittedResult, ProjectWorkspaceSession, RegisteredProject } from '../types';
 import { closeProjectTab, addProjectTab } from '../utils/project-tabs';
 import {
   captureProjectWorkspaceState,
@@ -21,7 +21,8 @@ const EMPTY_SESSION: ProjectWorkspaceSession = {
   contextsByProject: {}
 };
 
-type CommittedProjectOpenResult = Extract<FlowWeaveProjectOpenResult, { graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>;
+type OpenProjectWorkspaceResult = ProjectAnalysisCommittedResult |
+  Extract<FlowWeaveProjectOpenResult, { status: "analyzing" }>;
 
 export function useProjectWorkspaceTabs() {
   const [isReady, setIsReady] = useState(false);
@@ -29,8 +30,12 @@ export function useProjectWorkspaceTabs() {
   const [projects, setProjects] = useState<RegisteredProject[]>([]);
   const [session, setSession] = useState<ProjectWorkspaceSession>(EMPTY_SESSION);
   const [restoreProjectId, setRestoreProjectId] = useState<string>();
+  const [pendingAnalysisProjectId, setPendingAnalysisProjectId] = useState<string>();
+  const [pendingWorkspaceKey, setPendingWorkspaceKey] = useState<string>();
   const sessionRef = useRef<ProjectWorkspaceSession>(EMPTY_SESSION);
   const snapshots = useRef(new Map<string, ReturnType<typeof captureProjectWorkspaceState>>());
+  const canvasFlush = useRef<(() => Promise<void>) | undefined>(undefined);
+  const transitionSerial = useRef(0);
   const activePage = useNavigationStore((state) => state.activePage);
   const loadedProjectId = useProjectStore((state) => state.projectId);
   const expandedPaths = useCanvasStore((state) => state.expandedPaths);
@@ -135,65 +140,115 @@ export function useProjectWorkspaceTabs() {
     return next;
   }
 
-  function activateProject(projectId: string) {
-    const current = captureActiveWorkspace();
-    if (!current.openProjectIds.includes(projectId) || current.activeProjectId === projectId) return;
-    const snapshot = snapshots.current.get(projectId);
-    if (snapshot) restoreProjectWorkspaceState(snapshot);
-    else {
-      clearProjectWorkspaceState();
-      const context = current.contextsByProject[projectId];
-      if (context) restorePersistedProjectWorkspaceContext(context);
-      restoreSavedPage(current, projectId);
-    }
-    updateSession({ ...current, activeProjectId: projectId });
-    setRestoreProjectId(snapshot ? undefined : projectId);
-  }
-
-  function closeProject(projectId: string) {
-    const current = captureActiveWorkspace();
-    if (!current.openProjectIds.includes(projectId)) return;
-    snapshots.current.delete(projectId);
-    const next = closeProjectTab(current, projectId);
-    const nextProjectId = next.activeProjectId;
-    if (current.activeProjectId === projectId) {
-      const snapshot = nextProjectId ? snapshots.current.get(nextProjectId) : undefined;
+  async function activateProject(projectId: string) {
+    if (sessionRef.current.activeProjectId === projectId) return;
+    const serial = ++transitionSerial.current;
+    useProjectStore.getState().setIsCanvasTransitioning(true);
+    try {
+      if (!canvasFlush.current) throw new Error("Canvas save barrier is unavailable while switching projects.");
+      await canvasFlush.current();
+      if (serial !== transitionSerial.current) return;
+      const current = captureActiveWorkspace();
+      if (!current.openProjectIds.includes(projectId) || current.activeProjectId === projectId) return;
+      if (current.activeProjectId && pendingAnalysisProjectId === current.activeProjectId) {
+        void window.flowweave?.cancelProjectAnalysis(current.activeProjectId).catch((error) => {
+          setWorkspaceError(formatWorkspaceError(error));
+        });
+        setPendingAnalysisProjectId(undefined);
+        setPendingWorkspaceKey(undefined);
+      }
+      const snapshot = snapshots.current.get(projectId);
       if (snapshot) restoreProjectWorkspaceState(snapshot);
       else {
         clearProjectWorkspaceState();
-        const context = nextProjectId ? next.contextsByProject[nextProjectId] : undefined;
+        const context = current.contextsByProject[projectId];
         if (context) restorePersistedProjectWorkspaceContext(context);
-        restoreSavedPage(next, nextProjectId);
+        restoreSavedPage(current, projectId);
       }
-      setRestoreProjectId(snapshot || !nextProjectId ? undefined : nextProjectId);
+      updateSession({ ...current, activeProjectId: projectId });
+      setRestoreProjectId(snapshot ? undefined : projectId);
+      setWorkspaceError(undefined);
+    } catch (error) {
+      if (serial === transitionSerial.current) setWorkspaceError(formatWorkspaceError(error));
+    } finally {
+      if (serial === transitionSerial.current) useProjectStore.getState().setIsCanvasTransitioning(false);
     }
-    updateSession(next);
+  }
+
+  async function closeProject(projectId: string) {
+    const serial = ++transitionSerial.current;
+    useProjectStore.getState().setIsCanvasTransitioning(true);
+    try {
+      if (sessionRef.current.activeProjectId === projectId) {
+        if (!canvasFlush.current) throw new Error("Canvas save barrier is unavailable while closing a project.");
+        await canvasFlush.current();
+      }
+      if (serial !== transitionSerial.current) return;
+      const current = captureActiveWorkspace();
+      if (!current.openProjectIds.includes(projectId)) return;
+      if (pendingAnalysisProjectId === projectId) {
+        void window.flowweave?.cancelProjectAnalysis(projectId).catch((error) => {
+          setWorkspaceError(formatWorkspaceError(error));
+        });
+        setPendingAnalysisProjectId(undefined);
+        setPendingWorkspaceKey(undefined);
+      }
+      snapshots.current.delete(projectId);
+      const next = closeProjectTab(current, projectId);
+      const nextProjectId = next.activeProjectId;
+      if (current.activeProjectId === projectId) {
+        const snapshot = nextProjectId ? snapshots.current.get(nextProjectId) : undefined;
+        if (snapshot) restoreProjectWorkspaceState(snapshot);
+        else {
+          clearProjectWorkspaceState();
+          const context = nextProjectId ? next.contextsByProject[nextProjectId] : undefined;
+          if (context) restorePersistedProjectWorkspaceContext(context);
+          restoreSavedPage(next, nextProjectId);
+        }
+        setRestoreProjectId(snapshot || !nextProjectId ? undefined : nextProjectId);
+      }
+      updateSession(next);
+      setWorkspaceError(undefined);
+    } catch (error) {
+      if (serial === transitionSerial.current) setWorkspaceError(formatWorkspaceError(error));
+    } finally {
+      if (serial === transitionSerial.current) useProjectStore.getState().setIsCanvasTransitioning(false);
+    }
   }
 
   function handleProjectOpenStarted() {
     captureActiveWorkspace();
   }
 
-  function handleProjectOpened(result: CommittedProjectOpenResult) {
+  function handleProjectOpened(result: OpenProjectWorkspaceResult) {
     const current = sessionRef.current;
     const projectId = result.projectId;
     const isAlreadyOpen = current.openProjectIds.includes(projectId);
     const existingSnapshot = snapshots.current.get(projectId);
     const project: RegisteredProject = {
       id: projectId,
-      name: result.project.projectName,
-      path: result.project.rootPath,
+      name: result.status === "analyzing" ? result.projectName : result.project.projectName,
+      path: result.status === "analyzing" ? result.projectPath : result.project.rootPath,
       lastOpenedAt: new Date().toISOString()
     };
     setProjects((currentProjects) => [
       ...currentProjects.filter((item) => item.id !== projectId),
       project
     ]);
+    if (result.status === "analyzing") {
+      if (!pendingAnalysisProjectId) setPendingWorkspaceKey(current.activeProjectId ?? "home");
+      setPendingAnalysisProjectId(projectId);
+    } else if (pendingAnalysisProjectId === projectId) {
+      setPendingAnalysisProjectId(undefined);
+      setPendingWorkspaceKey(undefined);
+    }
 
-    if (isAlreadyOpen && current.activeProjectId !== projectId && existingSnapshot) {
-      restoreProjectWorkspaceState(existingSnapshot);
-    } else {
-      snapshots.current.set(projectId, captureProjectWorkspaceState());
+    if (result.status !== "analyzing") {
+      if (isAlreadyOpen && current.activeProjectId !== projectId && existingSnapshot) {
+        restoreProjectWorkspaceState(existingSnapshot);
+      } else {
+        snapshots.current.set(projectId, captureProjectWorkspaceState());
+      }
     }
     const tabbedSession = addProjectTab(current, projectId);
     const next = {
@@ -207,9 +262,20 @@ export function useProjectWorkspaceTabs() {
     setRestoreProjectId(undefined);
   }
 
+  function handleProjectAnalysisFinished(projectId: string) {
+    if (pendingAnalysisProjectId !== projectId) return;
+    setPendingAnalysisProjectId(undefined);
+    setPendingWorkspaceKey(undefined);
+  }
+
   return {
+    setCanvasFlush: (flush: () => Promise<void>) => { canvasFlush.current = flush; },
     activeProjectId: session.activeProjectId,
+    workspaceInstanceKey: pendingAnalysisProjectId === session.activeProjectId
+      ? pendingWorkspaceKey ?? session.activeProjectId ?? "home"
+      : session.activeProjectId ?? "home",
     closeProject,
+    handleProjectAnalysisFinished,
     handleProjectOpened,
     handleProjectOpenStarted,
     isReady,

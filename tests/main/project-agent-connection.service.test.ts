@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { CodeflowCanvas, CodeflowProject } from "../../src/types";
+import { readProjectProtocolCanvas, readProjectProtocolSnapshot } from "../../src/main/storage/flowweave-store";
+import { writeProtocolFixture } from "./protocol.fixture";
 import {
   disableProjectAgentConnection,
   enableProjectAgentConnection,
@@ -34,7 +36,7 @@ describe("project Agent connection", () => {
 
     expect(status.state).toBe("ready");
     expect(status.platforms).toEqual(["codex", "claude", "gemini", "cursor"]);
-    await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), ".flowweave/project.json");
+    await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), ".flowweave/static-snapshot.json");
     await expectFileToContain(join(projectPath, ".flowweave", "agent-context.md"), "Agent Inbox Protocol v2");
     const context = await readFile(join(projectPath, ".flowweave", "agent-context.md"), "utf8");
     expect(context).toContain("responsePath");
@@ -43,8 +45,12 @@ describe("project Agent connection", () => {
     expect(context.length).toBeLessThan(4_000);
     expect(context).toContain(`Project root: ${projectPath}`);
     expect(context).toContain("Scan fingerprint: fixture-scan-fingerprint");
-    expect(context).toContain(".flowweave/project.json (schema v1)");
-    expect(context).toContain(".flowweave/canvas/main.canvas.json (schema v6)");
+    expect(context).toContain(".flowweave/static-snapshot.json (schema v1)");
+    expect(context).toContain(".flowweave/graph-overview.json (schema v1)");
+    expect(context).toContain(".flowweave/canvas/user-state.json (schema v1)");
+    expect(context).not.toContain(".flowweave/context/file-tree.md");
+    expect(context).not.toContain(".flowweave/tasks/main.task.md");
+    await expect(readFile(join(projectPath, ".flowweave/context/file-tree.md"), "utf8")).resolves.toContain("Project File Tree");
     expect(context).not.toContain("## Canvas Modules");
     expect(context).not.toContain("## Canvas Relationships");
     expect(context).not.toContain("## File Tree");
@@ -166,10 +172,11 @@ describe("project Agent connection", () => {
   it("requires refresh when the scan fingerprint, protocol, or managed block changes", async () => {
     const projectPath = await createProject();
     await enableProjectAgentConnection(projectPath);
-    const projectArtifactPath = join(projectPath, ".flowweave", "project.json");
-    const projectArtifact = JSON.parse(await readFile(projectArtifactPath, "utf8")) as CodeflowProject;
+    const projectArtifact = (await readProjectProtocolSnapshot(projectPath))?.project;
+    const canvas = await readProjectProtocolCanvas(projectPath);
+    if (!projectArtifact || !canvas) throw new Error("Protocol v7 fixture is missing.");
     projectArtifact.scanFingerprint = "changed-scan-fingerprint";
-    await writeJson(projectArtifactPath, projectArtifact);
+    await writeProtocolFixture(projectPath, projectArtifact, canvas);
 
     expect((await getProjectAgentConnection(projectPath)).state).toBe("needs-refresh");
 
@@ -194,14 +201,12 @@ describe("project Agent connection", () => {
     const contextPath = join(projectPath, ".flowweave", "agent-context.md");
     const context = await readFile(contextPath, "utf8");
     await writeFile(contextPath, context.replace(`Project root: ${projectPath}`, "Project root: /old/flowweave/path"), "utf8");
-    const canvasPath = join(projectPath, ".flowweave", "canvas", "main.canvas.json");
-    const canvas = JSON.parse(await readFile(canvasPath, "utf8")) as Record<string, unknown>;
-    canvas.version = 1;
-    const legacyCanvas = `${JSON.stringify(canvas)}\n`;
-    const sequencePath = join(projectPath, ".flowweave", "sequence-diagrams.json");
-    const legacySequence = JSON.stringify({ version: 1, generatedAt: new Date().toISOString() });
-    await writeFile(canvasPath, legacyCanvas, "utf8");
-    await writeFile(sequencePath, legacySequence, "utf8");
+    const protocolPaths = [
+      join(projectPath, ".flowweave", "static-snapshot.json"),
+      join(projectPath, ".flowweave", "graph-overview.json"),
+      join(projectPath, ".flowweave", "canvas", "user-state.json")
+    ];
+    const protocolBytes = await Promise.all(protocolPaths.map((path) => readFile(path, "utf8")));
 
     const status = await getProjectAgentConnection(projectPath);
 
@@ -212,10 +217,89 @@ describe("project Agent connection", () => {
 
     expect(refreshed.state).toBe("ready");
     await expectFileToContain(contextPath, `Project root: ${projectPath}`);
-    await expectFileToContain(contextPath, ".flowweave/canvas/main.canvas.json (schema v1)");
-    await expectFileToContain(contextPath, ".flowweave/sequence-diagrams.json (schema v1)");
-    await expect(readFile(canvasPath, "utf8")).resolves.toBe(legacyCanvas);
-    await expect(readFile(sequencePath, "utf8")).resolves.toBe(legacySequence);
+    await expectFileToContain(contextPath, ".flowweave/static-snapshot.json (schema v1)");
+    await expectFileToContain(contextPath, ".flowweave/graph-overview.json (schema v1)");
+    await expectFileToContain(contextPath, ".flowweave/canvas/user-state.json (schema v1)");
+    expect(await readFile(contextPath, "utf8")).not.toContain(".flowweave/sequence-diagrams.json");
+    await expect(Promise.all(protocolPaths.map((path) => readFile(path, "utf8")))).resolves.toEqual(protocolBytes);
+  });
+
+  it("advertises only current-generation v2 task and sequence artifacts", async () => {
+    const projectPath = await createProject();
+    const canvas = await readProjectProtocolCanvas(projectPath);
+    if (!canvas?.generation) throw new Error("Protocol v7 fixture is missing its generation.");
+    const taskPath = join(projectPath, ".flowweave/tasks/current.task.json");
+    const markdownPath = join(projectPath, ".flowweave/tasks/current.task.md");
+    const sequencePath = join(projectPath, ".flowweave/sequence-diagrams.json");
+    await writeJson(taskPath, {
+      version: 2,
+      generation: canvas.generation,
+      inputFingerprint: canvas.scanFingerprint,
+      artifactState: "current",
+      modules: [],
+      relations: []
+    });
+    await writeFile(markdownPath, "# Unbound legacy task\n", "utf8");
+    await writeJson(sequencePath, {
+      version: 2,
+      generation: canvas.generation,
+      projectName: "Fixture Project",
+      rootPath: projectPath,
+      generatedAt: new Date().toISOString(),
+      source: "local",
+      architectural: {}
+    });
+
+    await enableProjectAgentConnection(projectPath);
+
+    const context = await readFile(join(projectPath, ".flowweave/agent-context.md"), "utf8");
+    expect(context).toContain(".flowweave/sequence-diagrams.json (schema v2)");
+    expect(context).toContain(".flowweave/tasks/current.task.json");
+    expect(context).not.toContain(".flowweave/tasks/current.task.md");
+    expect(context).not.toContain(".flowweave/context/file-tree.md");
+    await expect(readFile(taskPath, "utf8")).resolves.toContain('"version": 2');
+    await expect(readFile(markdownPath, "utf8")).resolves.toBe("# Unbound legacy task\n");
+    await expect(readFile(sequencePath, "utf8")).resolves.toContain('"version": 2');
+  });
+
+  it("does not advertise stale v2 task or sequence artifacts and preserves them", async () => {
+    const projectPath = await createProject();
+    const taskPath = join(projectPath, ".flowweave/tasks/current.task.json");
+    const markdownPath = join(projectPath, ".flowweave/tasks/current.task.md");
+    const sequencePath = join(projectPath, ".flowweave/sequence-diagrams.json");
+    const staleTask = {
+      version: 2,
+      generation: { requestId: "previous-generation", inputFingerprint: "previous-input" },
+      inputFingerprint: "fixture-scan-fingerprint",
+      artifactState: "current",
+      modules: [],
+      relations: []
+    };
+    const staleTaskBytes = `${JSON.stringify(staleTask, null, 2)}\n`;
+    const staleSequenceBytes = `${JSON.stringify({
+      version: 2,
+      generation: { requestId: "previous-generation", inputFingerprint: "previous-input" },
+      projectName: "Fixture Project",
+      rootPath: projectPath,
+      generatedAt: new Date().toISOString(),
+      source: "local",
+      architectural: {}
+    }, null, 2)}\n`;
+    const staleMarkdownBytes = "# Previous generation task\n";
+    await writeFile(taskPath, staleTaskBytes, "utf8");
+    await writeFile(markdownPath, staleMarkdownBytes, "utf8");
+    await writeFile(sequencePath, staleSequenceBytes, "utf8");
+
+    await enableProjectAgentConnection(projectPath);
+
+    const context = await readFile(join(projectPath, ".flowweave/agent-context.md"), "utf8");
+    expect(context).not.toContain(".flowweave/sequence-diagrams.json");
+    expect(context).not.toContain(".flowweave/tasks/current.task.json");
+    expect(context).not.toContain(".flowweave/tasks/current.task.md");
+    expect(context).not.toContain(".flowweave/context/file-tree.md");
+    await expect(readFile(taskPath, "utf8")).resolves.toBe(staleTaskBytes);
+    await expect(readFile(markdownPath, "utf8")).resolves.toBe(staleMarkdownBytes);
+    await expect(readFile(sequencePath, "utf8")).resolves.toBe(staleSequenceBytes);
   });
 
   it("preserves legacy connector artifacts until their manifests are migrated", async () => {
@@ -240,7 +324,6 @@ describe("project Agent connection", () => {
 
 async function createProject() {
   const projectPath = await mkdtemp(join(tmpdir(), "flowweave-agent-connection-"));
-  await mkdir(join(projectPath, ".flowweave", "canvas"), { recursive: true });
   await mkdir(join(projectPath, ".flowweave", "context"), { recursive: true });
   await mkdir(join(projectPath, ".flowweave", "tasks"), { recursive: true });
 
@@ -258,8 +341,7 @@ async function createProject() {
     files: [],
     scanFingerprint: "fixture-scan-fingerprint"
   };
-  await writeJson(join(projectPath, ".flowweave", "project.json"), project);
-  await writeJson(join(projectPath, ".flowweave", "canvas", "main.canvas.json"), createCanvas(projectPath, "API Module"));
+  await writeProtocolFixture(projectPath, project, createCanvas(projectPath, "API Module"));
   await writeFile(join(projectPath, ".flowweave", "context", "file-tree.md"), "# Project File Tree\n\n- src/\n", "utf8");
   await writeFile(join(projectPath, ".flowweave", "tasks", "main.task.md"), "# Task\n", "utf8");
   return projectPath;
@@ -267,7 +349,6 @@ async function createProject() {
 
 function createCanvas(projectPath: string, title: string): CodeflowCanvas {
   return {
-    version: 6,
     id: "main",
     title: "Main Canvas",
     projectPath,

@@ -15,6 +15,7 @@ import {
   getAgentInboxResponsePath,
   writeAgentInboxRequest
 } from "../../src/main/services/agent-inbox.service";
+import { writeEmptyProtocolFixture } from "./protocol.fixture";
 
 describe("run-log.service", () => {
   it("lists run summaries newest first", async () => {
@@ -83,6 +84,7 @@ describe("run-log.service", () => {
   it("serializes timeout reconciliation with an on-time Inbox response import", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "flowweave-run-timeout-race-"));
     await mkdir(join(projectPath, FLOWWEAVE_DIR), { recursive: true });
+    await writeEmptyProtocolFixture(projectPath, "scan-race");
     const projectId = await registerProject(projectPath);
     const runId = "run-timeout-race";
     const startedAt = "2026-08-07T00:00:00.000Z";

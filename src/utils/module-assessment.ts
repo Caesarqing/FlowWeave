@@ -48,12 +48,15 @@ export function applyRiskOverride(
     throw new Error("A reason is required to override the system risk assessment.");
   }
   const current = module.assessment ?? unknownAssessment("", createdAt);
+  const systemLevelAtOverride = current.risk.override?.systemLevelAtOverride ??
+    (current.risk.systemLevel === "unknown" ? undefined : current.risk.systemLevel);
   const assessment: ModuleAssessment = {
     ...current,
     risk: {
       ...current.risk,
       effectiveLevel: level,
-      override: { level, reason: normalizedReason, createdAt }
+      override: { level, reason: normalizedReason, createdAt,
+        ...(systemLevelAtOverride && systemLevelAtOverride !== "unknown" ? { systemLevelAtOverride } : {}) }
     }
   };
   return { ...module, risk: level, assessment, status: "needs-review" };
@@ -82,8 +85,18 @@ export function invalidateModuleAssessment(module: GraphNode, assessedAt: string
     risk: next.risk.effectiveLevel,
     confidence: undefined,
     assessment: next,
+    assessmentPending: true,
     status: "needs-review"
   };
+}
+
+export function applyAssessmentOverride(
+  assessment: ModuleAssessment,
+  override: NonNullable<ModuleAssessment["risk"]["override"]>
+): ModuleAssessment {
+  const previousSystemLevel = override.systemLevelAtOverride === "unknown" ? undefined : override.systemLevelAtOverride;
+  return { ...assessment, risk: { ...assessment.risk, override, effectiveLevel: override.level,
+    ...(previousSystemLevel ? { previousSystemLevel, systemLevelChanged: previousSystemLevel !== assessment.risk.systemLevel } : {}) } };
 }
 
 export function unknownAssessment(fingerprint: string, assessedAt: string): ModuleAssessment {
@@ -253,14 +266,17 @@ function buildRiskFactors(
 function preserveOverride(next: ModuleAssessment, previous: ModuleAssessment | undefined): ModuleAssessment {
   const override = previous?.risk.override;
   if (!previous || !override?.reason.trim()) return next;
+  const previousSystemLevel = override.systemLevelAtOverride ?? previous.risk.systemLevel;
   return {
     ...next,
     risk: {
       ...next.risk,
       effectiveLevel: override.level,
-      previousSystemLevel: previous.risk.systemLevel,
-      systemLevelChanged: previous.risk.systemLevel !== next.risk.systemLevel,
-      override
+      ...(previousSystemLevel === "unknown" ? {} : {
+        previousSystemLevel,
+        systemLevelChanged: previousSystemLevel !== next.risk.systemLevel
+      }),
+      override: previousSystemLevel === "unknown" ? override : { ...override, systemLevelAtOverride: previousSystemLevel }
     }
   };
 }

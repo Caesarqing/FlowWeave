@@ -1,16 +1,34 @@
 import { describe, expect, it } from "vitest";
 import type { GraphEdge, GraphNode } from "../../src/types";
-import { chooseInitialCollapsedGroups, createFlowEdge, createFlowNode, expandedGroupsForGroup, expandedGroupsForNode, graphEdgeFromFlow, projectCollapsedFlowGraph, traceDisplayNodeIds } from "../../src/utils/graph-converters";
+import { createFlowEdge, createFlowNode, decorateFlowGraph, expandedGroupsForNode, graphEdgeFromFlow, projectCollapsedFlowGraph, traceDisplayNodeIds } from "../../src/utils/graph-converters";
+import { nodeGroupKey } from "../../src/utils/canvas-layout";
+import { filterCanvasToModuleGroups } from "../../src/components/CanvasWorkspace";
+import { CANVAS_NODE_SIZE } from "../../src/common/canvas-geometry";
 
-const packageGroup = { id: "scope:app", title: "App", rootPath: "app" };
-const featureGroup = { id: "group:orders", title: "Orders", rootPath: "app/orders", parentId: packageGroup.id };
+const packageGroup = { id: "group:package:app", title: "App", rootPath: "app" };
+const featureGroup = { id: "group:directory:app/orders", title: "Orders", rootPath: "app/orders", parentId: packageGroup.id };
 const nodes: GraphNode[] = ["first", "second"].map((id) => ({
   id, title: id, subtitle: "", kind: "module", nodeType: "service", risk: "unknown", description: id,
   files: [`app/orders/${id}.ts`], guidanceDraft: "", status: "mapped", x: 0, y: 0, groupPath: [packageGroup, featureGroup]
 }));
-const outside: GraphNode = { ...nodes[0], id: "outside", groupPath: [{ id: "scope:worker", title: "Worker", rootPath: "worker" }] };
+const outside: GraphNode = { ...nodes[0], id: "outside", groupPath: [
+  { id: "group:package:worker", title: "Worker package", rootPath: "worker" },
+  { id: "group:directory:worker", title: "Worker", rootPath: "worker" }
+] };
 
 describe("canvas hierarchy projection", () => {
+  it("gives collapsed cards measured endpoints for their visible relations", () => {
+    const collapsed = projectCollapsedFlowGraph([...nodes, outside].map(createFlowNode), [
+      createFlowEdge({ id: "call", source: "first", target: "outside", relation: "calls" })
+    ], "execution", [featureGroup.id]);
+    const decorated = decorateFlowGraph(collapsed.nodes, collapsed.edges);
+    const group = decorated.nodes.find((node) => node.id === `group:${featureGroup.id}`)!;
+    expect(group.initialWidth).toBe(CANVAS_NODE_SIZE.width);
+    expect(group.initialHeight).toBe(CANVAS_NODE_SIZE.height);
+    expect(group.handles?.every((handle) => (handle.x === 0 || handle.x === CANVAS_NODE_SIZE.width) && handle.y >= 0 && handle.y <= CANVAS_NODE_SIZE.height)).toBe(true);
+    expect(group.handles?.some((handle) => handle.id === decorated.edges[0].sourceHandle)).toBe(true);
+  });
+
   it("creates a real group card and retains all evidence and semantic distinctions when folding", () => {
     const edges: GraphEdge[] = [
       { id: "render", source: "first", target: "outside", relation: "calls", semanticKinds: ["render"], sourceRelationIds: ["semantic-render"], evidence: [{ filePath: "app/orders/first.ts", detail: "renders child" }] },
@@ -21,9 +39,9 @@ describe("canvas hierarchy projection", () => {
     const sourceNodes = [...nodes, outside].map(createFlowNode);
     const sourceEdges = edges.map(createFlowEdge);
     const original = structuredClone({ sourceNodes, sourceEdges });
-    const folded = projectCollapsedFlowGraph(sourceNodes, sourceEdges, "architecture", [packageGroup.id, featureGroup.id]);
-    expect(folded.nodes.map((node) => node.id)).toEqual(["outside", `group:${packageGroup.id}`]);
-    expect(folded.nodes[1].data).toMatchObject({ title: "App", syntheticKind: "group", memberNodeIds: ["first", "second"], groupId: packageGroup.id });
+    const folded = projectCollapsedFlowGraph(sourceNodes, sourceEdges, "execution", [featureGroup.id]);
+    expect(folded.nodes.map((node) => node.id)).toEqual(["outside", `group:${featureGroup.id}`]);
+    expect(folded.nodes[1].data).toMatchObject({ title: "Orders", syntheticKind: "group", memberNodeIds: ["first", "second"], groupId: featureGroup.id });
     const call = folded.edges.find((edge) => edge.data?.relation === "calls");
     expect(graphEdgeFromFlow(call!)).toMatchObject({ semanticKinds: ["call", "render"], sourceRelationIds: ["semantic-call", "semantic-render"], aggregatedEdgeIds: ["call", "render"], evidence: expect.arrayContaining(edges.slice(0, 2).flatMap((edge) => edge.evidence ?? [])) });
     expect(graphEdgeFromFlow(folded.edges.find((edge) => edge.data?.relation === "reads_writes")!)).toMatchObject({ operations: ["read", "write"] });
@@ -31,19 +49,31 @@ describe("canvas hierarchy projection", () => {
   });
 
   it("expands only a search result's ancestors and restores original source facts", () => {
-    const collapsed = [packageGroup.id, featureGroup.id, "scope:worker"];
-    const expanded = expandedGroupsForNode(nodes[1], "architecture", collapsed);
-    expect(expanded).toEqual(["scope:worker"]);
-    const unfolded = projectCollapsedFlowGraph([...nodes, outside].map(createFlowNode), [], "architecture", expanded);
-    expect(unfolded.nodes.map((node) => node.id)).toEqual(["first", "second", "group:scope:worker"]);
-    expect(collapsed).toEqual([packageGroup.id, featureGroup.id, "scope:worker"]);
+    const collapsed = [featureGroup.id, "group:directory:worker"];
+    const expanded = expandedGroupsForNode(nodes[1], "execution", collapsed);
+    expect(expanded).toEqual(["group:directory:worker"]);
+    const unfolded = projectCollapsedFlowGraph([...nodes, outside].map(createFlowNode), [], "execution", expanded);
+    expect(unfolded.nodes.map((node) => node.id)).toEqual(["first", "second", "group:group:directory:worker"]);
+    expect(collapsed).toEqual([featureGroup.id, "group:directory:worker"]);
   });
 
-  it("opens a package one level at a time and keeps unrelated packages folded", () => {
-    const packages = [packageGroup.id, "scope:worker"];
-    const expandedPackage = expandedGroupsForGroup([...nodes, outside], "architecture", packageGroup.id, packages);
-    expect(expandedPackage).toEqual([featureGroup.id, "scope:worker"]);
-    expect(expandedGroupsForGroup([...nodes, outside], "architecture", featureGroup.id, expandedPackage)).toEqual(["scope:worker"]);
+  it("shows real modules until a functional area is explicitly collapsed", () => {
+    const expanded = projectCollapsedFlowGraph([...nodes, outside].map(createFlowNode), [], "execution", []);
+    expect(expanded.nodes.map((node) => node.id)).toEqual(["first", "second", "outside"]);
+  });
+
+  it("uses the same persisted area identity for filtering and collapsing", () => {
+    const sharedArea = "area:orders";
+    const first = { ...nodes[0], areaId: sharedArea };
+    const second = { ...nodes[1], areaId: sharedArea, groupPath: [packageGroup] };
+    const unrelated = { ...outside, areaId: "area:worker" };
+    const graphNodes = [first, second, unrelated].map(createFlowNode);
+
+    expect(nodeGroupKey(first)).toBe(sharedArea);
+    expect(nodeGroupKey(second)).toBe(sharedArea);
+    expect(filterCanvasToModuleGroups(graphNodes, [], [sharedArea]).nodes.map((node) => node.id)).toEqual(["first", "second"]);
+    expect(projectCollapsedFlowGraph(graphNodes, [], "execution", [sharedArea]).nodes.map((node) => node.id))
+      .toEqual(["outside", `group:${sharedArea}`]);
   });
 
   it("keeps a selected module's trace on source facts across folding and expansion", () => {
@@ -52,16 +82,9 @@ describe("canvas hierarchy projection", () => {
       createFlowEdge({ id: "first-outside", source: "first", target: "outside", relation: "calls" }),
       createFlowEdge({ id: "second-unrelated", source: "second", target: "unrelated", relation: "calls" })
     ];
-    const collapsed = projectCollapsedFlowGraph(sourceNodes, sourceEdges, "architecture", [packageGroup.id]);
-    expect([...traceDisplayNodeIds("first", sourceNodes, sourceEdges, collapsed.nodes, "architecture", "downstream")].sort()).toEqual(["group:scope:app", "outside"]);
-    expect([...traceDisplayNodeIds("first", sourceNodes, sourceEdges, sourceNodes, "architecture", "downstream")].sort()).toEqual(["first", "outside"]);
-    expect([...traceDisplayNodeIds("group:scope:app", sourceNodes, sourceEdges, sourceNodes, "architecture", "downstream")].sort()).toEqual(["first", "outside", "second", "unrelated"]);
-  });
-
-  it("starts multiple packages collapsed and opens a single package to functional groups", () => {
-    expect(chooseInitialCollapsedGroups([...nodes, outside])).toEqual(["scope:app", "scope:worker"]);
-    expect(chooseInitialCollapsedGroups(nodes)).toEqual(["group:orders"]);
-    const resource: GraphNode = { ...nodes[0], id: "event", files: [], resource: { id: "event", kind: "event", scopeId: "app", key: "event", title: "Event", detail: "", evidence: [] }, groupPath: [packageGroup, { id: "group:resources", title: "Resources", rootPath: "app", parentId: packageGroup.id }] };
-    expect(chooseInitialCollapsedGroups([...nodes, resource])).toEqual(["group:orders", "group:resources"]);
+    const collapsed = projectCollapsedFlowGraph(sourceNodes, sourceEdges, "execution", [featureGroup.id]);
+    expect([...traceDisplayNodeIds("first", sourceNodes, sourceEdges, collapsed.nodes, "execution", "downstream")].sort()).toEqual([`group:${featureGroup.id}`, "outside"]);
+    expect([...traceDisplayNodeIds("first", sourceNodes, sourceEdges, sourceNodes, "execution", "downstream")].sort()).toEqual(["first", "outside"]);
+    expect([...traceDisplayNodeIds(`group:${featureGroup.id}`, sourceNodes, sourceEdges, sourceNodes, "execution", "downstream")].sort()).toEqual(["first", "outside", "second", "unrelated"]);
   });
 });

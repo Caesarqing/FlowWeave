@@ -1,0 +1,5 @@
+(node:44479) [DEP0180] DeprecationWarning: fs.Stats constructor is deprecated.
+(Use `FlowWeave Helper --trace-deprecation ...` to show where the warning was created)
+FlowWeave graph smoke test passed: empty.
+Graph smoke report retained without replacing existing evidence: /Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/docs/evidence/static-graph-generalization/A5-current-source-local-package-2026-10-09-de5xb2k2/graph-smoke-empty.json.
+Graph smoke artifacts verified: empty; protocol=v7; semantic=v5; ReactFlow edges=0; toolchain PATH empty.

@@ -9,6 +9,7 @@ import type {
 } from "../../types";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { requireProjectProtocolV7 } from "../storage/flowweave-store";
 import { withArchitectureArtifactLock } from "./architecture-review.service";
 import { assertArtifactGeneration, readCommittedGeneration } from "./project-generation.service";
 
@@ -89,9 +90,7 @@ export async function writeSequenceReviewStatus(
   status: SequenceReviewStatus
 ): Promise<void> {
   await withArchitectureArtifactLock(projectPath, async () => {
-    const canvasPath = join(projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
-    const canvas = await readJsonArtifact(canvasPath) as { version?: number } | undefined;
-    if (canvas?.version === 5) throw new Error(`Legacy Canvas v5 is read-only; re-scan successfully before updating sequence review: ${canvasPath}`);
+    await requireProjectProtocolV7(projectPath);
     if (status.generation) await assertArtifactGeneration(projectPath, "sequence-review.json", status);
     await writeJsonAtomic(reviewStatePath(projectPath), status);
   });

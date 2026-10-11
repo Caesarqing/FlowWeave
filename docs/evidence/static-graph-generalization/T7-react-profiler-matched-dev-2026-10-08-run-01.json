@@ -1,0 +1,4796 @@
+{
+  "status": "failed",
+  "fixture": "viewport-only",
+  "workspaceVisibleMs": 4143,
+  "lastState": {
+    "onboardingVisible": false,
+    "nodes": 3,
+    "nodeIds": [
+      "module-105cc96e2949c3e9",
+      "module-c05bc0dca2d8b5e0",
+      "group:view:unlinked"
+    ],
+    "viewportNodeIds": [
+      "module-105cc96e2949c3e9",
+      "module-c05bc0dca2d8b5e0",
+      "group:view:unlinked"
+    ],
+    "groups": 1,
+    "groupCards": [
+      {
+        "id": "group:view:unlinked",
+        "text": "Group3 modulesNo confirmed callsExpand to inspect these modu",
+        "x": 393.1953125,
+        "y": 601.3564453125,
+        "opacity": "1",
+        "visibility": "visible"
+      }
+    ],
+    "edges": [
+      {
+        "id": "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed",
+        "label": "Edge from module-105cc96e2949c3e9 to module-c05bc0dca2d8b5e0",
+        "path": "M306.99920468271426 130.82010828947384L326.99920468271426 130.82010828947384L362.99961741607046 130.82010828947384L362.99961741607046 130.82010828947384L399.00003014942666 130.82010828947384L419.00003014942666 130.82010828947384",
+        "markerEnd": "url('#1__color=#42f5a7&type=arrowclosed')"
+      }
+    ],
+    "edgePaths": 1,
+    "layoutPending": false,
+    "emptyText": "",
+    "viewMode": "execution",
+    "projectStatus": "Read 21 files and generated 10 module nodes.",
+    "workspaceVisible": true,
+    "staleBanner": false,
+    "modulePanelVisible": false
+  },
+  "reactProfiler": {
+    "status": "failed",
+    "error": "React Profiler smoke found no enabled whole-graph layout control.",
+    "reactVersion": "19.2.6",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) flowweave/0.1.0 Chrome/148.0.7778.280 Electron/42.8.1 Safari/537.36",
+    "actions": [
+      {
+        "name": "initial-render",
+        "durationMs": 0,
+        "visibleNodeCountBefore": 0,
+        "visibleNodeCountAfter": 3,
+        "visibleNodeIdsBefore": [],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 161,
+        "actualDurationMs": 74.99999995529652,
+        "startedAt": 594.2999999970198
+      },
+      {
+        "name": "expand-group",
+        "durationMs": 795.9000000022352,
+        "visibleNodeCountBefore": 3,
+        "visibleNodeCountAfter": 5,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:group:function:java:java:example",
+          "group:group:function:python:python:sample",
+          "group:group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 79,
+        "actualDurationMs": 33.599999994039536
+      },
+      {
+        "name": "collapse-group",
+        "durationMs": 597.9000000022352,
+        "visibleNodeCountBefore": 5,
+        "visibleNodeCountAfter": 3,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:group:function:java:java:example",
+          "group:group:function:python:python:sample",
+          "group:group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 65,
+        "actualDurationMs": 26.099999994039536
+      },
+      {
+        "name": "filter-technology",
+        "durationMs": 108.40000000223517,
+        "visibleNodeCountBefore": 3,
+        "visibleNodeCountAfter": 0,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleNodeIdsAfter": [],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [],
+        "commitCount": 8,
+        "actualDurationMs": 5.200000002980232
+      },
+      {
+        "name": "automatic-layout-refresh",
+        "durationMs": 788.9000000022352,
+        "visibleNodeCountBefore": 0,
+        "visibleNodeCountAfter": 0,
+        "visibleNodeIdsBefore": [],
+        "visibleNodeIdsAfter": [],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [],
+        "commitCount": 16,
+        "actualDurationMs": 16.69999999552965
+      },
+      {
+        "name": "profile-module-panel",
+        "durationMs": 263.20000000298023,
+        "visibleNodeCountBefore": 7,
+        "visibleNodeCountAfter": 7,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-110beac7ad70dd99",
+          "module-16cd6a1b950684a5",
+          "module-3e3cb32f29d1be44",
+          "module-c05bc0dca2d8b5e0",
+          "resource:4466ac188deb76262f540325",
+          "resource:a4980f41d504d05e7f07424c"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-110beac7ad70dd99",
+          "module-16cd6a1b950684a5",
+          "module-3e3cb32f29d1be44",
+          "module-c05bc0dca2d8b5e0",
+          "resource:4466ac188deb76262f540325",
+          "resource:a4980f41d504d05e7f07424c"
+        ],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed",
+          "module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed",
+          "module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed"
+        ],
+        "commitCount": 92,
+        "actualDurationMs": 28.50000000372529
+      },
+      {
+        "name": "profile-connection-panel",
+        "durationMs": 415.6000000014901,
+        "visibleNodeCountBefore": 7,
+        "visibleNodeCountAfter": 7,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-110beac7ad70dd99",
+          "module-16cd6a1b950684a5",
+          "module-3e3cb32f29d1be44",
+          "module-c05bc0dca2d8b5e0",
+          "resource:4466ac188deb76262f540325",
+          "resource:a4980f41d504d05e7f07424c"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-110beac7ad70dd99",
+          "module-16cd6a1b950684a5",
+          "module-3e3cb32f29d1be44",
+          "module-c05bc0dca2d8b5e0",
+          "resource:4466ac188deb76262f540325",
+          "resource:a4980f41d504d05e7f07424c"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed",
+          "module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed",
+          "module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed",
+          "module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed",
+          "module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed"
+        ],
+        "commitCount": 26,
+        "actualDurationMs": 8.5
+      }
+    ],
+    "samples": [
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "mount",
+        "actualDuration": 8.100000001490116,
+        "baseDuration": 5.600000001490116,
+        "startTime": 594.2999999970198,
+        "commitTime": 733.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.2999999970197678,
+        "baseDuration": 1.4000000022351742,
+        "startTime": 742.8999999985099,
+        "commitTime": 744.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 1.5000000037252903,
+        "startTime": 745.3999999985099,
+        "commitTime": 745.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 1.6000000014901161,
+        "startTime": 749.5999999977648,
+        "commitTime": 749.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 1.6000000014901161,
+        "startTime": 750.0999999977648,
+        "commitTime": 750.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.300000000745058,
+        "baseDuration": 1.9000000022351742,
+        "startTime": 751.0999999977648,
+        "commitTime": 752.5,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 1.800000000745058,
+        "startTime": 753,
+        "commitTime": 753.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.199999999254942,
+        "baseDuration": 1.5999999977648258,
+        "startTime": 806.6999999992549,
+        "commitTime": 807.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 1.6000000014901161,
+        "startTime": 808.8999999985099,
+        "commitTime": 809,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.0999999977648258,
+        "baseDuration": 1.5,
+        "startTime": 810.6999999992549,
+        "commitTime": 811.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 1.4999999962747097,
+        "startTime": 812.5,
+        "commitTime": 812.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.599999997764826,
+        "baseDuration": 2.9999999962747097,
+        "startTime": 814.1999999992549,
+        "commitTime": 816.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 2.9999999962747097,
+        "startTime": 817.6999999992549,
+        "commitTime": 817.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.8999999985098839,
+        "baseDuration": 1.2999999970197678,
+        "startTime": 819.6999999992549,
+        "commitTime": 820.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.199999999254942,
+        "startTime": 821.3999999985099,
+        "commitTime": 821.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5,
+        "baseDuration": 0.6999999992549419,
+        "startTime": 822.5,
+        "commitTime": 823,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.6999999992549419,
+        "startTime": 823.6999999992549,
+        "commitTime": 823.6999999992549,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5,
+        "baseDuration": 0.6999999992549419,
+        "startTime": 824.5999999977648,
+        "commitTime": 825.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.8000000007450581,
+        "startTime": 825.7999999970198,
+        "commitTime": 825.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5,
+        "baseDuration": 0.9000000022351742,
+        "startTime": 827.7999999970198,
+        "commitTime": 828.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.8000000007450581,
+        "startTime": 829.0999999977648,
+        "commitTime": 829.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.29999999701976776,
+        "baseDuration": 0.5999999977648258,
+        "startTime": 830,
+        "commitTime": 830.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.5999999977648258,
+        "startTime": 831,
+        "commitTime": 831.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.29999999701976776,
+        "baseDuration": 0.5999999977648258,
+        "startTime": 831.8999999985099,
+        "commitTime": 832.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.5999999977648258,
+        "startTime": 833.3999999985099,
+        "commitTime": 833.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5999999977648258,
+        "baseDuration": 0.8999999985098839,
+        "startTime": 834.6999999992549,
+        "commitTime": 835.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 1,
+        "startTime": 836.7999999970198,
+        "commitTime": 836.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.3999999985098839,
+        "baseDuration": 0.8000000007450581,
+        "startTime": 837.6999999992549,
+        "commitTime": 838.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.6999999992549419,
+        "startTime": 838.6999999992549,
+        "commitTime": 838.6999999992549,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.3999999985098839,
+        "baseDuration": 0.6999999992549419,
+        "startTime": 839.3999999985099,
+        "commitTime": 839.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.6999999992549419,
+        "startTime": 840.2999999970198,
+        "commitTime": 840.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.4000000022351742,
+        "baseDuration": 0.7000000029802322,
+        "startTime": 841.0999999977648,
+        "commitTime": 841.5,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.7000000029802322,
+        "startTime": 842.0999999977648,
+        "commitTime": 842.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5,
+        "baseDuration": 0.7000000029802322,
+        "startTime": 842.7999999970198,
+        "commitTime": 843.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.7000000029802322,
+        "startTime": 843.7999999970198,
+        "commitTime": 843.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5999999977648258,
+        "baseDuration": 0.8999999985098839,
+        "startTime": 934.5,
+        "commitTime": 935.1999999992549,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.8999999985098839,
+        "startTime": 935.5999999977648,
+        "commitTime": 935.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.5,
+        "baseDuration": 0.7000000029802322,
+        "startTime": 965.2999999970198,
+        "commitTime": 965.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0.7000000029802322,
+        "startTime": 966.8999999985099,
+        "commitTime": 966.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1,
+        "baseDuration": 1.199999999254942,
+        "startTime": 1035.7999999970198,
+        "commitTime": 1036.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.199999999254942,
+        "startTime": 1037.5,
+        "commitTime": 1037.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.9000000022351742,
+        "baseDuration": 1.1000000014901161,
+        "startTime": 1090.2999999970198,
+        "commitTime": 1091.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 1.199999999254942,
+        "startTime": 1092,
+        "commitTime": 1092.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.7000000029802322,
+        "baseDuration": 1.1000000014901161,
+        "startTime": 1153.2999999970198,
+        "commitTime": 1154.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.0000000037252903,
+        "startTime": 1155,
+        "commitTime": 1155.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.699999999254942,
+        "baseDuration": 2.4999999962747097,
+        "startTime": 1163.5,
+        "commitTime": 1166.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.3999999985098839,
+        "baseDuration": 0.30000000074505806,
+        "startTime": 1172.699999999255,
+        "commitTime": 1173.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1173.199999999255,
+        "commitTime": 1173.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1173.3999999985099,
+        "commitTime": 1173.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 4.799999997019768,
+        "baseDuration": 4.400000002235174,
+        "startTime": 1169,
+        "commitTime": 1173.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1175.699999999255,
+        "commitTime": 1176.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1175.8999999985099,
+        "commitTime": 1176.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1176.0999999977648,
+        "commitTime": 1176.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.6000000014901161,
+        "baseDuration": 3.199999999254942,
+        "startTime": 1174.8999999985099,
+        "commitTime": 1176.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1179.5999999977648,
+        "commitTime": 1180.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0,
+        "startTime": 1179.7999999970198,
+        "commitTime": 1180.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1179.8999999985099,
+        "commitTime": 1180.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.3999999985098839,
+        "baseDuration": 1.4999999962747097,
+        "startTime": 1178.5999999977648,
+        "commitTime": 1180.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1181.2999999970198,
+        "commitTime": 1181.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1181.5,
+        "commitTime": 1181.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1181.5,
+        "commitTime": 1181.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.4000000022351742,
+        "baseDuration": 1.5999999977648258,
+        "startTime": 1181.2999999970198,
+        "commitTime": 1181.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "mount",
+        "actualDuration": 0.5,
+        "baseDuration": 0.29999999701976776,
+        "startTime": 1190,
+        "commitTime": 1191.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1190.5999999977648,
+        "commitTime": 1191.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1190.7999999970198,
+        "commitTime": 1191.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1190.8999999985099,
+        "commitTime": 1191.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.800000000745058,
+        "baseDuration": 2.699999999254942,
+        "startTime": 1188.3999999985099,
+        "commitTime": 1191.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1195.199999999255,
+        "commitTime": 1196,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 1195.2999999970198,
+        "commitTime": 1196,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1195.5,
+        "commitTime": 1196,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1195.699999999255,
+        "commitTime": 1196,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.9000000022351742,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 1194.0999999977648,
+        "commitTime": 1196,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.600000001490116,
+        "startTime": 1196.3999999985099,
+        "commitTime": 1196.5,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 1196.7999999970198,
+        "commitTime": 1196.8999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 1197.0999999977648,
+        "commitTime": 1197.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1201.0999999977648,
+        "commitTime": 1201.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1201.199999999255,
+        "commitTime": 1201.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1201.2999999970198,
+        "commitTime": 1201.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1201.3999999985099,
+        "commitTime": 1201.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.399999998509884,
+        "baseDuration": 3.7999999970197678,
+        "startTime": 1198.199999999255,
+        "commitTime": 1201.5999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1202.5999999977648,
+        "commitTime": 1203.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1202.699999999255,
+        "commitTime": 1203.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1202.8999999985099,
+        "commitTime": 1203.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1203,
+        "commitTime": 1203.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.6999999992549419,
+        "baseDuration": 3.800000000745058,
+        "startTime": 1202.5,
+        "commitTime": 1203.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1282.8999999985099,
+        "commitTime": 1283.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1283,
+        "commitTime": 1283.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1283.0999999977648,
+        "commitTime": 1283.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1283.0999999977648,
+        "commitTime": 1283.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.4000000022351742,
+        "baseDuration": 1.8000000044703484,
+        "startTime": 1281.699999999255,
+        "commitTime": 1283.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.8000000044703484,
+        "startTime": 1284.3999999985099,
+        "commitTime": 1284.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1383.699999999255,
+        "commitTime": 1384,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1383.699999999255,
+        "commitTime": 1384,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1383.7999999970198,
+        "commitTime": 1384,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1383.8999999985099,
+        "commitTime": 1384,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.8999999985098839,
+        "baseDuration": 1.4000000022351742,
+        "startTime": 1383,
+        "commitTime": 1384,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.4000000022351742,
+        "startTime": 1384.699999999255,
+        "commitTime": 1385,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1390.0999999977648,
+        "commitTime": 1390.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1390.199999999255,
+        "commitTime": 1390.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1390.2999999970198,
+        "commitTime": 1390.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1390.2999999970198,
+        "commitTime": 1390.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1,
+        "baseDuration": 1.5000000037252903,
+        "startTime": 1389.3999999985099,
+        "commitTime": 1390.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1391.5999999977648,
+        "commitTime": 1392,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1391.7999999970198,
+        "commitTime": 1392,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1391.8999999985099,
+        "commitTime": 1392,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1391.8999999985099,
+        "commitTime": 1392,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.4000000022351742,
+        "baseDuration": 1.4000000022351742,
+        "startTime": 1391.5999999977648,
+        "commitTime": 1392,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1496.8999999985099,
+        "commitTime": 1497.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1496.8999999985099,
+        "commitTime": 1497.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1497,
+        "commitTime": 1497.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1497.0999999977648,
+        "commitTime": 1497.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.8000000007450581,
+        "baseDuration": 1.199999999254942,
+        "startTime": 1496.2999999970198,
+        "commitTime": 1497.0999999977648,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.0999999977648258,
+        "startTime": 1498.3999999985099,
+        "commitTime": 1498.3999999985099,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1949.0999999977648,
+        "commitTime": 1949.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1949.199999999255,
+        "commitTime": 1949.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1949.5,
+        "commitTime": 1949.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 1949.5,
+        "commitTime": 1949.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.099999997764826,
+        "baseDuration": 2.3999999947845936,
+        "startTime": 1947.5,
+        "commitTime": 1949.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 1952.699999999255,
+        "commitTime": 1953.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 1952.8999999985099,
+        "commitTime": 1953.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0,
+        "startTime": 1953,
+        "commitTime": 1953.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 1953.0999999977648,
+        "commitTime": 1953.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.7999999970197678,
+        "baseDuration": 2.3999999947845936,
+        "startTime": 1952.5,
+        "commitTime": 1953.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 3867.7999999970198,
+        "commitTime": 3868.89999999851,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 3868.099999997765,
+        "commitTime": 3868.89999999851,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0,
+        "startTime": 3868.39999999851,
+        "commitTime": 3868.89999999851,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 3868.5,
+        "commitTime": 3868.89999999851,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.899999998509884,
+        "baseDuration": 3.799999989569187,
+        "startTime": 3865,
+        "commitTime": 3868.89999999851,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 3871.39999999851,
+        "commitTime": 3872.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 3871.599999997765,
+        "commitTime": 3872.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 3871.699999999255,
+        "commitTime": 3872.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 3872,
+        "commitTime": 3872.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.9000000022351742,
+        "baseDuration": 3.800000000745058,
+        "startTime": 3871.2999999970198,
+        "commitTime": 3872.199999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 3.800000000745058,
+        "startTime": 3873,
+        "commitTime": 3873.099999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 3.900000002235174,
+        "startTime": 3873.39999999851,
+        "commitTime": 3873.5,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 3877,
+        "commitTime": 3877.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 3877.099999997765,
+        "commitTime": 3877.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 3877.2999999970198,
+        "commitTime": 3877.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 3877.5,
+        "commitTime": 3877.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.699999999254942,
+        "baseDuration": 3.1000000052154064,
+        "startTime": 3875,
+        "commitTime": 3877.699999999255,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 3878.699999999255,
+        "commitTime": 3879.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 3878.7999999970198,
+        "commitTime": 3879.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 3879,
+        "commitTime": 3879.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 3879.199999999255,
+        "commitTime": 3879.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.6999999992549419,
+        "baseDuration": 2.899999998509884,
+        "startTime": 3878.5,
+        "commitTime": 3879.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4062.7999999970198,
+        "commitTime": 4063.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4062.89999999851,
+        "commitTime": 4063.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4063.2999999970198,
+        "commitTime": 4063.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4063.5,
+        "commitTime": 4063.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.800000000745058,
+        "baseDuration": 4.200000002980232,
+        "startTime": 4059.89999999851,
+        "commitTime": 4063.7999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 4.300000000745058,
+        "startTime": 4065.699999999255,
+        "commitTime": 4067.099999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4077.89999999851,
+        "commitTime": 4078.599999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4078,
+        "commitTime": 4078.599999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4078.199999999255,
+        "commitTime": 4078.599999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4078.5,
+        "commitTime": 4078.599999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.4999999962747097,
+        "baseDuration": 2.9999999962747097,
+        "startTime": 4075.89999999851,
+        "commitTime": 4078.599999997765,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4080.5,
+        "commitTime": 4081.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4080.699999999255,
+        "commitTime": 4081.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4080.89999999851,
+        "commitTime": 4081.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4081,
+        "commitTime": 4081.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.7999999970197678,
+        "baseDuration": 3.1999999955296516,
+        "startTime": 4080.39999999851,
+        "commitTime": 4081.2999999970198,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4159.199999999255,
+        "commitTime": 4160,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4159.39999999851,
+        "commitTime": 4160,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4159.599999997765,
+        "commitTime": 4160,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4159.699999999255,
+        "commitTime": 4160,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.899999998509884,
+        "baseDuration": 4,
+        "startTime": 4156,
+        "commitTime": 4160,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4163.39999999851,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4163.599999997765,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4163.79999999702,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4164,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 4164.29999999702,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4164.699999999255,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.7999999970197678,
+        "baseDuration": 4.699999999254942,
+        "startTime": 4162.099999997765,
+        "commitTime": 4165.099999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4174.5,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4174.599999997765,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4174.79999999702,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4174.89999999851,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4175.099999997765,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4175.199999999255,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.0000000037252903,
+        "baseDuration": 3.5000000037252903,
+        "startTime": 4172.29999999702,
+        "commitTime": 4175.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4177.699999999255,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4177.699999999255,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4177.89999999851,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4178,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4178.199999999255,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4178.29999999702,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1,
+        "baseDuration": 3.2000000029802322,
+        "startTime": 4177.5,
+        "commitTime": 4178.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 3.2000000029802322,
+        "startTime": 4179,
+        "commitTime": 4179,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 3.2000000029802322,
+        "startTime": 4179.39999999851,
+        "commitTime": 4179.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4182.39999999851,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4182.39999999851,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4182.599999997765,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4182.79999999702,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4182.89999999851,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4183.099999997765,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3,
+        "baseDuration": 3.3000000044703484,
+        "startTime": 4180.29999999702,
+        "commitTime": 4183.29999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4184.5,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4184.599999997765,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4184.699999999255,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4184.89999999851,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4185.099999997765,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4185.29999999702,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1,
+        "baseDuration": 3.3000000044703484,
+        "startTime": 4184.39999999851,
+        "commitTime": 4185.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4367.5,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4367.599999997765,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4367.79999999702,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4368,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4368.099999997765,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4368.29999999702,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.5,
+        "baseDuration": 4.100000001490116,
+        "startTime": 4365.099999997765,
+        "commitTime": 4368.599999997765,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 4.100000001490116,
+        "startTime": 4369.699999999255,
+        "commitTime": 4370.39999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4380.39999999851,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4380.5,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4380.599999997765,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4380.699999999255,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4380.699999999255,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4380.79999999702,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.800000000745058,
+        "baseDuration": 2.199999999254942,
+        "startTime": 4379.099999997765,
+        "commitTime": 4380.89999999851,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4385.29999999702,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4385.5,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4385.699999999255,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4385.89999999851,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4386,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4386.099999997765,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.300000000745058,
+        "baseDuration": 2.900000002235174,
+        "startTime": 4385.099999997765,
+        "commitTime": 4386.5,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 3.0000000037252903,
+        "startTime": 4388.79999999702,
+        "commitTime": 4389,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4934.5,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 0.30000000074505806,
+        "startTime": 4934.699999999255,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4935,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4935.199999999255,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4935.5,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4935.699999999255,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 4.199999999254942,
+        "baseDuration": 4.900000002235174,
+        "startTime": 4931.699999999255,
+        "commitTime": 4936,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4938.29999999702,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 0.30000000074505806,
+        "startTime": 4938.39999999851,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4938.699999999255,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4938.89999999851,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4939.099999997765,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 4939.29999999702,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.3999999985098839,
+        "baseDuration": 4.600000001490116,
+        "startTime": 4938.199999999255,
+        "commitTime": 4939.79999999702,
+        "action": "expand-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4951.79999999702,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4951.89999999851,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4952.199999999255,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 4952.29999999702,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4952.5,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4952.699999999255,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.300000000745058,
+        "baseDuration": 3.9000000059604645,
+        "startTime": 4949.599999997765,
+        "commitTime": 4952.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4956,
+        "commitTime": 4957.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4956.199999999255,
+        "commitTime": 4957.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 4956.29999999702,
+        "commitTime": 4957.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.29999999701976776,
+        "baseDuration": 0.29999999701976776,
+        "startTime": 4956.5,
+        "commitTime": 4957.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.1000000014901161,
+        "baseDuration": 3.6000000052154064,
+        "startTime": 4955,
+        "commitTime": 4957.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 3.5000000037252903,
+        "startTime": 4958.699999999255,
+        "commitTime": 4958.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4964,
+        "commitTime": 4964.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4964,
+        "commitTime": 4964.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4964.29999999702,
+        "commitTime": 4964.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4964.39999999851,
+        "commitTime": 4964.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.600000001490116,
+        "baseDuration": 3.100000001490116,
+        "startTime": 4962.099999997765,
+        "commitTime": 4964.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4966.39999999851,
+        "commitTime": 4967,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4966.5,
+        "commitTime": 4967,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4966.599999997765,
+        "commitTime": 4967,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4966.89999999851,
+        "commitTime": 4967,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.7000000029802322,
+        "baseDuration": 2.9000000059604645,
+        "startTime": 4966.29999999702,
+        "commitTime": 4967,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4975.39999999851,
+        "commitTime": 4976,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 4975.5,
+        "commitTime": 4976,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4975.699999999255,
+        "commitTime": 4976,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 4975.699999999255,
+        "commitTime": 4976,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.300000000745058,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 4973.599999997765,
+        "commitTime": 4976,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4978.29999999702,
+        "commitTime": 4978.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4978.39999999851,
+        "commitTime": 4978.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 4978.599999997765,
+        "commitTime": 4978.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 4978.599999997765,
+        "commitTime": 4978.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.4999999962747097,
+        "baseDuration": 2.599999997764826,
+        "startTime": 4977.39999999851,
+        "commitTime": 4978.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.5000000037252903,
+        "startTime": 4981.89999999851,
+        "commitTime": 4982,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 2.5,
+        "startTime": 4998.199999999255,
+        "commitTime": 4998.29999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 2.5,
+        "startTime": 5015,
+        "commitTime": 5015.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 2.600000001490116,
+        "startTime": 5031.599999997765,
+        "commitTime": 5031.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 2.600000001490116,
+        "startTime": 5048.39999999851,
+        "commitTime": 5048.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 2.600000001490116,
+        "startTime": 5065.099999997765,
+        "commitTime": 5065.29999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 2.5,
+        "startTime": 5081,
+        "commitTime": 5081.099999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 5098.199999999255,
+        "commitTime": 5098.5,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 2.600000001490116,
+        "startTime": 5115,
+        "commitTime": 5115.199999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 2.600000001490116,
+        "startTime": 5131.5,
+        "commitTime": 5131.699999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 5148.199999999255,
+        "commitTime": 5148.5,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 2.600000001490116,
+        "startTime": 5165,
+        "commitTime": 5165.199999999255,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.5000000037252903,
+        "startTime": 5181.5,
+        "commitTime": 5181.79999999702,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 2.7000000029802322,
+        "startTime": 5198.199999999255,
+        "commitTime": 5198.599999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 2.5000000037252903,
+        "startTime": 5215.099999997765,
+        "commitTime": 5215.599999997765,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.6000000052154064,
+        "startTime": 5215.79999999702,
+        "commitTime": 5215.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 5219.099999997765,
+        "commitTime": 5219.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 5219.199999999255,
+        "commitTime": 5219.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 5219.39999999851,
+        "commitTime": 5219.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 5219.599999997765,
+        "commitTime": 5219.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3,
+        "baseDuration": 3.7000000029802322,
+        "startTime": 5216.79999999702,
+        "commitTime": 5219.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 3.7000000029802322,
+        "startTime": 5220.79999999702,
+        "commitTime": 5220.89999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 5534,
+        "commitTime": 5535,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.30000000074505806,
+        "baseDuration": 0.30000000074505806,
+        "startTime": 5534.099999997765,
+        "commitTime": 5535,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 5534.5,
+        "commitTime": 5535,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 5534.699999999255,
+        "commitTime": 5535,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 4.100000001490116,
+        "baseDuration": 4.700000002980232,
+        "startTime": 5530.79999999702,
+        "commitTime": 5535,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 5537.5,
+        "commitTime": 5538.39999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 5537.599999997765,
+        "commitTime": 5538.39999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 5537.89999999851,
+        "commitTime": 5538.39999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 5538.099999997765,
+        "commitTime": 5538.39999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1,
+        "baseDuration": 4.600000001490116,
+        "startTime": 5537.29999999702,
+        "commitTime": 5538.39999999851,
+        "action": "collapse-group"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 5545,
+        "commitTime": 5545.79999999702,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 5545.099999997765,
+        "commitTime": 5545.79999999702,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 5545.29999999702,
+        "commitTime": 5545.79999999702,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasGroupNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 5545.599999997765,
+        "commitTime": 5545.79999999702,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.2999999970197678,
+        "baseDuration": 4.099999997764826,
+        "startTime": 5542.39999999851,
+        "commitTime": 5545.79999999702,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.899999998509884,
+        "startTime": 5547,
+        "commitTime": 5548.199999999255,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.300000000745058,
+        "baseDuration": 1.5,
+        "startTime": 5554.699999999255,
+        "commitTime": 5556,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 1.6000000014901161,
+        "startTime": 5557.29999999702,
+        "commitTime": 5557.5,
+        "action": "filter-technology"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.100000001490116,
+        "baseDuration": 2.400000002235174,
+        "startTime": 5657.79999999702,
+        "commitTime": 5660,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 2.300000000745058,
+        "startTime": 5661.79999999702,
+        "commitTime": 5661.89999999851,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 2.399999998509884,
+        "startTime": 5665.5,
+        "commitTime": 5665.599999997765,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 2.399999998509884,
+        "startTime": 5666,
+        "commitTime": 5666.199999999255,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.300000000745058,
+        "baseDuration": 1.699999999254942,
+        "startTime": 5666.89999999851,
+        "commitTime": 5668.199999999255,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.6000000014901161,
+        "startTime": 5668.79999999702,
+        "commitTime": 5668.89999999851,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0.8999999985098839,
+        "baseDuration": 1.0000000037252903,
+        "startTime": 5670.699999999255,
+        "commitTime": 5671.699999999255,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 1.1000000052154064,
+        "startTime": 5672.79999999702,
+        "commitTime": 5673,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3,
+        "baseDuration": 3.400000002235174,
+        "startTime": 5849.39999999851,
+        "commitTime": 5852.39999999851,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 3.5,
+        "startTime": 5854.199999999255,
+        "commitTime": 5855.199999999255,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.4000000022351742,
+        "baseDuration": 1.800000000745058,
+        "startTime": 5870.099999997765,
+        "commitTime": 5871.5,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 1.699999999254942,
+        "startTime": 5873.099999997765,
+        "commitTime": 5873.29999999702,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.899999998509884,
+        "baseDuration": 4.199999995529652,
+        "startTime": 5987.199999999255,
+        "commitTime": 5991.199999999255,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 4.199999995529652,
+        "startTime": 5993.099999997765,
+        "commitTime": 5993.29999999702,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.199999999254942,
+        "baseDuration": 3.599999997764826,
+        "startTime": 6428.29999999702,
+        "commitTime": 6431.599999997765,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 3.5,
+        "startTime": 6434.099999997765,
+        "commitTime": 6434.199999999255,
+        "action": "automatic-layout-refresh"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.800000000745058,
+        "baseDuration": 3.2000000029802322,
+        "startTime": 6439.79999999702,
+        "commitTime": 6442.599999997765,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.3999999985098839,
+        "baseDuration": 0.3999999985098839,
+        "startTime": 6444.199999999255,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6444.699999999255,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6445,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 6445.29999999702,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6445.599999997765,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 6445.79999999702,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6446,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 2.800000000745058,
+        "baseDuration": 5.4000000059604645,
+        "startTime": 6443.599999997765,
+        "commitTime": 6446.39999999851,
+        "action": "between-actions"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6453.5,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6453.699999999255,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0,
+        "startTime": 6453.89999999851,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6454,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6454.199999999255,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6454.29999999702,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6454.39999999851,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.199999999254942,
+        "baseDuration": 3.4999999962747097,
+        "startTime": 6451.39999999851,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "mount",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0,
+        "startTime": 6454.699999999255,
+        "commitTime": 6454.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6460.599999997765,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6460.89999999851,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6461,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6461.099999997765,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6461.29999999702,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6461.39999999851,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6461.599999997765,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 2.7999999970197678,
+        "baseDuration": 3.099999997764826,
+        "startTime": 6459,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6461.79999999702,
+        "commitTime": 6461.89999999851,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 3,
+        "startTime": 6463.5,
+        "commitTime": 6463.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "mount",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6468.79999999702,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "mount",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6469,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "mount",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0,
+        "startTime": 6469.199999999255,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6469.39999999851,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6469.599999997765,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6469.699999999255,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6469.89999999851,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6470.099999997765,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6470.099999997765,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6470.29999999702,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 3.2000000029802322,
+        "baseDuration": 3.2000000029802322,
+        "startTime": 6467.099999997765,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6470.5,
+        "commitTime": 6470.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6473.599999997765,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6473.599999997765,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6473.699999999255,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6473.89999999851,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6474,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6474.099999997765,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6474.29999999702,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6474.39999999851,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6474.599999997765,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6474.79999999702,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.699999999254942,
+        "baseDuration": 3.4000000059604645,
+        "startTime": 6473.39999999851,
+        "commitTime": 6475.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6488.099999997765,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6488.099999997765,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6488.099999997765,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6488.199999999255,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6488.39999999851,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6488.599999997765,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6488.699999999255,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6488.79999999702,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6488.89999999851,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6489.099999997765,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.699999999254942,
+        "baseDuration": 3.4000000059604645,
+        "startTime": 6486.39999999851,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6489.199999999255,
+        "commitTime": 6489.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6491.79999999702,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6491.89999999851,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6492,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6492.099999997765,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6492.199999999255,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.20000000298023224,
+        "baseDuration": 0.20000000298023224,
+        "startTime": 6492.29999999702,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6492.5,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6492.599999997765,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6492.79999999702,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6492.79999999702,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.3999999985098839,
+        "baseDuration": 3.300000000745058,
+        "startTime": 6491,
+        "commitTime": 6493.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6597.199999999255,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6597.199999999255,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6597.29999999702,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6597.29999999702,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6597.39999999851,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0.09999999776482582,
+        "startTime": 6597.5,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6597.599999997765,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6597.699999999255,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0,
+        "startTime": 6597.699999999255,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6597.79999999702,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.6000000014901161,
+        "baseDuration": 2.2000000029802322,
+        "startTime": 6596.29999999702,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "update",
+        "actualDuration": 1.8999999985098839,
+        "baseDuration": 0.8999999985098839,
+        "startTime": 6597.89999999851,
+        "commitTime": 6599.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 2.2000000029802322,
+        "startTime": 6601.79999999702,
+        "commitTime": 6601.79999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6635.699999999255,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6635.699999999255,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6635.699999999255,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6635.89999999851,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6636,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6636,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6636.099999997765,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6636.099999997765,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 0,
+        "startTime": 6636.199999999255,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6636.29999999702,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.4000000022351742,
+        "baseDuration": 2.0000000037252903,
+        "startTime": 6634.89999999851,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "update",
+        "actualDuration": 0.7999999970197678,
+        "baseDuration": 0.6999999955296516,
+        "startTime": 6636.39999999851,
+        "commitTime": 6637.29999999702,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 2.0000000037252903,
+        "startTime": 6639,
+        "commitTime": 6639.099999997765,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasModulePanel",
+        "phase": "update",
+        "actualDuration": 1.5,
+        "baseDuration": 1.300000000745058,
+        "startTime": 6668.89999999851,
+        "commitTime": 6670.5,
+        "action": "profile-module-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6714.79999999702,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6714.89999999851,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6714.89999999851,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.19999999925494194,
+        "startTime": 6714.89999999851,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6715.099999997765,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.19999999925494194,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6715.099999997765,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6715.29999999702,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6715.29999999702,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6715.39999999851,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6715.5,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.800000000745058,
+        "baseDuration": 2.400000002235174,
+        "startTime": 6713.699999999255,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasConnectionPanel",
+        "phase": "update",
+        "actualDuration": 2,
+        "baseDuration": 0,
+        "startTime": 6715.5,
+        "commitTime": 6716,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6718.5,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6718.599999997765,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasSmoothStepEdge",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6718.599999997765,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0.10000000149011612,
+        "baseDuration": 0.10000000149011612,
+        "startTime": 6718.599999997765,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6718.79999999702,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6718.89999999851,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6718.89999999851,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6719,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6719.099999997765,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasModuleNode",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 0,
+        "startTime": 6719.099999997765,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.8000000007450581,
+        "baseDuration": 2.199999999254942,
+        "startTime": 6718.39999999851,
+        "commitTime": 6719.29999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasConnectionPanel",
+        "phase": "update",
+        "actualDuration": 1.3999999985098839,
+        "baseDuration": 0.9999999925494194,
+        "startTime": 6731.599999997765,
+        "commitTime": 7017.199999999255,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasConnectionPanel",
+        "phase": "update",
+        "actualDuration": 1.8999999985098839,
+        "baseDuration": 1.7999999970197678,
+        "startTime": 7052.79999999702,
+        "commitTime": 7054.79999999702,
+        "action": "profile-connection-panel"
+      },
+      {
+        "componentId": "CanvasConnectionPanel",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 1.7999999970197678,
+        "startTime": 7055.5,
+        "commitTime": 7056.099999997765,
+        "action": "profile-connection-panel"
+      }
+    ],
+    "layoutSnapshots": [
+      {
+        "action": "expand-group",
+        "status": "persisted",
+        "layoutMode": "execution",
+        "userRevision": 2,
+        "positionCount": 14,
+        "handlePositionCount": 5,
+        "matchingPositionCount": 5,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,140],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,140]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-89e4861a-7c58-4bb6-857f-eec812c90e00\",\"generationId\":\"89137e33bd794c186e606615982df1248d052e96c4f63e2412daf1e285d9a9c2\",\"viewport\":{\"width\":759,\"height\":613},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,140],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,140]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-89e4861a-7c58-4bb6-857f-eec812c90e00\",\"generationId\":\"89137e33bd794c186e606615982df1248d052e96c4f63e2412daf1e285d9a9c2\",\"viewport\":{\"width\":759,\"height\":599},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "runtimeLayoutContext": false,
+        "topologyChanged": true,
+        "collapsedGroups": [
+          "group:function:java:java:example",
+          "group:function:python:python:sample",
+          "group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "targetGroupPresent": false
+      },
+      {
+        "action": "collapse-group",
+        "status": "persisted",
+        "layoutMode": "execution",
+        "userRevision": 3,
+        "positionCount": 14,
+        "handlePositionCount": 3,
+        "matchingPositionCount": 3,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-89e4861a-7c58-4bb6-857f-eec812c90e00\",\"generationId\":\"89137e33bd794c186e606615982df1248d052e96c4f63e2412daf1e285d9a9c2\",\"viewport\":{\"width\":759,\"height\":599},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-89e4861a-7c58-4bb6-857f-eec812c90e00\",\"generationId\":\"89137e33bd794c186e606615982df1248d052e96c4f63e2412daf1e285d9a9c2\",\"viewport\":{\"width\":759,\"height\":599},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "runtimeLayoutContext": false,
+        "topologyChanged": true,
+        "collapsedGroups": [],
+        "targetGroupPresent": true
+      },
+      {
+        "action": "automatic-layout-refresh",
+        "status": "persisted",
+        "layoutMode": "dependency",
+        "userRevision": 4,
+        "positionCount": 10,
+        "handlePositionCount": 7,
+        "matchingPositionCount": 7,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-89e4861a-7c58-4bb6-857f-eec812c90e00\",\"generationId\":\"89137e33bd794c186e606615982df1248d052e96c4f63e2412daf1e285d9a9c2\",\"viewport\":{\"width\":759,\"height\":599},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:4466ac188deb76262f540325\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:a4980f41d504d05e7f07424c\\u0000depends_on\"],\"context\":{\"projectId\":\"project-89e4861a-7c58-4bb6-857f-eec812c90e00\",\"generationId\":\"89137e33bd794c186e606615982df1248d052e96c4f63e2412daf1e285d9a9c2\",\"viewport\":{\"width\":759,\"height\":647},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:4466ac188deb76262f540325\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:a4980f41d504d05e7f07424c\\u0000depends_on\"]}",
+        "runtimeLayoutContext": true,
+        "topologyChanged": true,
+        "collapsedGroups": []
+      }
+    ],
+    "appVersion": "0.1.0",
+    "electronVersion": "42.8.1",
+    "chromeVersion": "148.0.7778.280",
+    "nodeVersion": "24.18.1"
+  },
+  "phaseTrace": [
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:start",
+      "monotonicMs": 446,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 857.751334
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:start",
+      "monotonicMs": 447.29999999701977,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 860.561209
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:completed",
+      "monotonicMs": 451.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 863.212875
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.guardAfterFlush:stale",
+      "monotonicMs": 451.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 863.231917
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:completed",
+      "monotonicMs": 451.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 863.252375
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.onProjectOpenStarted:start",
+      "monotonicMs": 451.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 863.262125
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.onProjectOpenStarted:completed",
+      "monotonicMs": 451.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 863.281417
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.readRegisteredProject:start",
+      "monotonicMs": 451.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 863.300667
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.readRegisteredProject:completed",
+      "monotonicMs": 466.5999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 878.364167
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.restoreRegisteredProject:start",
+      "monotonicMs": 466.5999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "observedAtMainMonotonicMs": 878.393417
+    },
+    {
+      "source": "main",
+      "stage": "registryRestore:start",
+      "monotonicMs": 878.487542,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00"
+    },
+    {
+      "source": "main",
+      "stage": "registryRestore:completed",
+      "monotonicMs": 879.677792,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00"
+    },
+    {
+      "source": "main",
+      "stage": "generationRegistration:start",
+      "monotonicMs": 879.779959,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00"
+    },
+    {
+      "source": "main",
+      "stage": "generationRegistration:completed",
+      "monotonicMs": 886.348459,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "cachedCanvasRead:start",
+      "monotonicMs": 886.353125,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "cachedCanvasRead:completed",
+      "monotonicMs": 888.144625,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "progressDispatched",
+      "monotonicMs": 888.246667,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerLaunch:completed",
+      "monotonicMs": 888.539167,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.restoreRegisteredProject:completed",
+      "monotonicMs": 480,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a",
+      "observedAtMainMonotonicMs": 891.76175
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1131.305167,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:scanned",
+      "monotonicMs": 1131.353334,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1216.135209,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1220.457959,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1220.531875,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1220.555334,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1220.571417,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1220.88525,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1228.812584,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1228.867792,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1228.886042,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1229.585875,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1229.618459,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1230.43775,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1230.465459,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1230.568959,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1445.472417,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1445.634792,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1447.641875,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1452.954834,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1453.643875,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1456.248834,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1456.882542,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1498.561792,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1500.018709,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:progress",
+      "monotonicMs": 1500.040125,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1501.239584,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1501.973875,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:measurement",
+      "monotonicMs": 1557.078917,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerMessage:result",
+      "monotonicMs": 1557.127167,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "analysisCommit:completed",
+      "monotonicMs": 1562.871334,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "terminalAnalysisEvent:completed:sent",
+      "monotonicMs": 1571.149459,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "main",
+      "stage": "workerExit:0",
+      "monotonicMs": 1571.223292,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a"
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.analysisEvent.completed:received",
+      "monotonicMs": 1160,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a",
+      "observedAtMainMonotonicMs": 1571.792375
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.applyProjectOpenResult:start",
+      "monotonicMs": 1160.0999999977648,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a",
+      "observedAtMainMonotonicMs": 1571.821459
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.applyProjectOpenResult:completed",
+      "monotonicMs": 1176.5,
+      "projectId": "project-89e4861a-7c58-4bb6-857f-eec812c90e00",
+      "localRequestId": 3,
+      "requestId": "e8f731e5-7d63-4545-a24c-9a2cdb8bcc8a",
+      "observedAtMainMonotonicMs": 1588.326
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "React Profiler smoke failed after 7 actions and 456 commits: React Profiler smoke found no enabled whole-graph layout control..",
+    "stack": "Error: React Profiler smoke failed after 7 actions and 456 commits: React Profiler smoke found no enabled whole-graph layout control..\n    at file:///Users/qingpeng/.codex/worktrees/static-loading-rebuild/FlowWeave/out/main/index.js:10697:19"
+  }
+}

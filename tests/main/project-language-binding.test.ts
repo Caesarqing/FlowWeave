@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -5,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import type { AnalysisScope, ProjectAnalysisContext, SemanticFile } from "../../src/types";
 import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
+import { discoverProjectAnalysisContext } from "../../src/main/services/project-analysis-context.service";
+import { flattenProjectFilePaths } from "../../src/main/services/project-import-resolver.service";
 import { analyzeTreeSitterProject } from "../../src/main/services/project-language-binding.service";
 
 function file(path: string): SemanticFile {
@@ -18,6 +21,18 @@ function scope(language: AnalysisScope["language"], rootPath: string, sourceRoot
 }
 
 describe("source-only project language binding", () => {
+  it.each([
+    ["four-language-workspace", "3b194e4b32a656b54080de4810ba1d725c7e3cbd581b2d7abc11ca6ae97e8dba"],
+    ["ambiguous-workspace", "5b7ff8360a4453b8da1702985fdb4c361625d72fab03bb8801ba9a66bb572553"]
+  ])("preserves complete declaration-binding evidence for %s", async (fixture, expectedSha256) => {
+    const root = resolve("tests/fixtures", fixture);
+    const paths = flattenProjectFilePaths((await scanProject(root)).files);
+    const analysisContext = await discoverProjectAnalysisContext(root, paths);
+    const result = await analyzeTreeSitterProject(root, paths.map(file), analysisContext);
+    const evidence = { relations: result.relations, symbolsByFile: [...result.symbolsByFile], diagnostics: result.diagnostics, operations: result.operations };
+    expect(createHash("sha256").update(JSON.stringify(evidence)).digest("hex")).toBe(expectedSha256);
+  });
+
   it("binds Python reexports, Java static imports, and Go module aliases in the real workspace", async () => {
     const root = resolve("tests/fixtures/four-language-workspace");
     const py = ["python/src/sample/__init__.py", "python/src/sample/app.py", "python/src/sample/service.py"];
@@ -31,7 +46,49 @@ describe("source-only project language binding", () => {
     for (const [source, target] of [[py[1], py[2]], [java[0], java[1]], [go[0], go[1]]]) {
       expect(result.relations).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "call", sourceFile: source, targetFile: target, targetRef: expect.objectContaining({ kind: "file", symbolId: expect.any(String), declarationRange: expect.any(Object) }), sourceRange: expect.any(Object) })]));
     }
+    expect(result.relations.find((relation) => relation.kind === "call" && relation.sourceFile === py[1])).toMatchObject({
+      confidence: "confirmed",
+      targetRef: {
+        kind: "file",
+        filePath: py[2],
+        symbolId: expect.any(String),
+        declarationRange: { start: { line: 1, column: 1 }, end: { line: 2, column: 20 } }
+      },
+      sourceRange: { start: { line: 4, column: 12 }, end: { line: 4, column: 18 } }
+    });
+    expect(result.relations.find((relation) => relation.kind === "call" && relation.sourceFile === go[0])).toMatchObject({
+      confidence: "confirmed",
+      targetRef: {
+        kind: "file",
+        filePath: go[1],
+        symbolId: expect.any(String),
+        declarationRange: { start: { line: 3, column: 1 }, end: { line: 3, column: 39 } }
+      },
+      sourceRange: { start: { line: 5, column: 15 }, end: { line: 5, column: 25 } }
+    });
     expect(result.symbolsByFile.get(py[2])?.[0]).toMatchObject({ qualifiedName: "sample.service.load", scopeId: "python:python" });
+  });
+
+  it("does not confirm calling an imported module as a direct declaration call", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-module-call-"));
+    try {
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(join(root, "src/app.py"), "import service as module\nmodule()\n");
+      await writeFile(join(root, "src/service.py"), "def load():\n    return 1\n");
+      const result = await analyzeTreeSitterProject(root, [file("src/app.py"), file("src/service.py")], context([
+        scope("python", "src", ["src"], ["src/app.py", "src/service.py"], "sample")
+      ]));
+      const call = result.relations.find((relation) => relation.kind === "call" && relation.symbol === "module");
+
+      expect(call).toMatchObject({
+        confidence: "inferred",
+        targetRef: { kind: "unresolved" },
+        sourceRange: { start: { line: 2, column: 1 } }
+      });
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "unresolved-call", stage: "binding", range: call?.sourceRange }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("preserves repeated calls, lexical shadows, ambiguous overloads, concrete receivers, and imported operation identities", async () => {
@@ -92,7 +149,55 @@ describe("source-only project language binding", () => {
       expect(result.relations).toContainEqual(expect.objectContaining({ kind: "call", symbol: "pkg.service.load", targetFile: "py/pkg/service.py" }));
       expect(result.relations).toContainEqual(expect.objectContaining({ kind: "call", symbol: "api.Load", targetFile: "shared/service/service.go" }));
       expect(result.relations.filter((r) => r.kind === "call" && r.targetFile === "java/p/Base.java")).toHaveLength(2);
-      expect(result.relations.filter((r) => ["api.work", "api.Work", "f"].includes(r.symbol ?? "")).every((r) => r.targetRef?.kind === "unresolved")).toBe(true);
+      const packageCall = result.relations.find((relation) => relation.kind === "call" && relation.symbol === "pkg.service.load");
+      expect(packageCall).toMatchObject({
+        confidence: "confirmed",
+        targetRef: {
+          kind: "file",
+          filePath: "py/pkg/service.py",
+          symbolId: expect.any(String),
+          declarationRange: { start: { line: 1, column: 1 }, end: { line: 2, column: 13 } }
+        },
+        sourceRange: { start: { line: 4, column: 21 }, end: { line: 4, column: 39 } }
+      });
+      const shadowedCall = result.relations.find((relation) => relation.kind === "call" && relation.symbol === "req.get");
+      expect(shadowedCall).toMatchObject({
+        confidence: "inferred",
+        targetRef: { kind: "unresolved", candidates: ["py/app.py:104:req"] },
+        sourceRange: { start: { line: 5, column: 18 }, end: { line: 5, column: 48 } }
+      });
+      const unknownFactoryCall = result.relations.find((relation) => relation.kind === "call" && relation.symbol === "req.unknown_factory().get");
+      expect(unknownFactoryCall).toMatchObject({
+        confidence: "inferred",
+        targetRef: { kind: "unresolved", candidates: [] },
+        sourceRange: { start: { line: 6, column: 5 }, end: { line: 6, column: 52 } }
+      });
+      const apiLoad = result.relations.find((relation) => relation.kind === "call" && relation.symbol === "api.Load");
+      expect(apiLoad).toMatchObject({
+        confidence: "confirmed",
+        targetRef: {
+          kind: "file",
+          filePath: "shared/service/service.go",
+          symbolId: expect.any(String),
+          declarationRange: { start: { line: 2, column: 1 }, end: { line: 2, column: 15 } }
+        },
+        sourceRange: { start: { line: 6, column: 15 }, end: { line: 6, column: 25 } }
+      });
+      const interfaceMethod = result.relations.find((relation) => relation.kind === "call" && relation.sourceFile === "go/main.go" && relation.symbol === "api.Work");
+      const interfaceType = result.symbolsByFile.get("go/main.go")?.find((symbol) => symbol.name === "Api");
+      expect(interfaceType).toBeDefined();
+      expect(interfaceMethod).toMatchObject({
+        confidence: "inferred",
+        targetRef: { kind: "unresolved", reason: "Interface member Work has runtime dispatch", candidates: [interfaceType?.id] },
+        sourceRange: { start: { line: 7, column: 28 }, end: { line: 7, column: 38 } }
+      });
+      const functionVariableCall = result.relations.find((relation) => relation.kind === "call" && relation.sourceFile === "go/main.go" && relation.symbol === "f");
+      expect(functionVariableCall).toMatchObject({
+        confidence: "inferred",
+        targetRef: { kind: "unresolved", candidates: [] },
+        sourceRange: { start: { line: 7, column: 51 }, end: { line: 7, column: 54 } }
+      });
+      expect(result.relations.filter((relation) => relation.kind === "call" && relation.sourceFile === "go/main.go" && ["api.work", "api.Work", "f"].includes(relation.symbol ?? "")).every((relation) => relation.targetRef?.kind === "unresolved")).toBe(true);
       expect(result.operations.map((o) => [o.kind, o.target])).toEqual(expect.arrayContaining([["http", "https://java.test/users"], ["database", "select 1"], ["process", "echo"], ["http", "https://go.test/users"]]));
       expect(result.operations.find((o) => o.target === "https://go.test/users" && o.apiName === "Do")?.method).toBe("POST");
       expect(result.operations.filter((o) => o.kind === "database")).toHaveLength(2);
@@ -208,6 +313,70 @@ describe("source-only project language binding", () => {
         expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "ambiguous-call", relationId: relation?.id, range: relation?.sourceRange, candidates: expect.any(Array) }));
       }
     } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("keeps a Java call unresolved when its dependency classpath is absent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-java-missing-classpath-"));
+    const sourcePath = "src/main/java/fixture/App.java";
+    try {
+      await mkdir(join(root, "src/main/java/fixture"), { recursive: true });
+      await writeFile(join(root, sourcePath), [
+        "package fixture;",
+        "import com.vendor.Client;",
+        "import java.util.UUID;",
+        "class App {",
+        "void run(Client client) {",
+        "  client.execute();",
+        "  UUID.randomUUID();",
+        "  LocalService.execute();",
+        "}",
+        "}"
+      ].join("\n"));
+      await writeFile(join(root, "src/main/java/fixture/LocalService.java"), [
+        "package fixture;",
+        "class LocalService {",
+        "  static void execute() {}",
+        "}"
+      ].join("\n"));
+
+      const { index } = await buildSemanticIndex(await scanProject(root));
+      const calls = index.relations.filter((relation) => relation.kind === "call" && relation.sourceFile === sourcePath);
+      const call = calls.find((relation) => relation.symbol === "client.execute");
+      const jdkCall = calls.find((relation) => relation.symbol === "UUID.randomUUID");
+      const sourceCall = calls.find((relation) => relation.symbol === "LocalService.execute");
+      const javaCapability = index.analysisCapabilities?.find((capability) => capability.language === "Java");
+
+      expect(call).toMatchObject({
+        kind: "call",
+        symbol: "client.execute",
+        confidence: "inferred",
+        bindingBasis: "classpath-unavailable",
+        targetRef: { kind: "unresolved" },
+        sourceRange: { start: { line: 6, column: 3 }, end: { line: 6, column: 19 } }
+      });
+      expect(index.diagnostics).toContainEqual(expect.objectContaining({
+        code: "unresolved-call",
+        filePath: sourcePath,
+        range: call?.sourceRange,
+        candidates: ["external:com.vendor.Client.execute"]
+      }));
+      expect(jdkCall).toMatchObject({
+        confidence: "confirmed",
+        targetRef: { kind: "external", standardLibrary: true },
+        sourceRange: { start: { line: 7, column: 3 }, end: { line: 7, column: 20 } }
+      });
+      expect(sourceCall).toMatchObject({
+        confidence: "confirmed",
+        targetRef: { kind: "file", filePath: "src/main/java/fixture/LocalService.java", symbolId: expect.any(String) },
+        sourceRange: { start: { line: 8, column: 3 }, end: { line: 8, column: 25 } }
+      });
+      expect(calls).toHaveLength(3);
+      expect(index.relations.find((relation) => relation.kind === "import" && relation.sourceFile === sourcePath && relation.symbol === "com.vendor.Client"))
+        .toMatchObject({ kind: "import", confidence: "confirmed" });
+      expect(javaCapability?.limitations).toContainEqual(expect.objectContaining({ code: "classpath-not-loaded" }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("persists the four-language ambiguity fixture without fabricated bindings or standard API operations", async () => {

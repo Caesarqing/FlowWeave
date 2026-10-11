@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-08",
+  "status": "passed",
+  "app": {
+    "path": "/var/folders/r5/1zvyd5dx45327vrxyn77m5sw0000gn/T/flowweave-static-graph-package-2026-10-08-XpKde1/release/mac-arm64/FlowWeave.app",
+    "version": "0.1.0",
+    "bundleId": "com.flowweave.app",
+    "architecture": "arm64",
+    "appAsarSha256": "8b0d3e74eda048aa4957b09d51f994d6b34080803547ca94b7fa873105275835",
+    "executableSha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157"
+  },
+  "platform": "macOS 26.6.2 arm64",
+  "inputMethod": "cua_repl native App.pressKey; automated native desktop input, not a human usability review",
+  "fixture": {
+    "source": "tests/fixtures/four-language-workspace",
+    "temporaryProjectPath": "/tmp/flowweave-native-keyboard-2026-10-08/project",
+    "languages": ["TypeScript", "Python", "Java", "Go"],
+    "projectWasSynthetic": true,
+    "projectWasClosedAfterTest": true
+  },
+  "appDataCleanup": "The temporary project tab was closed. Its single registration at /private/tmp/flowweave-native-keyboard-2026-10-08/project was removed from the app project registry; the other eight entries and session metadata were preserved.",
+  "steps": [
+    {
+      "input": "Tab",
+      "count": 12,
+      "observedFocus": "the Expand button for the three-module No confirmed calls group",
+      "accessibilityState": "button 展开; parent heading No confirmed calls; group count 3"
+    },
+    {
+      "input": "Return",
+      "result": "the unlinked group expanded to its member groups; focus moved to the Example group Expand button",
+      "accessibilityState": "返回总览 button present; Example, Sample, Go, Core, and Dashboard groups present; focused element button 展开"
+    },
+    {
+      "input": "Escape",
+      "result": "the overview returned; the No confirmed calls group was visible and its Expand button regained focus",
+      "accessibilityState": "No confirmed calls heading present; focused element button 展开"
+    }
+  ],
+  "fullTabCycle": [
+    "agent", "canvas", "sequence diagram", "documents", "code review", "profile", "settings",
+    "send guidance", "export guidance", "project tab", "project status", "close project",
+    "open another project", "show left sidebar", "show right sidebar", "search modules or files",
+    "view mode", "technology filter", "layer filter", "collapse or expand groups", "module scope",
+    "relation display", "more layout actions", "file parsing status", "relation legend", "relation edge",
+    "Dashboard card", "Go card", "Example card", "Sample card", "Core card", "zoom in", "zoom out",
+    "fit view", "wrap to agent"
+  ],
+  "scope": "This verifies native keyboard focus traversal and group expand/return on the current packaged synthetic fixture. It does not satisfy human visual review, holdout labels, or the full T1 acceptance matrix."
+}

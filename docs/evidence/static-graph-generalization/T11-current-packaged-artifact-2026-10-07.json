@@ -1,0 +1,50 @@
+{
+  "capturedAt": "2026-10-07",
+  "artifact": {
+    "path": "/tmp/flowweave-static-loading-module-graph-package-local-2026-10-07/mac-arm64/FlowWeave.app",
+    "availabilityAtFollowUp": "The temporary directory was no longer present during later screenshot work; this path is historical and not the current reproducible package.",
+    "architecture": "arm64",
+    "bundleIdentifier": "com.flowweave.app",
+    "version": "0.1.0",
+    "appAsarSha256": "778b3ae8a2c7726954d9c724be6ede456944907385c5d8b8a46e8413e022a006",
+    "executableSha256": "059764b26f729ddf5c986f58cc44631e8212eb83b1c2309ff28ac6174cbef157",
+    "electronVersion": "42.8.1",
+    "macOSVersion": "26.6.2",
+    "electronRuntimeSource": "node_modules/electron/dist"
+  },
+  "signature": {
+    "kind": "adhoc",
+    "teamIdentifier": null,
+    "strictVerification": "failed",
+    "strictVerificationMessage": "code has no resources but signature indicates they must be present"
+  },
+  "graphSmoke": {
+    "runner": "FLOWWEAVE_PACKAGED_EXECUTABLE=<artifact Contents/MacOS/FlowWeave> node scripts/run-graph-smoke.mjs",
+    "completedFixtures": [
+      "edges",
+      "empty",
+      "four-languages",
+      "save-failure",
+      "tab-switch",
+      "viewport-only",
+      "details-race"
+    ],
+    "reports": {
+      "edges": "T11-current-packaged-edges-2026-10-07.json",
+      "empty": "T11-current-packaged-empty-retry-2026-10-07.json",
+      "four-languages": "T11-current-packaged-four-languages-2026-10-07.json",
+      "save-failure": "T11-current-packaged-save-failure-2026-10-07.json",
+      "tab-switch": "T11-current-packaged-tab-switch-2026-10-07.json",
+      "viewport-only": "T11-current-packaged-viewport-only-2026-10-07.json",
+      "details-race": "T11-current-packaged-details-race-2026-10-07.json"
+    },
+    "transientFailure": {
+      "report": "T11-current-packaged-empty-2026-10-07.json",
+      "message": "Graph node did not open its module details panel.",
+      "retryReport": "T11-current-packaged-empty-retry-2026-10-07.json",
+      "retryStatus": "completed",
+      "rootCause": "undetermined"
+    },
+    "keyboardInput": "Electron webContents.sendInputEvent; focused window and document were confirmed in the report. This is not native OS keyboard input or human visual review."
+  }
+}

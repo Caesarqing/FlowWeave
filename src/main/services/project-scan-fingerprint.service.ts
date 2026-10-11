@@ -1,16 +1,11 @@
-import { join } from "node:path";
-import { readJsonArtifact } from "../storage/artifact-store";
-import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { readProjectProtocolSnapshot } from "../storage/flowweave-store";
 
 export async function readCurrentProjectScanFingerprint(projectPath: string): Promise<string> {
-  const projectArtifactPath = join(projectPath, FLOWWEAVE_DIR, "project.json");
-  const value = await readJsonArtifact(projectArtifactPath);
-  if (typeof value !== "object" || value === null || !("scanFingerprint" in value)) {
-    throw new Error(`FlowWeave project scan is missing scanFingerprint. Scan the project before starting Agent artifact review: ${projectArtifactPath}`);
-  }
-  const scanFingerprint = (value as { scanFingerprint?: unknown }).scanFingerprint;
+  const snapshot = await readProjectProtocolSnapshot(projectPath);
+  if (!snapshot) throw new Error(`FlowWeave protocol v7 snapshot is missing. Scan the project before starting Agent artifact review: ${projectPath}`);
+  const scanFingerprint = snapshot.project.scanFingerprint;
   if (typeof scanFingerprint !== "string" || !scanFingerprint.trim()) {
-    throw new Error(`FlowWeave project scan has an invalid scanFingerprint. Rescan the project before starting Agent artifact review: ${projectArtifactPath}`);
+    throw new Error(`FlowWeave protocol v7 snapshot has an invalid scanFingerprint. Rescan the project before starting Agent artifact review: ${projectPath}`);
   }
   return scanFingerprint;
 }

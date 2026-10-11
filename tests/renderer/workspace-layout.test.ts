@@ -57,7 +57,7 @@ describe("workspace panel preferences", () => {
     expect(styles.match(/^\.canvas-view-tools \{/gm)).toHaveLength(1);
     expect(styles).toContain(".canvas-view-tools {\n  position: relative;");
     expect(styles).toContain(".canvas-view-tools-content {\n  display: flex;");
-    expect(styles).toContain("margin-inline: auto;");
+    expect(styles).toContain("flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;");
     expect(styles).toContain(".workspace-layout:not(.left-panel-collapsed) .canvas-tool-label");
     expect(styles).toContain(".workspace-layout:not(.right-panel-collapsed) .canvas-tool-label");
   });

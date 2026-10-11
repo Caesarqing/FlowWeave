@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "T2-scip-java-seatbelt-minimal-lookup-2026-10-06",
+  "recordedAtUtc": "2026-10-06T07:47:35Z",
+  "status": "minimal-mach-lookup-permission-insufficient; JVM startup still blocked; indexing not attempted",
+  "supersedes": "T2-scip-java-availability-2026-10-06.json",
+  "scope": {
+    "candidate": "D05 only (google/gson)",
+    "registeredCommit": "854c8255b625cf1e13c701a83ea9ccb4caaa576a",
+    "registeredCheckoutTreeOid": "aba443ba941f8a8c00b98ca91f1268ab58ebf88a",
+    "manifestPath": "docs/evidence/static-graph-generalization/D05-inventory.jsonl",
+    "sourceArchivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D05-854c8255b625cf1e13c701a83ea9ccb4caaa576a.tar.gz",
+    "sourceArchiveSha256": "80873d66b71b556e6d559198b46457995aad597fb7e9caa861895f96ab09f07e",
+    "priorRegisteredCopyVerification": {
+      "sourceFilesChecked": 274,
+      "sourceFilesMissing": 0,
+      "sourceFilesMismatched": 0,
+      "holdoutAccess": "none"
+    },
+    "currentProbe": "Only launched the pinned JDK version command; no candidate source files, project scripts, Maven lifecycle, or project plugins were accessed or run.",
+    "holdoutAccess": "none"
+  },
+  "inputs": {
+    "D05 manifest": "874e6fd5b0033623c698f13050087a4ad95738d4f6ccf5c0d571c958eae3659a",
+    "D05 source archive": "80873d66b71b556e6d559198b46457995aad597fb7e9caa861895f96ab09f07e",
+    "Temurin archive": "196d13ba5f10414bef7f6a05a9b3f00edacb18ebacef2b99485db9e2ee18f0e8",
+    "base Seatbelt profile": "ac1917e357bee68a18ea7d43d19b6cc43686eef3bce22ff466d9fcc1484eeae1",
+    "sandboxed Java executable": "af8b122943345320b179c75c3404d56a981017739746b75f9caf583632f0bea0",
+    "minimal Seatbelt profile": "484e132fedb96dbd7709568caf8a3c4e89cbe4ed0f3c50986113b37b5462394f"
+  },
+  "environment": {
+    "platform": "Darwin arm64, macOS 25.6.0",
+    "javaVersion": "Eclipse Temurin 17.0.20.1+1",
+    "network": "Seatbelt explicitly denies network-inbound and network-outbound; no network command was run.",
+    "writeBoundary": "Seatbelt permits writes only under the task-local t2-scip-java-isolated SDD directory and /dev/null.",
+    "profile": {
+      "path": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/profiles/java-opendirectory-probe-2026-10-06.sb",
+      "sha256": "484e132fedb96dbd7709568caf8a3c4e89cbe4ed0f3c50986113b37b5462394f",
+      "derivedFrom": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-scip-java-isolated/profiles/offline-build.sb",
+      "addedRule": "(allow mach-lookup (global-name \"com.apple.system.opendirectoryd.libinfo\"))",
+      "otherAllowancesAdded": false,
+      "sandboxParserProbeExitCode": 0
+    }
+  },
+  "runtimeProbe": {
+    "command": "/usr/bin/sandbox-exec -f <SDD>/profiles/java-opendirectory-probe-2026-10-06.sb /usr/bin/env -i HOME=<SDD>/home-probe TMPDIR=<SDD>/tmp-probe JAVA_HOME=<SDD>/tools/jdk/jdk-17.0.20.1+1/Contents/Home JAVA_TOOL_OPTIONS=\"-Duser.home=<SDD>/home-probe -Djava.io.tmpdir=<SDD>/tmp-probe -XX:ErrorFile=<SDD>/java_error_%p.log -Xmx512m\" PATH=<SDD>/tools/jdk/.../bin:/usr/bin:/bin:/usr/sbin:/sbin <SDD>/tools/jdk/.../bin/java -version",
+    "exitCode": 139,
+    "signal": "SIGSEGV (11)",
+    "elapsedSeconds": 0.1079,
+    "stdout": "",
+    "stderr": "",
+    "interpretation": "The JVM still failed before reporting its version with only the opendirectoryd mach lookup added. Per instruction, the attempt stopped here; no broader profile, Maven, scip-java CLI, or indexing retry was attempted."
+  },
+  "indexAttempt": {
+    "attempted": false,
+    "reason": "JVM startup failed. The D05 Maven lifecycle may execute candidate-configured plugins, which is outside this probe’s authorized boundary.",
+    "mavenVersionCommandRun": false,
+    "scipJavaHelpCommandRun": false,
+    "scipJavaIndexCommandRun": false,
+    "projectScriptsRun": false,
+    "projectBuildOrPluginExecution": false,
+    "indexProduced": false
+  },
+  "conclusion": {
+    "availability": "SCIP-Java launch/index availability remains unproven under the required isolation; the minimal Seatbelt permission did not allow the JVM to start.",
+    "semanticQuality": "Not assessed.",
+    "adoptionDecision": "None.",
+    "productDependenciesOrLockfilesChanged": false,
+    "holdoutInspected": false
+  }
+}

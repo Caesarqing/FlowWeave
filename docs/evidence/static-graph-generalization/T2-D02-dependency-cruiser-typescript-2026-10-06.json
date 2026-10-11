@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "T2-D02-current-scope-dependency-cruiser-ts-2026-10-06",
+  "recordedAt": "2026-10-06T12:34:15.893Z",
+  "status": "development-only exact-scope import structure comparison; corpus remains proposed; no quality/adoption conclusion",
+  "boundary": {
+    "sampleId": "D02",
+    "split": "development",
+    "sourceInputs": 505,
+    "configurationInputsScannedForIdentityOnly": 18,
+    "licenseInputsExcluded": 2,
+    "allManifestRowsVerifiedAgainstIsolatedArchive": true,
+    "onlyRegisteredSourcePathsPassedToAnalyzer": true,
+    "outOfScopeDependenciesNotRecursed": true,
+    "noProjectScriptsBuildOrDependencyInstall": true,
+    "noHoldoutOrHumanLabelsAccessed": true,
+    "interpretation": "Unlabeled import file-pair overlap only; not precision, recall, semantic quality, or adoption evidence."
+  },
+  "inputs": {
+    "repositoryCommit": "580401b706331316237a0c14f3c6234272fea816",
+    "sampleCommit": "ed10ac7dca7e40f3f4a31269b4bfba980d0db41e",
+    "checkoutTreeOid": "66be96e073c2141d8973127015e81c6d99df23af",
+    "inventoryPath": "docs/evidence/static-graph-generalization/D02-inventory.jsonl",
+    "inventorySha256": "e19ca3b8d0f26bee50bf8e3daf411586d27543b7420ff16f6ac7a90c059617bf",
+    "scopeSha256": "d334de5f39da277035150c87723bc8f7b63383614a0254f890d7e52fe7260b07",
+    "sourceRowsSha256": "6f47c8340424f89fce4d8e972f8bd1c2e03c3d78dfdf3764c81dc4319bba7ba0",
+    "isolatedCheckout": "/tmp/flowweave-t2-d02-isolated-tsparser-2026-10-06",
+    "originalCheckoutCleanBeforeAndAfter": true,
+    "analyzerInputCount": 505,
+    "sourceRowsHashDefinition": "SHA-256 of registered source-row JSONL bytes in manifest order, joined with LF and terminated by LF."
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v24.6.0",
+    "dependencyCruiser": "18.5.0",
+    "typescriptParser": "5.9.3",
+    "runtimeDependencyCruiserInstall": "isolated /tmp toolchain; network used only to prepare this temporary test tool; scripts disabled; no project dependency files changed",
+    "depcruiseCapabilityProbeHasTypeScript": true,
+    "toolPreparationCommand": "npm install --prefix /tmp/flowweave-t2-toolchain-2026-10-06 --no-save --package-lock=false --ignore-scripts --cache=/tmp/flowweave-t2-npm-cache-2026-10-06 dependency-cruiser@18.5.0 typescript@5.9.3",
+    "toolPreparationNetwork": "Network used only to retrieve the fixed analyzer/parser and their packages into temporary cache/toolchain; project package files and dependencies unchanged.",
+    "projectScriptsRun": false,
+    "typescriptCapabilityOutputPath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-d02-current-scope-2026-10-06/dependency-cruiser-info-typescript-enabled.txt",
+    "typescriptCapabilityOutputSha256": "7f6b1746f04dcfd474934b5e99d47394df0bc8f534d0658f4b846574a023e6ad",
+    "planDeviation": "Preparing the temporary analyzer toolchain used npm network access despite plan §4 saying candidate trials must not automatically enable network downloads. This deviation is recorded; no further candidate tool downloads will be initiated automatically."
+  },
+  "command": {
+    "executable": "/tmp/flowweave-t2-toolchain-2026-10-06/node_modules/.bin/depcruise",
+    "arguments": [
+      "--no-config",
+      "--output-type",
+      "json",
+      "--do-not-follow <negative-lookahead of all 505 registered source paths>",
+      "<exact 505 registered source paths>"
+    ],
+    "workingDirectory": "/tmp/flowweave-t2-d02-isolated-tsparser-2026-10-06",
+    "elapsedMs": 1736.41,
+    "rawOutputPath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-d02-current-scope-2026-10-06/dependency-cruiser-output-typescript-enabled.json",
+    "rawOutputSha256": "ac28e72bfd22ee0d1fdced5a15852e082f1a17daa47d9b13171c1d685532aeb1",
+    "stderrPath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-d02-current-scope-2026-10-06/dependency-cruiser-stderr-typescript-enabled.txt",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "invalidEarlierNoTypeScriptOutputSha256": "a1dc8bf81d71526cff88f74e2786fe77e7917c9c7b3869a4f9a25011fd6458e9"
+  },
+  "dependencyCruiser": {
+    "sourceModulesParsed": 505,
+    "sourceModulesMissing": [],
+    "totalModulesReported": 922,
+    "extraOutOfScopeModulesReported": 417,
+    "selectedSourceDependencyFacts": 2795,
+    "selectedSourceUnresolvedDependencyFacts": 885,
+    "selectedSourceResolvedOutOfScopeDependencyFacts": 1197,
+    "uniqueInScopeImportFilePairs": 1598,
+    "summary": {
+      "error": 0,
+      "warn": 0,
+      "info": 0,
+      "totalCruised": 922,
+      "totalDependenciesCruised": 2795
+    },
+    "limitation": "No project dependency installation or project configuration loading was used. Package imports and path aliases without a resolved source path may remain unresolved; the run only measures parser-derived structure."
+  },
+  "flowWeave": {
+    "generatorVersion": "5.0.8",
+    "parsedSourceFiles": 504,
+    "importFacts": 3773,
+    "uniqueInScopeImportFilePairs": 2641
+  },
+  "unlabeledStructure": {
+    "sharedInScopeImportFilePairs": 1523,
+    "flowWeaveOnlyPairs": 1118,
+    "dependencyCruiserOnlyPairs": 75
+  },
+  "decision": "No adoption/rejection decision: corpus and scope remain proposed, no independent human labels were used, and package/runtime/quality gates are incomplete."
+}

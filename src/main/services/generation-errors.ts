@@ -27,3 +27,10 @@ export class TransactionRecoveryError extends Error {
     this.name = "TransactionRecoveryError";
   }
 }
+
+export class LegacyCanvasMigrationRequiredError extends Error {
+  constructor(projectPath: string, artifactPath: string, version: number, backupPath: string) {
+    super(`Legacy Canvas v${version} requires one-time migration and was preserved: project ${projectPath}, artifact ${artifactPath}, backup ${backupPath}`);
+    this.name = "LegacyCanvasMigrationRequiredError";
+  }
+}

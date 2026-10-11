@@ -1,14 +1,19 @@
-import type { GraphEdge, GraphNode } from "../../types";
+import { join } from "node:path";
+import type { GenerationIdentity, GraphEdge, GraphNode, TaskArtifactWriteResult } from "../../types";
 import type { CodeflowTask } from "../storage/schemas";
+import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { readProjectGenerationManifest, readProjectProtocolCanvas, readProjectProtocolOverview, writeBatchAtomic } from "../storage/flowweave-store";
 
 const GENERATOR_VERSION = "1.0.0";
 
 export function createTaskArtifact(
   modules: GraphNode[],
   edges: GraphEdge[],
-  scanFingerprint: string
+  scanFingerprint: string,
+  generation: GenerationIdentity
 ): CodeflowTask {
   return {
+    generation,
     version: 2,
     generatorVersion: GENERATOR_VERSION,
     inputFingerprint: scanFingerprint,
@@ -39,6 +44,53 @@ export function createTaskArtifact(
       "Security-sensitive files require explicit human approval before modification."
     ]
   };
+}
+
+/** Caller holds the project artifact lock while validating and committing this derived artifact. */
+export async function writeCurrentTaskArtifact(
+  projectPath: string,
+  expectedGenerationId: string,
+  expectedUserRevision: number
+): Promise<TaskArtifactWriteResult> {
+  const manifest = await readProjectGenerationManifest(projectPath);
+  if (!manifest || manifest.generationId !== expectedGenerationId) {
+    throw new Error(`Task generation rejected because the project generation changed: project ${projectPath}, expected ${expectedGenerationId}, actual ${manifest?.generationId ?? "missing"}`);
+  }
+  const [canvas, overview] = await Promise.all([
+    readProjectProtocolCanvas(projectPath),
+    readProjectProtocolOverview(projectPath)
+  ]);
+  if (!canvas || !overview?.project) {
+    throw new Error(`Task generation requires a complete committed protocol v7 project: ${projectPath}`);
+  }
+  if (canvas.userRevision !== expectedUserRevision) {
+    throw new Error(`Task generation rejected because Canvas user state changed: project ${projectPath}, generation ${expectedGenerationId}, expected revision ${expectedUserRevision}, actual ${canvas.userRevision ?? "missing"}`);
+  }
+  const scanFingerprint = canvas.scanFingerprint;
+  if (!scanFingerprint || scanFingerprint !== overview.scanFingerprint || overview.project.scanFingerprint !== scanFingerprint) {
+    throw new Error(`Task generation rejected because the committed scan fingerprint is inconsistent: project ${projectPath}, generation ${expectedGenerationId}`);
+  }
+
+  const generation: GenerationIdentity = { requestId: manifest.generationId, inputFingerprint: manifest.inputFingerprint };
+  const task = createTaskArtifact(canvas.nodes, canvas.edges, scanFingerprint, generation);
+  const taskPath = join(projectPath, FLOWWEAVE_DIR, "tasks", "current.task.json");
+  const markdownPath = join(projectPath, FLOWWEAVE_DIR, "tasks", "current.task.md");
+  await writeBatchAtomic(projectPath, [
+    { path: taskPath, content: `${JSON.stringify(task, null, 2)}\n` },
+    { path: markdownPath, content: createTaskMarkdown(task) }
+  ], [], async () => {
+    const [currentManifest, currentCanvas] = await Promise.all([
+      readProjectGenerationManifest(projectPath),
+      readProjectProtocolCanvas(projectPath)
+    ]);
+    if (currentManifest?.generationId !== expectedGenerationId || currentCanvas?.generation?.requestId !== expectedGenerationId) {
+      throw new Error(`Task generation rejected at commit because the project generation changed: project ${projectPath}, expected ${expectedGenerationId}, actual ${currentManifest?.generationId ?? "missing"}`);
+    }
+    if (currentCanvas.userRevision !== expectedUserRevision) {
+      throw new Error(`Task generation rejected at commit because Canvas user state changed: project ${projectPath}, generation ${expectedGenerationId}, expected revision ${expectedUserRevision}, actual ${currentCanvas.userRevision}`);
+    }
+  });
+  return { taskPath, markdownPath, generationId: expectedGenerationId, userRevision: expectedUserRevision };
 }
 
 export function createTaskMarkdown(task: CodeflowTask) {

@@ -126,7 +126,7 @@ FlowWeave persists project-specific state in a `.flowweave/` directory inside th
 
 - **Desktop shell**: Electron 42 + electron-vite
 - **Renderer**: React 19, TypeScript, Zustand, React Flow, Monaco Editor, Lucide icons
-- **Project analysis**: fast-glob, TypeScript program analysis, Vue compiler SFC parser, Tree-sitter WASM for Python/Java/Go
+- **Project analysis**: tinyglobby, TypeScript program analysis, Vue compiler SFC parser, Tree-sitter WASM for Python/Java/Go
 - **Packaging**: electron-builder for macOS and Windows
 - **Testing**: Vitest, smoke tests, packaged-app smoke checks
 

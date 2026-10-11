@@ -1,0 +1,38 @@
+{
+  "schema": "flowweave-t10-review-sidecar-migration/v1",
+  "recorded_at": "2026-10-06",
+  "scope": "Synthetic temporary-project migration regression; no real project or holdout data",
+  "environment": {
+    "platform": "macOS arm64",
+    "node": "v24.6.0",
+    "npm": "11.5.1"
+  },
+  "focused_test": {
+    "command": "npm test -- --reporter=dot tests/main/flowweave-store.test.ts -t 'archives review sidecars byte-for-byte'",
+    "exit_code": 0,
+    "files_passed": 1,
+    "tests_passed": 1,
+    "tests_skipped_by_filter": 41,
+    "elapsed_seconds": 0.625
+  },
+  "integration_test": {
+    "command": "npm test -- --reporter=dot tests/main/flowweave-store.test.ts tests/main/canvas-migration.service.test.ts tests/main/canvas-migration-review.test.ts tests/main/full-project-flow.e2e.test.ts tests/main/project-scan-static-graph.test.ts tests/main/project-agent-connection.service.test.ts tests/main/sequence-diagram.service.test.ts tests/main/task-generator.test.ts tests/renderer/canvas-diagnostics.test.ts tests/renderer/agent-page-readiness.test.ts",
+    "exit_code": 0,
+    "files_passed": 10,
+    "tests_passed": 190,
+    "elapsed_seconds": 7.64
+  },
+  "regression": {
+    "test_file": "tests/main/flowweave-store.test.ts",
+    "test_name": "archives review sidecars byte-for-byte and exposes their old generation as stale after migration",
+    "assertions": [
+      "architecture-review.json and sequence-review.json remain byte-identical in the live project after migration",
+      "both original sidecars are byte-identical in the migration archive",
+      "architecture and sequence review readers return stale for the pre-migration identities"
+    ]
+  },
+  "limits": [
+    "The fixture is synthetic and does not establish historical release prevalence or replace user review decisions.",
+    "The plan remains incomplete pending authoritative release formats, authentic recoverable fixtures, and human disposition of real pending items."
+  ]
+}

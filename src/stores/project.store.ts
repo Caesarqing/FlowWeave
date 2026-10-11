@@ -19,7 +19,7 @@ type ProjectState = {
   sequenceReview: SequenceReviewStatus;
   projectStatus: string;
   isProjectLoading: boolean;
-  legacyCanvasReadOnly: boolean;
+  isCanvasTransitioning: boolean;
   setProjectLabel: (value: string) => void;
   setProjectId: (value: string) => void;
   setProjectPath: (value: string) => void;
@@ -37,7 +37,7 @@ type ProjectState = {
   ) => void;
   setProjectStatus: (value: string) => void;
   setIsProjectLoading: (value: boolean) => void;
-  setLegacyCanvasReadOnly: (value: boolean) => void;
+  setIsCanvasTransitioning: (value: boolean) => void;
 };
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -51,7 +51,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   sequenceReview: { state: "missing" },
   projectStatus: "Open a local backend project first. FlowWeave will read the file tree and generate module nodes.",
   isProjectLoading: false,
-  legacyCanvasReadOnly: false,
+  isCanvasTransitioning: false,
   setProjectLabel: (projectLabel) => set({ projectLabel }),
   setProjectId: (projectId) => set({ projectId }),
   setProjectPath: (projectPath) => set({ projectPath }),
@@ -69,5 +69,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
   })),
   setProjectStatus: (projectStatus) => set({ projectStatus }),
   setIsProjectLoading: (isProjectLoading) => set({ isProjectLoading }),
-  setLegacyCanvasReadOnly: (legacyCanvasReadOnly) => set({ legacyCanvasReadOnly })
+  setIsCanvasTransitioning: (isCanvasTransitioning) => set({ isCanvasTransitioning })
 }));
+
+export function canvasEditingEnabled(): boolean {
+  const state = useProjectStore.getState();
+  return Boolean(state.projectId && !state.isProjectLoading && !state.isCanvasTransitioning && state.artifactStatuses?.canvas === "current");
+}
+
+export function assertCanvasEditable(): void {
+  if (!canvasEditingEnabled()) {
+    const state = useProjectStore.getState();
+    throw new Error(`Canvas is not editable: project ${state.projectId || "none"}, loading ${state.isProjectLoading}, switching ${state.isCanvasTransitioning}, artifact ${state.artifactStatuses?.canvas ?? "missing"}`);
+  }
+}

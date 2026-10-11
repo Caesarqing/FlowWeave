@@ -6,7 +6,10 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
-        input: resolve(__dirname, "src/main/index.ts")
+        input: {
+          index: resolve(__dirname, "src/main/index.ts"),
+          "project-analysis.worker": resolve(__dirname, "src/main/project-analysis.worker.ts")
+        }
       }
     }
   },

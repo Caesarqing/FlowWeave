@@ -1,0 +1,62 @@
+
+> flowweave@0.1.0 dist:mac:arm64
+> npm run build && electron-builder --mac --dir --arm64 -c.electronDist=node_modules/electron/dist --config.npmRebuild=false
+
+
+> flowweave@0.1.0 build
+> node scripts/check-brand-assets.mjs && npm run typecheck && electron-vite build && node scripts/check-bundle-size.mjs
+
+
+> flowweave@0.1.0 typecheck
+> tsc --noEmit && tsc -p tsconfig.node.json --noEmit
+
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 90 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/services/run-log.service.ts is dynamically imported by /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/services/architecture-analysis.service.ts, /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/services/architecture-analysis.service.ts, /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/services/sequence-diagram.service.ts but also statically imported by /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/ipc/agent.ipc.ts, /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/services/agent-run.service.ts, /private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/src/main/services/artifact-review-wait.service.ts, dynamic import will not move module into another chunk.
+
+out/main/project-analysis.worker.js                       2.64 kB
+out/main/chunks/project-generation.service-DI9zT6T-.js  527.81 kB
+out/main/index.js                                       531.63 kB
+✓ built in 894ms
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/preload/index.cjs  11.72 kB
+✓ built in 8ms
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 1958 modules transformed.
+rendering chunks...
+out/renderer/index.html                                    0.72 kB
+out/renderer/assets/elk-worker.min-C9JGDOE-.js         1,593.72 kB
+out/renderer/assets/react-flow-DjDsNOP-.css               18.57 kB
+out/renderer/assets/index-CVyqrfoF.css                   105.61 kB
+out/renderer/assets/AgentGuidanceComposer-Dwo_pSfA.js      1.77 kB
+out/renderer/assets/module-text-Daz6IUj2.js                2.16 kB
+out/renderer/assets/DocumentWorkspace-Bf8Ff_jg.js          4.45 kB
+out/renderer/assets/GitReviewWorkspace-D56fzbYg.js        11.28 kB
+out/renderer/assets/ConnectionPanel-DxMbnZUT.js           17.17 kB
+out/renderer/assets/monaco-DhWh2oL4.js                    22.79 kB
+out/renderer/assets/StructureWorkspace-BeBUFQY5.js        24.74 kB
+out/renderer/assets/ModulePanel-Dk5UDJbJ.js               25.94 kB
+out/renderer/assets/AgentPage-Dh9fKSvz.js                 45.76 kB
+out/renderer/assets/CanvasWorkspace-eHV46XSp.js           94.03 kB
+out/renderer/assets/react-flow-DR3c6x9j.js               351.36 kB
+out/renderer/assets/index--KBxFaOy.js                    389.94 kB
+out/renderer/assets/vendor-CwJc-vDj.js                   576.81 kB
+✓ built in 925ms
+  • electron-builder  version=26.15.3 os=25.6.0
+  • loaded configuration  file=package.json ("build" field)
+  • skipped dependencies rebuild  reason=npmRebuild is set to false
+  • packaging       platform=darwin arch=arm64 electron=42.8.1 appOutDir=release/mac-arm64
+  • using custom unpacked Electron distribution  electronDist=node_modules/electron/dist
+  • copying unpacked Electron  source=/private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/node_modules/electron/dist/Electron.app destination=/private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source/release/mac-arm64/Electron.app
+  • searching for node modules  pm=npm searchDir=/private/tmp/flowweave-a5-current-source-2026-10-09-de5xb2k2/source
+  • duplicate dependency references  dependencies=["react-dom@19.2.6","@babel/parser@7.29.8","@vue/compiler-core@3.5.36","@vue/compiler-dom@3.5.36","@types/d3-interpolate@3.0.4","d3-drag@3.0.0","d3-interpolate@3.0.1","d3-interpolate@3.0.1","react-dom@19.2.6","@types/react@19.2.14"]
+  • skipped macOS application code signing  reason=cannot find valid "Developer ID Application" identity or custom non-Apple code signing certificate, it could cause some undefined behaviour, e.g. macOS localized description not visible, see https://electron.build/code-signing allIdentities=     0 identities found
+                                                Valid identities only
+     0 valid identities found

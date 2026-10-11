@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { generateProject } from "../../src/main/services/project-generation.service";
 import { withArchitectureArtifactLock } from "../../src/main/services/architecture-review.service";
 import { writeBatchAtomic } from "../../src/main/storage/flowweave-store";
+import { configureTransactionAuthorityRoot } from "../../src/main/storage/transaction-authority";
+
+const authorityRoot = process.env.FLOWWEAVE_TEST_TRANSACTION_AUTHORITY_ROOT;
+if (!authorityRoot) throw new Error("Transaction test authority root was not provided.");
+configureTransactionAuthorityRoot(authorityRoot);
 
 const [mode, root, barrier, crashAt] = process.argv.slice(2);
 function waitForRelease(): void {
@@ -15,12 +20,21 @@ if (mode === "scan") {
     if (barrier && progress.stage === "persisting") waitForRelease();
   } });
   process.stdout.write(JSON.stringify({ status: result.status, generation: result.status === "committed" ? result.generation : undefined }));
+} else if (mode === "commit-race") {
+  const result = await generateProject(root, { onProgress: (progress) => {
+    if (progress.message === "Static graph ready to commit.") waitForRelease();
+  } });
+  process.stdout.write(JSON.stringify({ status: result.status, generation: result.status === "committed" ? result.generation : undefined }));
 } else if (mode === "lock") {
   await withArchitectureArtifactLock(root, async () => { waitForRelease(); });
-} else if (mode === "crash") {
+} else if (mode === "crash" || mode === "journal-crash") {
   const rename = fs.promises.rename;
   let replacements = 0;
   fs.promises.rename = async (source, target) => {
+    if (String(target).endsWith("transaction.json")) {
+      if (mode === "journal-crash") process.kill(process.pid, "SIGKILL");
+      return rename(source, target);
+    }
     await rename(source, target);
     replacements += 1;
     if (replacements === Number(crashAt)) process.kill(process.pid, "SIGKILL");
@@ -32,12 +46,13 @@ if (mode === "scan") {
     { path: join(root, ".flowweave/generation.json"), content: JSON.stringify({ requestId: "new", inputFingerprint: "new" }) }
   ]));
 }
- else if (mode === "rollback-failure" || mode === "cleanup-failure") {
+ else if (mode === "rollback-failure" || mode === "cleanup-failure" || mode === "partial-cleanup-failure") {
   const rename = fs.promises.rename;
   const copyFile = fs.promises.copyFile;
   const rm = fs.promises.rm;
   let replacementCount = 0;
   fs.promises.rename = async (source, target) => {
+    if (String(target).endsWith("transaction.json")) return rename(source, target);
     replacementCount += 1;
     if (mode === "rollback-failure" && replacementCount === 5) throw new Error("injected replacement failure");
     return rename(source, target);
@@ -48,7 +63,10 @@ if (mode === "scan") {
     return copyFile(source, target, flags);
   };
   fs.promises.rm = async (path, options) => {
-    if (mode === "cleanup-failure" && String(path).endsWith(".bak")) throw new Error("injected cleanup failure");
+    if ((mode === "cleanup-failure" && String(path).endsWith(".bak")) ||
+      (mode === "partial-cleanup-failure" && String(path).includes(".second.json.") && String(path).endsWith(".bak"))) {
+      throw new Error("injected cleanup failure");
+    }
     return rm(path, options);
   };
   syncBuiltinESMExports();

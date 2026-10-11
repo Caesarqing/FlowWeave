@@ -1,23 +1,19 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
 import type {
   ArchitectureEvidence, ArchitectureLayer, ArchitectureMap, ArchitectureModule,
-  ArchitectureModuleCategory, ArchitectureRelationship, CodeflowProject, FileInsight,
+  AnalysisScope, ArchitectureModuleCategory, ArchitectureRelationship, CodeflowProject, FileInsight,
   GraphEdge, GraphEdgeRelation, GraphNode, GraphNodeType, ProjectStructureFacts,
   SemanticIndex, SemanticRelation, TechnologyStack, ArchitectureGroup, ArchitectureGroupReference, ArchitectureRelationDiagnostic
 } from "../../types";
-import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
-import { readJsonArtifact } from "../storage/artifact-store";
+import { readProjectProtocolSnapshot } from "../storage/flowweave-store";
 import { assessModules } from "../../utils/module-assessment";
 import { createArchitectureInputFingerprint } from "./architecture-review.service";
 import { clusterArchitectureModules } from "./module-clustering.service";
 import { moduleClusteringRelations, semanticIndexToStructureFacts } from "./semantic-index.service";
-import { generateProject } from "./project-generation.service";
-import { GenerationSupersededError } from "./generation-errors";
 import { readCurrentProjectScanFingerprint } from "./project-scan-fingerprint.service";
 
-const MODULE_CLUSTERING_CONFIG_VERSION = "5";
-const ARCHITECTURE_GENERATOR_VERSION = "3.0.1";
+const MODULE_CLUSTERING_CONFIG_VERSION = "7";
+const ARCHITECTURE_GENERATOR_VERSION = "3.0.2";
 const ARCHITECTURE_REVIEW_CONTRACT_VERSION = "3";
 
 export type StaticArchitectureBuild = {
@@ -58,24 +54,127 @@ export async function buildStaticArchitecture(
   };
 }
 
-async function readPreviousLocalModules(projectPath: string): Promise<ArchitectureModule[]> {
-  const artifactPath = join(projectPath, FLOWWEAVE_DIR, "architecture-local.json");
-  const value = await readJsonArtifact(artifactPath);
-  if (value === undefined) return [];
-  if (
-    typeof value !== "object" || value === null ||
-    !("version" in value) || (value.version !== 1 && value.version !== 2 && value.version !== 3) ||
-    !("source" in value) || value.source !== "local" ||
-    !("modules" in value) || !Array.isArray(value.modules)
-  ) {
-    throw new Error(`FlowWeave local architecture baseline is invalid: ${artifactPath}`);
+export function deriveArchitectureGroups(
+  modules: readonly ArchitectureModule[],
+  facts: ProjectStructureFacts
+): ArchitectureGroup[] {
+  const scopes = facts.scopes ?? [];
+  const moduleScopes = new Map<string, AnalysisScope | undefined>();
+  const moduleLabels = new Map<string, string | undefined>();
+  const moduleTitleSources = new Map<string, string[]>();
+  const strongModuleLabels = new Set<string>();
+  const moduleByFile = new Map<string, ArchitectureModule>();
+
+  for (const module of modules) {
+    for (const path of module.files) {
+      const previous = moduleByFile.get(path);
+      if (previous && previous.id !== module.id) throw new Error(`Source file ${path} belongs to multiple architecture modules.`);
+      moduleByFile.set(path, module);
+    }
+    const moduleScope = scopeForModule(module, scopes);
+    moduleScopes.set(module.id, moduleScope);
+    const pathLabel = functionalDirectoryLabel(module, moduleScope);
+    const exportedLabels = exportedResponsibilityLabels(module, facts);
+    const filenameLabels = fileResponsibilityLabels(module);
+    const label = pathLabel ?? (module.category === "api-boundary" && exportedLabels.size === 1
+      ? [...exportedLabels][0]
+      : uniqueLabel([...filenameLabels, ...exportedLabels]));
+    moduleLabels.set(module.id, label);
+    moduleTitleSources.set(module.id, label ? titleSourcesForLabel(module, facts, moduleScope, label, Boolean(pathLabel)) : []);
+    if (pathLabel || (module.category === "api-boundary" && exportedLabels.size === 1)) {
+      strongModuleLabels.add(`${scopeKey(moduleScope)}\u0000${label}\u0000${module.id}`);
+    }
   }
-  return value.modules as ArchitectureModule[];
+
+  const confirmedNeighbors = confirmedModuleNeighbors(facts.relations ?? [], moduleByFile, moduleScopes);
+  const areaForModule = new Map<string, { id: string; title: string; rootPath: string; parentId: string; titleSources: string[] }>();
+  const byScopeAndLabel = new Map<string, ArchitectureModule[]>();
+  for (const module of modules) {
+    if (module.category === "shared-utility" || module.category === "test-surface" || module.category === "external-integration") continue;
+    const label = moduleLabels.get(module.id);
+    if (!label) continue;
+    const key = `${scopeKey(moduleScopes.get(module.id))}\u0000${label}`;
+    byScopeAndLabel.set(key, [...(byScopeAndLabel.get(key) ?? []), module]);
+  }
+
+  for (const [key, candidates] of byScopeAndLabel) {
+    const [scopeId, label] = key.split("\u0000");
+    const candidateIds = new Set(candidates.map((module) => module.id));
+    const components = connectedCandidateComponents(candidates, candidateIds, confirmedNeighbors);
+    for (const component of components) {
+      const containsStrongEvidence = component.some((module) => strongModuleLabels.has(`${scopeId}\u0000${label}\u0000${module.id}`));
+      if (!containsStrongEvidence && component.length < 2) continue;
+      const first = component[0];
+      if (!first) continue;
+      const scope = moduleScopes.get(first.id);
+      const structuralId = `group:function:${scopeId}:${label}`;
+      const connectedId = `group:function:${scopeId}:${label}:${createHash("sha256").update(component.map((module) => module.id).sort().join("\u0000")).digest("hex").slice(0, 12)}`;
+      const groupId = containsStrongEvidence ? structuralId : connectedId;
+      for (const module of component) {
+        areaForModule.set(module.id, {
+          id: groupId,
+          title: titleWords(label),
+          rootPath: scope?.rootPath ?? "",
+          parentId: packageGroupId(scope),
+          titleSources: moduleTitleSources.get(module.id) ?? []
+        });
+      }
+    }
+  }
+
+  for (const module of modules) {
+    if (areaForModule.has(module.id)) continue;
+    const scope = moduleScopes.get(module.id);
+    const supportedAreas = new Set((facts.relations ?? []).flatMap((relation) => {
+      if (relation.confidence !== "confirmed" || !relation.targetFile) return [];
+      const target = moduleByFile.get(relation.targetFile);
+      const source = moduleByFile.get(relation.sourceFile);
+      if (target?.id !== module.id || !source) return [];
+      const sourceArea = areaForModule.get(source.id);
+      return sourceArea ? [sourceArea.id] : [];
+    }));
+    const title = module.category === "shared-utility"
+      ? `${supportedAreas.size > 1 ? "Shared Infrastructure" : "Shared Support"} · ${module.title}`
+      : module.category === "test-surface" ? `Test Surface · ${module.title}`
+      : module.category === "external-integration" ? `External Integration · ${module.title}`
+      : `Needs Review · ${module.title}`;
+    const prefix = module.category === "shared-utility" ? (supportedAreas.size > 1 ? "infrastructure" : "support")
+      : module.category === "test-surface" ? "tests"
+      : module.category === "external-integration" ? "integration" : "review";
+    areaForModule.set(module.id, {
+      id: `group:${prefix}:${scopeKey(scope)}:${module.id}`,
+      title,
+      rootPath: scope?.rootPath ?? "",
+      parentId: packageGroupId(scope),
+      titleSources: [
+        `category:${module.category}`,
+        `module:${module.id}`,
+        ...[...supportedAreas].sort().map((id) => `supported-area:${id}`)
+      ]
+    });
+  }
+
+  const groups = new Map<string, ArchitectureGroup>();
+  for (const module of modules) {
+    const scope = moduleScopes.get(module.id);
+    const packageReference = packageGroupReference(scope, facts.projectName);
+    const area = areaForModule.get(module.id);
+    if (!area) throw new Error(`Architecture module ${module.id} has no derived area.`);
+    addGroupMembership(groups, packageReference, module.id);
+    addGroupMembership(groups, area, module.id);
+  }
+  return [...groups.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+async function readPreviousLocalModules(projectPath: string): Promise<ArchitectureModule[]> {
+  const snapshot = await readProjectProtocolSnapshot(projectPath);
+  return snapshot?.localArchitecture.modules ?? [];
 }
 
 export function architectureMapToGraph(architectureMap: ArchitectureMap): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const nodes = architectureMap.modules.map((module): GraphNode => ({
     id: module.id,
+    identity: module.identity,
     title: module.title,
     subtitle: categoryLabel(module.category),
     kind: "module",
@@ -87,6 +186,7 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     status: architectureMap.source === "agent" ? "mapped" : "needs-review",
     x: 0,
     y: 0,
+    areaId: module.groupPath?.at(-1)?.id ?? `area:${module.id}`,
     groupPath: module.groupPath, relationSummary: module.relationSummary, relationDiagnostics: module.relationDiagnostics,
     category: module.category,
     role: module.role,
@@ -120,7 +220,15 @@ export function architectureMapToGraph(architectureMap: ArchitectureMap): { node
     risk: "unknown", status: "mapped", x: 0, y: 0, resource, evidence: resource.evidence,
     groupPath: resourceGroupPath(resource.scopeId, architectureMap.groups ?? []), architectureLayer: "integration", technologyStack: "infrastructure"
   }));
-  return { nodes: [...nodes, ...resourceNodes], edges };
+  const allNodes = [...nodes, ...resourceNodes];
+  const positions = new Map([...allNodes]
+    .sort((left, right) => {
+      const leftGroup = left.groupPath?.map((group) => group.id).join("/") ?? left.category ?? left.nodeType;
+      const rightGroup = right.groupPath?.map((group) => group.id).join("/") ?? right.category ?? right.nodeType;
+      return leftGroup.localeCompare(rightGroup) || left.id.localeCompare(right.id);
+    })
+    .map((node, index) => [node.id, { x: (index % 4) * 320, y: Math.floor(index / 4) * 190 }]));
+  return { nodes: allNodes.map((node) => ({ ...node, ...positions.get(node.id) })), edges };
 }
 
 function technologyStackForModule(module: ArchitectureModule): TechnologyStack {
@@ -253,8 +361,8 @@ function createLocalArchitectureMap(
   previousModules: ArchitectureModule[],
   clusteringRelations: SemanticRelation[]
 ): ArchitectureMap {
-  const clustering = clusterArchitectureModules(facts.files, clusteringRelations, previousModules, facts.scopes);
-  const modules = clustering.modules.map((cluster): ArchitectureModule => {
+  const clustering = clusterArchitectureModules(facts.files, clusteringRelations, previousModules, facts.scopes ?? []);
+  const ungroupedModules = clustering.modules.map((cluster): ArchitectureModule => {
     const files = facts.files.filter((file) => cluster.files.includes(file.path));
     const { id, identity, title, category } = cluster;
     const ownedFiles = new Set(cluster.files);
@@ -268,8 +376,8 @@ function createLocalArchitectureMap(
       title,
       category,
       nodeType: nodeTypeFromCategory(category),
-      role: fallbackRole(category, files),
-      description: fallbackModuleDescription(title, category, files),
+      role: fallbackRole(files),
+      description: fallbackModuleDescription(title, files),
       files: files.map((file) => file.path),
       fileRoles: fallbackFileRoles(files, category),
       symbols,
@@ -279,13 +387,16 @@ function createLocalArchitectureMap(
         line: file.symbols[0]?.line,
         detail: evidenceFromInsight(file)
       })),
-      groupPath: groupPathForFiles(files.map((file) => file.path), facts),
       risk: "unknown"
     };
   });
 
+  const groups = deriveArchitectureGroups(ungroupedModules, facts);
+  const modules = ungroupedModules.map((module) => ({
+    ...module,
+    groupPath: groupPathForModule(module.id, groups)
+  }));
   const { relationships, diagnostics: relationDiagnostics } = buildArchitectureRelationships(modules, facts);
-  const groups = groupsFromModules(modules);
   for (const resource of facts.resources ?? []) {
     const references = resourceGroupPath(resource.scopeId, groups);
     for (const reference of references) if (!groups.some((group) => group.id === reference.id)) groups.push({ ...reference, moduleIds: [] });
@@ -341,32 +452,206 @@ function factOutcomes(facts: ProjectStructureFacts, relationships: ArchitectureR
   return [...outcomes.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.outcome.localeCompare(b.outcome));
 }
 
-function groupPathForFiles(files: string[], facts: ProjectStructureFacts): ArchitectureGroupReference[] {
-  if (!facts.scopes) return [];
-  const scope = facts.scopes.filter((item) => files.some((file) => item.paths.includes(file))).sort((a, b) => b.rootPath.length - a.rootPath.length)[0];
-  const root = scope?.rootPath ?? "";
-  const top: ArchitectureGroupReference = { id: `group:package:${root || "."}`, title: scope?.packageName ?? root.split("/").at(-1) ?? facts.projectName, rootPath: root };
-  const sharedDirectory = commonDirectory(files);
-  if (!sharedDirectory || sharedDirectory === root) return [top];
-  const relativeDirectory = root ? sharedDirectory.slice(root.length + 1) : sharedDirectory;
-  // ponytail: one directory level groups supporting files; deeper navigation remains module/file drill-down.
-  const parts = relativeDirectory.split("/");
-  const source = parts[0] === "src" ? parts.slice(1) : parts;
-  const directory = ["features", "modules", "domains"].includes(source[0]) && source[1] ? source.slice(0, 2) : source.slice(0, 1);
-  if (!directory.length || ["main", "renderer", "app"].includes(directory[0])) return [top];
-  const path = [root, parts[0] === "src" ? "src" : "", ...directory].filter(Boolean).join("/");
-  return [top, { id: `group:directory:${path}`, title: titleWords(directory.at(-1)!), rootPath: path, parentId: top.id }];
+function titleWords(value: string): string { return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+
+const GENERIC_AREA_DIRECTORIES = new Set([
+  "api", "apis", "app", "apps", "backend", "client", "clients", "common", "components", "config",
+  "data", "database", "db", "domain", "domains", "external", "feature", "features", "frontend",
+  "handler", "handlers", "infra", "infrastructure", "integration", "integrations", "main", "model",
+  "models", "module", "modules", "package", "packages", "repository", "repositories", "route", "routes",
+  "server", "service", "services", "shared", "src", "storage", "store", "stores", "test", "tests",
+  "types", "util", "utils", "view", "views", "worker", "workers"
+]);
+const GENERIC_RESPONSIBILITY_TOKENS = new Set([
+  ...GENERIC_AREA_DIRECTORIES, "adapter", "controller", "gateway", "hook", "ipc", "page", "panel", "repo",
+  "router", "schema", "workspace", "create", "delete", "fetch", "find", "get", "handle", "load", "list",
+  "parse", "read", "resolve", "update", "write"
+]);
+
+function scopeForModule(module: ArchitectureModule, scopes: AnalysisScope[]): AnalysisScope | undefined {
+  const scopeByFile = module.files.flatMap((path) => {
+    const scope = scopes.filter((candidate) => candidate.paths.includes(path))
+      .sort((left, right) => right.rootPath.length - left.rootPath.length || left.id.localeCompare(right.id))[0];
+    return scope ? [scope] : [];
+  });
+  const scopeIds = new Set(scopeByFile.map((scope) => scope.id));
+  if (scopeIds.size > 1) throw new Error(`Architecture module ${module.id} crosses package scopes: ${[...scopeIds].sort().join(", ")}.`);
+  const id = [...scopeIds][0];
+  return scopes.find((scope) => scope.id === id);
 }
 
-function titleWords(value: string): string { return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function groupsFromModules(modules: ArchitectureModule[]): ArchitectureGroup[] {
-  const groups = new Map<string, ArchitectureGroup>();
-  for (const module of modules) for (const reference of module.groupPath ?? []) {
-    const previous = groups.get(reference.id);
-    groups.set(reference.id, { ...reference, moduleIds: [...(previous?.moduleIds ?? []), module.id] });
-  }
-  return [...groups.values()].sort((a, b) => a.id.localeCompare(b.id));
+function scopeKey(scope: AnalysisScope | undefined): string {
+  return scope?.id ?? ".";
 }
+
+function packageGroupId(scope: AnalysisScope | undefined): string {
+  return `group:package:${scopeKey(scope)}`;
+}
+
+function packageGroupReference(scope: AnalysisScope | undefined, projectName: string): ArchitectureGroupReference {
+  const rootPath = scope?.rootPath ?? "";
+  const rootName = rootPath.split("/").filter(Boolean).at(-1);
+  return {
+    id: packageGroupId(scope),
+    title: scope?.packageName ?? rootName ?? projectName,
+    rootPath,
+    titleSources: scope ? [`package-scope:${scope.id}`, `package-root:${rootPath}`] : [`project:${projectName}`]
+  };
+}
+
+function functionalDirectoryLabel(module: ArchitectureModule, scope: AnalysisScope | undefined): string | undefined {
+  const labels = module.files.flatMap((path) => {
+    const relativePath = relativeToScope(path, scope);
+    const directories = relativePath.split("/").slice(0, -1);
+    const label = directories.filter((segment) => !isGenericAreaDirectory(segment)).at(-1);
+    return label ? [normalizeAreaLabel(label)] : [];
+  });
+  return mostCommonLabel(labels);
+}
+
+function relativeToScope(path: string, scope: AnalysisScope | undefined): string {
+  const rootPath = scope?.rootPath.replace(/\/$/, "");
+  return rootPath && (path === rootPath || path.startsWith(`${rootPath}/`)) ? path.slice(rootPath.length).replace(/^\//, "") : path;
+}
+
+function isGenericAreaDirectory(segment: string): boolean {
+  const normalized = normalizeAreaLabel(segment);
+  return GENERIC_AREA_DIRECTORIES.has(normalized) || /^v\d+$/.test(normalized);
+}
+
+function fileResponsibilityLabels(module: ArchitectureModule): Set<string> {
+  return new Set(module.files.flatMap((path) => {
+    const label = responsibilityLabel(path.split("/").at(-1) ?? path);
+    return label ? [label] : [];
+  }));
+}
+
+function exportedResponsibilityLabels(module: ArchitectureModule, facts: ProjectStructureFacts): Set<string> {
+  const ownedFiles = new Set(module.files);
+  const labels = facts.files.filter((file) => ownedFiles.has(file.path)).flatMap((file) => [
+    ...file.symbols.filter((symbol) => symbol.exported).map((symbol) => responsibilityLabel(symbol.name)),
+    ...file.exports.map((name) => responsibilityLabel(name))
+  ]);
+  return new Set(labels.filter((label): label is string => Boolean(label)));
+}
+
+function titleSourcesForLabel(
+  module: ArchitectureModule,
+  facts: ProjectStructureFacts,
+  scope: AnalysisScope | undefined,
+  label: string,
+  fromDirectory: boolean
+): string[] {
+  if (fromDirectory) {
+    return module.files.filter((path) => {
+      const directories = relativeToScope(path, scope).split("/").slice(0, -1);
+      const directory = directories.filter((segment) => !isGenericAreaDirectory(segment)).at(-1);
+      return directory ? normalizeAreaLabel(directory) === label : false;
+    }).map((path) => `directory:${path}`).sort();
+  }
+  const ownedFiles = new Set(module.files);
+  const filenameSources = module.files.filter((path) =>
+    responsibilityLabel(path.split("/").at(-1) ?? path) === label
+  ).map((path) => `filename:${path}`);
+  const exportedSources = facts.files.filter((file) => ownedFiles.has(file.path)).flatMap((file) => [
+    ...file.symbols.filter((symbol) => symbol.exported && responsibilityLabel(symbol.name) === label)
+      .map((symbol) => `symbol:${file.path}#${symbol.qualifiedName ?? symbol.name}`),
+    ...file.exports.filter((name) => responsibilityLabel(name) === label).map((name) => `export:${file.path}#${name}`)
+  ]);
+  return [...new Set([...filenameSources, ...exportedSources])].sort();
+}
+
+function responsibilityLabel(value: string): string | undefined {
+  const words = value.replace(/\.(d\.)?(tsx?|jsx?|mjs|cjs|py|java|go)$/i, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word && !GENERIC_RESPONSIBILITY_TOKENS.has(word));
+  const label = words.join("-");
+  return label && !GENERIC_AREA_DIRECTORIES.has(label) ? label : undefined;
+}
+
+function normalizeAreaLabel(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function mostCommonLabel(labels: string[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1);
+  return [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0];
+}
+
+function uniqueLabel(labels: string[]): string | undefined {
+  const unique = [...new Set(labels)].sort();
+  return unique.length === 1 ? unique[0] : undefined;
+}
+
+function confirmedModuleNeighbors(
+  relations: SemanticRelation[],
+  moduleByFile: Map<string, ArchitectureModule>,
+  moduleScopes: Map<string, AnalysisScope | undefined>
+): Map<string, Set<string>> {
+  const neighbors = new Map<string, Set<string>>();
+  for (const relation of relations) {
+    if (relation.confidence !== "confirmed" || !relation.targetFile) continue;
+    const source = moduleByFile.get(relation.sourceFile);
+    const target = moduleByFile.get(relation.targetFile);
+    if (!source || !target || source.id === target.id || scopeKey(moduleScopes.get(source.id)) !== scopeKey(moduleScopes.get(target.id))) continue;
+    neighbors.set(source.id, new Set([...(neighbors.get(source.id) ?? []), target.id]));
+    neighbors.set(target.id, new Set([...(neighbors.get(target.id) ?? []), source.id]));
+  }
+  return neighbors;
+}
+
+function connectedCandidateComponents(
+  candidates: ArchitectureModule[],
+  candidateIds: Set<string>,
+  neighbors: Map<string, Set<string>>
+): ArchitectureModule[][] {
+  const modulesById = new Map(candidates.map((module) => [module.id, module]));
+  const remaining = new Set([...candidateIds].sort());
+  const components: ArchitectureModule[][] = [];
+  while (remaining.size > 0) {
+    const start = [...remaining][0];
+    if (!start) break;
+    const pending = [start];
+    const component: ArchitectureModule[] = [];
+    remaining.delete(start);
+    while (pending.length > 0) {
+      const current = pending.shift();
+      if (!current) continue;
+      const module = modulesById.get(current);
+      if (module) component.push(module);
+      for (const neighbor of [...(neighbors.get(current) ?? [])].sort()) {
+        if (!remaining.has(neighbor)) continue;
+        remaining.delete(neighbor);
+        pending.push(neighbor);
+      }
+    }
+    components.push(component.sort((left, right) => left.id.localeCompare(right.id)));
+  }
+  return components;
+}
+
+function addGroupMembership(
+  groups: Map<string, ArchitectureGroup>,
+  reference: ArchitectureGroupReference,
+  moduleId: string
+): void {
+  const previous = groups.get(reference.id);
+  const moduleIds = [...new Set([...(previous?.moduleIds ?? []), moduleId])].sort();
+  const titleSources = [...new Set([...(previous?.titleSources ?? []), ...(reference.titleSources ?? [])])].sort();
+  groups.set(reference.id, { ...reference, titleSources, moduleIds });
+}
+
+function groupPathForModule(moduleId: string, groups: ArchitectureGroup[]): ArchitectureGroupReference[] {
+  const area = groups.find((group) => group.parentId && group.moduleIds.includes(moduleId));
+  if (!area?.parentId) throw new Error(`Architecture module ${moduleId} is missing its derived area.`);
+  const packageGroup = groups.find((group) => group.id === area.parentId);
+  if (!packageGroup) throw new Error(`Architecture area ${area.id} is missing its package scope.`);
+  return [packageGroup, area].map(({ id, title, rootPath, parentId, titleSources }) => ({ id, title, rootPath, parentId, titleSources }));
+}
+
 function resourceGroupPath(scopeId: string, groups: ArchitectureGroup[]): ArchitectureGroupReference[] {
   const root = scopeId.slice(scopeId.indexOf(":") + 1).replace(/^\.$/, "");
   const top = groups.find((group) => group.rootPath === root && !group.parentId);
@@ -417,7 +702,7 @@ export function aggregateArchitectureRelationships(
 
   const grouped = new Map<string, ArchitectureRelationship>();
   for (const candidate of allCandidates.sort(compareRelationshipCandidate)) {
-    const key = `${candidate.source}:${candidate.target}:${candidate.relation}`;
+    const key = `${candidate.source}:${candidate.target}:${candidate.relation}:${candidate.confidence ?? "unrated"}`;
     const current = grouped.get(key);
     if (current) {
       current.evidence.push(...candidate.evidence);
@@ -425,14 +710,11 @@ export function aggregateArchitectureRelationships(
       current.operations = [...new Set([...(current.operations ?? []), ...(candidate.operations ?? [])])];
       current.importUsages = [...new Set([...(current.importUsages ?? []), ...(candidate.importUsages ?? [])])];
       current.sourceRelationIds = [...new Set([...(current.sourceRelationIds ?? []), ...(candidate.sourceRelationIds ?? [])])];
-      if (candidate.confidence === "confirmed" || current.confidence === undefined) {
-        current.confidence = candidate.confidence;
-      }
       continue;
     }
     grouped.set(key, {
       ...candidate,
-      id: `${candidate.source}-${candidate.target}-${candidate.relation}`,
+      id: `${candidate.source}-${candidate.target}-${candidate.relation}-${candidate.confidence ?? "unrated"}`,
       evidence: [...candidate.evidence]
     });
   }
@@ -477,14 +759,15 @@ function architectureRelationFromSemantic(relation: SemanticRelation): GraphEdge
     case "render":
       return "calls";
     case "http":
-      return relation.targetFile ? "calls" : relation.targetRef?.kind === "resource" ? "external_api" : undefined;
+      return relation.targetFile ? "http_contract" : relation.targetRef?.kind === "resource" ? "external_api" : undefined;
     case "database":
     case "filesystem":
-      return relation.targetFile || relation.targetRef?.kind === "resource" ? "reads_writes" : undefined;
+      if (!relation.targetFile && relation.targetRef?.kind !== "resource") return undefined;
+      return relation.operation === "read" ? "reads" : relation.operation === "write" ? "writes" : undefined;
     case "test":
       return "tests";
     case "process":
-      return relation.operation === "invoke" ? "calls" : undefined;
+      return relation.operation === "invoke" ? "process_invocation" : undefined;
     case "event":
       return relation.operation === "publish" ? "publishes_event" : relation.operation === "subscribe" ? "subscribes_event" : undefined;
   }
@@ -518,41 +801,17 @@ function categoryLabel(category: ArchitectureModuleCategory) {
   return labels[category];
 }
 
-function fallbackRole(category: ArchitectureModuleCategory, files: FileInsight[]) {
-  const scope = commonDirectory(files.map((file) => file.path));
-  const prefix = scope ? `${scope} contains` : "This module contains";
-  const descriptions: Record<ArchitectureModuleCategory, string> = {
-    "api-boundary": `${prefix} request entry points and interface orchestration.`,
-    "domain-service": `${prefix} business logic and application workflow code.`,
-    "data-access": `${prefix} persistence, project data, and storage access code.`,
-    "external-integration": `${prefix} code that connects FlowWeave to external runtimes or APIs.`,
-    "job-worker": `${prefix} background analysis and generated artifact workflows.`,
-    "shared-utility": `${prefix} shared utilities, UI helpers, configuration, and cross-cutting support.`,
-    "test-surface": `${prefix} tests that verify behavior and protect regressions.`,
-    "unknown": "These files could not be assigned to a functional module from the available static evidence."
-  };
-  return descriptions[category];
+function fallbackRole(files: FileInsight[]) {
+  const names = files.flatMap((file) => file.symbols.map((symbol) => symbol.name)).slice(0, 3);
+  return names.length > 0 ? `Declares ${names.join(", ")}.` : "Functional responsibility is not established by static evidence.";
 }
 
-function fallbackModuleDescription(title: string, category: ArchitectureModuleCategory, files: FileInsight[]) {
+function fallbackModuleDescription(title: string, files: FileInsight[]) {
   const scope = commonDirectory(files.map((file) => file.path));
   const fileCount = files.length;
   const symbolNames = files.flatMap((file) => file.symbols.map((symbol) => symbol.name)).slice(0, 4);
-  const evidence = symbolNames.length > 0
-    ? ` Key code signals include ${symbolNames.join(", ")}.`
-    : "";
-  const location = scope ? ` under ${scope}` : "";
-  const descriptions: Record<ArchitectureModuleCategory, string> = {
-    "api-boundary": `${title} handles project entry points and routes user or process requests into the rest of the system.`,
-    "domain-service": `${title} owns the main application behavior and coordinates related code paths${location}.`,
-    "data-access": `${title} manages persisted project data, artifact storage, or schema-oriented access paths${location}.`,
-    "external-integration": `${title} isolates calls into external tools, runtimes, or service boundaries${location}.`,
-    "job-worker": `${title} runs background analysis or generated-artifact workflows across ${fileCount} files${location}.`,
-    "shared-utility": `${title} provides reusable support code used across FlowWeave features${location}.`,
-    "test-surface": `${title} verifies expected behavior and regression coverage for the project${location}.`,
-    "unknown": `${title} contains files whose functional responsibility is not clear from the available static evidence${location}.`
-  };
-  return `${descriptions[category]}${evidence}`;
+  return `${title} contains ${fileCount} source ${fileCount === 1 ? "file" : "files"}${scope ? ` under ${scope}` : ""}.` +
+    (symbolNames.length > 0 ? ` Declared symbols include ${symbolNames.join(", ")}.` : "");
 }
 
 function fallbackFileRoles(files: FileInsight[], category: ArchitectureModuleCategory) {
@@ -666,21 +925,6 @@ export function assessArchitectureMap(
       } : module;
     })
   };
-}
-
-export async function persistStaticArchitecture(
-  project: CodeflowProject,
-  staticArchitecture: StaticArchitectureBuild
-): Promise<{
-  architectureMap: ArchitectureMap;
-  graph: { nodes: import("../../types").GraphNode[]; edges: import("../../types").GraphEdge[] };
-  written: import("../storage/schemas").CodeflowWriteResult;
-}> {
-  if (!staticArchitecture.quality.valid) throw new Error(`Static architecture validation failed; previous artifacts were preserved: ${staticArchitecture.quality.reasons.join("; ")}`);
-  // A previously prepared graph cannot commit independently of its source/index generation.
-  const result = await generateProject(project.rootPath, {});
-  if (result.status === "superseded") throw new GenerationSupersededError(project.rootPath, result.requestId, "a newer registered request");
-  return { architectureMap: result.architectureMap, graph: result.graph, written: result.written };
 }
 
 export function isCurrentAgentArchitecture(value: unknown, localArchitecture: ArchitectureMap): value is ArchitectureMap {

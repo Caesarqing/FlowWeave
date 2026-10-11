@@ -1,0 +1,148 @@
+{
+  "status": "failed",
+  "fixture": "viewport-only",
+  "phase": "waiting-for-initial-graph",
+  "workspaceVisibleMs": 1790,
+  "lastState": {
+    "onboardingVisible": false,
+    "nodes": 0,
+    "nodeIds": [],
+    "viewportNodeIds": [],
+    "groups": 0,
+    "groupCards": [],
+    "edges": [],
+    "edgePaths": 0,
+    "layoutPending": false,
+    "emptyText": "",
+    "viewMode": "execution",
+    "projectStatus": "Rescanning current project...",
+    "workspaceVisible": true,
+    "staleBanner": false,
+    "modulePanelVisible": false
+  },
+  "rendererUrl": "http://127.0.0.1:5010/?flowweave-graph-smoke-trace=1",
+  "reactProfiler": {
+    "status": "failed",
+    "error": "Graph smoke timed out before the initial graph and interaction sequence completed.",
+    "reactVersion": "19.2.6",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) flowweave/0.1.0 Chrome/148.0.7778.280 Electron/42.8.1 Safari/537.36",
+    "actions": [],
+    "samples": [
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "mount",
+        "actualDuration": 2,
+        "baseDuration": 1.1000000014901161,
+        "startTime": 172.29999999701977,
+        "commitTime": 174.39999999850988,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 1.3999999985098839,
+        "baseDuration": 1.3999999985098839,
+        "startTime": 184.09999999776483,
+        "commitTime": 185.59999999776483,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0.09999999776482582,
+        "baseDuration": 1.3999999985098839,
+        "startTime": 186.29999999701977,
+        "commitTime": 186.59999999776483,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 1.3999999985098839,
+        "startTime": 187.89999999850988,
+        "commitTime": 187.89999999850988,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 0,
+        "baseDuration": 1.3999999985098839,
+        "startTime": 188.09999999776483,
+        "commitTime": 188.19999999925494,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 1.199999999254942,
+        "baseDuration": 1.2999999970197678,
+        "startTime": 188.89999999850988,
+        "commitTime": 190.09999999776483,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 1.2999999970197678,
+        "startTime": 190.59999999776483,
+        "commitTime": 190.59999999776483,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "update",
+        "actualDuration": 2.699999999254942,
+        "baseDuration": 2.4999999962747097,
+        "startTime": 372,
+        "commitTime": 374.69999999925494,
+        "action": "initial-render"
+      },
+      {
+        "componentId": "CanvasWorkspace",
+        "phase": "nested-update",
+        "actualDuration": 0,
+        "baseDuration": 2.4999999962747097,
+        "startTime": 375.69999999925494,
+        "commitTime": 375.79999999701977,
+        "action": "initial-render"
+      }
+    ],
+    "appVersion": "0.1.0",
+    "electronVersion": "42.8.1",
+    "chromeVersion": "148.0.7778.280",
+    "nodeVersion": "24.18.1"
+  },
+  "phaseTrace": [
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:start",
+      "monotonicMs": 112.69999999925494,
+      "projectId": "project-ee9c90a0-a17a-48a8-b8bf-0648b88a64dd",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 386.505375
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.flush:completed",
+      "monotonicMs": 117.5,
+      "projectId": "project-ee9c90a0-a17a-48a8-b8bf-0648b88a64dd",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 392.466083
+    },
+    {
+      "source": "renderer",
+      "stage": "renderer.restore.guardAfterFlush:stale",
+      "monotonicMs": 117.59999999776483,
+      "projectId": "project-ee9c90a0-a17a-48a8-b8bf-0648b88a64dd",
+      "localRequestId": 1,
+      "observedAtMainMonotonicMs": 392.489875
+    }
+  ],
+  "error": {
+    "name": "TimeoutError",
+    "message": "Graph smoke did not render its initial graph within 45000 ms."
+  }
+}

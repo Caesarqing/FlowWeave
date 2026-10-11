@@ -2,7 +2,7 @@ import { ArtifactLockOccupiedError } from "./generation-errors";
 import { createHash, randomUUID } from "node:crypto";
 import { link, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { recoverArtifactTransaction } from "../storage/flowweave-store";
+import { readProjectGenerationManifest, readProjectProtocolOverview, readProjectProtocolSnapshot, recoverArtifactTransaction, requireProjectProtocolV7 } from "../storage/flowweave-store";
 import { assertSafeProjectWritePath } from "../storage/project-write-guard";
 import { join } from "node:path";
 import type {
@@ -20,7 +20,6 @@ import { assertArtifactGeneration, readCommittedGeneration } from "./project-gen
 
 const REVIEW_STATE_FILENAME = "architecture-review.json";
 const ARCHITECTURE_MAP_FILENAME = "architecture-map.json";
-const ARCHITECTURE_LOCAL_FILENAME = "architecture-local.json";
 const activeReviewIds = new Set<string>();
 
 export type ArchitectureInputFingerprintParts = {
@@ -131,19 +130,22 @@ export function createArchitectureInputFingerprint(parts: ArchitectureInputFinge
 
 export async function withArchitectureArtifactLock<T>(
   projectPath: string,
-  action: () => Promise<T>
+  action: () => Promise<T>,
+  onLockWaitMs?: (durationMs: number) => void
 ): Promise<T> {
   const canonical = await realpath(projectPath);
-  const unlock = await acquireArtifactLock(canonical);
+  const lease = await acquireArtifactLock(canonical, onLockWaitMs !== undefined);
   try {
+    onLockWaitMs?.(lease.waitedMs);
     await recoverArtifactTransaction(canonical);
     return await action();
-  } finally { await unlock(); }
+  } finally { await lease.unlock(); }
 }
 
 type LockOwner = { pid: number; ownerId: string };
+type ArtifactLockLease = { unlock: () => Promise<void>; waitedMs: number };
 
-async function acquireArtifactLock(projectPath: string): Promise<() => Promise<void>> {
+async function acquireArtifactLock(projectPath: string, measureWait: boolean): Promise<ArtifactLockLease> {
   const root = join(projectPath, FLOWWEAVE_DIR);
   await assertSafeProjectWritePath(projectPath, root);
   await mkdir(root, { recursive: true });
@@ -151,15 +153,19 @@ async function acquireArtifactLock(projectPath: string): Promise<() => Promise<v
   const owner: LockOwner = { pid: process.pid, ownerId: randomUUID() };
   const candidate = `${lockPath}.${owner.ownerId}`;
   await writeFile(candidate, JSON.stringify(owner), { flag: "wx" });
-  const started = Date.now();
+  const waitStartedAtEpochMs = Date.now();
+  const waitStartedAt = measureWait ? performance.now() : undefined;
   try {
     while (true) {
       try {
         await link(candidate, lockPath);
-        return async () => {
-          const current = await readLockOwner(lockPath, projectPath);
-          if (current.ownerId !== owner.ownerId) throw new Error(`Artifact lock ownership changed: project ${projectPath}, expected ${owner.ownerId}, owner ${JSON.stringify(current)}`);
-          await rm(lockPath);
+        return {
+          waitedMs: waitStartedAt === undefined ? 0 : performance.now() - waitStartedAt,
+          unlock: async () => {
+            const current = await readLockOwner(lockPath, projectPath);
+            if (current.ownerId !== owner.ownerId) throw new Error(`Artifact lock ownership changed: project ${projectPath}, expected ${owner.ownerId}, owner ${JSON.stringify(current)}`);
+            await rm(lockPath);
+          }
         };
       } catch (error) {
         if (!hasCode(error, "EEXIST")) throw error;
@@ -184,7 +190,7 @@ async function acquireArtifactLock(projectPath: string): Promise<() => Promise<v
         }
         continue;
       }
-      if (Date.now() - started >= 30_000) throw new ArtifactLockOccupiedError(projectPath, current.pid, current.ownerId);
+      if (Date.now() - waitStartedAtEpochMs >= 30_000) throw new ArtifactLockOccupiedError(projectPath, current.pid, current.ownerId);
       await delay(25);
     }
   } finally { await rm(candidate, { force: true }); }
@@ -209,10 +215,8 @@ function hasCode(error: unknown, code: string): boolean { return typeof error ==
 
 export async function startArchitectureReview(input: StartArchitectureReviewInput): Promise<ArchitectureReviewStatus> {
   const start = await withArchitectureArtifactLock(input.projectPath, async () => {
-    const canvasPath = join(input.projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
-    const canvas = await readJsonArtifact(canvasPath) as { version?: number } | undefined;
-    if (canvas?.version === 5) throw new Error(`Legacy Canvas v5 is read-only; re-scan successfully before reviewing: ${canvasPath}`);
-    await assertArtifactGeneration(input.projectPath, join(input.projectPath, FLOWWEAVE_DIR, ARCHITECTURE_LOCAL_FILENAME), input.localArchitecture);
+    await requireProjectProtocolV7(input.projectPath);
+    await assertArtifactGeneration(input.projectPath, "static-snapshot.json", input.localArchitecture);
     const stored = await readStoredArchitectureReviewStatus(input.projectPath);
     const effective = await readArchitectureReviewStatusUnlocked(input.projectPath, input);
     if (
@@ -279,9 +283,8 @@ export async function adoptArchitectureReview(
   input: AdoptArchitectureReviewInput
 ): Promise<ArchitectureReviewAdoption> {
   return withArchitectureArtifactLock(input.projectPath, async () => {
-    const canvasPath = join(input.projectPath, FLOWWEAVE_DIR, "canvas", "main.canvas.json");
-    const canvas = await readJsonArtifact(canvasPath) as { version?: number } | undefined;
-    if (canvas?.version === 5) return { status: "rejected", message: `Legacy Canvas v5 is read-only: ${canvasPath}` };
+    const manifest = await readProjectGenerationManifest(input.projectPath);
+    if (!manifest) return { status: "rejected", message: `Project has not been migrated to FlowWeave protocol v7: ${input.projectPath}` };
     const generation = await readCommittedGeneration(input.projectPath);
     if (generation && (input.architectureMap.generation?.requestId !== generation.requestId ||
         input.architectureMap.generation.inputFingerprint !== generation.inputFingerprint)) {
@@ -313,7 +316,7 @@ export async function adoptArchitectureReview(
     if (currentScanFingerprint !== input.scanFingerprint) {
       return { status: "stale", message: "Run completed but not applied because the project scan changed." };
     }
-    const localArtifact = await readJsonArtifact(join(input.projectPath, FLOWWEAVE_DIR, ARCHITECTURE_LOCAL_FILENAME));
+    const localArtifact = (await readProjectProtocolSnapshot(input.projectPath))?.localArchitecture;
     if (
       !isArchitectureMap(localArtifact) ||
       localArtifact.source !== "local" ||
@@ -322,7 +325,7 @@ export async function adoptArchitectureReview(
       return { status: "rejected", message: "Current local architecture baseline is missing or invalid." };
     }
     const localFingerprint = artifactInputFingerprint(localArtifact);
-    await assertArtifactGeneration(input.projectPath, join(input.projectPath, FLOWWEAVE_DIR, ARCHITECTURE_LOCAL_FILENAME), localArtifact);
+    await assertArtifactGeneration(input.projectPath, "static-snapshot.json", localArtifact);
     const localScanFingerprint = artifactScanFingerprint(localArtifact);
     if (!localFingerprint || !localScanFingerprint) {
       return { status: "rejected", message: "Current local architecture baseline is missing fingerprint metadata." };
@@ -590,10 +593,7 @@ function validateArchitectureReviewArtifact(input: AdoptArchitectureReviewInput)
 }
 
 async function readProjectScanFingerprint(projectPath: string): Promise<string | undefined> {
-  const project = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, "project.json"));
-  if (project === undefined) return undefined;
-  if (typeof project !== "object" || project === null || !("scanFingerprint" in project)) return "";
-  return typeof project.scanFingerprint === "string" ? project.scanFingerprint : "";
+  return (await readProjectProtocolSnapshot(projectPath))?.project.scanFingerprint;
 }
 
 async function readArchitectureReviewStatusUnlocked(
@@ -601,7 +601,13 @@ async function readArchitectureReviewStatusUnlocked(
   fingerprints: Pick<ArchitectureReviewKey, "scanFingerprint" | "inputFingerprint">
 ): Promise<ArchitectureReviewStatus> {
   const stored = await readStoredArchitectureReviewStatus(projectPath);
-  const architectureArtifact = await readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, ARCHITECTURE_MAP_FILENAME));
+  const [reviewedArchitecture, overview] = await Promise.all([
+    readJsonArtifact(join(projectPath, FLOWWEAVE_DIR, ARCHITECTURE_MAP_FILENAME)),
+    readProjectProtocolOverview(projectPath)
+  ]);
+  const architectureArtifact = reviewedArchitecture ?? (overview?.architectureInputFingerprint
+    ? { source: "local", metadata: { inputFingerprint: overview.architectureInputFingerprint, scanFingerprint: overview.scanFingerprint } }
+    : (await readProjectProtocolSnapshot(projectPath))?.localArchitecture);
   const derived = deriveReviewStatusFromArchitecture(architectureArtifact, fingerprints);
   const hasCompleteIdentity = hasCompleteAgentReviewIdentity(architectureArtifact, fingerprints);
   return resolveEffectiveArchitectureReviewStatus(stored, derived, fingerprints, hasCompleteIdentity);

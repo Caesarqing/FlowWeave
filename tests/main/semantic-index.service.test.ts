@@ -1,9 +1,9 @@
 import { generateProject } from "../../src/main/services/project-generation.service";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildSemanticIndex, moduleClusteringRelations, readSemanticIndex } from "../../src/main/services/semantic-index.service";
+import { buildSemanticIndex, moduleClusteringRelations, readSemanticIndex, SEMANTIC_INDEX_GENERATOR_VERSION } from "../../src/main/services/semantic-index.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
 import type { SemanticIndex, SemanticRelation } from "../../src/types";
 
@@ -17,6 +17,7 @@ describe("semantic-index.service", () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     await writeFile(manifestPath, JSON.stringify({ ...manifest, generatorVersion: "degraded-generator" }), "utf8");
     const app = first.index.files.find((file) => file.path === "app.js")!;
+    await mkdir(join(root, ".flowweave", "index", "files"), { recursive: true });
     await writeFile(join(root, ".flowweave", "index", "files", `${app.cacheKey}.json`), JSON.stringify({
       ...app, insight: { ...app.insight, imports: [], calls: [], symbols: [] }
     }), "utf8");
@@ -25,6 +26,33 @@ describe("semantic-index.service", () => {
     expect(second.index.relations).toContainEqual(expect.objectContaining({
       kind: "import", sourceFile: "app.js", targetFile: "service.js"
     }));
+  });
+
+  it("rebuilds cached TypeScript diagnostics after binding stages are added", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-binding-stage-cache-"));
+    await writeFile(join(root, "app.ts"), "import { absent } from './absent';\nabsent();\n", "utf8");
+    await scanSemantic(root);
+
+    const indexPath = join(root, ".flowweave", "index", "semantic-index.json");
+    const index = JSON.parse(await readFile(indexPath, "utf8")) as {
+      generatorVersion: string;
+      diagnostics: Array<Record<string, unknown>>;
+    };
+    index.generatorVersion = "5.0.7";
+    const unresolvedImport = index.diagnostics.find((diagnostic) => diagnostic.code === "unresolved-import");
+    if (!unresolvedImport) throw new Error("Expected persisted unresolved import diagnostic");
+    delete unresolvedImport.stage;
+    await writeFile(indexPath, JSON.stringify(index), "utf8");
+
+    const manifestPath = join(root, ".flowweave", "index", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { generatorVersion: string };
+    manifest.generatorVersion = "5.0.7";
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+
+    const refreshed = await scanSemantic(root);
+
+    expect(refreshed.index.generatorVersion).not.toBe("5.0.7");
+    expect(refreshed.index.diagnostics).toContainEqual(expect.objectContaining({ code: "unresolved-import", stage: "binding" }));
   });
 
   it("locates Python package dependencies without inventing calls or resolving ambiguous roots", async () => {
@@ -62,16 +90,37 @@ describe("semantic-index.service", () => {
     expect(selected.map((relation) => relation.id)).toEqual(["call-a", "call-z"]);
   });
 
+  it("records parse-error stage and rejects persisted errors without it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-diagnostic-stage-"));
+    await writeFile(join(root, "app.ts"), "export function run( {\n", "utf8");
+    await writeFile(join(root, "app.py"), "def run(:\n    pass\n", "utf8");
+
+    const built = await scanSemantic(root);
+    const errors = built.index.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.every((diagnostic) => diagnostic.stage === "parsing" && diagnostic.message.length > 0)).toBe(true);
+
+    const semanticIndexPath = join(root, ".flowweave", "index", "semantic-index.json");
+    const persisted = JSON.parse(await readFile(semanticIndexPath, "utf8")) as {
+      files: Array<{ diagnostics: Array<{ severity: string; stage?: string }> }>;
+    };
+    const persistedError = persisted.files.flatMap((file) => file.diagnostics).find((diagnostic) => diagnostic.severity === "error");
+    if (!persistedError) throw new Error("Expected a persisted parse diagnostic.");
+    delete persistedError.stage;
+    await writeFile(semanticIndexPath, JSON.stringify(persisted), "utf8");
+
+    await expect(readSemanticIndex(root)).resolves.toBeUndefined();
+  });
+
   it("persists a versioned semantic index and reuses unchanged files", async () => {
     const root = await mkdtemp(join(tmpdir(), "flowweave-semantic-index-"));
     await mkdir(join(root, "src"), { recursive: true });
-    await writeFile(join(root, "src", "api.ts"), 'import { service } from "./service";\nexport const api = () => service();\n', "utf8");
-    await writeFile(join(root, "src", "service.ts"), "export const service = () => fetch('/users');\n", "utf8");
+    await writeFile(join(root, "src", "api.ts"), 'import { service } from "./service";\nexport function invoke() {\n  service();\n  ghost();\n}\n', "utf8");
+    await writeFile(join(root, "src", "service.ts"), "export function service() {}\n", "utf8");
 
     const first = await scanSemantic(root);
     const cachePath = join(root, ".flowweave", "index", "files", `${first.index.files[0].cacheKey}.json`);
-    const cacheModifiedAt = (await stat(cachePath)).mtimeMs;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    const semanticIndexPath = join(root, ".flowweave", "index", "semantic-index.json");
     const second = await scanSemantic(root);
     const stored = await readSemanticIndex(root);
 
@@ -86,9 +135,105 @@ describe("semantic-index.service", () => {
         confidence: "confirmed"
       })
     ]));
-    expect((await stat(cachePath)).mtimeMs).toBeGreaterThan(cacheModifiedAt);
-    expect(JSON.parse(await readFile(cachePath, "utf8")).generation).toEqual(second.generation);
-    expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe("5.0.1");
+    expect(stored?.relations.find((relation) => relation.kind === "call" && relation.symbol === "service")).toMatchObject({
+      confidence: "confirmed",
+      bindingBasis: "typescript-checker",
+      targetRef: {
+        kind: "file",
+        filePath: "src/service.ts",
+        symbolId: expect.any(String),
+        declarationRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 29 } }
+      },
+      sourceRange: { start: { line: 3, column: 3 }, end: { line: 3, column: 12 } }
+    });
+    expect(stored?.relations.find((relation) => relation.kind === "call" && relation.symbol === "ghost")).toMatchObject({
+      confidence: "inferred",
+      bindingBasis: "typescript-checker",
+      targetRef: { kind: "unresolved", reason: expect.any(String), candidates: [] },
+      sourceRange: { start: { line: 4, column: 3 }, end: { line: 4, column: 10 } }
+    });
+    await expect(readFile(cachePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(stored?.files.every((file) => file.generation?.requestId === second.generation.requestId)).toBe(true);
+    expect(JSON.parse(await readFile(join(root, ".flowweave", "index", "manifest.json"), "utf8")).generatorVersion).toBe(SEMANTIC_INDEX_GENERATOR_VERSION);
+
+    const corrupted = JSON.parse(await readFile(semanticIndexPath, "utf8")) as { relations: Array<Record<string, unknown>> };
+    const corruptedCall = corrupted.relations.find((relation) => relation.kind === "call" && relation.symbol === "service");
+    if (!corruptedCall) throw new Error("Expected persisted source call relation");
+    delete corruptedCall.confidence;
+    await writeFile(semanticIndexPath, JSON.stringify(corrupted), "utf8");
+    await expect(readSemanticIndex(root)).resolves.toBeUndefined();
+
+    corruptedCall.confidence = "confirmed";
+    corruptedCall.targetRef = {
+      kind: "unresolved",
+      reason: "Multiple source declarations match the call.",
+      candidates: ["symbol-one", "symbol-two"]
+    };
+    corruptedCall.targetFile = "src/service.ts";
+    await writeFile(semanticIndexPath, JSON.stringify(corrupted), "utf8");
+    await expect(readSemanticIndex(root)).resolves.toBeUndefined();
+
+    const rebuilt = await scanSemantic(root);
+    const restored = await readSemanticIndex(root);
+    expect(rebuilt.index.relations.find((relation) => relation.kind === "call" && relation.symbol === "service")).toMatchObject({
+      confidence: "confirmed",
+      bindingBasis: "typescript-checker",
+      targetRef: { kind: "file", filePath: "src/service.ts" },
+      sourceRange: { start: { line: 3, column: 3 }, end: { line: 3, column: 12 } }
+    });
+    expect(restored?.relations.find((relation) => relation.kind === "call" && relation.symbol === "service")).toMatchObject({
+      confidence: "confirmed",
+      targetRef: { kind: "file", filePath: "src/service.ts" },
+      sourceRange: { start: { line: 3, column: 3 }, end: { line: 3, column: 12 } }
+    });
+  });
+
+  it("reports parser coverage, offline execution, and known source-binding limits", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-analysis-capabilities-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "app.ts"), "export const load = () => 1;\n", "utf8");
+    await writeFile(join(root, "src", "app.py"), "def load():\n    return 1\n", "utf8");
+    await writeFile(join(root, "src", "App.java"), "package fixture; class App { int load() { return 1; } }\n", "utf8");
+    await writeFile(join(root, "src", "app.go"), "package fixture\nfunc load() int { return 1 }\n", "utf8");
+    await writeFile(join(root, "src", "app.rs"), "fn load() -> i32 { 1 }\n", "utf8");
+
+    const project = await scanProject(root);
+    const { index } = await buildSemanticIndex(project);
+
+    expect(index.analysisCapabilities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        language: "TypeScript",
+        parserId: "typescript-program",
+        status: "available",
+        sourceFiles: 1,
+        failedFiles: 0,
+        unsupportedFiles: 0,
+        offline: true
+      }),
+      expect.objectContaining({
+        language: "Python",
+        parserId: "tree-sitter-python-wasm",
+        status: "available",
+        sourceFiles: 1,
+        offline: true
+      }),
+      expect.objectContaining({
+        language: "Java",
+        parserId: "tree-sitter-java-wasm",
+        limitations: expect.arrayContaining([
+          expect.objectContaining({ code: "classpath-not-loaded", count: 1 })
+        ])
+      }),
+      expect.objectContaining({
+        language: "Rust",
+        parserId: "lightweight-language",
+        status: "unsupported",
+        unsupportedFiles: 1,
+        limitations: expect.arrayContaining([
+          expect.objectContaining({ code: "unsupported-semantic-language", count: 1 })
+        ])
+      })
+    ]));
   });
 
   it("keeps cold caches isolated by project and preserves graph counts across warm reuse", async () => {

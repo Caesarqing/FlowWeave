@@ -9,6 +9,7 @@ import {
   architectureMapToResult,
   buildArchitectureInputFingerprint,
   enhanceLocalArchitecture,
+  loadAnalysisGeneration,
   readArchitectureMap
 } from "../../src/main/services/architecture-analysis.service";
 import { configureAgentRegistry, saveCustomAgent } from "../../src/main/services/agent-registry.service";
@@ -16,7 +17,6 @@ import { adoptArtifactRun } from "../../src/main/services/artifact-run-adoption.
 import { writeArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
 import { listRunSummaries, readRunArtifact } from "../../src/main/services/run-log.service";
 import { registerProject } from "../../src/main/services/project-registry.service";
-import { scanProject } from "../../src/main/services/project-scanner.service";
 import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { generateProject } from "../../src/main/services/project-generation.service";
 import {
@@ -24,11 +24,21 @@ import {
   createArchitectureReviewPromptInput
 } from "../../src/main/services/architecture-review-prompt.service";
 import { FLOWWEAVE_DIR } from "../../src/main/storage/flowweave-paths";
+import { readProjectProtocolSnapshot } from "../../src/main/storage/flowweave-store";
+import { writeEmptyProtocolFixture } from "./protocol.fixture";
 import type { ArchitectureModule, ArchitectureReviewResponse, CodeflowProject, SemanticRelation } from "../../src/types";
 import { createNodeCliFixture } from "./test-cli-fixture";
 import { projectGraphForView } from "../../src/utils/graph-view-projection";
 
 describe("architecture-analysis.service", () => {
+  it("requires a committed static generation instead of rescanning on the Agent path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-agent-no-rescan-"));
+
+    await expect(loadAnalysisGeneration(projectFixture(root))).rejects.toThrow("Static project analysis has not completed");
+    await expect(readFile(join(root, FLOWWEAVE_DIR, "generation-request.json"), "utf8"))
+      .rejects.toHaveProperty("code", "ENOENT");
+  });
+
   it("marks only the local analysis result as a static presentation", () => {
     const localResult = architectureMapToResult(architectureFixtureMap("local"), { state: "reviewing" });
     const reviewedResult = architectureMapToResult(architectureFixtureMap("agent"), { state: "reviewed" });
@@ -125,10 +135,11 @@ describe("architecture-analysis.service", () => {
     const relations: SemanticRelation[] = [
       semanticRelation("import", "src/a.ts", "src/b.ts", "import", "confirmed"),
       semanticRelation("call", "src/b.ts", "src/c.ts", "call", "inferred"),
+      semanticRelation("call-confirmed", "src/b.ts", "src/c.ts", "call", "confirmed"),
       semanticRelation("http", "src/a.ts", "src/d.ts", "http", "confirmed"),
       semanticRelation("event", "src/c.ts", "src/d.ts", "event", "confirmed"),
-      semanticRelation("process", "src/c.ts", "src/a.ts", "process", "confirmed"),
-      semanticRelation("database", "src/d.ts", "src/b.ts", "database", "confirmed"),
+      { ...semanticRelation("process", "src/c.ts", "src/a.ts", "process", "confirmed"), operation: "invoke" },
+      { ...semanticRelation("database", "src/d.ts", "src/b.ts", "database", "confirmed"), operation: "write" },
       { ...semanticRelation("external-http", "src/a.ts", "https://service.test", "http", "inferred"), targetFile: undefined }
     ];
     const files = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"].map((path) => ({
@@ -150,16 +161,24 @@ describe("architecture-analysis.service", () => {
 
     expect(relationships.map(({ source, target, relation, confidence }) => ({ source, target, relation, confidence }))).toEqual([
       { source: "module-a", target: "module-b", relation: "depends_on", confidence: "confirmed" },
-      { source: "module-a", target: "module-d", relation: "calls", confidence: "confirmed" },
+      { source: "module-a", target: "module-d", relation: "http_contract", confidence: "confirmed" },
+      { source: "module-b", target: "module-c", relation: "calls", confidence: "confirmed" },
       { source: "module-b", target: "module-c", relation: "calls", confidence: "inferred" },
-      { source: "module-d", target: "module-b", relation: "reads_writes", confidence: "confirmed" }
+      { source: "module-c", target: "module-a", relation: "process_invocation", confidence: "confirmed" },
+      { source: "module-d", target: "module-b", relation: "writes", confidence: "confirmed" }
     ]);
     expect(relationships.find((relationship) => relationship.source === "module-a" && relationship.target === "module-b")?.evidence)
       .toHaveLength(1);
+    expect(relationships.filter((relationship) => relationship.source === "module-b" && relationship.target === "module-c")
+      .map((relationship) => ({ confidence: relationship.confidence, relationIds: relationship.sourceRelationIds })))
+      .toEqual([
+        { confidence: "confirmed", relationIds: ["call-confirmed"] },
+        { confidence: "inferred", relationIds: ["call"] }
+      ]);
     expect(architectureMapToGraph({
       ...architectureFixtureMap("local"),
       relationships
-    }).edges.find((edge) => edge.source === "module-b" && edge.target === "module-c")?.confidence)
+    }).edges.find((edge) => edge.source === "module-b" && edge.target === "module-c" && edge.confidence === "inferred")?.confidence)
       .toBe("inferred");
     const projectionGraph = architectureMapToGraph({
       ...architectureFixtureMap("local"),
@@ -171,8 +190,8 @@ describe("architecture-analysis.service", () => {
     const projected = projectGraphForView(
       projectionGraph.nodes,
       projectionGraph.edges,
-      "dependency",
-      { includeInferredDependencyOverlay: false }
+      "execution",
+      { additionalRelations: ["calls"] }
     );
     expect(projected.edges.find((edge) => edge.source === "user-api" && edge.target === "user-service")?.confidence)
       .toBe("inferred");
@@ -187,9 +206,7 @@ describe("architecture-analysis.service", () => {
       await writeFile(join(modulePath, "index.ts"), `export const feature${index} = () => true;\n`, "utf8");
     }));
 
-    const project = await scanProject(root);
-    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: project.scanFingerprint }), "utf8");
+    const project = await generateCommittedProject(root);
     const result = await analyzeArchitecture(project, "mock");
 
     expect(result.outcome).toBe("generated");
@@ -206,9 +223,7 @@ describe("architecture-analysis.service", () => {
       await writeFile(join(modulePath, "index.ts"), `export const feature${index} = () => true;\n`, "utf8");
     }));
 
-    const project = await scanProject(root);
-    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: project.scanFingerprint }), "utf8");
+    const project = await generateCommittedProject(root);
     const projectId = await registerProject(root);
     const events: import("../../src/types").ArchitectureReviewEvent[] = [];
 
@@ -225,15 +240,13 @@ describe("architecture-analysis.service", () => {
       error: { code: "agent-failed", message: expect.stringContaining("ARCHITECTURE_PROMPT_BUDGET_EXCEEDED") }
     });
     expect((await readArchitectureMap(root))?.source).toBe("local");
-    const local = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")) as import("../../src/types").ArchitectureMap;
+    const local = (await readProjectProtocolSnapshot(root))?.localArchitecture;
     expect(local.modules).toHaveLength(240);
   });
 
   it("groups files by functional responsibility instead of the top-level source scope", async () => {
     const root = await createModuleClusteringFiles();
-    const project = await scanProject(root);
-    await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-    await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: project.scanFingerprint }), "utf8");
+    const project = await generateCommittedProject(root);
 
     const result = await analyzeArchitecture(project, "mock");
 
@@ -267,7 +280,7 @@ describe("architecture-analysis.service", () => {
 
   it("persists validated mock architecture artifacts", async () => {
     const root = await createFixtureFiles();
-    const project = projectFixture(root);
+    const project = await generateCommittedProject(root);
 
     const result = await analyzeArchitecture(project, "mock");
     await waitForArchitectureSource(root, "agent");
@@ -291,6 +304,7 @@ describe("architecture-analysis.service", () => {
 
   it("reports and preserves a corrupted architecture artifact", async () => {
     const root = await createFixtureFiles();
+    await writeEmptyProtocolFixture(root, "scan-test");
     await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
     const artifactPath = join(root, FLOWWEAVE_DIR, "architecture-map.json");
     await writeFile(artifactPath, "{invalid-json", "utf8");
@@ -338,7 +352,7 @@ describe("architecture-analysis.service", () => {
       args: [scriptPath]
     });
 
-    const result = await analyzeArchitecture(projectFixture(root), agent.id);
+    const result = await analyzeArchitecture(await generateCommittedProject(root), agent.id);
     const summaries = await listRunSummaries(root);
     const stored = await readArchitectureMap(root);
 
@@ -358,7 +372,7 @@ describe("architecture-analysis.service", () => {
       scanFingerprint: result.architectureMap.metadata?.scanFingerprint,
       inputFingerprint: result.review.inputFingerprint
     });
-    expect(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")).toContain(result.review.inputFingerprint);
+    expect((await readProjectProtocolSnapshot(root))?.localArchitecture.metadata?.inputFingerprint).toBe(result.review.inputFingerprint);
     expect(stored?.metadata).toMatchObject({
       source: "local",
       inputFingerprint: result.architectureMap.metadata?.inputFingerprint
@@ -417,7 +431,7 @@ describe("architecture-analysis.service", () => {
     const projectId = await registerProject(root);
     const events: import("../../src/types").ArchitectureReviewEvent[] = [];
 
-    const result = await analyzeArchitecture(projectFixture(root), agent.id, {
+    const result = await analyzeArchitecture(await generateCommittedProject(root), agent.id, {
       projectId,
       onArchitectureReview: (event) => events.push(event)
     });
@@ -605,7 +619,7 @@ describe("architecture-analysis.service", () => {
     const projectId = await registerProject(root);
     const events: import("../../src/types").ArchitectureReviewEvent[] = [];
 
-    const result = await analyzeArchitecture(projectFixture(root), agent.id, {
+    const result = await analyzeArchitecture(await generateCommittedProject(root), agent.id, {
       projectId,
       onArchitectureReview: (event) => events.push(event)
     });
@@ -632,7 +646,7 @@ describe("architecture-analysis.service", () => {
     const originalPath = process.env.PATH;
     const binRoot = await mkdtemp(join(tmpdir(), "flowweave-claude-failure-"));
     const root = await createFixtureFiles();
-    const trusted = await analyzeArchitecture(projectFixture(root), "mock");
+    const trusted = await analyzeArchitecture(await generateCommittedProject(root), "mock");
     if (trusted.outcome !== "generated") throw new Error("Expected trusted architecture.");
     await createNodeCliFixture(binRoot, "claude", [
       "if (process.argv.includes('--version')) { console.log('claude-test 1.0'); process.exit(0); }",
@@ -661,7 +675,7 @@ describe("architecture-analysis.service", () => {
       expect(result.warning).toBeUndefined();
       expect(stored?.source).toBe("local");
       expect(stored?.metadata?.inputFingerprint).toBe(result.architectureMap.metadata?.inputFingerprint);
-      const baseline = JSON.parse(await readFile(join(root, FLOWWEAVE_DIR, "architecture-local.json"), "utf8")) as import("../../src/types").ArchitectureMap;
+      const baseline = (await readProjectProtocolSnapshot(root))?.localArchitecture;
       expect(baseline.metadata?.inputFingerprint).toBe(result.architectureMap.metadata?.inputFingerprint);
     } finally {
       process.env.PATH = originalPath;
@@ -697,8 +711,7 @@ async function createFixtureFiles() {
   await mkdir(join(root, "src/service"), { recursive: true });
   await writeFile(join(root, "src/api/user.controller.ts"), 'import { UserService } from "../service/user.service";\nexport function loadUser() { return fetch("/users"); }\n', "utf8");
   await writeFile(join(root, "src/service/user.service.ts"), "export class UserService { load() { return true; } }\n", "utf8");
-  await mkdir(join(root, FLOWWEAVE_DIR), { recursive: true });
-  await writeFile(join(root, FLOWWEAVE_DIR, "project.json"), JSON.stringify({ scanFingerprint: "scan-test" }), "utf8");
+  await generateCommittedProject(root);
   return root;
 }
 
@@ -797,6 +810,12 @@ function projectFixture(rootPath: string): CodeflowProject {
       }
     ]
   };
+}
+
+async function generateCommittedProject(rootPath: string): Promise<CodeflowProject> {
+  const result = await generateProject(rootPath, {});
+  if (result.status !== "committed") throw new Error("Expected a committed static generation.");
+  return result.project;
 }
 
 function architectureFixtureMap(source: "agent" | "local"): import("../../src/types").ArchitectureMap {

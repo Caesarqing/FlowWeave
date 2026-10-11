@@ -8,10 +8,9 @@ import type {
   NormalizedRelation
 } from "../types";
 
-export function normalizeModificationSnapshot(
-  canvas: CodeflowCanvas | (Omit<CodeflowCanvas, "version"> & { version: 5 }),
-  sequenceInstruction: string
-): ModificationSnapshot {
+export const GRAPH_MODEL_VERSION = 7;
+
+export function normalizeModificationSnapshot(canvas: CodeflowCanvas, sequenceInstruction: string): ModificationSnapshot {
   return {
     generation: canvas.generation,
     scanFingerprint: canvas.scanFingerprint,
@@ -62,9 +61,14 @@ export function migrateModificationBaseline(
   current: ModificationSnapshot,
   generated: ModificationSnapshot | undefined
 ): ModificationBaseline {
+  const previousOverlappingIds = modulesWithOverlappingFiles(baseline.canvas.modules);
+  const currentOverlappingIds = modulesWithOverlappingFiles(current.canvas.modules);
   const matches = new Map(baseline.canvas.modules.map((previous) => [previous.id, current.canvas.modules.filter((module) => {
     if (previous.resourceId || module.resourceId) return previous.resourceId !== undefined && previous.resourceId === module.resourceId;
-    return previous.files.length > 0 && module.files.some((file) => previous.files.includes(file)) || previous.id === module.id && previous.files.length === 0;
+    return !previousOverlappingIds.has(previous.id) && !currentOverlappingIds.has(module.id) &&
+      previous.files.length > 0 && module.files.length > 0 &&
+      JSON.stringify([...previous.files].sort()) === JSON.stringify([...module.files].sort()) ||
+      previous.id === module.id && previous.files.length === 0 && module.files.length === 0;
   })]));
   const matchCounts = new Map<string, number>();
   for (const candidates of matches.values()) {
@@ -114,7 +118,7 @@ export function migrateModificationBaseline(
   }
   return {
     ...baseline,
-    graphModelVersion: 6,
+    graphModelVersion: GRAPH_MODEL_VERSION,
     scanFingerprint: current.scanFingerprint,
     canvas: { modules: [...migratedById.values()].sort(compareById), relations: [...relationsById.values()].sort(compareById) },
     moduleGuidanceAcknowledgements: Object.fromEntries(Object.entries(baseline.moduleGuidanceAcknowledgements ?? {}).map(([id, guidance]) => [idMap.get(id) ?? id, guidance]))
@@ -281,4 +285,13 @@ function changedFields<T extends Record<string, unknown>>(
 
 function compareById(left: { id: string }, right: { id: string }): number {
   return left.id.localeCompare(right.id);
+}
+
+function modulesWithOverlappingFiles(modules: readonly NormalizedModule[]): Set<string> {
+  const modulesByFile = new Map<string, string[]>();
+  for (const module of modules) {
+    if (module.resourceId) continue;
+    for (const file of module.files) modulesByFile.set(file, [...(modulesByFile.get(file) ?? []), module.id]);
+  }
+  return new Set([...modulesByFile.values()].flatMap((ids) => ids.length > 1 ? ids : []));
 }

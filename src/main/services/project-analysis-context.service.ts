@@ -8,6 +8,12 @@ import type { AnalysisLanguage, AnalysisScope, PackageExport, ProjectAnalysisCon
 const require = createRequire(import.meta.url);
 const CONFIGURATION_NAME = /^(?:package\.json|(?:tsconfig|jsconfig)(?:\.[\w-]+)?\.json|pnpm-workspace\.yaml|pyproject\.toml|setup\.(?:py|cfg)|pom\.xml|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?|go\.(?:mod|work))$/;
 
+/** Nested test-fixture configs are input data; explicitly referenced configs still undergo compiler validation. */
+export function isTypeScriptProjectConfiguration(path: string): boolean {
+  return /(^|\/)(tsconfig|jsconfig)(?:\.[^/]+)?\.json$/.test(path) &&
+    !/(^|\/)(test|tests|__tests__)\/fixtures\//.test(path);
+}
+
 export class AnalysisConfigurationError extends Error {
   constructor(path: string, detail: string, cause: unknown) {
     super(`Static analysis configuration is invalid: ${path}: ${detail}`, { cause });
@@ -36,13 +42,28 @@ export async function discoverProjectAnalysisContext(rootPath: string, projectPa
   const ts = require("typescript") as typeof TypeScript;
   const compilerConfigurations = new Map<string, TypeScript.ParsedCommandLine>();
   for (const path of configurationPaths.filter((candidate) => /(?:tsconfig|jsconfig)(?:\.[\w-]+)?\.json$/.test(posix.basename(candidate)))) {
+    if (!isTypeScriptProjectConfiguration(path)) {
+      diagnostics.push({ code: "typescript-fixture-configuration", severity: "warning", filePath: path,
+        message: "TypeScript test-fixture configuration is retained as input data and is not an active compiler configuration." });
+      continue;
+    }
     const result = ts.getParsedCommandLineOfConfigFile(join(rootPath, path), {}, {
       ...(snapshot?.system ?? ts.sys),
       onUnRecoverableConfigFileDiagnostic: (error) => { throw compilerConfigurationError(ts, path, [error]); }
     });
     if (!result) throw new AnalysisConfigurationError(path, "TypeScript configuration could not be read", undefined);
-    const errors = result.errors.filter((error) => error.code !== 18003 && error.code !== 18002);
+    const errors = result.errors.filter((error) => error.code !== 18003 && error.code !== 18002 && !isUnknownCompilerOption(error));
     if (errors.length > 0) throw compilerConfigurationError(ts, path, errors);
+    for (const error of result.errors.filter(isUnknownCompilerOption)) {
+      const start = error.file && error.start !== undefined ? error.file.getLineAndCharacterOfPosition(error.start) : undefined;
+      const end = error.file && error.start !== undefined ? error.file.getLineAndCharacterOfPosition(error.start + (error.length ?? 0)) : undefined;
+      diagnostics.push({
+        code: `typescript-${error.code}`, severity: "warning", stage: "binding",
+        filePath: error.file ? relative(rootPath, error.file.fileName).split(sep).join("/") : path,
+        message: ts.flattenDiagnosticMessageText(error.messageText, "\n"),
+        range: start && end ? { start: { line: start.line + 1, column: start.character + 1 }, end: { line: end.line + 1, column: end.character + 1 } } : undefined
+      });
+    }
     compilerConfigurations.set(path, result);
     const source = result.options.configFile;
     const inheritedPaths = source && typeof source === "object" && "extendedSourceFiles" in source ? stringArray(source.extendedSourceFiles) : [];
@@ -122,6 +143,7 @@ function parseYaml(path: string, content: string): Record<string, unknown> {
     if (!line.trim()) continue;
     if (!/^\s/.test(line)) {
       inPackages = /^packages\s*:\s*(?:#.*)?$/.test(line);
+      if (/^packages\s*:/.test(line) && !inPackages) throw new AnalysisConfigurationError(path, "workspace packages must be declared as a string list", undefined);
       if (inPackages) {
         if (foundPackages) throw new AnalysisConfigurationError(path, "duplicate packages key", undefined);
         foundPackages = true;
@@ -134,7 +156,6 @@ function parseYaml(path: string, content: string): Record<string, unknown> {
     try { packages.push(parseYamlString(item)); }
     catch (error) { throw new AnalysisConfigurationError(path, `packages entry at line ${index + 1}: ${errorMessage(error)}`, error); }
   }
-  if (!foundPackages) throw new AnalysisConfigurationError(path, "workspace packages must be declared as a string list", undefined);
   return { packages };
 }
 
@@ -183,7 +204,7 @@ function parseStaticToml(content: string): Record<string, unknown> {
     if (arrayHeader) { table = ensureTomlArrayTable(root, parseTomlKey(arrayHeader[1])); continue; }
     const header = line.match(/^\[([^\]]+)\]$/);
     if (header) { table = parseTomlKey(header[1]); ensureTomlTable(root, table); continue; }
-    if (line.startsWith("[") || line.endsWith("]")) throw new TypeError(`invalid table at line ${index + 1}`);
+    if (line.startsWith("[")) throw new TypeError(`invalid table at line ${index + 1}`);
     const separator = findTomlSeparator(line, "=");
     if (separator < 1) throw new TypeError(`expected key-value pair at line ${index + 1}`);
     const key = parseTomlKey(line.slice(0, separator).trim());
@@ -285,7 +306,11 @@ function parseTomlValue(value: string): unknown {
   if (text.startsWith("[")) {
     if (!text.endsWith("]")) throw new TypeError(`invalid TOML array: ${text}`);
     const body = text.slice(1, -1).trim();
-    return body ? splitTomlValues(body).filter(Boolean).map(parseTomlValue) : [];
+    if (!body) return [];
+    const entries = splitTomlValues(body);
+    if (entries.at(-1) === "") entries.pop();
+    if (entries.some((entry) => !entry)) throw new TypeError(`invalid TOML array: ${text}`);
+    return entries.map(parseTomlValue);
   }
   if (text.startsWith("{")) {
     if (!text.endsWith("}")) throw new TypeError(`invalid TOML inline table: ${text}`);
@@ -358,12 +383,12 @@ function parseStaticXml(content: string): Record<string, unknown> {
       stack.pop();
       continue;
     }
-    const opening = token.match(/^<([\w:.-]+)(?:\s[^>]*)?\s*(\/?)>$/);
+    const opening = token.match(/^<([\w:.-]+)/);
     if (!opening) throw new TypeError(`unsupported XML token ${token.slice(0, 80)}`);
     const node: XmlNode = { name: localXmlName(opening[1]), text: "", children: new Map() };
     const parent = stack.at(-1)!;
     parent.children.set(node.name, [...(parent.children.get(node.name) ?? []), node]);
-    if (!opening[2]) stack.push(node);
+    if (!token.endsWith("/>")) stack.push(node);
   }
   if (content.slice(cursor).includes("<")) throw new TypeError("malformed XML tail");
   stack.at(-1)!.text += decodeXmlText(content.slice(cursor));
@@ -449,6 +474,11 @@ function compilerConfigurationError(ts: typeof TypeScript, path: string, errors:
   return new AnalysisConfigurationError(path, errors.map((error) => ts.flattenDiagnosticMessageText(error.messageText, "\n")).join("; "), errors);
 }
 
+/** Newer or misspelled compiler options are reported without blocking static source bindings. */
+export function isUnknownCompilerOption(error: TypeScript.Diagnostic): boolean {
+  return error.code === 5023 || error.code === 5025;
+}
+
 function preferredCompilerConfiguration(root: string, configurations: Map<string, TypeScript.ParsedCommandLine>): string | undefined {
   const local = [...configurations.keys()].filter((path) => cleanRoot(posix.dirname(path)) === root);
   return local.find((path) => posix.basename(path) === "tsconfig.json") ?? local.find((path) => posix.basename(path) === "jsconfig.json") ?? local[0];
@@ -466,7 +496,8 @@ function languageRoots(language: AnalysisLanguage, configurations: string[], pat
     java: /^(?:pom\.xml|build\.gradle(?:\.kts)?)$/,
     go: /^go\.mod$/
   };
-  const roots = configurations.filter((path) => patterns[language].test(posix.basename(path))).map((path) => cleanRoot(posix.dirname(path)));
+  const roots = configurations.filter((path) => patterns[language].test(posix.basename(path)) &&
+    (language !== "typescript" || posix.basename(path) === "package.json" || isTypeScriptProjectConfiguration(path))).map((path) => cleanRoot(posix.dirname(path)));
   if (language === "python" && roots.length === 0) {
     for (const path of paths.filter((candidate) => candidate.endsWith("/__init__.py"))) {
       const parent = cleanRoot(posix.dirname(posix.dirname(path)));

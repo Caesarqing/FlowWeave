@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "T2-D03-current-scope-exploratory-2026-10-06",
+  "recordedAt": "2026-10-06T11:54:01.934Z",
+  "status": "FlowWeave project-config parsing now succeeds on the registered development scope; dependency-cruiser does not resolve Python imports; no quality/adoption decision",
+  "boundary": {
+    "sampleId": "D03",
+    "split": "development",
+    "sourceCount": 24,
+    "configurationCount": 1,
+    "sourceSetExact": true,
+    "noProjectScriptsBuildsOrDependencyInstall": true,
+    "noNetworkOrSourceMutation": true,
+    "noHoldoutOrHumanLabelsAccessed": true
+  },
+  "inputs": {
+    "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+    "checkoutTreeOid": "d46b1a2a2cc4219b0ad5060ab618e9f5ae635680",
+    "manifestPath": "docs/evidence/static-graph-generalization/D03-inventory.jsonl",
+    "manifestSha256": "fd3515b7f6571ee9b62c3797f3ffe5d1796bfdbbb202a2713a556595b7539138",
+    "scopeSha256": "ce6a921c6a770fc6fe8d544fc981179d19801e462367e3a943c41f87275498ba",
+    "sourceOnlySha256": "7be1926cb57b1d5f8626961814fa68a7bb0a505a17a358fb05731fd3ce69dce7",
+    "analyzedProjectPathCount": 25
+  },
+  "flowWeave": {
+    "generatorVersion": "5.0.8",
+    "scanElapsedMs": 28.3,
+    "semanticAnalysisElapsedMs": 305.91,
+    "semanticFiles": 24,
+    "relations": {
+      "import:confirmed": 289,
+      "import:inferred": 77,
+      "call:confirmed": 647,
+      "call:inferred": 568,
+      "inherit:confirmed": 35,
+      "inherit:inferred": 15,
+      "filesystem:inferred": 9
+    },
+    "diagnostics": {
+      "warning:unresolved-import": 77,
+      "warning:unresolved-call": 567,
+      "warning:unknown-operation-target": 9,
+      "warning:ambiguous-call": 16,
+      "warning:resource-target-unresolved": 9
+    },
+    "analysisCapabilities": [
+      {
+        "language": "Python",
+        "scopeId": "python:.",
+        "status": "available",
+        "sourceFiles": 24,
+        "parsedFiles": 24,
+        "failedFiles": 0,
+        "unsupportedFiles": 0
+      }
+    ],
+    "rawOutput": {
+      "path": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-d03-current-scope-2026-10-06/flowweave-semantic-index.json",
+      "sha256": "830883f0ea153061c6e7fede7e57e43ef3baea3d0d1b6e48535cb0f27912b1d5"
+    }
+  },
+  "dependencyCruiser": {
+    "version": "18.5.0",
+    "args": [
+      "--no-config",
+      "--output-type",
+      "json",
+      "<24 registered Python source paths>"
+    ],
+    "elapsedMs": 320.16,
+    "exitCode": 0,
+    "counts": {
+      "modules": 25,
+      "dependencies": 24,
+      "unresolved": 24,
+      "internalResolved": 0,
+      "externalOrUntracked": 0
+    },
+    "usablePythonImportOutput": false,
+    "rawOutput": {
+      "path": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/t2-d03-current-scope-2026-10-06/dependency-cruiser-output.json",
+      "sha256": "c18a5c216c79991c245834a22ea3d758db6d50a21c40c41998b239eba5d6354f"
+    }
+  },
+  "decision": "This fixes an analyzer configuration blocker and records tool capability only. Human-labeled Python dynamic-dispatch quality comparison remains pending."
+}

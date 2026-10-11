@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { countCanvasModules } from '../../src/components/CanvasWorkspace';
 import { filterCanvasNodes, getCanvasFilterResult } from '../../src/utils/canvas-filters';
 import type { GraphNode } from '../../src/types';
 import { createFlowNode, decorateFlowGraph, graphEdgeFromFlow, projectCollapsedFlowGraph } from '../../src/utils/graph-converters';
 
 describe('canvas filters', () => {
+  it('counts visible modules without counting resources or collapsed group cards', () => {
+    const module = createFlowNode(node('billing-api', ['src/billing/api.ts']));
+    const resource = createFlowNode({ ...node('external-api', ['https://example.test']), resource: true });
+    const group = { ...module, data: { ...module.data, syntheticKind: 'group' as const } };
+
+    expect(countCanvasModules([module, resource, group])).toBe(1);
+  });
+
   it('combines role, runtime tags, and domain filters with explanatory zero results', () => {
     const nodes = [
       createFlowNode({ ...node('account-web', ['src/features/account/view.tsx', 'server/account.py']), classification: {
@@ -32,12 +41,12 @@ describe('canvas filters', () => {
       flowEdge('service-ledger', 'billing-service', 'ledger', 'reads_writes')
     ];
 
-    const projected = projectCollapsedFlowGraph(nodes, edges, 'domain', ['domain:billing']);
+    const projected = projectCollapsedFlowGraph(nodes, edges, 'execution', ['area:billing']);
 
-    expect(projected.nodes.map((item) => item.id)).toEqual(['ledger', 'group:domain:billing']);
+    expect(projected.nodes.map((item) => item.id)).toEqual(['ledger', 'group:area:billing']);
     expect(projected.nodes[1].data).toMatchObject({ syntheticKind: 'group', memberNodeIds: ['billing-api', 'billing-service'] });
     expect(projected.edges).toHaveLength(1);
-    expect(projected.edges[0]).toMatchObject({ source: 'group:domain:billing', target: 'ledger' });
+    expect(projected.edges[0]).toMatchObject({ source: 'group:area:billing', target: 'ledger' });
     expect(projected.edges[0].data?.aggregatedEdgeIds).toEqual(['api-ledger', 'service-ledger']);
   });
 
@@ -49,7 +58,7 @@ describe('canvas filters', () => {
     ];
     const decorated = decorateFlowGraph(nodes, [flowEdge('service-ledger', 'billing-service', 'ledger', 'reads_writes')]);
 
-    const projected = projectCollapsedFlowGraph(decorated.nodes, decorated.edges, 'domain', ['domain:billing']);
+    const projected = projectCollapsedFlowGraph(decorated.nodes, decorated.edges, 'execution', ['area:billing']);
 
     expect(projected.edges[0]).not.toHaveProperty('sourceHandle');
     expect(projected.edges[0]).not.toHaveProperty('targetHandle');
@@ -61,7 +70,7 @@ describe('canvas filters', () => {
     const edges = [flowEdge('one-two', 'one', 'two', 'calls')];
     const original = structuredClone(edges);
 
-    const projected = projectCollapsedFlowGraph(nodes, edges, 'architecture', []);
+    const projected = projectCollapsedFlowGraph(nodes, edges, 'execution', []);
 
     expect(projected.edges).toEqual(edges);
     expect(edges).toEqual(original);

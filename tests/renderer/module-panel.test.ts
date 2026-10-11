@@ -91,8 +91,7 @@ describe("module panel display data", () => {
       connectedExecutableModuleCount: 1,
       isolatedModuleIds: ["orphan"],
       unresolvedEventCount: 1,
-      hiddenDependencyEdgeCount: 2,
-      inferredOverlayEdgeCount: 0
+      hiddenDependencyEdgeCount: 2
     })).toEqual({ percent: 25, hasLimitedEvidence: true });
   });
 });

@@ -1,6 +1,4 @@
 import "@xyflow/react/dist/style.css";
-import { ConnectionPanel } from "./components/ConnectionPanel";
-import { ModulePanel } from "./components/ModulePanel";
 import { ProjectExplorer } from "./components/ProjectExplorer";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -9,18 +7,22 @@ import { useAppController } from "./hooks/useAppController";
 import { isArchitectureUpdateDisabled } from "./hooks/useProjectActions";
 import { useProjectWorkspaceTabs } from "./hooks/useProjectWorkspaceTabs";
 import { usePreferencesStore } from "./stores/preferences.store";
-import { lazy, Suspense, useEffect } from "react";
+import { useProjectStore } from "./stores/project.store";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { cn } from "./utils/classnames";
 import { BrandLogo } from "./components/BrandLogo";
 import { useI18n } from "./utils/i18n";
 import { OnboardingDialog } from "./components/OnboardingDialog";
 import { ErrorCenter } from "./components/ErrorCenter";
 import { WorkspaceLayout } from "./components/WorkspaceLayout";
+import { CanvasProfilerBoundary } from "./components/CanvasProfilerBoundary";
 import { Button } from "./components/Button";
 import { ProjectTabs } from "./components/ProjectTabs";
 import { BrainCircuit, Link2, Plus } from "lucide-react";
 
 const CanvasWorkspace = lazy(() => import("./components/CanvasWorkspace").then((module) => ({ default: module.CanvasWorkspace })));
+const ConnectionPanel = lazy(() => import("./components/ConnectionPanel").then((module) => ({ default: module.ConnectionPanel })));
+const ModulePanel = lazy(() => import("./components/ModulePanel").then((module) => ({ default: module.ModulePanel })));
 const StructureWorkspace = lazy(() => import("./components/StructureWorkspace").then((module) => ({ default: module.StructureWorkspace })));
 const DocumentWorkspace = lazy(() => import("./components/DocumentWorkspace").then((module) => ({ default: module.DocumentWorkspace })));
 const GitReviewWorkspace = lazy(() => import("./components/GitReviewWorkspace").then((module) => ({ default: module.GitReviewWorkspace })));
@@ -78,16 +80,42 @@ function DesktopApp() {
     return <main className="workspace-page" aria-busy="true" />;
   }
 
-  return <WorkspaceApp key={workspace.activeProjectId ?? "home"} workspace={workspace} />;
+  return <WorkspaceApp key={workspace.workspaceInstanceKey} workspace={workspace} />;
 }
 
 function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWorkspaceTabs> }) {
+  const isCanvasTransitioning = useProjectStore((state) => state.isCanvasTransitioning);
+  const closeState = useRef<"idle" | "saving" | "saved">("idle");
   const app = useAppController({
     onProjectOpenStarted: workspace.handleProjectOpenStarted,
     onProjectOpened: workspace.handleProjectOpened,
+    onProjectAnalysisFinished: workspace.handleProjectAnalysisFinished,
     restoreProjectId: workspace.restoreProjectId
   });
   const { t } = useI18n();
+  useEffect(() => {
+    workspace.setCanvasFlush(app.flushCanvas);
+  }, [app.flushCanvas, workspace]);
+  useEffect(() => {
+    function saveBeforeClose(event: BeforeUnloadEvent) {
+      if (closeState.current === "saved") return;
+      event.preventDefault();
+      if (closeState.current === "saving") return;
+      closeState.current = "saving";
+      useProjectStore.getState().setIsCanvasTransitioning(true);
+      void app.flushCanvas().then(() => {
+        closeState.current = "saved";
+        window.close();
+      }).catch((error: unknown) => {
+        closeState.current = "idle";
+        useProjectStore.getState().setIsCanvasTransitioning(false);
+        const message = error instanceof Error ? error.message : String(error);
+        window.alert(t("canvas.saveFailed", { error: message }));
+      });
+    }
+    window.addEventListener("beforeunload", saveBeforeClose);
+    return () => window.removeEventListener("beforeunload", saveBeforeClose);
+  }, [app.flushCanvas, t]);
   const setUtilityPanel = usePreferencesStore((state) => state.setUtilityPanel);
   const utilityPanel = usePreferencesStore((state) => state.utilityPanel);
   const architectureUpdateDisabled = isArchitectureUpdateDisabled(
@@ -100,6 +128,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
     : app.architectureReview.state === "reviewing"
       ? t("canvas.agentEnhancing")
       : t("canvas.generate");
+  const canvasReadOnly = isCanvasTransitioning || app.canvas.isProjectLoading || app.artifactStatuses?.canvas !== "current";
 
   function changePage(page: Parameters<typeof app.onPageChange>[0]) {
     setUtilityPanel(undefined);
@@ -118,14 +147,13 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
           onExport={app.onExport}
           onSendToTool={app.onSendToTool}
           projectLabel={app.projectLabel}
-          sendDisabled={app.legacyCanvasReadOnly || !app.hasPendingModifications}
+          sendDisabled={!app.hasPendingModifications}
         />
         <ProjectTabs
           activeProjectId={workspace.activeProjectId}
           activeProjectStatus={{
             architectureReview: app.architectureReview,
             isProjectLoading: app.canvas.isProjectLoading,
-            readOnly: app.legacyCanvasReadOnly,
             onRefreshProject: () => void app.canvas.onRefreshProject(),
             onUpdateArchitecture: () => void app.canvas.onAnalyzeProject(),
             onUpdateSequences: () => void app.sequence.generateDiagrams(),
@@ -156,40 +184,52 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
               projectPath={app.canvas.projectPath}
               statusMessage={app.canvas.projectStatus}
             />}
-            right={app.canvas.connectionPanelMode ? (
-              <ConnectionPanel
-                defaultRelation={app.canvas.defaultRelation}
-                mode={app.canvas.connectionPanelMode}
-                modules={app.canvas.modules}
-                onClose={app.canvas.onClearConnectionSelection}
-                onCreateConnection={app.canvas.onAddConnection}
-                onDeleteEdge={app.canvas.deleteEdge}
-                onUpdateEdgeEndpoints={app.canvas.onUpdateEdgeEndpoints}
-                onUpdateEdgeGuidance={app.canvas.onUpdateEdgeGuidance}
-                onUpdateEdgeRelation={app.canvas.onUpdateEdgeRelation}
-                selectedEdge={app.canvas.selectedEdge}
-                readOnly={app.canvas.legacyCanvasReadOnly}
-              />
+            right={<CanvasProfilerBoundary id={app.canvas.connectionPanelMode ? "CanvasConnectionPanel" : "CanvasModulePanel"}>{app.canvas.connectionPanelMode ? (
+              <Suspense fallback={<div role="status">{t("canvas.detailLoading")}</div>}>
+                <ConnectionPanel
+                  readOnly={canvasReadOnly}
+                  projectId={app.canvas.projectId}
+                  generationId={app.canvas.generationId}
+                  userRevision={app.canvas.userRevision}
+                  onEnsureSaved={app.flushCanvas}
+                  defaultRelation={app.canvas.defaultRelation}
+                  mode={app.canvas.connectionPanelMode}
+                  modules={app.canvas.modules}
+                  onClose={app.canvas.onClearConnectionSelection}
+                  onCreateConnection={app.canvas.onAddConnection}
+                  onDeleteEdge={app.canvas.deleteEdge}
+                  onUpdateEdgeEndpoints={app.canvas.onUpdateEdgeEndpoints}
+                  onUpdateEdgeGuidance={app.canvas.onUpdateEdgeGuidance}
+                  onUpdateEdgeRelation={app.canvas.onUpdateEdgeRelation}
+                  selectedEdge={app.canvas.selectedEdge}
+                />
+              </Suspense>
             ) : app.canvas.selectedNode ? (
-              <ModulePanel
-                edges={app.canvas.graphRelations}
-                modules={app.canvas.modules}
-                guidanceOperation={app.canvas.guidanceOperation}
-                node={app.canvas.selectedNode}
-                onDeleteNode={app.canvas.deleteModuleNode}
-                onGuidanceChange={app.canvas.onGuidanceChange}
-                onModuleChange={app.canvas.onUpdateModuleFields}
-                onSaveGuidance={app.canvas.onSaveGuidance}
-                onSendGuidance={app.canvas.onSendGuidance}
-                sendGuidanceDisabled={!app.canvas.hasPendingGuidance}
-                readOnly={app.canvas.legacyCanvasReadOnly}
-              />
-            ) : undefined}
+              <Suspense fallback={<div role="status">{t("canvas.detailLoading")}</div>}>
+                <ModulePanel
+                  readOnly={canvasReadOnly}
+                  projectId={app.canvas.projectId}
+                  generationId={app.canvas.generationId}
+                  userRevision={app.canvas.userRevision}
+                  onEnsureSaved={app.flushCanvas}
+                  edges={app.canvas.graphRelations}
+                  modules={app.canvas.modules}
+                  guidanceOperation={app.canvas.guidanceOperation}
+                  node={app.canvas.selectedNode}
+                  onDeleteNode={app.canvas.deleteModuleNode}
+                  onGuidanceChange={app.canvas.onGuidanceChange}
+                  onModuleChange={app.canvas.onUpdateModuleFields}
+                  onSaveGuidance={app.canvas.onSaveGuidance}
+                  onSendGuidance={app.canvas.onSendGuidance}
+                  sendGuidanceDisabled={!app.canvas.hasPendingGuidance}
+                />
+              </Suspense>
+            ) : undefined}</CanvasProfilerBoundary>}
             rightAttention={Boolean(app.canvas.selectedNode || app.canvas.connectionPanelMode)}
             actions={(
               <>
                 <Button
-                  disabled={app.canvas.isProjectLoading || app.canvas.legacyCanvasReadOnly || architectureUpdateDisabled}
+                  disabled={app.canvas.isProjectLoading || architectureUpdateDisabled}
                   icon={<BrainCircuit size={15} />}
                   label={architectureActionLabel}
                   size="default"
@@ -200,10 +240,10 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
                     {architectureActionLabel}
                   </span>
                 </Button>
-                <Button disabled={app.canvas.legacyCanvasReadOnly} icon={<Plus size={15} />} label={t("canvas.addNode")} variant="secondary" onClick={app.canvas.onAddNode}>
+                <Button disabled={canvasReadOnly} icon={<Plus size={15} />} label={t("canvas.addNode")} variant="secondary" onClick={app.canvas.onAddNode}>
                   <span className="workspace-action-label">{t("canvas.addNode")}</span>
                 </Button>
-                <Button disabled={app.canvas.legacyCanvasReadOnly} icon={<Link2 size={15} />} label={t("canvas.addConnection")} variant="secondary" onClick={app.canvas.onOpenConnectionCreator}>
+                <Button disabled={canvasReadOnly} icon={<Link2 size={15} />} label={t("canvas.addConnection")} variant="secondary" onClick={app.canvas.onOpenConnectionCreator}>
                   <span className="workspace-action-label">{t("canvas.addConnection")}</span>
                 </Button>
               </>
@@ -211,20 +251,32 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
             status={app.canvas.analysisLabel}
             title={t("canvas.title")}
           >
-            <CanvasWorkspace
+              <CanvasWorkspace
+                readOnly={canvasReadOnly}
+                hiddenGeneratedCount={app.canvas.hiddenGeneratedCount}
               canvasLayout={app.canvas.canvasLayout}
               edges={app.canvas.edges}
+              isProjectLoading={app.canvas.isProjectLoading}
               nodes={app.canvas.nodes}
               relationDiagnostics={app.canvas.relationDiagnostics}
               quality={app.canvas.quality}
-              readOnly={app.canvas.legacyCanvasReadOnly}
               orphanedNodeEdits={app.canvas.orphanedNodeEdits}
+              migrationPendingItems={app.canvas.migrationPendingItems}
+              preservedCounts={app.canvas.preservedCounts}
+              graphStatus={app.artifactStatuses?.canvas}
+              generatedAt={app.canvas.generatedAt}
+              generationId={app.canvas.generationId}
+              userRevision={app.canvas.userRevision}
+              projectId={app.canvas.projectId}
+              orphanedEdges={app.canvas.orphanedEdges}
               onConnect={app.canvas.onConnect}
               onApplyAutoLayout={app.canvas.onApplyAutoLayout}
               onEdgesChange={app.canvas.onEdgesChange}
               onNodesChange={app.canvas.onNodesChange}
               onOpenProject={app.canvas.onOpenProject}
               onRestoreManualLayout={app.canvas.onRestoreManualLayout}
+              onRestoreGeneratedItems={app.canvas.onRestoreGeneratedItems}
+              onResolveMigrationItem={app.canvas.onResolveMigrationItem}
               onPaneClick={app.canvas.onClearConnectionSelection}
               onSelectEdge={app.canvas.onSelectEdge}
               onSelectNode={app.canvas.onSelectNode}
@@ -245,9 +297,10 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
             executionMode={app.tools.executionMode}
             isDesktopBridgeAvailable={app.isDesktopBridgeAvailable}
             lastRunStatus={app.tools.lastRunStatus}
-            legacyCanvasReadOnly={app.legacyCanvasReadOnly}
             isRunsLoading={app.tools.isRunsLoading}
             onAnalyzeCurrentProject={app.tools.onAnalyzeCurrentProject}
+            canGenerateTaskArtifact={app.tools.canGenerateTaskArtifact}
+            onGenerateTaskArtifact={app.tools.onGenerateTaskArtifact}
             onApplyRunArtifact={app.tools.onApplyRunArtifact}
             onDeleteCustomAgent={app.tools.onDeleteCustomAgent}
             onDetectAgent={app.tools.onDetectAgent}

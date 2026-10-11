@@ -122,12 +122,13 @@ const builtInAgentDescriptionKeys: Partial<Record<RuntimeAgentId, string>> = {
 export function AgentPage({
   agents,
   architectureReview,
+  canGenerateTaskArtifact,
   executionMode,
   isRunsLoading,
   isDesktopBridgeAvailable,
   lastRunStatus,
-  legacyCanvasReadOnly,
   onAnalyzeCurrentProject,
+  onGenerateTaskArtifact,
   onApplyRunArtifact,
   onDeleteCustomAgent,
   onDetectAgent,
@@ -159,12 +160,13 @@ export function AgentPage({
 }: {
   agents: AgentDefinition[];
   architectureReview: ArchitectureReviewStatus;
+  canGenerateTaskArtifact: boolean;
   executionMode: ExecutionMode;
   isRunsLoading: boolean;
   isDesktopBridgeAvailable: boolean;
   lastRunStatus: string;
-  legacyCanvasReadOnly: boolean;
   onAnalyzeCurrentProject: (agentId?: RuntimeAgentId) => void;
+  onGenerateTaskArtifact: () => Promise<void>;
   onApplyRunArtifact: () => void;
   onDeleteCustomAgent: (agentId: AgentId) => void;
   onDetectAgent: (agentId: RuntimeAgentId) => void;
@@ -200,7 +202,17 @@ export function AgentPage({
   const isArchitectureReviewing = architectureReview.state === "reviewing";
   const agentNames = useMemo(() => new Map<string, string>(visibleAgents.map((agent) => [agent.id, agent.name])), [visibleAgents]);
   const [isAddingAgent, setIsAddingAgent] = useState(false);
+  const [isGeneratingTask, setIsGeneratingTask] = useState(false);
   const [copiedAgentId, setCopiedAgentId] = useState<string>("");
+
+  async function generateTaskArtifact() {
+    setIsGeneratingTask(true);
+    try {
+      await onGenerateTaskArtifact();
+    } finally {
+      setIsGeneratingTask(false);
+    }
+  }
 
   return (
     <main className="agents-page">
@@ -221,12 +233,17 @@ export function AgentPage({
           <strong>{selectedAgent?.name ?? t("agent.notSelected")}</strong>
           <span>{selectedAgent ? commandLabel(selectedAgent) : t("agent.addOrSelect")}</span>
         </div>
-        <button className="send-button" disabled={legacyCanvasReadOnly || !projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
-          <Play size={14} />
-          {isArchitectureReviewing
-            ? t("agent.waitingForRun", { runId: architectureReview.runId ?? architectureReview.reviewId ?? "" })
-            : t("agent.analyzeProject")}
-        </button>
+        <div className="default-agent-actions">
+          <Button disabled={!canGenerateTaskArtifact || isGeneratingTask} icon={<FileText size={14} />} onClick={() => void generateTaskArtifact()}>
+            {isGeneratingTask ? t("agent.generatingTask") : t("agent.generateTask")}
+          </Button>
+          <button className="send-button" disabled={!projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
+            <Play size={14} />
+            {isArchitectureReviewing
+              ? t("agent.waitingForRun", { runId: architectureReview.runId ?? architectureReview.reviewId ?? "" })
+              : t("agent.analyzeProject")}
+          </button>
+        </div>
       </section>
 
       <section className="agent-selector-panel">

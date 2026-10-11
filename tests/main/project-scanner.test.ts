@@ -21,6 +21,13 @@ describe("project-scanner.service", () => {
     expect(project.summary.languages.TypeScript).toBe(1);
     expect(project.files.map((node) => node.path)).toContain("src");
     expect(project.files.find((node) => node.path === "src")?.children?.[0].path).toBe("src/auth");
+
+    const selected = await scanProject(root, { selection: {
+      sourcePaths: ["src/auth/index.ts"], configurationPaths: ["package.json"],
+      scopeSha256: "a".repeat(64), sourceInventorySha256: "b".repeat(64)
+    } });
+    expect(filePaths(selected.files)).toEqual(filePaths(project.files));
+    expect(selected.summary).toEqual(project.summary);
   });
 
   it("scans and indexes source files beyond eight nested directories", async () => {
@@ -35,6 +42,50 @@ describe("project-scanner.service", () => {
     expect(project.summary.totalFiles).toBe(1);
     expect(project.summary.truncated).toBe(false);
     expect((await buildSemanticIndex(project)).index.files.map((file) => file.path)).toContain("a/b/c/d/e/f/g/h/i/j/deep.ts");
+  });
+
+  it("uses an exact frozen source selection, preserving selected first-party vendor files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-selection-"));
+    await mkdir(join(root, "spring-orm/src/main/java/org/springframework/orm/jpa/vendor"), { recursive: true });
+    await mkdir(join(root, "spring-orm/src/main/java/org/springframework/orm/jpa"), { recursive: true });
+    await mkdir(join(root, "src/main/java"), { recursive: true });
+    await mkdir(join(root, "tests"), { recursive: true });
+    await mkdir(join(root, "generated"), { recursive: true });
+    await writeFile(join(root, "spring-orm/src/main/java/org/springframework/orm/jpa/vendor/Adapter.java"), "package adapter;\n");
+    await writeFile(join(root, "spring-orm/src/main/java/org/springframework/orm/jpa/Excluded.java"), "package adapter;\n");
+    await writeFile(join(root, "src/main/java/Included.java"), "package included;\n");
+    await writeFile(join(root, "tests/Fixture.java"), "package tests;\n");
+    await writeFile(join(root, "generated/Generated.java"), "package generated;\n");
+    await writeFile(join(root, "pom.xml"), "<project/>\n");
+
+    const selection = {
+      sourcePaths: [
+        "spring-orm/src/main/java/org/springframework/orm/jpa/vendor/Adapter.java",
+        "src/main/java/Included.java"
+      ],
+      configurationPaths: ["pom.xml"],
+      scopeSha256: "a".repeat(64),
+      sourceInventorySha256: "b".repeat(64)
+    };
+    const project = await scanProject(root, { concurrency: 2, selection } as Parameters<typeof scanProject>[1]);
+
+    expect(filePaths(project.files).sort()).toEqual([...selection.sourcePaths, "pom.xml"].sort());
+    expect(project.summary.languages).toEqual({ Java: 2 });
+  });
+
+  it("rejects a missing path from a frozen source selection", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flowweave-scan-selection-missing-"));
+    await writeFile(join(root, "present.ts"), "export {};\n");
+
+    const selection = {
+      sourcePaths: ["missing.ts"],
+      configurationPaths: [],
+      scopeSha256: "a".repeat(64),
+      sourceInventorySha256: "b".repeat(64)
+    };
+
+    await expect(scanProject(root, { concurrency: 1, selection } as Parameters<typeof scanProject>[1]))
+      .rejects.toThrow(/missing\.ts/);
   });
 
   it("uses each independent fixture directory's exact file count", async () => {
@@ -159,3 +210,10 @@ describe("project-scanner.service", () => {
     );
   });
 });
+
+function filePaths(nodes: import("../../src/types").ProjectFileNode[]): string[] {
+  return nodes.flatMap((node) => [
+    ...(node.type === "file" ? [node.path] : []),
+    ...filePaths(node.children ?? [])
+  ]);
+}

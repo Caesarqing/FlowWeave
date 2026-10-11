@@ -22,6 +22,8 @@ type Field = { owner: string; name: string; value?: Expression; type?: Expressio
 type Call = { expression: Expression; arguments: Expression[]; name: string; range: SourceRange; lexicalScope: number; index: number; kind: "call" | "inherit"; constructorCall?: boolean; controlPath?: PythonControlRegion[] };
 type LexicalScope = { id: number; parent?: number; owner?: string; qualifiedName?: string };
 type FileFacts = { path: string; scope: AnalysisScope; language: TreeSitterLanguageId; module: string; packageName?: string; declarations: Declaration[]; imports: Import[]; locals: Local[]; fields: Field[]; calls: Call[]; lexicalScopes: LexicalScope[]; diagnostics: SemanticDiagnostic[] };
+type VisibleFacts = { files: FileFacts[]; declarationsByName: Map<string, Declaration[]>; declarationsByQualifiedName: Map<string | undefined, Declaration[]> };
+type BindingFacts = { fileByPath: Map<string, FileFacts>; scopes: Map<string, VisibleFacts> };
 type Identity =
   | { kind: "declaration"; declarations: Declaration[]; receiver: boolean; receiverProof?: "construction" | "declared-type"; target?: string; receiverId?: string }
   | { kind: "module"; files: FileFacts[]; module: string }
@@ -41,12 +43,13 @@ export async function analyzeTreeSitterProject(rootPath: string, files: Semantic
     if (content === undefined) throw new Error(`Missing source snapshot: ${file.path}`);
     facts.push(await withTreeSitterTree(language, file.path, content, (root) => collectFileFacts(file.path, scope, language, content, root)));
   }
+  const bindingFacts = createBindingFacts(facts);
   const relations: SemanticRelation[] = [];
   const operations: SemanticOperationFact[] = [];
   const diagnostics = facts.flatMap((file) => file.diagnostics);
   for (const file of facts) {
     for (const imported of file.imports) {
-      const identity = resolveImport(file, imported.boundModule ? { ...imported, boundModule: undefined } : imported, facts, new Set());
+      const identity = resolveImport(file, imported.boundModule ? { ...imported, boundModule: undefined } : imported, bindingFacts, new Set());
       const call: Call = { expression: { kind: "name", name: imported.local }, arguments: [], name: imported.module + (imported.name ? `.${imported.name}` : ""), range: imported.range, lexicalScope: imported.lexicalScope, index: imported.index, kind: "call" };
       const identities: Identity[] = identity.kind === "module" && file.language !== "python" ? identity.files.map((candidate) => ({ ...identity, files: [candidate] })) : [identity];
       for (const target of identities) {
@@ -56,12 +59,15 @@ export async function analyzeTreeSitterProject(rootPath: string, files: Semantic
       }
     }
     for (const call of file.calls) {
-      const identity = resolveExpression(file, call.expression, call.lexicalScope, call.index, facts, new Set());
-      const callable = call.constructorCall ? selectJavaConstructor(file, identity, call.arguments.length, facts) : selectCallable(identity, call.arguments.length);
+      const identity = resolveExpression(file, call.expression, call.lexicalScope, call.index, bindingFacts, new Set());
+      const selectedCallable = call.constructorCall ? selectJavaConstructor(file, identity, call.arguments.length, bindingFacts) : selectCallable(identity, call.arguments.length);
+      const missingJavaClasspath = unresolvedJavaExternalCall(file, call, selectedCallable);
+      const callable = missingJavaClasspath ?? selectedCallable;
       const virtual = isJavaVirtualCall(file, call, callable);
-      const boundRelation = makeRelation(file, call, call.kind, callable, virtual ? "declared-virtual-member" : callable.kind === "declaration" ? "source-declaration" : "source-import");
+      const bindingBasis = missingJavaClasspath ? "classpath-unavailable" : virtual ? "declared-virtual-member" : callable.kind === "declaration" ? "source-declaration" : "source-import";
+      const boundRelation = makeRelation(file, call, call.kind, callable, bindingBasis);
       const relation: SemanticRelation = virtual ? { ...boundRelation, confidence: "inferred" } : boundRelation;
-      const operation = operationFromIdentity(file, call, callable, facts);
+      const operation = operationFromIdentity(file, call, callable, bindingFacts);
       if (callable.kind === "external" && callable.module === "net/http" && ["Handle", "HandleFunc"].includes(callable.members.at(-1) ?? "")) diagnostics.push({ code: "unsupported-http-route", severity: "warning", filePath: file.path, range: call.range, relationId: relation.id, message: `${call.name} registers a route; it is not an outbound HTTP request` });
       if (!operation) {
         relations.push(relation);
@@ -297,8 +303,47 @@ function unresolved(reason: string, candidates: string[]): Extract<Identity, { k
 function declarationIdentity(declarations: Declaration[], receiver: boolean): Identity {
   return declarations.length ? { kind: "declaration", declarations, receiver } : unresolved("No declaration in the source scope", []);
 }
-function visibleFiles(file: FileFacts, facts: FileFacts[]): FileFacts[] {
-  return facts.filter((candidate) => candidate.language === file.language && (candidate.scope.id === file.scope.id || file.scope.dependencies?.some((dependency) => dependency === candidate.scope.packageName || dependency.split("=>")[1] === candidate.scope.rootPath)));
+function createBindingFacts(files: FileFacts[]): BindingFacts {
+  const scopes = new Map<string, VisibleFacts>();
+  for (const file of files) {
+    const key = `${file.language}:${file.scope.id}`;
+    if (scopes.has(key)) continue;
+    const visible = files.filter((candidate) => candidate.language === file.language && (candidate.scope.id === file.scope.id || file.scope.dependencies?.some((dependency) => dependency === candidate.scope.packageName || dependency.split("=>")[1] === candidate.scope.rootPath)));
+    const declarationsByName = new Map<string, Declaration[]>();
+    const declarationsByQualifiedName = new Map<string | undefined, Declaration[]>();
+    for (const candidate of visible) {
+      for (const declaration of candidate.declarations) {
+        const named = declarationsByName.get(declaration.name);
+        if (named) named.push(declaration);
+        else declarationsByName.set(declaration.name, [declaration]);
+        const qualified = declarationsByQualifiedName.get(declaration.symbol.qualifiedName);
+        if (qualified) qualified.push(declaration);
+        else declarationsByQualifiedName.set(declaration.symbol.qualifiedName, [declaration]);
+      }
+    }
+    scopes.set(key, { files: visible, declarationsByName, declarationsByQualifiedName });
+  }
+  return { fileByPath: new Map(files.map((file) => [file.path, file])), scopes };
+}
+function visibleFacts(file: FileFacts, facts: BindingFacts): VisibleFacts {
+  const visible = facts.scopes.get(`${file.language}:${file.scope.id}`);
+  if (!visible) throw new Error(`Missing declaration index for ${file.language} scope ${file.scope.id}`);
+  return visible;
+}
+function visibleFiles(file: FileFacts, facts: BindingFacts): FileFacts[] {
+  return visibleFacts(file, facts).files;
+}
+function declarationsNamed(file: FileFacts, name: string, facts: BindingFacts): Declaration[] {
+  return visibleFacts(file, facts).declarationsByName.get(name) ?? [];
+}
+function declarationsQualified(file: FileFacts, name: string, facts: BindingFacts): Declaration[] {
+  return visibleFacts(file, facts).declarationsByQualifiedName.get(name) ?? [];
+}
+function sameModuleDeclarations(file: FileFacts, name: string, facts: BindingFacts): Declaration[] {
+  return declarationsNamed(file, name, facts).filter((declaration) => {
+    const candidate = facts.fileByPath.get(declaration.symbol.filePath);
+    return candidate?.module === file.module && (file.language !== "go" || candidate.packageName === file.packageName);
+  });
 }
 function canonicalImport(file: FileFacts, module: string): string {
   if (file.language !== "python" || !module.startsWith(".")) return module;
@@ -306,7 +351,7 @@ function canonicalImport(file: FileFacts, module: string): string {
   const parts = (file.path.endsWith("/__init__.py") ? file.module : file.module.split(".").slice(0, -1).join(".")).split(".");
   return [...parts.slice(0, Math.max(0, parts.length - dots + 1)), module.slice(dots)].filter(Boolean).join(".");
 }
-function importFiles(file: FileFacts, module: string, facts: FileFacts[]): FileFacts[] {
+function importFiles(file: FileFacts, module: string, facts: BindingFacts): FileFacts[] {
   const visible = visibleFiles(file, facts);
   if (file.language !== "go") return visible.filter((candidate) => candidate.module === module);
   const replacement = file.scope.dependencies?.map((dependency) => dependency.split("=>")).find(([prefix, root]) => root && (module === prefix || module.startsWith(`${prefix}/`)));
@@ -317,11 +362,11 @@ function importFiles(file: FileFacts, module: string, facts: FileFacts[]): FileF
   }
   return visible.filter((candidate) => candidate.module === module && !candidate.path.endsWith("_test.go"));
 }
-function resolveImport(file: FileFacts, imported: Import, facts: FileFacts[], visited: Set<string>): Identity {
+function resolveImport(file: FileFacts, imported: Import, facts: BindingFacts, visited: Set<string>): Identity {
   const module = canonicalImport(file, imported.module);
   if (imported.name === "*" && file.language !== "java") return unresolved("Wildcard import cannot establish a unique local binding", []);
   if (file.language === "java") {
-    const classes = visibleFiles(file, facts).flatMap((candidate) => candidate.declarations).filter((declaration) => declaration.symbol.kind === "class" && declaration.symbol.qualifiedName === module);
+    const classes = declarationsQualified(file, module, facts).filter((declaration) => declaration.symbol.kind === "class");
     if (classes.length) {
       const base = declarationIdentity(classes, false);
       return imported.name && imported.name !== "*" ? resolveMember(file, base, imported.name, facts, visited) : base;
@@ -347,7 +392,7 @@ function resolveImport(file: FileFacts, imported: Import, facts: FileFacts[], vi
   if (file.language === "python" && (module === "urllib" && imported.name === "request" || module === "http" && imported.name === "client")) return { kind: "external", module: `${module}.${imported.name}`, members: [] };
   return { kind: "external", module, members: imported.name && imported.name !== "*" ? [imported.name] : [] };
 }
-function resolveExpression(file: FileFacts, value: Expression, lexicalScope: number, index: number, facts: FileFacts[], visited: Set<string>): Identity {
+function resolveExpression(file: FileFacts, value: Expression, lexicalScope: number, index: number, facts: BindingFacts, visited: Set<string>): Identity {
   if (value.kind === "keyword") return resolveExpression(file, value.value, lexicalScope, index, facts, visited);
   if (value.kind === "name") return resolveName(file, value.name, lexicalScope, index, facts, visited);
   if (value.kind === "member") return resolveMember(file, resolveExpression(file, value.object, lexicalScope, index, facts, visited), value.name, facts, visited);
@@ -360,7 +405,7 @@ function resolveExpression(file: FileFacts, value: Expression, lexicalScope: num
   }
   return unresolved(`Expression ${expressionName(value)} is not a source declaration`, []);
 }
-function resolveName(file: FileFacts, name: string, lexicalScope: number, index: number, facts: FileFacts[], visited: Set<string>): Identity {
+function resolveName(file: FileFacts, name: string, lexicalScope: number, index: number, facts: BindingFacts, visited: Set<string>): Identity {
   const key = `${file.path}:${lexicalScope}:${name}`;
   if (visited.has(key)) return unresolved(`Cyclic source alias ${name}`, []);
   const nextVisited = new Set([...visited, key]);
@@ -369,7 +414,7 @@ function resolveName(file: FileFacts, name: string, lexicalScope: number, index:
     const scope = file.lexicalScopes.find((candidate) => candidate.id === current);
     if (file.language === "python" && current !== lexicalScope && scope?.owner && scope.qualifiedName === scope.owner) { current = scope.parent; continue; }
     if ((name === "this" || name === "super") && scope?.owner) {
-      const owners = visibleFiles(file, facts).flatMap((candidate) => candidate.declarations).filter((declaration) => declaration.symbol.qualifiedName === scope.owner && declaration.symbol.kind === "class");
+      const owners = declarationsQualified(file, scope.owner, facts).filter((declaration) => declaration.symbol.kind === "class");
       if (name === "super") {
         const base = owners[0]?.bases[0];
         return base ? resolveExpression(file, base, owners[0].lexicalScope, index, facts, nextVisited) : unresolved("No explicit superclass source declaration", []);
@@ -395,16 +440,16 @@ function resolveName(file: FileFacts, name: string, lexicalScope: number, index:
       const candidates = file.language === "go" && imported.implicit ? importFiles(file, imported.module, facts) : [];
       return candidates.length ? candidates.some((candidate) => candidate.packageName === name) : imported.local === name;
     });
-    const declarations = file.declarations.filter((declaration) => declaration.lexicalScope === current && declaration.name === name);
+    const declarations = declarationsNamed(file, name, facts).filter((declaration) => declaration.symbol.filePath === file.path && declaration.lexicalScope === current);
     if (imports.length && declarations.length) return unresolved(`Imports and declarations both bind ${name}`, [...imports.map((imported) => imported.module), ...declarations.map((declaration) => declaration.symbol.id ?? declaration.name)]);
     if (imports.length > 1) return unresolved(`Duplicate imports bind ${name}`, imports.map((imported) => imported.module));
     if (imports[0]) return resolveImport(file, imports[0], facts, nextVisited);
     if (declarations.length) {
-      const candidates = current === -1 && file.language !== "python" ? visibleFiles(file, facts).filter((candidate) => candidate.module === file.module && (file.language !== "go" || candidate.packageName === file.packageName)).flatMap((candidate) => candidate.declarations).filter((declaration) => declaration.lexicalScope === -1 && declaration.name === name) : declarations;
+      const candidates = current === -1 && file.language !== "python" ? sameModuleDeclarations(file, name, facts).filter((declaration) => declaration.lexicalScope === -1) : declarations;
       return declarationIdentity(candidates, false);
     }
     if (scope?.owner && file.language === "java") {
-      const members = visibleFiles(file, facts).flatMap((candidate) => candidate.declarations).filter((declaration) => declaration.owner === scope.owner && declaration.name === name);
+      const members = declarationsNamed(file, name, facts).filter((declaration) => declaration.owner === scope.owner);
       if (members.length) return declarationIdentity(members, true);
     }
     current = scope?.parent;
@@ -412,7 +457,7 @@ function resolveName(file: FileFacts, name: string, lexicalScope: number, index:
   if (file.language === "python" && ["open", "print", "len", "str", "int", "float", "bool", "list", "dict", "set", "tuple", "range", "enumerate", "zip", "map", "filter", "sum", "min", "max", "sorted", "reversed", "isinstance", "issubclass", "getattr", "setattr", "hasattr", "super", "type", "object", "bytes", "bytearray", "iter", "next", "abs", "all", "any", "round", "Exception", "ValueError", "RuntimeError"].includes(name)) return { kind: "external", module: "builtins", members: [name] };
   if (file.language === "go" && ["append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "len", "make", "max", "min", "new", "panic", "print", "println", "real", "recover", "string", "int", "int64", "float64", "bool", "byte", "rune"].includes(name)) return { kind: "external", module: "builtin", members: [name] };
   if (file.language === "java" || file.language === "go") {
-    const declarations = visibleFiles(file, facts).filter((candidate) => candidate.module === file.module && (file.language !== "go" || candidate.packageName === file.packageName)).flatMap((candidate) => candidate.declarations).filter((declaration) => !declaration.owner && declaration.name === name);
+    const declarations = sameModuleDeclarations(file, name, facts).filter((declaration) => !declaration.owner);
     if (declarations.length) return declarationIdentity(declarations, false);
   }
   if (file.language === "java") {
@@ -429,7 +474,7 @@ function resolveName(file: FileFacts, name: string, lexicalScope: number, index:
   return unresolved(`No lexical declaration or import binds ${name}`, []);
 }
 
-function resolvePythonLocal(file: FileFacts, name: string, lexicalScope: number, index: number, locals: Local[], facts: FileFacts[], visited: Set<string>): Identity {
+function resolvePythonLocal(file: FileFacts, name: string, lexicalScope: number, index: number, locals: Local[], facts: BindingFacts, visited: Set<string>): Identity {
   const prior = locals.filter((local) => local.parameter || local.index <= index);
   if (!prior.length) return unresolved(`Local ${name} shadows an outer binding before assignment`, locals.map((local) => `${file.path}:${local.index}:${name}`));
 
@@ -457,7 +502,7 @@ function resolvePythonLocal(file: FileFacts, name: string, lexicalScope: number,
   return mergePythonLocalIdentities(file, name, lexicalScope, identities);
 }
 
-function pythonLocalIdentity(file: FileFacts, name: string, lexicalScope: number, local: Local, facts: FileFacts[], visited: Set<string>): Identity {
+function pythonLocalIdentity(file: FileFacts, name: string, lexicalScope: number, local: Local, facts: BindingFacts, visited: Set<string>): Identity {
   const localCandidate = `${file.path}:${local.index}:${name}`;
   if (local.value) {
     const identity = resolveExpression(file, local.value, local.lexicalScope, local.index, facts, visited);
@@ -493,7 +538,7 @@ function mergePythonLocalIdentities(file: FileFacts, name: string, lexicalScope:
   return unresolved(`Local ${name} has multiple possible source bindings across control-flow branches`, candidates.length ? candidates : [`${file.path}:${lexicalScope}:${name}`]);
 }
 
-function resolveMember(file: FileFacts, identity: Identity, name: string, facts: FileFacts[], visited: Set<string>): Identity {
+function resolveMember(file: FileFacts, identity: Identity, name: string, facts: BindingFacts, visited: Set<string>): Identity {
   if (identity.kind === "unresolved") return identity;
   if (identity.kind === "external") {
     if (file.language === "java" && (identity.module === "java" || !/[A-Z]/.test(identity.module)) && /^[A-Z]/.test(name)) return { ...identity, module: [identity.module, ...identity.members, name].join("."), members: [] };
@@ -516,7 +561,7 @@ function resolveMember(file: FileFacts, identity: Identity, name: string, facts:
   }
   if (identity.declarations.some((declaration) => declaration.interface)) return unresolved(`Interface member ${name} has runtime dispatch`, identity.declarations.map((declaration) => declaration.symbol.id ?? declaration.symbol.qualifiedName ?? declaration.name));
   const owners = identity.declarations.map((declaration) => declaration.symbol.qualifiedName);
-  const declarations = visibleFiles(file, facts).flatMap((candidate) => candidate.declarations).filter((declaration) => owners.includes(declaration.owner) && declaration.name === name && (file.language !== "java" || identity.receiver || declaration.static || declaration.symbol.kind === "class"));
+  const declarations = declarationsNamed(file, name, facts).filter((declaration) => owners.includes(declaration.owner) && (file.language !== "java" || identity.receiver || declaration.static || declaration.symbol.kind === "class"));
   if (declarations.length) return { ...identity, declarations };
   const fields = visibleFiles(file, facts).flatMap((candidate) => candidate.fields.filter((field) => owners.includes(field.owner) && field.name === name).map((field) => ({ field, candidate })));
   if (fields.length > 1) return unresolved(`Multiple source assignments establish field ${name}`, fields.map(({ field, candidate }) => `${candidate.path}:${field.index}`));
@@ -533,7 +578,7 @@ function resolveMember(file: FileFacts, identity: Identity, name: string, facts:
   for (const declaration of identity.declarations) {
     const key = `${declaration.symbol.id}:member:${name}`;
     if (visited.has(key)) continue;
-    const ownerFile = facts.find((candidate) => candidate.path === declaration.symbol.filePath);
+    const ownerFile = facts.fileByPath.get(declaration.symbol.filePath);
     if (!ownerFile) continue;
     for (const base of declaration.bases) {
       const baseIdentity = resolveExpression(ownerFile, base, declaration.lexicalScope, Number.MAX_SAFE_INTEGER, facts, new Set([...visited, key]));
@@ -544,6 +589,7 @@ function resolveMember(file: FileFacts, identity: Identity, name: string, facts:
   return inherited.length ? { ...identity, declarations: inherited } : unresolved(`No source member ${name} belongs to the receiver declaration`, []);
 }
 function selectCallable(identity: Identity, arity: number): Identity {
+  if (identity.kind === "module") return unresolved(`Module ${identity.module} does not identify a callable source declaration`, identity.files.map((file) => file.path));
   if (identity.kind !== "declaration") return identity;
   const declarations = identity.declarations.filter((declaration) => declaration.symbol.kind === "class" || declaration.arity === undefined || declaration.arity === arity || declaration.symbol.filePath.endsWith(".py"));
   if (declarations.length > 1) return unresolved("Multiple source declarations match the call; argument types and runtime dispatch are not proven", declarations.map((declaration) => declaration.symbol.id ?? declaration.symbol.qualifiedName ?? declaration.name));
@@ -555,18 +601,26 @@ function isJavaVirtualCall(file: FileFacts, call: Call, identity: Identity): boo
   return Boolean(declaration && declaration.symbol.kind === "method" && !declaration.static && !declaration.final && identity.receiverProof !== "construction");
 }
 
-function selectJavaConstructor(file: FileFacts, identity: Identity, arity: number, facts: FileFacts[]): Identity {
+function selectJavaConstructor(file: FileFacts, identity: Identity, arity: number, facts: BindingFacts): Identity {
   if (identity.kind !== "declaration") return identity;
   if (identity.declarations.length !== 1) return selectCallable(identity, arity);
   const classDeclaration = identity.declarations[0];
-  const constructors = visibleFiles(file, facts).flatMap((candidate) => candidate.declarations).filter((declaration) => declaration.owner === classDeclaration.symbol.qualifiedName && declaration.name === classDeclaration.name);
+  const constructors = declarationsNamed(file, classDeclaration.name, facts).filter((declaration) => declaration.owner === classDeclaration.symbol.qualifiedName);
   return constructors.length ? selectCallable(declarationIdentity(constructors, false), arity) : arity === 0 ? identity : unresolved(`Class ${classDeclaration.name} only has the implicit no-argument constructor`, []);
 }
 
 function standardLibrary(module: string, language: TreeSitterLanguageId): boolean {
-  if (language === "java") return module.startsWith("java.") || module.startsWith("javax.");
+  if (language === "java") return isJavaPlatformModule(module);
   if (language === "go") return !module.split("/")[0]?.includes(".");
   return ["builtins", "pathlib", "subprocess", "sqlite3", "os", "sys", "json", "typing", "collections", "asyncio", "math", "re", "urllib", "http"].includes(module.split(".")[0] ?? "");
+}
+function isJavaPlatformModule(module: string): boolean {
+  return module.startsWith("java.") || module.startsWith("javax.") || module.startsWith("jdk.");
+}
+function unresolvedJavaExternalCall(file: FileFacts, call: Call, identity: Identity): Extract<Identity, { kind: "unresolved" }> | undefined {
+  if (file.language !== "java" || call.kind !== "call" || identity.kind !== "external" || isJavaPlatformModule(identity.module)) return undefined;
+  const candidate = `external:${identity.module}${identity.members.length ? `.${identity.members.join(".")}` : ""}`;
+  return unresolved(`Java dependency target ${candidate} is not source-indexed and the dependency classpath was not loaded`, [candidate]);
 }
 function makeRelation(file: FileFacts, call: Call, kind: SemanticRelation["kind"], identity: Identity, basis: string): SemanticRelation {
   let targetRef: SemanticTarget;
@@ -580,7 +634,7 @@ function makeRelation(file: FileFacts, call: Call, kind: SemanticRelation["kind"
   return { id: hash(`${file.scope.id}:${file.path}:${kind}:${call.range.start.line}:${call.range.start.column}:${target}:${call.name}`), kind, source: file.path, target, sourceFile: file.path, targetFile: targetRef.kind === "file" ? targetRef.filePath : undefined, targetRef, sourceRange: call.range, scopeId: file.scope.id, bindingBasis: basis, importUsage: kind === "import" ? "value" : undefined, symbol: call.name, detail: `${call.name} in ${file.path}`, confidence: targetRef.kind === "unresolved" ? "inferred" : "confirmed" };
 }
 function bindingDiagnostic(file: FileFacts, call: Call, identity: Extract<Identity, { kind: "unresolved" }>, code: string): SemanticDiagnostic {
-  return { code, severity: "warning", filePath: file.path, range: call.range, candidates: identity.candidates, message: `${call.name}: ${identity.reason}` };
+  return { stage: "binding", code, severity: "warning", filePath: file.path, range: call.range, candidates: identity.candidates, message: `${call.name}: ${identity.reason}` };
 }
 function literalTarget(value: Expression | undefined): string | undefined {
   if (value?.kind === "literal") return value.value;
@@ -605,7 +659,7 @@ function pythonRequestUrl(origin: string | undefined, path: string | undefined):
   return origin && path.startsWith("/") ? `${origin}${path}` : undefined;
 }
 
-function externalReturnIdentity(identity: Extract<Identity, { kind: "external" }>, arguments_: Expression[], file: FileFacts, lexicalScope: number, index: number, facts: FileFacts[], visited: Set<string>): Identity {
+function externalReturnIdentity(identity: Extract<Identity, { kind: "external" }>, arguments_: Expression[], file: FileFacts, lexicalScope: number, index: number, facts: BindingFacts, visited: Set<string>): Identity {
   const api = identity.members.at(-1) ?? identity.module.split(".").at(-1) ?? identity.module;
   const factories: Record<string, string[]> = {
     requests: ["Session", "session"], httpx: ["Client", "AsyncClient"], pathlib: ["Path", "PosixPath", "WindowsPath", "PurePath"],
@@ -633,7 +687,7 @@ function externalReturnIdentity(identity: Extract<Identity, { kind: "external" }
   return { ...identity, target, origin, method, receiverId: identity.receiverId ?? `${file.path}:${index}:${identity.module}.${api}` };
 }
 
-function operationFromIdentity(file: FileFacts, call: Call, identity: Identity, facts: FileFacts[]): SemanticOperationFact | undefined {
+function operationFromIdentity(file: FileFacts, call: Call, identity: Identity, facts: BindingFacts): SemanticOperationFact | undefined {
   if (identity.kind !== "external") return undefined;
   const module = identity.module;
   const api = identity.members.at(-1) ?? module.split(".").at(-1) ?? module;

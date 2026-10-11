@@ -1,0 +1,174 @@
+{
+  "status": "completed",
+  "fixture": "viewport-only",
+  "reactProfiler": {
+    "status": "completed",
+    "reactVersion": "unavailable",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) flowweave/0.1.0 Chrome/148.0.7778.280 Electron/42.8.1 Safari/537.36",
+    "actions": [
+      {
+        "name": "initial-render",
+        "durationMs": 0,
+        "visibleNodeCountBefore": 0,
+        "visibleNodeCountAfter": 3,
+        "visibleNodeIdsBefore": [],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 0,
+        "actualDurationMs": 0,
+        "startedAt": 3219.2999999970198
+      },
+      {
+        "name": "expand-group",
+        "durationMs": 794.5,
+        "visibleNodeCountBefore": 3,
+        "visibleNodeCountAfter": 5,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:group:function:java:java:example",
+          "group:group:function:python:python:sample",
+          "group:group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      },
+      {
+        "name": "collapse-group",
+        "durationMs": 555.8000000007451,
+        "visibleNodeCountBefore": 5,
+        "visibleNodeCountAfter": 3,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:group:function:java:java:example",
+          "group:group:function:python:python:sample",
+          "group:group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "visibleNodeIdsAfter": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      },
+      {
+        "name": "filter-technology",
+        "durationMs": 104.60000000149012,
+        "visibleNodeCountBefore": 3,
+        "visibleNodeCountAfter": 0,
+        "visibleNodeIdsBefore": [
+          "module-105cc96e2949c3e9",
+          "module-c05bc0dca2d8b5e0",
+          "group:view:unlinked"
+        ],
+        "visibleNodeIdsAfter": [],
+        "visibleEdgeIdsBefore": [
+          "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed"
+        ],
+        "visibleEdgeIdsAfter": [],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      },
+      {
+        "name": "automatic-layout-refresh",
+        "durationMs": 736.3999999985099,
+        "visibleNodeCountBefore": 0,
+        "visibleNodeCountAfter": 0,
+        "visibleNodeIdsBefore": [],
+        "visibleNodeIdsAfter": [],
+        "visibleEdgeIdsBefore": [],
+        "visibleEdgeIdsAfter": [],
+        "commitCount": 0,
+        "actualDurationMs": 0
+      }
+    ],
+    "samples": [],
+    "layoutSnapshots": [
+      {
+        "action": "expand-group",
+        "status": "persisted",
+        "layoutMode": "execution",
+        "userRevision": 1,
+        "positionCount": 14,
+        "handlePositionCount": 5,
+        "matchingPositionCount": 5,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,172],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,172],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:6b1346de632c9983a717d154\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ce53b8357e9a3b169f5ec0ee\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ee60665b49b0ae82a677e927\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,172],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,172],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:6b1346de632c9983a717d154\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ce53b8357e9a3b169f5ec0ee\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:ee60665b49b0ae82a677e927\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-64f01d42-7c5d-462f-b4b1-509cd485d15b\",\"generationId\":\"4432d366d876f3f95dda0a8d1a6c5822e3dafe9c96bb5bac753498ccbacd3c61\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "runtimeLayoutContext": false,
+        "topologyChanged": true,
+        "collapsedGroups": [
+          "group:function:java:java:example",
+          "group:function:python:python:sample",
+          "group:review:go:go:module-110beac7ad70dd99"
+        ],
+        "targetGroupPresent": false
+      },
+      {
+        "action": "collapse-group",
+        "status": "persisted",
+        "layoutMode": "execution",
+        "userRevision": 2,
+        "positionCount": 14,
+        "handlePositionCount": 3,
+        "matchingPositionCount": 3,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-64f01d42-7c5d-462f-b4b1-509cd485d15b\",\"generationId\":\"4432d366d876f3f95dda0a8d1a6c5822e3dafe9c96bb5bac753498ccbacd3c61\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:group:function:java:java:example\",null,[\"group:package:java:java\",\"group:function:java:java:example\"],[\"module-16cd6a1b950684a5\"],248,172],[\"group:group:function:python:python:sample\",null,[\"group:package:python:python\",\"group:function:python:python:sample\"],[\"module-3e3cb32f29d1be44\"],248,172],[\"group:group:review:go:go:module-110beac7ad70dd99\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-64f01d42-7c5d-462f-b4b1-509cd485d15b\",\"generationId\":\"4432d366d876f3f95dda0a8d1a6c5822e3dafe9c96bb5bac753498ccbacd3c61\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "runtimeLayoutContext": false,
+        "topologyChanged": true,
+        "collapsedGroups": [],
+        "targetGroupPresent": true
+      },
+      {
+        "action": "automatic-layout-refresh",
+        "status": "persisted",
+        "layoutMode": "dependency",
+        "userRevision": 3,
+        "positionCount": 10,
+        "handlePositionCount": 7,
+        "matchingPositionCount": 7,
+        "baselineAutoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"],\"context\":{\"projectId\":\"project-64f01d42-7c5d-462f-b4b1-509cd485d15b\",\"generationId\":\"4432d366d876f3f95dda0a8d1a6c5822e3dafe9c96bb5bac753498ccbacd3c61\",\"viewport\":{\"width\":1104,\"height\":612},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "baselineHandleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"group:view:unlinked\",null,[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[\"module-110beac7ad70dd99\",\"module-16cd6a1b950684a5\",\"module-3e3cb32f29d1be44\"],248,172],[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000calls\"]}",
+        "autoLayoutTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:4466ac188deb76262f540325\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:a4980f41d504d05e7f07424c\\u0000depends_on\"],\"context\":{\"projectId\":\"project-64f01d42-7c5d-462f-b4b1-509cd485d15b\",\"generationId\":\"4432d366d876f3f95dda0a8d1a6c5822e3dafe9c96bb5bac753498ccbacd3c61\",\"viewport\":{\"width\":1104,\"height\":647},\"manualPositionRevision\":\"[[\\\"module-105cc96e2949c3e9\\\",{\\\"x\\\":60,\\\"y\\\":444}],[\\\"module-110beac7ad70dd99\\\",{\\\"x\\\":60,\\\"y\\\":60}],[\\\"module-16cd6a1b950684a5\\\",{\\\"x\\\":328,\\\"y\\\":60}],[\\\"module-3e3cb32f29d1be44\\\",{\\\"x\\\":60,\\\"y\\\":252}],[\\\"module-c05bc0dca2d8b5e0\\\",{\\\"x\\\":418,\\\"y\\\":444}],[\\\"resource:4466ac188deb76262f540325\\\",{\\\"x\\\":60,\\\"y\\\":726}],[\\\"resource:6b1346de632c9983a717d154\\\",{\\\"x\\\":378,\\\"y\\\":726}],[\\\"resource:a4980f41d504d05e7f07424c\\\",{\\\"x\\\":696,\\\"y\\\":726}],[\\\"resource:ce53b8357e9a3b169f5ec0ee\\\",{\\\"x\\\":1014,\\\"y\\\":726}],[\\\"resource:ee60665b49b0ae82a677e927\\\",{\\\"x\\\":60,\\\"y\\\":968}]]\"}}",
+        "handleTopologyFingerprint": "{\"layoutVersion\":14,\"nodeIds\":[[\"module-105cc96e2949c3e9\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\",[\"group:package:typescript:plugin/packages/dashboard\",\"group:review:typescript:plugin/packages/dashboard:module-105cc96e2949c3e9\"],[],248,142],[\"module-110beac7ad70dd99\",\"group:review:go:go:module-110beac7ad70dd99\",[\"group:package:go:go\",\"group:review:go:go:module-110beac7ad70dd99\"],[],248,172],[\"module-16cd6a1b950684a5\",\"group:function:java:java:example\",[\"group:package:java:java\",\"group:function:java:java:example\"],[],248,172],[\"module-3e3cb32f29d1be44\",\"group:function:python:python:sample\",[\"group:package:python:python\",\"group:function:python:python:sample\"],[],248,172],[\"module-c05bc0dca2d8b5e0\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\",[\"group:package:typescript:plugin/packages/core\",\"group:review:typescript:plugin/packages/core:module-c05bc0dca2d8b5e0\"],[],248,142],[\"resource:4466ac188deb76262f540325\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172],[\"resource:a4980f41d504d05e7f07424c\",null,[\"group:package:typescript:plugin/packages/dashboard\",\"group:package:typescript:plugin/packages/dashboard:resources\"],[],248,172]],\"edgeKeys\":[\"module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000module-c05bc0dca2d8b5e0\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:4466ac188deb76262f540325-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:4466ac188deb76262f540325\\u0000depends_on\",\"module-105cc96e2949c3e9-resource:a4980f41d504d05e7f07424c-depends_on-confirmed\\u0000module-105cc96e2949c3e9\\u0000resource:a4980f41d504d05e7f07424c\\u0000depends_on\"]}",
+        "runtimeLayoutContext": true,
+        "topologyChanged": true,
+        "collapsedGroups": []
+      }
+    ],
+    "appVersion": "0.1.0",
+    "electronVersion": "42.8.1",
+    "chromeVersion": "148.0.7778.280",
+    "nodeVersion": "24.18.1"
+  },
+  "mainRssMiB": 256
+}

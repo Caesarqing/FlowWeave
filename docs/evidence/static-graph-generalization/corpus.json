@@ -1,0 +1,2395 @@
+{
+  "schemaVersion": 1,
+  "status": "proposed",
+  "registrationClientDate": "2026-10-04",
+  "purpose": "T1a candidate metadata registration; this is not a completed source corpus, semantic truth set or acceptance result.",
+  "selection": {
+    "identityFreezeStatus": "amended-prebaseline-pending-scope-owner-license-and-label-review",
+    "repositoryCount": 14,
+    "developmentCount": 10,
+    "holdoutCount": 4,
+    "perLanguage": {
+      "TypeScript": {
+        "total": 3,
+        "development": 2,
+        "holdout": 1
+      },
+      "Python": {
+        "total": 3,
+        "development": 2,
+        "holdout": 1
+      },
+      "Java": {
+        "total": 4,
+        "development": 3,
+        "holdout": 1
+      },
+      "Go": {
+        "total": 4,
+        "development": 3,
+        "holdout": 1
+      }
+    },
+    "coverage": {
+      "roles": "Metadata supports frontend application, backend frameworks, libraries, CLI applications/frameworks and task tooling.",
+      "packageStructure": "Proposed metadata covers workspace and Maven/Gradle multi-project candidates plus single-distribution/root-module candidates; effective scopes remain pending.",
+      "scale": "Reviewed proposed production scopes yield five small, four medium, and one large development samples (6,854 sources across ten development projects); scope, source provenance, and threshold are not frozen.",
+      "topology": "unknown-use-independent-boundary-fixtures-until-measured",
+      "mixedLanguageCounts": "D10 Memos is proposed with 266 Go and 446 TypeScript/TSX production sources. The run schema records source languages; quality evidence aggregates by language across projects and does not establish per-project Memos quality or a minimum mixed-language threshold."
+    }
+  },
+  "collectionPolicy": {
+    "clonePerformed": true,
+    "sourceArchiveDownloaded": true,
+    "projectScriptsExecuted": false,
+    "sourceFilesPersisted": true,
+    "metadataDocumentsReadInMemory": true,
+    "holdoutAnalysisOutputsInspected": false,
+    "holdoutAnalysisRunsPerformed": false,
+    "preT11HoldoutUse": "Registered repository/license/package metadata only; no analyzer outputs, performance results or semantic labels may be inspected.",
+    "execution": "Collection must not install, build or execute analyzed projects; read configuration as data only."
+  },
+  "collectionLimitations": [
+    {
+      "operation": "anonymous GitHub REST repository metadata requests",
+      "status": "failed",
+      "httpStatus": 403,
+      "reportedReason": "rate limit exceeded",
+      "effect": "REST metadata was unavailable; a provisional whole-archive inventory was later obtained from the pinned codeload archives."
+    },
+    {
+      "operation": "git ls-remote https://github.com/<repository>.git HEAD",
+      "status": "failed",
+      "timeoutSeconds": 50,
+      "reportedReason": "process timed out",
+      "effect": "The pins were verified through the primary GitHub commit Atom feeds and successful reads at those exact commits, rather than Git ref transport."
+    }
+  ],
+  "unresolved": [
+    "Complete selected development-source generation/provenance and nested license/NOTICE review; development inventories are proposed and hashed, not frozen. No holdout source inventory or source contents were opened in this continuation.",
+    "Assign accountable human acquisition owners, two independent annotators, and a separate holdout custodian. The user reports the annotator/custodian roles cannot currently be arranged; no agent annotation substitutes for them.",
+    "Run eligible development-only measurements and boundary fixtures, then create valid baseline records and the acceptance contract. The proposed corpus is intentionally not frozen, and no holdout analyzer outputs, performance results, or semantic labels were inspected or generated.",
+    "Prove per-project mixed-language quality if required; current quality evidence groups runs by language across projects and has no per-project mixed-language threshold.",
+    "Complete T7 packaged keyboard focus/Tab and independent visual review; resolve the React profiler development graph failure before claiming that gate complete.",
+    "Complete T10 real historical release-format fixture conversion and T11 only after independent holdout custody and human labels are available."
+  ],
+  "repositories": [
+    {
+      "id": "D01",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/honojs/hono",
+      "commit": "08a023cbfde55b434fb0fb30fae35d42e4bf20aa",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/honojs/hono/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "TypeScript",
+      "roles": [
+        "backend-framework",
+        "library"
+      ],
+      "selectionReason": "Contributes independent TypeScript coverage for backend-framework, library and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "MIT",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/honojs/hono/blob/08a023cbfde55b434fb0fb30fae35d42e4bf20aa/LICENSE",
+        "contentSha256": "a6ab98e5c77b9070c443eaff2ff81034a6f8cc05a7524d5098eb0f24defa0115",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "pnpm-workspace.yaml",
+        "sourceUrl": "https://github.com/honojs/hono/blob/08a023cbfde55b434fb0fb30fae35d42e4bf20aa/pnpm-workspace.yaml",
+        "description": "Root package and adapters/* declared as workspace members.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE",
+          "adapters",
+          "adapters/aws-lambda/package.json",
+          "adapters/aws-lambda/tsconfig.json",
+          "adapters/bun/package.json",
+          "adapters/bun/tsconfig.json",
+          "adapters/cloudflare-workers/package.json",
+          "adapters/cloudflare-workers/tsconfig.json",
+          "adapters/deno/package.json",
+          "adapters/deno/tsconfig.json",
+          "adapters/lambda-edge/package.json",
+          "adapters/lambda-edge/tsconfig.json",
+          "adapters/netlify/package.json",
+          "adapters/netlify/tsconfig.json",
+          "adapters/service-worker/package.json",
+          "adapters/service-worker/tsconfig.json",
+          "adapters/vercel/package.json",
+          "adapters/vercel/tsconfig.json",
+          "package.json",
+          "perf-measures/type-check/scripts/tsconfig.json",
+          "pnpm-workspace.yaml",
+          "runtime-tests/bun/tsconfig.json",
+          "runtime-tests/fastly/tsconfig.json",
+          "runtime-tests/node/tsconfig.json",
+          "runtime-tests/workerd/tsconfig.json",
+          "src",
+          "tsconfig.base.json",
+          "tsconfig.build.json",
+          "tsconfig.json",
+          "tsconfig.spec.json"
+        ],
+        "excludePaths": [
+          "adapters/aws-lambda/src/conninfo.test.ts",
+          "adapters/aws-lambda/src/handler.test.ts",
+          "adapters/aws-lambda/test/",
+          "adapters/bun/src/conninfo.test.ts",
+          "adapters/bun/src/server.test.ts",
+          "adapters/bun/src/websocket.test.ts",
+          "adapters/bun/test/",
+          "adapters/cloudflare-workers/src/conninfo.test.ts",
+          "adapters/cloudflare-workers/src/serve-static.test.ts",
+          "adapters/cloudflare-workers/src/utils.test.ts",
+          "adapters/cloudflare-workers/src/websocket.test.ts",
+          "adapters/cloudflare-workers/test/",
+          "adapters/deno/src/conninfo.test.ts",
+          "adapters/deno/src/websocket.test.ts",
+          "adapters/deno/test/",
+          "adapters/lambda-edge/src/conninfo.test.ts",
+          "adapters/lambda-edge/src/handler.test.ts",
+          "adapters/lambda-edge/test/",
+          "adapters/netlify/src/conninfo.test.ts",
+          "adapters/service-worker/src/handler.test.ts",
+          "adapters/vercel/src/conninfo.test.ts",
+          "adapters/vercel/src/handler.test.ts",
+          "src/adapter/aws-lambda/conninfo.test.ts",
+          "src/adapter/aws-lambda/handler.test.ts",
+          "src/adapter/bun/conninfo.test.ts",
+          "src/adapter/bun/server.test.ts",
+          "src/adapter/bun/websocket.test.ts",
+          "src/adapter/cloudflare-pages/conninfo.test.ts",
+          "src/adapter/cloudflare-pages/handler.test.ts",
+          "src/adapter/cloudflare-workers/conninfo.test.ts",
+          "src/adapter/cloudflare-workers/serve-static.test.ts",
+          "src/adapter/cloudflare-workers/utils.test.ts",
+          "src/adapter/cloudflare-workers/websocket.test.ts",
+          "src/adapter/deno/conninfo.test.ts",
+          "src/adapter/deno/websocket.test.ts",
+          "src/adapter/lambda-edge/conninfo.test.ts",
+          "src/adapter/lambda-edge/handler.test.ts",
+          "src/adapter/netlify/conninfo.test.ts",
+          "src/adapter/service-worker/handler.test.ts",
+          "src/adapter/vercel/conninfo.test.ts",
+          "src/adapter/vercel/handler.test.ts",
+          "src/client/client.test.ts",
+          "src/client/types.test.ts",
+          "src/client/utils.test.ts",
+          "src/compose.test.ts",
+          "src/context.test.ts",
+          "src/helper/accepts/accepts.test.ts",
+          "src/helper/adapter/index.test.ts",
+          "src/helper/cookie/index.test.ts",
+          "src/helper/css/common.case.test.tsx",
+          "src/helper/css/index.test.tsx",
+          "src/helper/dev/index.test.ts",
+          "src/helper/factory/index.test.ts",
+          "src/helper/html/index.test.ts",
+          "src/helper/proxy/index.test.ts",
+          "src/helper/route/index.test.ts",
+          "src/helper/ssg/plugins.test.tsx",
+          "src/helper/ssg/ssg.test.tsx",
+          "src/helper/ssg/utils.test.ts",
+          "src/helper/streaming/sse.test.tsx",
+          "src/helper/streaming/stream.test.ts",
+          "src/helper/streaming/text.test.ts",
+          "src/helper/testing/index.test.ts",
+          "src/helper/websocket/index.test.ts",
+          "src/hono.test.ts",
+          "src/http-exception.test.ts",
+          "src/jsx/base.test.tsx",
+          "src/jsx/children.test.ts",
+          "src/jsx/components.test.tsx",
+          "src/jsx/context-isolation.test.ts",
+          "src/jsx/dom/client.test.tsx",
+          "src/jsx/dom/components.test.tsx",
+          "src/jsx/dom/context.test.tsx",
+          "src/jsx/dom/css.test.tsx",
+          "src/jsx/dom/hooks/index.test.tsx",
+          "src/jsx/dom/index.test.tsx",
+          "src/jsx/dom/intrinsic-element/components.test.tsx",
+          "src/jsx/dom/server.test.tsx",
+          "src/jsx/hooks/dom.test.tsx",
+          "src/jsx/hooks/string.test.tsx",
+          "src/jsx/index.test.tsx",
+          "src/jsx/intrinsic-element/components.test.tsx",
+          "src/jsx/jsx-runtime.test.tsx",
+          "src/jsx/streaming.test.tsx",
+          "src/jsx/utils.test.ts",
+          "src/middleware/basic-auth/index.test.ts",
+          "src/middleware/bearer-auth/index.test.ts",
+          "src/middleware/body-limit/index.test.ts",
+          "src/middleware/cache/index.test.ts",
+          "src/middleware/combine/index.test.ts",
+          "src/middleware/compress/index.test.ts",
+          "src/middleware/context-storage/index.test.ts",
+          "src/middleware/cors/index.test.ts",
+          "src/middleware/csrf/index.test.ts",
+          "src/middleware/etag/digest.test.ts",
+          "src/middleware/etag/index.test.ts",
+          "src/middleware/ip-restriction/index.test.ts",
+          "src/middleware/jsx-renderer/index.test.tsx",
+          "src/middleware/jwk/index.test.ts",
+          "src/middleware/jwk/keys.test.json",
+          "src/middleware/jwt/index.test.ts",
+          "src/middleware/language/index.test.ts",
+          "src/middleware/logger/index.test.ts",
+          "src/middleware/method-not-allowed/index.test.ts",
+          "src/middleware/method-override/index.test.ts",
+          "src/middleware/mount/index.test.ts",
+          "src/middleware/powered-by/index.test.ts",
+          "src/middleware/pretty-json/index.test.ts",
+          "src/middleware/request-id/index.test.ts",
+          "src/middleware/secure-headers/index.test.ts",
+          "src/middleware/serve-static/index.test.ts",
+          "src/middleware/serve-static/path.test.ts",
+          "src/middleware/timeout/index.test.ts",
+          "src/middleware/timing/index.test.ts",
+          "src/middleware/trailing-slash/index.test.ts",
+          "src/preset/quick.test.ts",
+          "src/preset/tiny.test.ts",
+          "src/request.test.ts",
+          "src/router/common.case.test.ts",
+          "src/router/linear-router/router.test.ts",
+          "src/router/pattern-router/router.test.ts",
+          "src/router/reg-exp-router/prepared-router.test.ts",
+          "src/router/reg-exp-router/router.test.ts",
+          "src/router/smart-router/router.test.ts",
+          "src/router/trie-router/node.test.ts",
+          "src/router/trie-router/router.test.ts",
+          "src/types.test.ts",
+          "src/utils/accept.test.ts",
+          "src/utils/basic-auth.test.ts",
+          "src/utils/body.test.ts",
+          "src/utils/buffer.test.ts",
+          "src/utils/color.test.ts",
+          "src/utils/concurrent.test.ts",
+          "src/utils/cookie.test.ts",
+          "src/utils/crypto.test.ts",
+          "src/utils/encode.test.ts",
+          "src/utils/filepath.test.ts",
+          "src/utils/html.test.ts",
+          "src/utils/ipaddr.test.ts",
+          "src/utils/jwt/jwa.test.ts",
+          "src/utils/jwt/jwt.test.ts",
+          "src/utils/mime.test.ts",
+          "src/utils/stream.test.ts",
+          "src/utils/types.test.ts",
+          "src/utils/url.test.ts",
+          "src/validator/utils.test.ts",
+          "src/validator/validator.test.ts"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "e7a8baf286c642ccb6a5c92ee2c548f472d45b066ba413bb06148cdbb4470cef",
+        "fileCount": 260,
+        "sourceFileCount": 232,
+        "sourceBytes": 854933,
+        "languageCounts": {
+          "TypeScript": 232
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D01-inventory.jsonl",
+        "manifestSha256": "e7a8baf286c642ccb6a5c92ee2c548f472d45b066ba413bb06148cdbb4470cef",
+        "sourceOnlyManifestSha256": "846b726cf8102c4b61a19a2ff0fed0a4528cf537fb010ae59c8c6c88fcc1e812"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "medium",
+        "thresholdContract": "232 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D01-08a023cbfde55b434fb0fb30fae35d42e4bf20aa.tar.gz",
+        "archiveBytes": 1767916,
+        "archiveSha256": "e5d8bf83f9afe4d89d4a4aa7f99574d0e0b5ce2ddb3e23f3213fae2779d1ebad",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D01",
+        "checkoutTreeOid": "5cf2db9690a2f5dbc39ad2b895a8c217965f2523",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "Declared workspaces require static package-scope handling; workspace dependency resolution has not been measured."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D01-inventory.jsonl",
+        "sha256": "e7a8baf286c642ccb6a5c92ee2c548f472d45b066ba413bb06148cdbb4470cef",
+        "scopeSha256": "2f6aade272b92a7dd673ed05a8b128e1827f2e4acc3dfd7aadcbea559145334f",
+        "entryCounts": {
+          "source": 232,
+          "configuration": 27,
+          "license": 1
+        },
+        "fileCount": 260,
+        "configurationPaths": [
+          "adapters/aws-lambda/package.json",
+          "adapters/aws-lambda/tsconfig.json",
+          "adapters/bun/package.json",
+          "adapters/bun/tsconfig.json",
+          "adapters/cloudflare-workers/package.json",
+          "adapters/cloudflare-workers/tsconfig.json",
+          "adapters/deno/package.json",
+          "adapters/deno/tsconfig.json",
+          "adapters/lambda-edge/package.json",
+          "adapters/lambda-edge/tsconfig.json",
+          "adapters/netlify/package.json",
+          "adapters/netlify/tsconfig.json",
+          "adapters/service-worker/package.json",
+          "adapters/service-worker/tsconfig.json",
+          "adapters/vercel/package.json",
+          "adapters/vercel/tsconfig.json",
+          "package.json",
+          "perf-measures/type-check/scripts/tsconfig.json",
+          "pnpm-workspace.yaml",
+          "runtime-tests/bun/tsconfig.json",
+          "runtime-tests/fastly/tsconfig.json",
+          "runtime-tests/node/tsconfig.json",
+          "runtime-tests/workerd/tsconfig.json",
+          "tsconfig.base.json",
+          "tsconfig.build.json",
+          "tsconfig.json",
+          "tsconfig.spec.json"
+        ],
+        "licensePaths": [
+          "LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes."
+      }
+    },
+    {
+      "id": "D02",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/excalidraw/excalidraw",
+      "commit": "ed10ac7dca7e40f3f4a31269b4bfba980d0db41e",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/excalidraw/excalidraw/commits/master.atom",
+        "defaultBranchObserved": "master",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "TypeScript",
+      "roles": [
+        "frontend-application",
+        "library"
+      ],
+      "selectionReason": "Contributes independent TypeScript coverage for frontend-application, library and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "MIT",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/excalidraw/excalidraw/blob/ed10ac7dca7e40f3f4a31269b4bfba980d0db41e/LICENSE",
+        "contentSha256": "1352d204fdb90d5e482c13139d848bc2c9300a9a7de358a0a558a23e72d0d8be",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "package.json",
+        "sourceUrl": "https://github.com/excalidraw/excalidraw/blob/ed10ac7dca7e40f3f4a31269b4bfba980d0db41e/package.json",
+        "description": "Workspaces declare excalidraw-app, packages/* and examples/*.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE",
+          "excalidraw-app",
+          "excalidraw-app/package.json",
+          "package.json",
+          "packages",
+          "packages/common/package.json",
+          "packages/common/tsconfig.json",
+          "packages/element/package.json",
+          "packages/element/tsconfig.json",
+          "packages/excalidraw/package.json",
+          "packages/excalidraw/tsconfig.json",
+          "packages/fractional-indexing/package.json",
+          "packages/fractional-indexing/tsconfig.json",
+          "packages/laser-pointer/LICENSE",
+          "packages/laser-pointer/package.json",
+          "packages/laser-pointer/tsconfig.json",
+          "packages/math/package.json",
+          "packages/math/tsconfig.json",
+          "packages/tsconfig.base.json",
+          "packages/utils/package.json",
+          "packages/utils/tsconfig.json",
+          "tsconfig.json"
+        ],
+        "excludePaths": [
+          "excalidraw-app/tests/",
+          "packages/common/src/__snapshots__/colors.test.ts.snap",
+          "packages/common/src/appEventBus.test.ts",
+          "packages/common/src/colors.test.ts",
+          "packages/common/src/utils.test.ts",
+          "packages/common/tests/",
+          "packages/element/src/__tests__/",
+          "packages/element/tests/",
+          "packages/excalidraw/actions/actionDeleteSelected.test.tsx",
+          "packages/excalidraw/actions/actionDuplicateSelection.test.tsx",
+          "packages/excalidraw/actions/actionElementLock.test.tsx",
+          "packages/excalidraw/actions/actionFlip.test.tsx",
+          "packages/excalidraw/actions/actionProperties.test.tsx",
+          "packages/excalidraw/charts.test.ts",
+          "packages/excalidraw/clipboard.test.ts",
+          "packages/excalidraw/components/DefaultSidebar.test.tsx",
+          "packages/excalidraw/components/FontPicker/FontPicker.test.tsx",
+          "packages/excalidraw/components/Popover.test.tsx",
+          "packages/excalidraw/components/Sidebar/Sidebar.test.tsx",
+          "packages/excalidraw/components/Sidebar/siderbar.test.helpers.tsx",
+          "packages/excalidraw/components/Stats/stats.test.tsx",
+          "packages/excalidraw/components/TTDDialog/common.test.ts",
+          "packages/excalidraw/components/TTDDialog/utils/TTDstreamFetch.test.ts",
+          "packages/excalidraw/components/TTDDialog/utils/chat.test.ts",
+          "packages/excalidraw/components/TTDDialog/utils/mermaidAutoFix.test.ts",
+          "packages/excalidraw/components/TTDDialog/utils/mermaidError.test.ts",
+          "packages/excalidraw/components/TTDDialog/utils/mermaidValidation.test.ts",
+          "packages/excalidraw/components/Trans.test.tsx",
+          "packages/excalidraw/components/UserList.test.tsx",
+          "packages/excalidraw/components/__snapshots__/App.test.tsx.snap",
+          "packages/excalidraw/components/dropdownMenu/DropdownMenu.test.tsx",
+          "packages/excalidraw/components/hoc/withInternalFallback.test.tsx",
+          "packages/excalidraw/components/positionElementBesideCursor.test.ts",
+          "packages/excalidraw/data/library.test.ts",
+          "packages/excalidraw/fonts/ComicShanns/index.ts",
+          "packages/excalidraw/fonts/Excalifont/index.ts",
+          "packages/excalidraw/mermaid.test.ts",
+          "packages/excalidraw/renderer/helpers.test.ts",
+          "packages/excalidraw/subset/harfbuzz/harfbuzz-wasm.ts",
+          "packages/excalidraw/subset/woff2/woff2-wasm.ts",
+          "packages/excalidraw/tests/",
+          "packages/excalidraw/wysiwyg/textWysiwyg.test.tsx",
+          "packages/math/tests/",
+          "packages/utils/tests/"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "e19ca3b8d0f26bee50bf8e3daf411586d27543b7420ff16f6ac7a90c059617bf",
+        "fileCount": 525,
+        "sourceFileCount": 505,
+        "sourceBytes": 4300474,
+        "languageCounts": {
+          "TypeScript": 505
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D02-inventory.jsonl",
+        "manifestSha256": "e19ca3b8d0f26bee50bf8e3daf411586d27543b7420ff16f6ac7a90c059617bf",
+        "sourceOnlyManifestSha256": "29d60d06e262b1f7d8f69b61de1a7c9fa4208d8860f008bcae78176c3f2f6bc8"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "medium",
+        "thresholdContract": "505 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D02-ed10ac7dca7e40f3f4a31269b4bfba980d0db41e.tar.gz",
+        "archiveBytes": 36419855,
+        "archiveSha256": "1eed790ee65f0f0cec108606013aa6bc4a20da74fc11692b3026880f652d1907",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D02",
+        "checkoutTreeOid": "66be96e073c2141d8973127015e81c6d99df23af",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "TypeScript and TSX application/library scopes need a frozen collection scope; assets and embedded resources require a separate license inventory."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D02-inventory.jsonl",
+        "sha256": "e19ca3b8d0f26bee50bf8e3daf411586d27543b7420ff16f6ac7a90c059617bf",
+        "scopeSha256": "d334de5f39da277035150c87723bc8f7b63383614a0254f890d7e52fe7260b07",
+        "entryCounts": {
+          "source": 505,
+          "configuration": 18,
+          "license": 2
+        },
+        "fileCount": 525,
+        "configurationPaths": [
+          "excalidraw-app/package.json",
+          "package.json",
+          "packages/common/package.json",
+          "packages/common/tsconfig.json",
+          "packages/element/package.json",
+          "packages/element/tsconfig.json",
+          "packages/excalidraw/package.json",
+          "packages/excalidraw/tsconfig.json",
+          "packages/fractional-indexing/package.json",
+          "packages/fractional-indexing/tsconfig.json",
+          "packages/laser-pointer/package.json",
+          "packages/laser-pointer/tsconfig.json",
+          "packages/math/package.json",
+          "packages/math/tsconfig.json",
+          "packages/tsconfig.base.json",
+          "packages/utils/package.json",
+          "packages/utils/tsconfig.json",
+          "tsconfig.json"
+        ],
+        "licensePaths": [
+          "LICENSE",
+          "packages/laser-pointer/LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes.",
+        "excludedGeneratedSourcePaths": [
+          "packages/excalidraw/fonts/ComicShanns/index.ts",
+          "packages/excalidraw/fonts/Excalifont/index.ts",
+          "packages/excalidraw/subset/harfbuzz/harfbuzz-wasm.ts",
+          "packages/excalidraw/subset/woff2/woff2-wasm.ts"
+        ]
+      },
+      "sourceGenerationExclusions": [
+        {
+          "path": "packages/excalidraw/fonts/ComicShanns/index.ts",
+          "sourceSha256": "947fd9ac901be8a6c62aaa35450b5f2ffca0489c194cfd54bba6ba53d3ef2e55",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies generated font-index or WASM wrapper output; source is excluded while embedded/font license provenance remains a separate pending review."
+        },
+        {
+          "path": "packages/excalidraw/fonts/Excalifont/index.ts",
+          "sourceSha256": "57793f1c8aa1116de20fb0add878c6c143a29d505913699114008e8907372e8a",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies generated font-index or WASM wrapper output; source is excluded while embedded/font license provenance remains a separate pending review."
+        },
+        {
+          "path": "packages/excalidraw/subset/harfbuzz/harfbuzz-wasm.ts",
+          "sourceSha256": "8b85df14edb55e138bee3865ad5d13f7acd63fe3e967de4f9577ad9045fa4906",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies generated font-index or WASM wrapper output; source is excluded while embedded/font license provenance remains a separate pending review."
+        },
+        {
+          "path": "packages/excalidraw/subset/woff2/woff2-wasm.ts",
+          "sourceSha256": "5428f71551fc004524353d50c66c09f98667e3bb7183b51de5ce4aefe4c78b9a",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies generated font-index or WASM wrapper output; source is excluded while embedded/font license provenance remains a separate pending review."
+        }
+      ]
+    },
+    {
+      "id": "D03",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/pallets/flask",
+      "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/pallets/flask/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Python",
+      "roles": [
+        "backend-framework",
+        "library",
+        "cli"
+      ],
+      "selectionReason": "Contributes independent Python coverage for backend-framework, library, cli and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "BSD-3-Clause",
+        "path": "LICENSE.txt",
+        "sourceUrl": "https://github.com/pallets/flask/blob/d73fa1cdcbd8b1465c151db8924ba58b1dd14e35/LICENSE.txt",
+        "contentSha256": "489a8e1108509ed98a37bb983e11e0f7e1d31f0bd8f99a79c8448e7ff37d07ea",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "pyproject.toml",
+        "sourceUrl": "https://github.com/pallets/flask/blob/d73fa1cdcbd8b1465c151db8924ba58b1dd14e35/pyproject.toml",
+        "description": "One Flask distribution is declared, with the flask CLI entry point.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE.txt",
+          "pyproject.toml",
+          "src/flask"
+        ],
+        "excludePaths": []
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "fd3515b7f6571ee9b62c3797f3ffe5d1796bfdbbb202a2713a556595b7539138",
+        "fileCount": 26,
+        "sourceFileCount": 24,
+        "sourceBytes": 348253,
+        "languageCounts": {
+          "Python": 24
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D03-inventory.jsonl",
+        "manifestSha256": "fd3515b7f6571ee9b62c3797f3ffe5d1796bfdbbb202a2713a556595b7539138",
+        "sourceOnlyManifestSha256": "7be1926cb57b1d5f8626961814fa68a7bb0a505a17a358fb05731fd3ce69dce7"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "small",
+        "thresholdContract": "24 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D03-d73fa1cdcbd8b1465c151db8924ba58b1dd14e35.tar.gz",
+        "archiveBytes": 765022,
+        "archiveSha256": "f2859ca2addf5a0c09e66f79a97851c26ea534727970596fd9e1f643e469a827",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D03",
+        "checkoutTreeOid": "d46b1a2a2cc4219b0ad5060ab618e9f5ae635680",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "A framework sample does not constitute a business application sample; external dependencies and dynamic dispatch need explicit capability diagnostics."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D03-inventory.jsonl",
+        "sha256": "fd3515b7f6571ee9b62c3797f3ffe5d1796bfdbbb202a2713a556595b7539138",
+        "scopeSha256": "ce6a921c6a770fc6fe8d544fc981179d19801e462367e3a943c41f87275498ba",
+        "entryCounts": {
+          "source": 24,
+          "configuration": 1,
+          "license": 1
+        },
+        "fileCount": 26,
+        "configurationPaths": [
+          "pyproject.toml"
+        ],
+        "licensePaths": [
+          "LICENSE.txt"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes."
+      }
+    },
+    {
+      "id": "D04",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/httpie/cli",
+      "commit": "5b604c37c6c67e18e7c3e9aee6c88a8c22b98345",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/httpie/cli/commits/master.atom",
+        "defaultBranchObserved": "master",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Python",
+      "roles": [
+        "cli",
+        "application"
+      ],
+      "selectionReason": "Contributes independent Python coverage for cli, application and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "BSD-3-Clause",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/httpie/cli/blob/5b604c37c6c67e18e7c3e9aee6c88a8c22b98345/LICENSE",
+        "contentSha256": "89a72f18e678d9db71553f9a30bc0c436c71a61496849af9cd477871b70c31ef",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "setup.cfg",
+        "sourceUrl": "https://github.com/httpie/cli/blob/5b604c37c6c67e18e7c3e9aee6c88a8c22b98345/setup.cfg",
+        "description": "One httpie distribution declares http, https and httpie command entry points.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE",
+          "httpie",
+          "setup.cfg"
+        ],
+        "excludePaths": []
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "0c19d28a0d2e794ef02fdd226c0f08cc72bfe2a56da7ef82e6d14b743142e4cc",
+        "fileCount": 80,
+        "sourceFileCount": 78,
+        "sourceBytes": 302596,
+        "languageCounts": {
+          "Python": 78
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D04-inventory.jsonl",
+        "manifestSha256": "0c19d28a0d2e794ef02fdd226c0f08cc72bfe2a56da7ef82e6d14b743142e4cc",
+        "sourceOnlyManifestSha256": "72dd1394c53f90fbb4175bb9b4c35c98da7e6c8ddf6481a4f86ce63edf9f6f5d"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "small",
+        "thresholdContract": "78 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D04-5b604c37c6c67e18e7c3e9aee6c88a8c22b98345.tar.gz",
+        "archiveBytes": 1280313,
+        "archiveSha256": "b17b8f906bf508bbc2fed25c02591fc01147d893cda6c3999a352012977023df",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D04",
+        "checkoutTreeOid": "ce66abc6fa4078b0d549dd0e4a3b512d9f1ee90e",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "setup.py is executable configuration and must not be executed; package metadata was read statically from setup.cfg."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D04-inventory.jsonl",
+        "sha256": "0c19d28a0d2e794ef02fdd226c0f08cc72bfe2a56da7ef82e6d14b743142e4cc",
+        "scopeSha256": "2d9745b15d9c1ed40358f26075caa7dc6ec30699f1813783275539513cc37976",
+        "entryCounts": {
+          "source": 78,
+          "configuration": 1,
+          "license": 1
+        },
+        "fileCount": 80,
+        "configurationPaths": [
+          "setup.cfg"
+        ],
+        "licensePaths": [
+          "LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes."
+      }
+    },
+    {
+      "id": "D05",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/google/gson",
+      "commit": "854c8255b625cf1e13c701a83ea9ccb4caaa576a",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/google/gson/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Java",
+      "roles": [
+        "library"
+      ],
+      "selectionReason": "Contributes independent Java coverage for library and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "Apache-2.0",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/google/gson/blob/854c8255b625cf1e13c701a83ea9ccb4caaa576a/LICENSE",
+        "contentSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "pom.xml",
+        "sourceUrl": "https://github.com/google/gson/blob/854c8255b625cf1e13c701a83ea9ccb4caaa576a/pom.xml",
+        "description": "Maven parent declares gson, test-jpms, test-graal-native-image, test-shrinker, extras, metrics and proto modules.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE",
+          "extras/pom.xml",
+          "extras/src/main/java",
+          "gson/LICENSE",
+          "gson/pom.xml",
+          "gson/src/main/java",
+          "pom.xml",
+          "proto/pom.xml",
+          "proto/src/main/java"
+        ],
+        "excludePaths": []
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "5c27077fd9ad55a6075dd9f711dcf06572e88e400791195bf33a9b1fbf80e453",
+        "fileCount": 102,
+        "sourceFileCount": 96,
+        "sourceBytes": 779875,
+        "languageCounts": {
+          "Java": 96
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D05-inventory.jsonl",
+        "manifestSha256": "5c27077fd9ad55a6075dd9f711dcf06572e88e400791195bf33a9b1fbf80e453",
+        "sourceOnlyManifestSha256": "3821f52b485275ffc49ba6edc93521463c56ed67aedb0e4e76b9e216b6cb5b12"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "small",
+        "thresholdContract": "96 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D05-854c8255b625cf1e13c701a83ea9ccb4caaa576a.tar.gz",
+        "archiveBytes": 496820,
+        "archiveSha256": "80873d66b71b556e6d559198b46457995aad597fb7e9caa861895f96ab09f07e",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D05",
+        "checkoutTreeOid": "aba443ba941f8a8c00b98ca91f1268ab58ebf88a",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "Declared test modules must be distinguished from production scopes without executing Maven or resolving dependencies."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D05-inventory.jsonl",
+        "sha256": "5c27077fd9ad55a6075dd9f711dcf06572e88e400791195bf33a9b1fbf80e453",
+        "scopeSha256": "73e786141a71e70b0f2c664e03ecf430fd17a7b5663485284d4354453c48bf47",
+        "entryCounts": {
+          "source": 96,
+          "configuration": 4,
+          "license": 2
+        },
+        "fileCount": 102,
+        "configurationPaths": [
+          "extras/pom.xml",
+          "gson/pom.xml",
+          "pom.xml",
+          "proto/pom.xml"
+        ],
+        "licensePaths": [
+          "LICENSE",
+          "gson/LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes."
+      }
+    },
+    {
+      "id": "D06",
+      "status": "proposed",
+      "split": "holdout",
+      "canonicalUrl": "https://github.com/remkop/picocli",
+      "commit": "10509c0af89aa3254ca14ba90d9b3b7168e57994",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/remkop/picocli/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Java",
+      "roles": [
+        "cli-framework",
+        "library",
+        "examples"
+      ],
+      "selectionReason": "Contributes Java cli-framework, library and examples coverage as the single Java holdout in the proposed split; holdout analysis outputs and labels remain sealed.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "Apache-2.0",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/remkop/picocli/blob/10509c0af89aa3254ca14ba90d9b3b7168e57994/LICENSE",
+        "contentSha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "settings.gradle",
+        "sourceUrl": "https://github.com/remkop/picocli/blob/10509c0af89aa3254ca14ba90d9b3b7168e57994/settings.gradle",
+        "description": "Multiple Gradle subprojects are declared, including Groovy, examples, shells and code generation; some includes depend on Java version.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "pending",
+        "includePaths": null,
+        "excludePaths": null
+      },
+      "sourceInventory": {
+        "status": "pending",
+        "contentHash": null,
+        "fileCount": null,
+        "sourceFileCount": null,
+        "sourceBytes": null,
+        "languageCounts": null
+      },
+      "scale": {
+        "status": "pending",
+        "stratum": null,
+        "thresholdContract": null
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D06-10509c0af89aa3254ca14ba90d9b3b7168e57994.tar.gz",
+        "archiveBytes": 57553291,
+        "archiveSha256": "3a5680368b6c29145be0bc1920fba3ff880373c59f55d05a8a4da0a93d480a44",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D06",
+        "checkoutTreeOid": "6986403e393eea265ea864ba54a59b0e81920d52",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": true,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "unassigned",
+        "sealingStatus": "pending",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "settings.gradle is executable configuration; only declared includes were inspected, and the effective build module set was not evaluated.",
+        "Mixed Groovy/Java support requires an explicit language scope; unsupported languages cannot be silently counted as supported."
+      ]
+    },
+    {
+      "id": "D07",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/spf13/cobra",
+      "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/spf13/cobra/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Go",
+      "roles": [
+        "cli-framework",
+        "library"
+      ],
+      "selectionReason": "Contributes independent Go coverage for cli-framework, library and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "Apache-2.0",
+        "path": "LICENSE.txt",
+        "sourceUrl": "https://github.com/spf13/cobra/blob/adbc8813901bba65827259daa8e22ff94ec1f30e/LICENSE.txt",
+        "contentSha256": "5e3400b93bbb099e83e52bab885e7441750673c21f97988ca3f1240639b63283",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "go.mod",
+        "sourceUrl": "https://github.com/spf13/cobra/blob/adbc8813901bba65827259daa8e22ff94ec1f30e/go.mod",
+        "description": "Root module github.com/spf13/cobra declares go 1.15 and external requirements.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          ".",
+          "LICENSE.txt",
+          "go.mod"
+        ],
+        "excludePaths": [
+          "active_help_test.go",
+          "args_test.go",
+          "assets",
+          "bash_completionsV2_test.go",
+          "bash_completions_test.go",
+          "cobra_test.go",
+          "command_test.go",
+          "completions_test.go",
+          "doc/cmd_test.go",
+          "doc/man_docs_test.go",
+          "doc/man_examples_test.go",
+          "doc/md_docs_test.go",
+          "doc/rest_docs_test.go",
+          "doc/yaml_docs_test.go",
+          "fish_completions_test.go",
+          "flag_groups_test.go",
+          "powershell_completions_test.go",
+          "site",
+          "zsh_completions_test.go"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "770fab99821d00ed8e50408bd73403a02babe69d94230ab70e3fe4ad89988556",
+        "fileCount": 21,
+        "sourceFileCount": 19,
+        "sourceBytes": 231345,
+        "languageCounts": {
+          "Go": 19
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D07-inventory.jsonl",
+        "manifestSha256": "770fab99821d00ed8e50408bd73403a02babe69d94230ab70e3fe4ad89988556",
+        "sourceOnlyManifestSha256": "bd5131451321c0fefd47502dad23f37f9027e34048ae4684fb79bf801f4bce6c"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "small",
+        "thresholdContract": "19 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D07-adbc8813901bba65827259daa8e22ff94ec1f30e.tar.gz",
+        "archiveBytes": 203651,
+        "archiveSha256": "3ac55fe8da447fda3fc44f539a78b9d713467f3e6790642c2bafc5df3c56b409",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D07",
+        "checkoutTreeOid": "5a3b2c8e9af4c74e607a0a55e7910c1edb5d266f",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "A root Go module is not a single Go package; nested-module inventory remains pending."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D07-inventory.jsonl",
+        "sha256": "770fab99821d00ed8e50408bd73403a02babe69d94230ab70e3fe4ad89988556",
+        "scopeSha256": "b3ef65af56c4ceaa5eb49913b4ef25bef117e5409a2c8e4e4008b7cdfbe79fd7",
+        "entryCounts": {
+          "source": 19,
+          "configuration": 1,
+          "license": 1
+        },
+        "fileCount": 21,
+        "configurationPaths": [
+          "go.mod"
+        ],
+        "licensePaths": [
+          "LICENSE.txt"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes."
+      }
+    },
+    {
+      "id": "D08",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/go-chi/chi",
+      "commit": "167e1e3bd039d060696b99c8da4e876ae04f42c1",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/go-chi/chi/commits/master.atom",
+        "defaultBranchObserved": "master",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Go",
+      "roles": [
+        "backend-router",
+        "library"
+      ],
+      "selectionReason": "Contributes independent Go coverage for backend-router, library and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "MIT",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/go-chi/chi/blob/167e1e3bd039d060696b99c8da4e876ae04f42c1/LICENSE",
+        "contentSha256": "a2d51b7515acfaff2f7a88688650f2fc4fd99561383e72bba2305e3db59a1647",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "go.mod",
+        "sourceUrl": "https://github.com/go-chi/chi/blob/167e1e3bd039d060696b99c8da4e876ae04f42c1/go.mod",
+        "description": "Root module github.com/go-chi/chi/v5 declares go 1.24, with no require entries in the inspected root go.mod.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          ".",
+          "LICENSE",
+          "go.mod"
+        ],
+        "excludePaths": [
+          "_examples",
+          "context_test.go",
+          "middleware/basic_auth_test.go",
+          "middleware/clean_path_test.go",
+          "middleware/client_ip_bench_test.go",
+          "middleware/client_ip_example_test.go",
+          "middleware/client_ip_test.go",
+          "middleware/compress_test.go",
+          "middleware/content_charset_test.go",
+          "middleware/content_encoding_test.go",
+          "middleware/content_type_test.go",
+          "middleware/get_head_test.go",
+          "middleware/heartbeat_test.go",
+          "middleware/logger_test.go",
+          "middleware/middleware_test.go",
+          "middleware/path_rewrite_test.go",
+          "middleware/realip_test.go",
+          "middleware/recoverer_test.go",
+          "middleware/request_id_test.go",
+          "middleware/route_headers_test.go",
+          "middleware/strip_test.go",
+          "middleware/sunset_test.go",
+          "middleware/terminal_test.go",
+          "middleware/throttle_test.go",
+          "middleware/url_format_test.go",
+          "middleware/value_test.go",
+          "middleware/wrap_writer_test.go",
+          "mux_test.go",
+          "path_value_test.go",
+          "pattern_test.go",
+          "testdata",
+          "testdata/",
+          "tree_test.go"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "e067379f15cc92167689f96f510d0c97419e363b06f262ed7026bf594992a62c",
+        "fileCount": 37,
+        "sourceFileCount": 35,
+        "sourceBytes": 124834,
+        "languageCounts": {
+          "Go": 35
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D08-inventory.jsonl",
+        "manifestSha256": "e067379f15cc92167689f96f510d0c97419e363b06f262ed7026bf594992a62c",
+        "sourceOnlyManifestSha256": "3aebe6d1cf332ca793f017503a2f40181f278f4d544924d1a1ddbe0443be15c5"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "small",
+        "thresholdContract": "35 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/D08-167e1e3bd039d060696b99c8da4e876ae04f42c1.tar.gz",
+        "archiveBytes": 108880,
+        "archiveSha256": "a199261ec2339cdb34a1e955cd249345520c4f6f825a47238481663f541208f8",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/D08",
+        "checkoutTreeOid": "78ea402444f50acbf2de96c413503d75ef8b6e54",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "No root external requirements does not mean no internal edges; nested-module and package inventories remain pending."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D08-inventory.jsonl",
+        "sha256": "e067379f15cc92167689f96f510d0c97419e363b06f262ed7026bf594992a62c",
+        "scopeSha256": "0f97941ddb5f802f3d6341f715710e7e3c49b809aa4525de69682151ffc3b671",
+        "entryCounts": {
+          "source": 35,
+          "configuration": 1,
+          "license": 1
+        },
+        "fileCount": 37,
+        "configurationPaths": [
+          "go.mod"
+        ],
+        "licensePaths": [
+          "LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes."
+      }
+    },
+    {
+      "id": "H01",
+      "status": "proposed",
+      "split": "holdout",
+      "canonicalUrl": "https://github.com/typescript-eslint/typescript-eslint",
+      "commit": "755b59082b9b4159c13c5d738e12cef1c3043065",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/typescript-eslint/typescript-eslint/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "TypeScript",
+      "roles": [
+        "language-tooling",
+        "library",
+        "website"
+      ],
+      "selectionReason": "Contributes independent TypeScript coverage for language-tooling, library, website and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "MIT",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/typescript-eslint/typescript-eslint/blob/755b59082b9b4159c13c5d738e12cef1c3043065/LICENSE",
+        "contentSha256": "2eb5c7a0bba9deb77a98c81bf6b9d3fb1c67118eebf968b6b1a787b3f8928ee0",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "package.json",
+        "sourceUrl": "https://github.com/typescript-eslint/typescript-eslint/blob/755b59082b9b4159c13c5d738e12cef1c3043065/package.json",
+        "description": "Workspaces declare packages/*; the root manifest declares language tooling and website tasks.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "pending",
+        "includePaths": null,
+        "excludePaths": null
+      },
+      "sourceInventory": {
+        "status": "pending",
+        "contentHash": null,
+        "fileCount": null,
+        "sourceFileCount": null,
+        "sourceBytes": null,
+        "languageCounts": null
+      },
+      "scale": {
+        "status": "pending",
+        "stratum": null,
+        "thresholdContract": null
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/H01-755b59082b9b4159c13c5d738e12cef1c3043065.tar.gz",
+        "archiveBytes": 4119544,
+        "archiveSha256": "1970a345a1292b384a9c45bb82e0a159aa4040e217491075a7f3c12ee50986eb",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/H01",
+        "checkoutTreeOid": "ec20912d2165983fca29c25c81ab81ba3869de6c",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": true,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "unassigned",
+        "sealingStatus": "pending",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "The root manifest contains a postinstall script; it was read as metadata and never executed.",
+        "Only predeclared repository metadata may be used before T11; analyzer outputs and quality labels remain sealed."
+      ]
+    },
+    {
+      "id": "H02",
+      "status": "proposed",
+      "split": "holdout",
+      "canonicalUrl": "https://github.com/spotify/luigi",
+      "commit": "715f65c4a56a908ef0a1df4df6fc33b8420e2e6c",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/spotify/luigi/commits/master.atom",
+        "defaultBranchObserved": "master",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Python",
+      "roles": [
+        "task",
+        "scheduler-service",
+        "cli",
+        "library"
+      ],
+      "selectionReason": "Contributes independent Python coverage for task, scheduler-service, cli, library and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "Apache-2.0",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/spotify/luigi/blob/715f65c4a56a908ef0a1df4df6fc33b8420e2e6c/LICENSE",
+        "contentSha256": "e50f1d85e3aefe03925118f9e028f006d8b46abb4df3be8432dd1e895c712790",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "pyproject.toml",
+        "sourceUrl": "https://github.com/spotify/luigi/blob/715f65c4a56a908ef0a1df4df6fc33b8420e2e6c/pyproject.toml",
+        "description": "One Luigi distribution declares luigi, luigid and tools entry points plus optional dependency groups.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "pending",
+        "includePaths": null,
+        "excludePaths": null
+      },
+      "sourceInventory": {
+        "status": "pending",
+        "contentHash": null,
+        "fileCount": null,
+        "sourceFileCount": null,
+        "sourceBytes": null,
+        "languageCounts": null
+      },
+      "scale": {
+        "status": "pending",
+        "stratum": null,
+        "thresholdContract": null
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/H02-715f65c4a56a908ef0a1df4df6fc33b8420e2e6c.tar.gz",
+        "archiveBytes": 2291485,
+        "archiveSha256": "4be510214739384eedfc56428dd3f5ae5524513c025d24548cabcf3c766aa7ad",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/H02",
+        "checkoutTreeOid": "2e73da979175f4e816cbea83ae83c87079bcb13a",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": true,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "unassigned",
+        "sealingStatus": "pending",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "Batch-job dependency DAGs are not source module call graphs.",
+        "Optional cloud integrations are not to be installed or invoked for default analysis; holdout outputs remain uninspected."
+      ]
+    },
+    {
+      "id": "H03",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/google/guava",
+      "commit": "74fb73b20e17e1b3fa072d7754af493217f86781",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/google/guava/commits/master.atom",
+        "defaultBranchObserved": "master",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Java",
+      "roles": [
+        "library"
+      ],
+      "selectionReason": "Contributes a proposed JVM-only Guava runtime scope plus the four first-party Futures runtime sources; excludes testing-support, GWT, Android, generated and third-party boundaries, and no longer serves as the mixed-language sample.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "Apache-2.0",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/google/guava/blob/74fb73b20e17e1b3fa072d7754af493217f86781/LICENSE",
+        "contentSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "pom.xml",
+        "sourceUrl": "https://github.com/google/guava/blob/74fb73b20e17e1b3fa072d7754af493217f86781/pom.xml",
+        "description": "Maven parent declares guava, guava-bom, guava-gwt, guava-testlib and guava-tests modules.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE",
+          "futures",
+          "futures/failureaccess/pom.xml",
+          "futures/listenablefuture1/pom.xml",
+          "guava/pom.xml",
+          "guava/src",
+          "pom.xml"
+        ],
+        "excludePaths": [
+          "guava/src/com/google/thirdparty/",
+          "guava/src/com/google/thirdparty/publicsuffix/PublicSuffixPatterns.java"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "78aac3d3fd7bc923adcd99e4c97b8b0b2ba9a5c23ad5e8e904a6f2e70a7b421d",
+        "fileCount": 618,
+        "sourceFileCount": 612,
+        "sourceBytes": 6489253,
+        "languageCounts": {
+          "Java": 612
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/H03-inventory.jsonl",
+        "manifestSha256": "78aac3d3fd7bc923adcd99e4c97b8b0b2ba9a5c23ad5e8e904a6f2e70a7b421d",
+        "sourceOnlyManifestSha256": "30d397aa8d06331a1d28f1ee9cdaae03a29540fe13d6e67fccad1323707aa5e0"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "medium",
+        "thresholdContract": "612 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/H03-74fb73b20e17e1b3fa072d7754af493217f86781.tar.gz",
+        "archiveBytes": 5980199,
+        "archiveSha256": "7cb71b9d08496983220e633d3596a5d789613f20292544bfc3817d5506de21be",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/H03",
+        "checkoutTreeOid": "6a1b65ed70b9a4470c601d4b4463516fa0889484",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "Separate production, GWT and test scopes through frozen static collection rules; do not execute Maven.",
+        "The full-archive scale estimate may change after the effective source scope is frozen."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/H03-inventory.jsonl",
+        "sha256": "78aac3d3fd7bc923adcd99e4c97b8b0b2ba9a5c23ad5e8e904a6f2e70a7b421d",
+        "scopeSha256": "b47a569969c5c76c70a31a90188675b9106d40a224e1ca210ff822e2e6a9e39e",
+        "entryCounts": {
+          "source": 612,
+          "configuration": 5,
+          "license": 1
+        },
+        "fileCount": 618,
+        "configurationPaths": [
+          "futures/failureaccess/pom.xml",
+          "futures/listenablefuture1/pom.xml",
+          "futures/listenablefuture9999/pom.xml",
+          "guava/pom.xml",
+          "pom.xml"
+        ],
+        "licensePaths": [
+          "LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes.",
+        "excludedGeneratedSourcePaths": [
+          "guava/src/com/google/thirdparty/publicsuffix/PublicSuffixPatterns.java"
+        ]
+      },
+      "sourceGenerationExclusions": [
+        {
+          "path": "guava/src/com/google/thirdparty/publicsuffix/PublicSuffixPatterns.java",
+          "sourceSha256": "946d205a2de1fb39768034d197f1a412f9de34eb0cb83739e14ce5a2d763a66f",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies a generated Public Suffix data table; exclude generated data from analyzed source while retaining the repository's applicable licensing review."
+        }
+      ]
+    },
+    {
+      "id": "H04",
+      "status": "proposed",
+      "split": "holdout",
+      "canonicalUrl": "https://github.com/go-task/task",
+      "commit": "b5aef1c287a9be8038347a17646bdf4bc7185bce",
+      "commitVerification": {
+        "status": "verified",
+        "method": "First commit identifier in the primary GitHub default-branch Atom feed; pinned metadata reads subsequently succeeded.",
+        "sourceUrl": "https://github.com/go-task/task/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Go",
+      "roles": [
+        "task",
+        "cli",
+        "application"
+      ],
+      "selectionReason": "Contributes independent Go coverage for task, cli, application and one of three repositories assigned to that language.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "MIT",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/go-task/task/blob/b5aef1c287a9be8038347a17646bdf4bc7185bce/LICENSE",
+        "contentSha256": "ae22882adc54d4c2cec2bb1ce5e0b252c7f3344efd55c72144738e8fcc89509b",
+        "embeddedAndTransitiveLicenseInventory": "pending"
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "go.mod",
+        "sourceUrl": "https://github.com/go-task/task/blob/b5aef1c287a9be8038347a17646bdf4bc7185bce/go.mod",
+        "description": "Root module github.com/go-task/task/v3 declares go 1.26.4 and external direct/indirect requirements.",
+        "effectiveBuildScopes": "unknown",
+        "nestedManifestInventory": "pending"
+      },
+      "collectionScope": {
+        "status": "pending",
+        "includePaths": null,
+        "excludePaths": null
+      },
+      "sourceInventory": {
+        "status": "pending",
+        "contentHash": null,
+        "fileCount": null,
+        "sourceFileCount": null,
+        "sourceBytes": null,
+        "languageCounts": null
+      },
+      "scale": {
+        "status": "pending",
+        "stratum": null,
+        "thresholdContract": null
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "assigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/H04-b5aef1c287a9be8038347a17646bdf4bc7185bce.tar.gz",
+        "archiveBytes": 830932,
+        "archiveSha256": "467065fea21f3e3e803115c8a80c9ccf74d7522b43e4faa654263507ce1bdcda",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/H04",
+        "checkoutTreeOid": "bd7a13e5845855273f3724a691b566d025ccc0d2",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Depth-one Git fetch of the pinned commit and detached checkout; no repository code executed."
+      },
+      "holdout": {
+        "applicable": true,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "unassigned",
+        "sealingStatus": "pending",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "Go 1.26.4 is an enhanced-indexer prerequisite, not permission to download a toolchain or execute Taskfiles.",
+        "External dependency count does not establish internal graph density; holdout analyzer outputs remain uninspected."
+      ]
+    },
+    {
+      "id": "D09",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/spring-projects/spring-framework",
+      "commit": "9b93e5f635dd6576cf049f8e1f8f623968c88047",
+      "commitVerification": {
+        "status": "verified",
+        "method": "Primary GitHub main-branch Atom feed plus successful reads at the pinned commit; archive tree identity independently checked.",
+        "sourceUrl": "https://github.com/spring-projects/spring-framework/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Java",
+      "roles": [
+        "backend-framework",
+        "library"
+      ],
+      "selectionReason": "Adds an independent multi-module Java framework and the first scoped large development sample (>2,000 included Java sources) before measurement and label freeze.",
+      "license": {
+        "status": "reviewed-proposed-scope",
+        "spdxId": "Apache-2.0",
+        "path": "LICENSE.txt",
+        "sourceUrl": "https://github.com/spring-projects/spring-framework/blob/9b93e5f635dd6576cf049f8e1f8f623968c88047/LICENSE.txt",
+        "contentSha256": "56dfc19e0dc836e30177332f73e8e6fbc297941acf3d906eec6eaaa46c2c452a",
+        "embeddedAndTransitiveLicenseInventory": "Selected-scope license and NOTICE files reviewed; full runtime dependency bill of materials not established.",
+        "selectedLicenseEvidencePaths": [
+          "LICENSE.txt",
+          "framework-docs/src/docs/dist/license.txt",
+          "framework-docs/src/docs/dist/notice.txt"
+        ],
+        "thirdPartySelectedSourceNote": "12 org.aopalliance sources have Public Domain attribution captured in D09-aopalliance-license.md; excluded repackaged implementations are not analyzed.",
+        "externalLicenseEvidencePath": "docs/evidence/static-graph-generalization/D09-aopalliance-license.md"
+      },
+      "packageMetadata": {
+        "status": "reviewed-static-declarations",
+        "path": "settings.gradle",
+        "sourceUrl": "https://github.com/spring-projects/spring-framework/blob/9b93e5f635dd6576cf049f8e1f8f623968c88047/settings.gradle",
+        "description": "Root Gradle multi-project declares Spring modules; the proposed source scope covers 20 first-party main Java source roots.",
+        "settingsSha256": "6ec3ec6edae99fd4962c3c883753ad299ee9a6a84b189b0b6c19a9b13bb699ad",
+        "effectiveBuildScopes": "Static tracked-source provenance review is complete; dynamic Gradle source-set evaluation was not run, so effective build scope remains unverified.",
+        "nestedManifestInventory": "25 selected Gradle configuration and wrapper files are listed in the combined inventory; buildSrc is separately hashed as excluded build logic."
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE.txt",
+          "build.gradle",
+          "framework-docs/src/docs/dist/license.txt",
+          "framework-docs/src/docs/dist/notice.txt",
+          "gradle.properties",
+          "gradle/spring-module.gradle",
+          "gradle/wrapper/gradle-wrapper.properties",
+          "settings.gradle",
+          "spring-aop/spring-aop.gradle",
+          "spring-aop/src/main/java/",
+          "spring-aspects/spring-aspects.gradle",
+          "spring-aspects/src/main/java/",
+          "spring-beans/spring-beans.gradle",
+          "spring-beans/src/main/java/",
+          "spring-context-indexer/spring-context-indexer.gradle",
+          "spring-context-indexer/src/main/java/",
+          "spring-context-support/spring-context-support.gradle",
+          "spring-context-support/src/main/java/",
+          "spring-context/spring-context.gradle",
+          "spring-context/src/main/java/",
+          "spring-core/spring-core.gradle",
+          "spring-core/src/main/java/",
+          "spring-expression/spring-expression.gradle",
+          "spring-expression/src/main/java/",
+          "spring-instrument/spring-instrument.gradle",
+          "spring-instrument/src/main/java/",
+          "spring-jdbc/spring-jdbc.gradle",
+          "spring-jdbc/src/main/java/",
+          "spring-jms/spring-jms.gradle",
+          "spring-jms/src/main/java/",
+          "spring-messaging/spring-messaging.gradle",
+          "spring-messaging/src/main/java/",
+          "spring-orm/spring-orm.gradle",
+          "spring-orm/src/main/java/",
+          "spring-oxm/spring-oxm.gradle",
+          "spring-oxm/src/main/java/",
+          "spring-r2dbc/spring-r2dbc.gradle",
+          "spring-r2dbc/src/main/java/",
+          "spring-tx/spring-tx.gradle",
+          "spring-tx/src/main/java/",
+          "spring-web/spring-web.gradle",
+          "spring-web/src/main/java/",
+          "spring-webflux/spring-webflux.gradle",
+          "spring-webflux/src/main/java/",
+          "spring-webmvc/spring-webmvc.gradle",
+          "spring-webmvc/src/main/java/",
+          "spring-websocket/spring-websocket.gradle",
+          "spring-websocket/src/main/java/"
+        ],
+        "excludePaths": [
+          "buildSrc/",
+          "framework-api/",
+          "framework-bom/",
+          "framework-platform/",
+          "integration-tests/",
+          "spring-core-test/",
+          "spring-core/src/main/java/org/springframework/asm/",
+          "spring-core/src/main/java/org/springframework/cglib/",
+          "spring-core/src/main/java/org/springframework/javapoet/",
+          "spring-core/src/main/java/org/springframework/objenesis/",
+          "spring-core/src/main/java21/",
+          "spring-core/src/main/java24/",
+          "spring-test/"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "3a818aac5e4dc9e031d947efb682a71609006967f708aaa481e76273f3ee4ed9",
+        "fileCount": 4569,
+        "sourceFileCount": 4541,
+        "sourceBytes": 25490318,
+        "languageCounts": {
+          "Java": 4541
+        },
+        "sourceOnlyManifestSha256": "a61b789860db22354d8e817aaeac04a37fd1bafa2049b2531063118eaa903356"
+      },
+      "measurementInventory": {
+        "status": "verified-candidate-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D09-spring-framework-inventory.jsonl",
+        "sha256": "3a818aac5e4dc9e031d947efb682a71609006967f708aaa481e76273f3ee4ed9",
+        "entryCounts": {
+          "source": 4541,
+          "configuration": 25,
+          "license": 3
+        },
+        "fileCount": 4569,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows also carry the inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes.",
+        "supportingScopeAudit": "D09-build-logic-boundary.json",
+        "externalLicenseEvidence": "D09-aopalliance-license.md",
+        "scopeSha256": "1b8e54d212f750bd6052c04075987fa4ad195a3d4c3590ce853938ad26546c71",
+        "configurationPaths": [
+          "build.gradle",
+          "gradle.properties",
+          "gradle/spring-module.gradle",
+          "gradle/wrapper/gradle-wrapper.properties",
+          "settings.gradle",
+          "spring-aop/spring-aop.gradle",
+          "spring-aspects/spring-aspects.gradle",
+          "spring-beans/spring-beans.gradle",
+          "spring-context-indexer/spring-context-indexer.gradle",
+          "spring-context-support/spring-context-support.gradle",
+          "spring-context/spring-context.gradle",
+          "spring-core/spring-core.gradle",
+          "spring-expression/spring-expression.gradle",
+          "spring-instrument/spring-instrument.gradle",
+          "spring-jdbc/spring-jdbc.gradle",
+          "spring-jms/spring-jms.gradle",
+          "spring-messaging/spring-messaging.gradle",
+          "spring-orm/spring-orm.gradle",
+          "spring-oxm/spring-oxm.gradle",
+          "spring-r2dbc/spring-r2dbc.gradle",
+          "spring-tx/spring-tx.gradle",
+          "spring-web/spring-web.gradle",
+          "spring-webflux/spring-webflux.gradle",
+          "spring-webmvc/spring-webmvc.gradle",
+          "spring-websocket/spring-websocket.gradle"
+        ],
+        "licensePaths": [
+          "LICENSE.txt",
+          "framework-docs/src/docs/dist/license.txt",
+          "framework-docs/src/docs/dist/notice.txt"
+        ],
+        "sourceContentGenerationAuditComplete": true,
+        "sourceContentGenerationAuditEvidence": "D09-spring-framework-review.md#static-source-provenance-follow-up",
+        "sourceContentGenerationAuditLimit": "Static review of all selected tracked source contents and declared build boundaries only; dynamic Gradle evaluation and generated outputs remain unverified."
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "large",
+        "thresholdContract": "4,541 Java source files; large is >2,000 included source files under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "task-acquired; accountable human acquisition owner unassigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/CANDIDATE-spring-framework-9b93e5f635dd6576cf049f8e1f8f623968c88047.tar.gz",
+        "archiveBytes": 10961616,
+        "archiveSha256": "0cb34f7148de4e16c38424624a53d288b04da751d9f7ff43680304e484a29c24",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/CANDIDATE-spring-framework",
+        "checkoutTreeOid": "5303cf47ab746df1b51c8984aec828a64f0837d3",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Pinned commit archive and detached checkout; content and Git tree were compared without executing repository code."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "The candidate selection and scope are recorded before development measurements and remain un-frozen.",
+        "spring-test and spring-core-test plus four repackaged implementation roots are excluded; selected-scope license review is not a complete runtime BOM.",
+        "Source inventory and topology do not establish semantic quality or production readiness.",
+        "Kotlin sources and seven Java 21/24 multi-release sources are outside this Java src/main/java inventory; multi-release source declarations were statically reviewed and hashed separately.",
+        "The static build-logic boundary inventory does not prove every generated-source path or every dynamic effective Gradle source set; source-content generation audit remains incomplete."
+      ]
+    },
+    {
+      "id": "D10",
+      "status": "proposed",
+      "split": "development",
+      "canonicalUrl": "https://github.com/usememos/memos",
+      "commit": "6ff88e36a22fae6fd225579777e77430b5f85a94",
+      "commitVerification": {
+        "status": "verified",
+        "method": "Pinned official repository commit and local detached checkout/tree identity were independently matched; no repository code executed.",
+        "sourceUrl": "https://github.com/usememos/memos/commits/main.atom",
+        "defaultBranchObserved": "main",
+        "pinnedMetadataReadSucceeded": true
+      },
+      "primaryLanguage": "Go",
+      "roles": [
+        "application",
+        "backend-framework",
+        "frontend-application",
+        "library"
+      ],
+      "selectionReason": "Adds a proposed Go and TypeScript web application with 266 scoped Go and 446 scoped TypeScript/TSX sources to provide a substantial mixed-language development sample; no cross-language call-resolution claim is made.",
+      "license": {
+        "status": "verified-primary-license-only",
+        "spdxId": "MIT",
+        "path": "LICENSE",
+        "sourceUrl": "https://github.com/usememos/memos/blob/6ff88e36a22fae6fd225579777e77430b5f85a94/LICENSE",
+        "contentSha256": "dadc85262cec40d1344736b57da50814194ff721ab98012c09cd9d35c4b8582a",
+        "embeddedAndTransitiveLicenseInventory": "Pending nested, embedded, asset, and transitive license/NOTICE review; no legal clearance is claimed."
+      },
+      "packageMetadata": {
+        "status": "verified-declarations-only",
+        "path": "go.mod",
+        "sourceUrl": "https://github.com/usememos/memos/blob/6ff88e36a22fae6fd225579777e77430b5f85a94/go.mod",
+        "description": "Root Go module and separately declared React/TypeScript web package at web/package.json.",
+        "effectiveBuildScopes": "Proposed production source roots were statically inventoried; no Go or frontend build was executed.",
+        "nestedManifestInventory": "Selected Go module and web package declarations are inventoried; full package/workspace boundary review remains pending."
+      },
+      "collectionScope": {
+        "status": "proposed-reviewed-not-frozen",
+        "includePaths": [
+          "LICENSE",
+          "cmd",
+          "core",
+          "filter",
+          "go.mod",
+          "internal",
+          "markdown",
+          "provider",
+          "server",
+          "store",
+          "web/package.json",
+          "web/src",
+          "web/tsconfig.json"
+        ],
+        "excludePaths": [
+          "cmd/memos/log_test.go",
+          "cmd/memos/main_test.go",
+          "core/access/memo_test.go",
+          "core/memoexport/expansion_test.go",
+          "core/memoexport/memoexport_test.go",
+          "core/memoexport/testdata/",
+          "core/notification/email_test.go",
+          "filter/engine_test.go",
+          "filter/functions_test.go",
+          "filter/time_test.go",
+          "internal/clientip/clientip_test.go",
+          "internal/email/client_test.go",
+          "internal/email/config_test.go",
+          "internal/email/email_test.go",
+          "internal/email/message_test.go",
+          "internal/identifier/resource_name_test.go",
+          "internal/identifier/username_test.go",
+          "internal/imagelimit/imagelimit_test.go",
+          "internal/linkmeta/html_meta_test.go",
+          "internal/motionphoto/motionphoto_test.go",
+          "internal/motionphoto/reader_test.go",
+          "internal/profile/profile_test.go",
+          "internal/ratelimit/ratelimit_test.go",
+          "internal/testutil",
+          "internal/webhook/webhook_test.go",
+          "markdown/extensions/mention_test.go",
+          "markdown/markdown_test.go",
+          "markdown/parser/gfm_email_test.go",
+          "markdown/parser/math_test.go",
+          "markdown/parser/mention_test.go",
+          "markdown/parser/tag_test.go",
+          "markdown/parser/tag_unicode_tables.go",
+          "markdown/parser/tagdata",
+          "markdown/parser/tagdata/main_test.go",
+          "markdown/renderer/markdown_renderer_test.go",
+          "provider/ai/audio/webm_test.go",
+          "provider/ai/audiollm/gemini/gemini_test.go",
+          "provider/ai/stt/openai/openai_test.go",
+          "provider/idp/oauth2/oauth2_test.go",
+          "provider/storage/driver_test.go",
+          "provider/storage/s3/s3_test.go",
+          "server/api/v1/acl_config_test.go",
+          "server/api/v1/attachment_exif_sniff_test.go",
+          "server/api/v1/attachment_exif_test.go",
+          "server/api/v1/attachment_media_metadata_test.go",
+          "server/api/v1/attachment_mime_test.go",
+          "server/api/v1/attachment_service_storage_test.go",
+          "server/api/v1/attachment_upload_test.go",
+          "server/api/v1/attachment_upload_transport_test.go",
+          "server/api/v1/auth_service_client_info_test.go",
+          "server/api/v1/auth_service_session_status_test.go",
+          "server/api/v1/authz_test.go",
+          "server/api/v1/common_test.go",
+          "server/api/v1/connect_handler_test.go",
+          "server/api/v1/connect_interceptors_test.go",
+          "server/api/v1/gateway_marshaler_test.go",
+          "server/api/v1/gateway_route_resolver_test.go",
+          "server/api/v1/instance_stats_test.go",
+          "server/api/v1/link_metadata_test.go",
+          "server/api/v1/memo_comment_relations_test.go",
+          "server/api/v1/memo_create_helpers_test.go",
+          "server/api/v1/memo_delete_webhook_test.go",
+          "server/api/v1/ratelimit_test.go",
+          "server/api/v1/reaction_service_policy_test.go",
+          "server/api/v1/request_body_limit_test.go",
+          "server/api/v1/resource_name_test.go",
+          "server/api/v1/space_icon_test.go",
+          "server/api/v1/space_service_test.go",
+          "server/api/v1/sse_hub_test.go",
+          "server/api/v1/sse_service_test.go",
+          "server/api/v1/sso_username_test.go",
+          "server/api/v1/test/",
+          "server/api/v1/user_resource_name_test.go",
+          "server/api/v1/user_webhook_test.go",
+          "server/auth/authenticator_test.go",
+          "server/auth/token_test.go",
+          "server/cors_test.go",
+          "server/fileserver/fileserver_test.go",
+          "server/frontend/dist",
+          "server/frontend/frontend_test.go",
+          "server/mcp/adapter_test.go",
+          "server/mcp/catalog_test.go",
+          "server/mcp/evals",
+          "server/mcp/openapi_test.go",
+          "server/mcp/service_test.go",
+          "server/mcp/validation_test.go",
+          "server/test/",
+          "store/cache/cache_test.go",
+          "store/db/mysql/auth_config_test.go",
+          "store/db/mysql/space_test.go",
+          "store/db/mysql/user_delete_test.go",
+          "store/db/postgres/auth_config_test.go",
+          "store/db/postgres/space_test.go",
+          "store/db/postgres/user_setting_test.go",
+          "store/db/sqlite/functions_test.go",
+          "store/db/sqlite/memo_validation_test.go",
+          "store/db/sqlite/space_test.go",
+          "store/demo_seed_test.go",
+          "store/deployment_config_test.go",
+          "store/email_test.go",
+          "store/memo_attachment_test.go",
+          "store/memo_relation_policy_test.go",
+          "store/memo_share_test.go",
+          "store/memo_view_icon_test.go",
+          "store/schema_version_test.go",
+          "store/space_icon_test.go",
+          "store/storage_test.go",
+          "store/test/",
+          "store/user_unique_test.go",
+          "web/src/types/proto",
+          "web/src/utils/tag-unicode-data.ts"
+        ]
+      },
+      "sourceInventory": {
+        "status": "verified-proposed-combined-inventory",
+        "contentHash": "b22ccb1f99ebc0743993b69f1592f755131f7e654ad7a47d9c9aa53ce3d309f4",
+        "fileCount": 716,
+        "sourceFileCount": 712,
+        "sourceBytes": 3300658,
+        "languageCounts": {
+          "Go": 266,
+          "TypeScript": 446
+        },
+        "manifestPath": "docs/evidence/static-graph-generalization/D10-inventory.jsonl",
+        "manifestSha256": "b22ccb1f99ebc0743993b69f1592f755131f7e654ad7a47d9c9aa53ce3d309f4",
+        "sourceOnlyManifestSha256": "8ac15a59dda9ced43331840171aad9fcc98dedc9ca3bcf14cc5b4fa8cedac930"
+      },
+      "scale": {
+        "status": "provisional-by-proposed-scope",
+        "stratum": "medium",
+        "thresholdContract": "712 included source files; small <=200, medium 201-2000, large >2000 under plan §7.1. Corpus and threshold freeze remain pending."
+      },
+      "topology": {
+        "status": "unknown",
+        "sparse": null,
+        "dense": null,
+        "cyclic": null,
+        "noEdge": null,
+        "source": "not-measured"
+      },
+      "acquisition": {
+        "status": "acquired",
+        "owner": "codex-task",
+        "ownerStatus": "task-acquired; accountable human acquisition owner unassigned",
+        "archivePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-sources/CANDIDATE-memos-6ff88e36a22fae6fd225579777e77430b5f85a94.tar.gz",
+        "archiveBytes": 2806828,
+        "archiveSha256": "1bc7f2792cc4d7ab0dcdf0352c45ceab7666d27b67ef3c7bab2d90bfac9be478",
+        "checkoutStatus": "clean-detached",
+        "checkoutRelativePath": ".superpowers/sdd/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN/corpus-checkouts/CANDIDATE-memos",
+        "checkoutTreeOid": "2f6f2efc0c197f8934d0190fe08f7dd2a1a3130f",
+        "checkoutHistoryDepth": 1,
+        "checkoutMethod": "Pinned codeload archive and detached checkout compared to the registered commit/tree; no repository code executed."
+      },
+      "holdout": {
+        "applicable": false,
+        "analysisOutputsInspected": false,
+        "analysisRunsPerformed": false,
+        "independentCustodian": null,
+        "custodianStatus": "not-applicable",
+        "sealingStatus": "not-applicable",
+        "independentAnnotationsStatus": "pending"
+      },
+      "caveats": [
+        "The 266 Go and 446 TypeScript/TSX source counts reflect proposed production roots with tests, generated protocol output, and generated Unicode tables excluded.",
+        "The runner derives each project's language membership from source manifest entries, but quality evidence is aggregated by language across projects; per-Memos dual-language quality and a minimum mixed-scope threshold are not established.",
+        "Nested, embedded, asset, and transitive license/NOTICE provenance and accountable human acquisition ownership remain pending."
+      ],
+      "measurementInventory": {
+        "status": "verified-proposed-manifest-not-frozen",
+        "path": "docs/evidence/static-graph-generalization/D10-inventory.jsonl",
+        "sha256": "b22ccb1f99ebc0743993b69f1592f755131f7e654ad7a47d9c9aa53ce3d309f4",
+        "scopeSha256": "874b28f20b72d1d23b2f12a7a43efcbc0dbe8c8e9aaa55535e68181d2c091b6a",
+        "entryCounts": {
+          "source": 712,
+          "configuration": 3,
+          "license": 1
+        },
+        "fileCount": 716,
+        "configurationPaths": [
+          "go.mod",
+          "web/package.json",
+          "web/tsconfig.json"
+        ],
+        "licensePaths": [
+          "LICENSE"
+        ],
+        "sourceContentGenerationAuditComplete": false,
+        "format": "UTF-8 JSONL sorted by repository-relative path; source rows carry inferred language; each row records kind, Git mode, path, content SHA-256, and sizeBytes.",
+        "sourceContentGenerationAuditLimit": "Targeted review verified documented generated protocol and Unicode boundaries; full selected-source provenance, dynamic build-generated behavior, and license/NOTICE completeness remain unverified."
+      },
+      "sourceGenerationExclusions": [
+        {
+          "path": "markdown/parser/tag_unicode_tables.go",
+          "sourceSha256": "21079a54be653b5437c17cf847cbbd7e52e17bb9c91758a92e4b4741eef57b18",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies a generated Unicode data table; excluded while preserving the handwritten tag parser and generator provenance boundary."
+        },
+        {
+          "path": "markdown/parser/tagdata/",
+          "sourceSha256": null,
+          "classification": "generator-tool-excluded-from-analysis-scope",
+          "reason": "The collection excludes the generator tool directory and generated table."
+        },
+        {
+          "path": "web/src/utils/tag-unicode-data.ts",
+          "sourceSha256": "951dad0cf5e89c5c6eef2fe9c271eaa673bcdbc34223ec61d3221349ee35d88a",
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned source header identifies a generated Unicode data table."
+        },
+        {
+          "path": "web/src/types/proto/",
+          "sourceSha256": null,
+          "classification": "generated-source-excluded-from-analysis-scope",
+          "reason": "Pinned generator configuration and project instructions identify this as generated protocol output."
+        },
+        {
+          "path": "proto/gen/",
+          "sourceSha256": null,
+          "classification": "generated-source-outside-included-roots",
+          "reason": "Generated Go protocol output is outside the production Go roots; .proto definitions are not source-language entries in the runner inventory."
+        }
+      ]
+    }
+  ],
+  "updatedDate": "2026-10-06",
+  "amendmentHistory": [
+    {
+      "id": "2026-10-05-add-D09-spring-framework",
+      "status": "proposed-prebaseline-amendment",
+      "reason": "The prior proposed development set had no large project within its effective source scope; Spring supplies 4,541 scoped Java source files and was independently reviewed before baseline collection.",
+      "priorCorpusSha256": "4375c465126d0a773b285c2760b0a590d060c52eec3da7ba3b9f76cd9d788f44",
+      "priorSelection": {
+        "repositories": 12,
+        "development": 8,
+        "holdout": 4,
+        "java": {
+          "total": 3,
+          "development": 2,
+          "holdout": 1
+        }
+      },
+      "amendedSelection": {
+        "repositories": 13,
+        "development": 9,
+        "holdout": 4,
+        "java": {
+          "total": 4,
+          "development": 3,
+          "holdout": 1
+        }
+      },
+      "holdoutIdentitiesChanged": false,
+      "holdoutIds": [
+        "D06",
+        "H01",
+        "H02",
+        "H04"
+      ],
+      "candidateEvidence": "D09-spring-framework-review.md, all D01-D09 inventory manifests, development-inventory-summary.json, D09-build-logic-boundary.json, and D09-aopalliance-license.md"
+    },
+    {
+      "id": "2026-10-06-add-D10-memos-and-reconcile-development-production-scopes",
+      "status": "proposed-prebaseline-amendment",
+      "reason": "Adds the pinned Memos candidate to address the development mixed-language sample gap and synchronizes development manifests with reviewed production-oriented source scopes before baseline or label freeze.",
+      "priorCorpusSha256": "4c76015f84303186d316f8fb853294234b8be4162f45bc9a533f6f155a220b21",
+      "priorSelection": {
+        "repositories": 13,
+        "development": 9,
+        "holdout": 4,
+        "go": {
+          "total": 3,
+          "development": 2,
+          "holdout": 1
+        }
+      },
+      "amendedSelection": {
+        "repositories": 14,
+        "development": 10,
+        "holdout": 4,
+        "go": {
+          "total": 4,
+          "development": 3,
+          "holdout": 1
+        }
+      },
+      "holdoutIdentitiesChanged": false,
+      "holdoutIds": [
+        "D06",
+        "H01",
+        "H02",
+        "H04"
+      ],
+      "candidateEvidence": "t1a-development-scope-review.md, t1a-development-scope-counts.json, t1a-polyglot-candidate.md, T1a-polyglot-selection-review.md, D01-D10 development manifests; mixed-language per-project quality remains unproven."
+    },
+    {
+      "id": "2026-10-06-add-D01-tsconfig-project-reference-metadata",
+      "status": "proposed-prebaseline-metadata-correction",
+      "reason": "Register the six tracked tsconfig files referenced by D01 root tsconfig.json as configuration-only inputs so an isolated exploratory T2 comparison can resolve the same project-reference metadata. The selected D01 source set is unchanged.",
+      "priorCorpusSha256": "195264ff58c7c5ab6338aea23bd90672e3be052ea30d1c4cd5a0f897dd91416c",
+      "priorSelection": {
+        "repositories": 14,
+        "development": 10,
+        "holdout": 4
+      },
+      "amendedSelection": {
+        "repositories": 14,
+        "development": 10,
+        "holdout": 4
+      },
+      "holdoutIdentitiesChanged": false,
+      "sample": "D01",
+      "sourceSelectionChanged": false,
+      "sourceFileCount": 232,
+      "sourceBytes": 854933,
+      "manifestSha256": "e7a8baf286c642ccb6a5c92ee2c548f472d45b066ba413bb06148cdbb4470cef",
+      "scopeSha256": "2f6aade272b92a7dd673ed05a8b128e1827f2e4acc3dfd7aadcbea559145334f",
+      "addedConfigurationEntries": [
+        {
+          "kind": "configuration",
+          "mode": "100644",
+          "path": "perf-measures/type-check/scripts/tsconfig.json",
+          "sha256": "c7cde225c0c9a651144f337970b0688ddc925aa617663ec4e8ce8e11191d8548",
+          "sizeBytes": 141
+        },
+        {
+          "kind": "configuration",
+          "mode": "100644",
+          "path": "runtime-tests/bun/tsconfig.json",
+          "sha256": "76c4d5dc3d84ef0771f41152e7279e94e62aa734531ff9fcccf0fbc3d4e019c3",
+          "sizeBytes": 245
+        },
+        {
+          "kind": "configuration",
+          "mode": "100644",
+          "path": "runtime-tests/fastly/tsconfig.json",
+          "sha256": "7d8e4a0b5dc8f266c10b6ccaac9e94efd7ba54bdbf4aad754008059a8303601e",
+          "sizeBytes": 191
+        },
+        {
+          "kind": "configuration",
+          "mode": "100644",
+          "path": "runtime-tests/node/tsconfig.json",
+          "sha256": "7d8e4a0b5dc8f266c10b6ccaac9e94efd7ba54bdbf4aad754008059a8303601e",
+          "sizeBytes": 191
+        },
+        {
+          "kind": "configuration",
+          "mode": "100644",
+          "path": "runtime-tests/workerd/tsconfig.json",
+          "sha256": "7d8e4a0b5dc8f266c10b6ccaac9e94efd7ba54bdbf4aad754008059a8303601e",
+          "sizeBytes": 191
+        },
+        {
+          "kind": "configuration",
+          "mode": "100644",
+          "path": "tsconfig.spec.json",
+          "sha256": "fb97bc443e930077ff966e316fd02fe05bbadaa0e03e575516757f15d244f7d1",
+          "sizeBytes": 262
+        }
+      ]
+    }
+  ]
+}

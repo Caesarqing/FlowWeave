@@ -18,7 +18,6 @@ type ProjectWorkspaceSnapshot = {
     sequenceReview: ReturnType<typeof useProjectStore.getState>['sequenceReview'];
     projectStatus: string;
     isProjectLoading: boolean;
-    legacyCanvasReadOnly: boolean;
   };
   canvas: {
     canvasLayout: CanvasLayoutState;
@@ -78,8 +77,7 @@ export function captureProjectWorkspaceState(): ProjectWorkspaceSnapshot {
       architectureReview: project.architectureReview,
       sequenceReview: project.sequenceReview,
       projectStatus: project.projectStatus,
-      isProjectLoading: project.isProjectLoading,
-      legacyCanvasReadOnly: project.legacyCanvasReadOnly
+      isProjectLoading: project.isProjectLoading
     },
     canvas: {
       canvasLayout: canvas.canvasLayout,
@@ -172,8 +170,7 @@ export function clearProjectWorkspaceState(): void {
       architectureReview: { state: 'missing' },
       sequenceReview: { state: 'missing' },
       projectStatus: 'Open a local backend project first. FlowWeave will read the file tree and generate module nodes.',
-      isProjectLoading: false,
-      legacyCanvasReadOnly: false
+      isProjectLoading: false
     },
     canvas: {
       canvasLayout: emptyCanvasLayout(),

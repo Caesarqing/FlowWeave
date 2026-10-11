@@ -1,0 +1,621 @@
+{
+  "capturedAt": "2026-10-04T09:49:33.890508+00:00",
+  "branch": "codex/static-loading-implementation",
+  "head": "580401b706331316237a0c14f3c6234272fea816",
+  "packageLockSha256": "b4fea2e22af05d1cf32bcc10eb472fcaf86542f0c23c6e204b6c46f294b6302e",
+  "runtime": {
+    "node": "v24.6.0",
+    "npm": "11.5.1",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64"
+  },
+  "snapshotArchiveSha256": "d4300fd83d072b6d6792fc5d294531533328d77be3daf145effee2014e02ed93",
+  "snapshotArchiveBytes": 146817849,
+  "restoreCheck": "Complete archive restored into a separate temporary project directory; all archived file hashes verified; excludes Git worktree pointer/internals, dependencies, and task ledger.",
+  "baselineCommand": "npm test -- tests/main/canvas-migration.service.test.ts tests/main/canvas-detail.service.test.ts tests/main/canvas-save-coordinator.test.ts tests/renderer/graph-view-projection.test.ts",
+  "baselineResult": {
+    "testFilesPassed": 4,
+    "testFilesFailed": 0,
+    "testsPassed": 78,
+    "testsFailed": 0,
+    "log": "baseline-tests.log"
+  },
+  "privacy": "No absolute filesystem paths or source contents are recorded in this context; changed paths are repository-relative.",
+  "baselineGraphSmoke": {
+    "exitCode": 0,
+    "scenariosPassed": [
+      "edges",
+      "migration-failure",
+      "empty",
+      "four-languages",
+      "save-failure",
+      "tab-switch"
+    ],
+    "log": "baseline-graph-smoke.log",
+    "note": "Intentional save-failure and tab-switch fault injections emit Electron IPC errors; the smoke assertions pass and the command exits 0."
+  },
+  "initialStatusEntryCount": 110,
+  "changedFileCount": 115,
+  "trackedModifiedFileCount": 95,
+  "trackedDeletedFileCount": 2,
+  "untrackedFileCount": 18,
+  "changedFiles": [
+    {
+      "path": ".gitignore",
+      "status": "modified",
+      "sha256": "a474cf47db86ff2e08f6d70205dc3b7bc7f1f3ecccf78135d3bcc36c5513866c"
+    },
+    {
+      "path": "docs/STATIC_LOADING_MODULE_GRAPH_DEEP_DESIGN.md",
+      "status": "untracked",
+      "sha256": "152cb1ced3ddcc39c499b70c220f066b3ed9774b65f148dae26bd75e76382571"
+    },
+    {
+      "path": "docs/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN.md",
+      "status": "untracked",
+      "sha256": "22287ca65df139e415e18559d80bf3ff59d6d6edaf8249704b18e515e4de191b"
+    },
+    {
+      "path": "docs/STATIC_LOADING_MODULE_GRAPH_REMEDIATION.md",
+      "status": "untracked",
+      "sha256": "710926082fb9abdfcec8044359948fb7a9d14e2ae2a15adb83c0599856619ddb"
+    },
+    {
+      "path": "docs/evidence/static-loading-coregist-aggregated-2026-10-02.png",
+      "status": "untracked",
+      "sha256": "4971c52ff61c9e9503e1d1c592003900f62e7a24d31777a09643a7a6bf6d5aef"
+    },
+    {
+      "path": "docs/evidence/static-loading-coregist-first-graph-2026-10-02.png",
+      "status": "untracked",
+      "sha256": "7a27c7edc8ae282c68d016f12cc1369d83aa854713d854cc8b626a02d7878263"
+    },
+    {
+      "path": "docs/evidence/static-loading-electron-2026-10-02.json",
+      "status": "untracked",
+      "sha256": "a03d2653182f3feed441bfe863f2ab2d89c94252075110fb3d7cdfcf162b9738"
+    },
+    {
+      "path": "docs/evidence/static-loading-electron-cache-2026-10-02.json",
+      "status": "untracked",
+      "sha256": "7249d63ad79f6c00f403ad65235930baec810c6742be8ce050d1bb5436e5d2a1"
+    },
+    {
+      "path": "docs/evidence/static-loading-flowweave-first-graph-2026-10-02.png",
+      "status": "untracked",
+      "sha256": "9854b49180fc53564484f34465ec6f732d285776c0d738cfd91c3207ab0aba7c"
+    },
+    {
+      "path": "docs/evidence/static-loading-go-chi-first-graph-2026-10-02.png",
+      "status": "untracked",
+      "sha256": "f3f3fe3f9e4abef8c2101229fb4d41cb7d3569b87b6d814cae5791e83331ad62"
+    },
+    {
+      "path": "electron.vite.config.ts",
+      "status": "modified",
+      "sha256": "3dc307395548c4a34f2913dc22700a44adf167180948e95b794545769ec64000"
+    },
+    {
+      "path": "package.json",
+      "status": "modified",
+      "sha256": "dd9a0eea15cd0faee92346a8c98b6b0994083bc8a566956e3e6007be1dc30692"
+    },
+    {
+      "path": "scripts/run-detail-benchmarks.ts",
+      "status": "untracked",
+      "sha256": "7060001710c0f652d23c3c11bb887101e02f5d25c0b491817675da69595b5d7e"
+    },
+    {
+      "path": "scripts/run-graph-smoke.mjs",
+      "status": "modified",
+      "sha256": "a7bff954bf52c427091d595c2bed01cbbc40339454e1ee9451a4fa9f6e4a62d2"
+    },
+    {
+      "path": "scripts/run-performance-benchmarks.ts",
+      "status": "modified",
+      "sha256": "15ed0bdf0650771881e3eaafe04333f5408a03c237ebb6ef4aa2a0c84f253751"
+    },
+    {
+      "path": "src/App.tsx",
+      "status": "modified",
+      "sha256": "4a5be41291b5a03440b20ce63ead14d7912b53888c6dbf82a742f7de2aa8ae55"
+    },
+    {
+      "path": "src/common/ipc-channels.ts",
+      "status": "modified",
+      "sha256": "2311c539a1d28e0153b29209e78fc64090cf4829f2196cc6f9fdcb243965cce6"
+    },
+    {
+      "path": "src/components/AgentPage.tsx",
+      "status": "modified",
+      "sha256": "e025caefe96512a0c319dc51dc76b44072b0361ca1db640ee9a0814d6f87133b"
+    },
+    {
+      "path": "src/components/CanvasWorkspace.tsx",
+      "status": "modified",
+      "sha256": "b404a4f9c9d7ee8dd496c0c495a40e286c3c777d7ec2ea3508afa71cdca837b3"
+    },
+    {
+      "path": "src/components/ConnectionPanel.tsx",
+      "status": "modified",
+      "sha256": "97c5fdf4cd3884a6f0e33f198ee37b326b56d38a78e751396bb56ecf9dedb1d3"
+    },
+    {
+      "path": "src/components/ModulePanel.tsx",
+      "status": "modified",
+      "sha256": "f5dc9b073df0581bf53c3c36fb6017f6f8432ac1f886635be44d096a596ea314"
+    },
+    {
+      "path": "src/components/ProjectStatusIndicator.tsx",
+      "status": "modified",
+      "sha256": "593a626bc73b1ac87d52934ffe54e9a33946c33170afd9e357dee0c51ea45d54"
+    },
+    {
+      "path": "src/components/StructureWorkspace.tsx",
+      "status": "modified",
+      "sha256": "782211f21c0879f4a11d28efcedefc24948f166ba2c6e62a9055142cee7bb332"
+    },
+    {
+      "path": "src/components/nodes/BaseCanvasNode.tsx",
+      "status": "modified",
+      "sha256": "497b80515c2a434b6ce0ad12d02dfcbb5fa59d24caae42a354087ccd5219dee4"
+    },
+    {
+      "path": "src/hooks/canvas-save-coordinator.ts",
+      "status": "untracked",
+      "sha256": "31fccc37c722e32cc284283f101c4ae4cf297f25f8c68f10a510fea69db7e765"
+    },
+    {
+      "path": "src/hooks/useAppController.ts",
+      "status": "modified",
+      "sha256": "f58c00bd3df9724e05a3f87edf3ff4d7bc06216bf231948317129972f3283dec"
+    },
+    {
+      "path": "src/hooks/useCanvasPersistence.ts",
+      "status": "modified",
+      "sha256": "827b5fb03e04d401da33a0d14b3cadc8c3273703551a4d146c1cef44b3630cc8"
+    },
+    {
+      "path": "src/hooks/useFlowWeaveState.ts",
+      "status": "modified",
+      "sha256": "aa91467d93fb5700cf97565850f3a3fca6ab3637b2e0ab2437a1558784c3bfcd"
+    },
+    {
+      "path": "src/hooks/useProjectActions.ts",
+      "status": "modified",
+      "sha256": "8f9a07307197c06903592e1d48e83990346f84ce68882910b84e88bbb9e1a0d7"
+    },
+    {
+      "path": "src/hooks/useProjectWorkspaceTabs.ts",
+      "status": "modified",
+      "sha256": "7ea79f12d5a99f71fa6f0499aaf0e1ed34bef18eb080f1cc304cc7f387e8d648"
+    },
+    {
+      "path": "src/hooks/useSequenceDiagramState.ts",
+      "status": "modified",
+      "sha256": "40f941eeed03e932cc318f71718f73df6f2c2082781c0f8aa5660950ad6d66dd"
+    },
+    {
+      "path": "src/main/cli/scan-project.ts",
+      "status": "deleted",
+      "sha256": null,
+      "headBlob": "207d567425e3626529ecaa0d2e639b3e81a90399"
+    },
+    {
+      "path": "src/main/index.ts",
+      "status": "modified",
+      "sha256": "ba5a37ab0f99ee2e17dce6d2a4d4506030688fa48756e9fe1f1d2a48e008e91b"
+    },
+    {
+      "path": "src/main/ipc/project.ipc.ts",
+      "status": "modified",
+      "sha256": "73565a870249ddb1115a4f2278b15284c1bc28d427d7fd419f72debe1b1eafc4"
+    },
+    {
+      "path": "src/main/project-analysis.worker.ts",
+      "status": "untracked",
+      "sha256": "29f3f52933a823f9ba6f7895cf265c934b5f332d60e4de3db657beec59ec71ea"
+    },
+    {
+      "path": "src/main/services/architecture-analysis.service.ts",
+      "status": "modified",
+      "sha256": "aba5e2f9d14a6d7742ef59b0cfbe3023b369bd4499c3603bf72c9c94f58ac152"
+    },
+    {
+      "path": "src/main/services/architecture-review.service.ts",
+      "status": "modified",
+      "sha256": "16c72db8e904497efe2ebfdc94cd623cd972fab575c10962cf5cf8219bdaa15b"
+    },
+    {
+      "path": "src/main/services/artifact-run-adoption.service.ts",
+      "status": "modified",
+      "sha256": "6fb4892ab5e3d26eff7002875f98fa96b20c3334e6d36078408756acc509f03d"
+    },
+    {
+      "path": "src/main/services/canvas-artifact.service.ts",
+      "status": "modified",
+      "sha256": "0e440d682a13669ca4a7ff190c751975eeb09f8a5ae774d403c92590a57b3be3"
+    },
+    {
+      "path": "src/main/services/canvas-detail.service.ts",
+      "status": "untracked",
+      "sha256": "d0435695f357dd29c72e2c5fcb2b50d501f7646e2bbb93cd14d82ad9f0455e13"
+    },
+    {
+      "path": "src/main/services/canvas-migration.service.ts",
+      "status": "modified",
+      "sha256": "9282f5a0a7dc51d8b96a216414b8127e0b6c2123ea548e70aee0269f44a7e0a0"
+    },
+    {
+      "path": "src/main/services/generation-errors.ts",
+      "status": "modified",
+      "sha256": "6536b184b90a2620be4d2712a36dd214c38c4316b17f1967b2e276a1266fd10d"
+    },
+    {
+      "path": "src/main/services/modification-delta.service.ts",
+      "status": "modified",
+      "sha256": "3c905a10cb714f61c0184db1d9c72bccadbce813dd693eb7a293014acc56c4c2"
+    },
+    {
+      "path": "src/main/services/module-clustering.service.ts",
+      "status": "modified",
+      "sha256": "989fa8f0aaa5e255920022dbb47e8450d0f74bed75eab45df54cf9501f5d517b"
+    },
+    {
+      "path": "src/main/services/project-agent-connection.service.ts",
+      "status": "modified",
+      "sha256": "d267253106d7fcf2e007f7365e2ddc3b6c3c2d644ea2f472a77c7c24242eee98"
+    },
+    {
+      "path": "src/main/services/project-analysis-context.service.ts",
+      "status": "modified",
+      "sha256": "700f75637b1b6deb540e6737fe7dbd64a36aa20463a7e3a00a79850247ca9434"
+    },
+    {
+      "path": "src/main/services/project-generation.service.ts",
+      "status": "modified",
+      "sha256": "748b1b4cc32056d62d7a9c2060b02fd1519ad965915fe12345410de3b5f355bd"
+    },
+    {
+      "path": "src/main/services/project-scan-fingerprint.service.ts",
+      "status": "modified",
+      "sha256": "51d66b142e412a7485993e2b3a53f3d4893be77745d2e3d581b125b14e445b9d"
+    },
+    {
+      "path": "src/main/services/semantic-index.service.ts",
+      "status": "modified",
+      "sha256": "bf8bfa8aaec7433a4480bafab425ae383e6716c96f2d49d58a99a005f252679f"
+    },
+    {
+      "path": "src/main/services/sequence-diagram.service.ts",
+      "status": "modified",
+      "sha256": "d9c35e4ea4c9d079e5f6f7ae320461720c6c23aed337056886cb7b3a7bda9847"
+    },
+    {
+      "path": "src/main/services/sequence-review.service.ts",
+      "status": "modified",
+      "sha256": "406ccbec62b56fef7650e8d209eadf9e78c48d87771f72db36d11c8fcddeb49b"
+    },
+    {
+      "path": "src/main/services/source-snapshot.service.ts",
+      "status": "modified",
+      "sha256": "0bc281a3a1ee6dd8313b331280bf92a4b66f40ce6666a6e48a70dc73aacb1c20"
+    },
+    {
+      "path": "src/main/services/static-architecture.service.ts",
+      "status": "modified",
+      "sha256": "d90e767ecb929fbb27cb02135e28e33a9802aff85b6d011a3a1bfeaebf1b159f"
+    },
+    {
+      "path": "src/main/services/static-graph-layout.service.ts",
+      "status": "untracked",
+      "sha256": "ff07ded724dc511eb33052242a20943083905256e8c9c2a18285eba0b13c45c0"
+    },
+    {
+      "path": "src/main/services/typescript-semantic.service.ts",
+      "status": "modified",
+      "sha256": "a422b5d38786485a1d65f7bf5aa644bfa91612e6578e3644bb05e553bec98307"
+    },
+    {
+      "path": "src/main/storage/flowweave-store.ts",
+      "status": "modified",
+      "sha256": "b70d6c30f75317096fc8d45579d71a143725e11300a8d05d4aa8c6f6e0b8a9e0"
+    },
+    {
+      "path": "src/preload/index.ts",
+      "status": "modified",
+      "sha256": "7a2c3128bebe9e8fab046aa0ed0e43e6b2588ca4f9c2f0c235b130de43a42eff"
+    },
+    {
+      "path": "src/stores/canvas.store.ts",
+      "status": "modified",
+      "sha256": "beb460654fbe4fb900444fcb44bd606a925fa1ab136d4c6da9bbe3dadc81949b"
+    },
+    {
+      "path": "src/stores/project-workspace-state.ts",
+      "status": "modified",
+      "sha256": "0759467f5205211663eba671343a8abaf738f13887be55b0055783a791e9b41f"
+    },
+    {
+      "path": "src/stores/project.store.ts",
+      "status": "modified",
+      "sha256": "3831738b0e5250e5955764777eba2220978f7805944fb9037ffd4f996d613806"
+    },
+    {
+      "path": "src/styles.css",
+      "status": "modified",
+      "sha256": "a1ca7337d587458fed31f3b6076dee85cd40030ef5d6a2595e4a48d7f47c786c"
+    },
+    {
+      "path": "src/types.ts",
+      "status": "modified",
+      "sha256": "0ce339f81a994ca2cc0ea4000d1ca6d076341c8261e2f533d0687f63eb0d455a"
+    },
+    {
+      "path": "src/utils/canvas-graph-crud.ts",
+      "status": "modified",
+      "sha256": "c5f49dcc9599ec04d3c4f0361df974c41ce689089fe7d81aae547ca35efbcaf4"
+    },
+    {
+      "path": "src/utils/canvas-layout.ts",
+      "status": "modified",
+      "sha256": "ac5f118c31db3afc272d42d4b4391e78967f6acf7180d71c7db5d2a47f7036d7"
+    },
+    {
+      "path": "src/utils/export-artifacts.ts",
+      "status": "modified",
+      "sha256": "bbfde98f7cb400a7b8bdf317af503857faf60f2059513ee95aa05a17f1c67cd1"
+    },
+    {
+      "path": "src/utils/graph-converters.ts",
+      "status": "modified",
+      "sha256": "1ebf52c883889b0b744ad08e1143ac86397b1267a6e35dc0159de741cac04e64"
+    },
+    {
+      "path": "src/utils/graph-view-projection.ts",
+      "status": "modified",
+      "sha256": "0b9474a01e7debe331d01f72780c150eed0ea8743037861c2463d478999e1915"
+    },
+    {
+      "path": "src/utils/i18n.ts",
+      "status": "modified",
+      "sha256": "9f1cb3907d250f09489207a1d3a4ac40037667fdd004556f803a1bc8e18fcbd9"
+    },
+    {
+      "path": "src/utils/modification-delta.ts",
+      "status": "modified",
+      "sha256": "8b1f7b2bd0e25fb4de6ee1b3b5bcf19b604913164858f7e6dd105fe3a5878ba5"
+    },
+    {
+      "path": "src/utils/module-assessment.ts",
+      "status": "modified",
+      "sha256": "0cc172443ecfb654b1f1f7ceae8f9536f79143f716b01767fa6eb5e5e9fa3bf7"
+    },
+    {
+      "path": "src/utils/relation-styles.ts",
+      "status": "modified",
+      "sha256": "6a46c87daa6a6fe52fc685cf5fd9f884251826e7c92abd4e4ccbb441b821aa41"
+    },
+    {
+      "path": "tests/main/agent-readiness.integration.test.ts",
+      "status": "modified",
+      "sha256": "0734c97b2b48131f3be6e73e867ccfb0f55f5e0cba8aceaaa904ad11ee52b57f"
+    },
+    {
+      "path": "tests/main/agent-run.service.test.ts",
+      "status": "modified",
+      "sha256": "ccf890f8aecbcf9637e2140f805f698ae0e4881a85c218ee8330120fe6ae579d"
+    },
+    {
+      "path": "tests/main/architecture-analysis.test.ts",
+      "status": "modified",
+      "sha256": "196082fd1d7e6a24f33de2ac3aaa0b8718c617ec2a8eb10c447f7a80cb8365c3"
+    },
+    {
+      "path": "tests/main/architecture-review.test.ts",
+      "status": "modified",
+      "sha256": "69214216da433463b0bbbda83341322e9d70cf80b27e1c6366f87c08cf464e79"
+    },
+    {
+      "path": "tests/main/canvas-detail.service.test.ts",
+      "status": "untracked",
+      "sha256": "6cce30048f5fb2e9aa44c04954d7b5441a4cf4416f38328ece03eb4d749a78cb"
+    },
+    {
+      "path": "tests/main/canvas-migration.service.test.ts",
+      "status": "modified",
+      "sha256": "2df8e04ed9194289c9a5ddce546f0c67568572729fa4533a286318eaef5845e5"
+    },
+    {
+      "path": "tests/main/canvas-save-coordinator.test.ts",
+      "status": "untracked",
+      "sha256": "64ed776c8a589e82766389fdd03e792f58bbe9cb803538eb0b88db17abb9c9eb"
+    },
+    {
+      "path": "tests/main/flowweave-store.test.ts",
+      "status": "modified",
+      "sha256": "0532544e0c5c63cc9937ed96adfbc02eb9634a3402d76fdcfc9bada031973157"
+    },
+    {
+      "path": "tests/main/full-project-flow.e2e.test.ts",
+      "status": "modified",
+      "sha256": "1501bc620223f3887e9baf38c77657e5f0bbe0608d352eee7e7c4a836c5b65f4"
+    },
+    {
+      "path": "tests/main/generation-process.fixture.ts",
+      "status": "modified",
+      "sha256": "beb2ada5410635158d7448b0ca9d54d3d2d96e58fd6ecf5c5bd429a9b6dc8117"
+    },
+    {
+      "path": "tests/main/generation-transaction.test.ts",
+      "status": "modified",
+      "sha256": "76b2d3701777eedfd2bd2badf977757cc21ddc53316f7491458a4030b7ea3dd9"
+    },
+    {
+      "path": "tests/main/modification-delta.service.test.ts",
+      "status": "modified",
+      "sha256": "228cf1fac49d2c1e2cf61aee7dd7b8ffb03689f3d00e58e6fe33a64e5ddb7804"
+    },
+    {
+      "path": "tests/main/modification-doc.service.test.ts",
+      "status": "modified",
+      "sha256": "55314b796cfafb6990c9ef81db40d999087e742a3bb1c6880293c21f67526f29"
+    },
+    {
+      "path": "tests/main/module-assessment.test.ts",
+      "status": "modified",
+      "sha256": "d7aa0b6eb25caa61b62d4a69b8ee4d3de4ef3dd606defc596a14c9854e6801d3"
+    },
+    {
+      "path": "tests/main/module-clustering.service.test.ts",
+      "status": "modified",
+      "sha256": "214302ad8ecadc83b1f9ade7a67910d7582dc90bb0b8f10e8c514ca474ff86db"
+    },
+    {
+      "path": "tests/main/project-agent-connection.service.test.ts",
+      "status": "modified",
+      "sha256": "b7feae837bc42c057a3ad09ed4ccebaa182f37c306b9e14fbcd7cb472b31475b"
+    },
+    {
+      "path": "tests/main/project-analysis-context.test.ts",
+      "status": "modified",
+      "sha256": "46f64652159a00d3ea2e28fec321d60093e276c0deb24b34435a81f83d169dd9"
+    },
+    {
+      "path": "tests/main/project-ipc-doc-read.test.ts",
+      "status": "modified",
+      "sha256": "f75fa4121879f390eaba5cd202e6cf21f88a01ef56e0d03a2d8ddaf636b8320d"
+    },
+    {
+      "path": "tests/main/project-ipc-doc-write.test.ts",
+      "status": "modified",
+      "sha256": "d19ad46d4dd2bb3c821adea67d50400d3eb9dbab7935257dfeb0b529daec2a8e"
+    },
+    {
+      "path": "tests/main/project-scan-static-graph.test.ts",
+      "status": "modified",
+      "sha256": "8621dddfb4a73e7828119a83c1fb2ec92c6e40514d1a5aed82ece76065257396"
+    },
+    {
+      "path": "tests/main/protocol.fixture.ts",
+      "status": "untracked",
+      "sha256": "70286b2f67a2b1db559c14a1d57e9b31352298d612d25050ef7b70e2ae77ed4c"
+    },
+    {
+      "path": "tests/main/run-log.service.test.ts",
+      "status": "modified",
+      "sha256": "6e8be4a525873bde7e6e553e82697c7752f332af274161679a5e127a33c036ab"
+    },
+    {
+      "path": "tests/main/semantic-index.service.test.ts",
+      "status": "modified",
+      "sha256": "059469e638c86987a7f90ea0190b2f3067fe7c642c006a5192d5996ffd0d643f"
+    },
+    {
+      "path": "tests/main/sequence-diagram.service.test.ts",
+      "status": "modified",
+      "sha256": "142c8833e10d8fb8a7edcd1a330a0e99009ba6f01b3e6fefe7fe996aaab307b4"
+    },
+    {
+      "path": "tests/main/sequence-review.test.ts",
+      "status": "modified",
+      "sha256": "f51aa0da4e4822ca93cb73c5c251720ea36449213ce11e593e6e16d78774b1f2"
+    },
+    {
+      "path": "tests/main/static-analysis-v5.integration.test.ts",
+      "status": "modified",
+      "sha256": "4bfb60aca0a97144571d18c65b08a43210b9e184ebc800b6c6ce086caf091405"
+    },
+    {
+      "path": "tests/main/static-architecture.service.test.ts",
+      "status": "modified",
+      "sha256": "e6f44066aa09db5eaf61dca024711639ebdf78825594a140782e8b65d0c91e3e"
+    },
+    {
+      "path": "tests/main/static-graph-layout.service.test.ts",
+      "status": "untracked",
+      "sha256": "efad2eaa5e448a1314b93e0a534b95d5684451143d034bbe6b98961f979f3399"
+    },
+    {
+      "path": "tests/main/task-generator.test.ts",
+      "status": "modified",
+      "sha256": "0985071ce89aec9c049239e46b95bb1f8fb7f3c5ac387c9fac6adca72b62eb02"
+    },
+    {
+      "path": "tests/renderer/agent-page-readiness.test.ts",
+      "status": "modified",
+      "sha256": "ede62d627539db062118c0df087fb94dfc2d2bd3db6dce172867ad8f1d0f7116"
+    },
+    {
+      "path": "tests/renderer/architecture-review-events.test.ts",
+      "status": "modified",
+      "sha256": "56c268f7b93bf48253c56b6681f7a7bf55a4d19c2e4f89403bdef933f63dbce0"
+    },
+    {
+      "path": "tests/renderer/canvas-crud.test.ts",
+      "status": "modified",
+      "sha256": "0286b37cb0ec4c400641e355f9a8bb4e1848065d2eea4d68fa8baa6ab4d24755"
+    },
+    {
+      "path": "tests/renderer/canvas-diagnostics.test.ts",
+      "status": "modified",
+      "sha256": "bc6cb71b09cb76faf323f3b121baa605c6b8cfc33405ddb31e5a3adb634c91a9"
+    },
+    {
+      "path": "tests/renderer/canvas-filters.test.ts",
+      "status": "modified",
+      "sha256": "b2b19b12f9be533f01e8810f3710bed8faee5fa956605276be45109a5ff1c2fd"
+    },
+    {
+      "path": "tests/renderer/canvas-hierarchy.test.ts",
+      "status": "modified",
+      "sha256": "47a3d3f87c0b7eacb8bea9d0d0f0238895cc18c9006f27730563467fd1b4e7f3"
+    },
+    {
+      "path": "tests/renderer/canvas-layout.test.ts",
+      "status": "modified",
+      "sha256": "be34faa90a12be14def966ef389621b3fbeb29e19655986e161fb9eb75f17d01"
+    },
+    {
+      "path": "tests/renderer/canvas-store.test.ts",
+      "status": "modified",
+      "sha256": "7140904f005ea82acd6274fb896c773ed77d869e84684232a87d3543fc787f3c"
+    },
+    {
+      "path": "tests/renderer/canvas-toolbar-controls.test.ts",
+      "status": "modified",
+      "sha256": "9dd5511911e1894b2b582789ee673fb2a02f42fb96e84fe74fea7a4d14e946a9"
+    },
+    {
+      "path": "tests/renderer/graph-view-projection.test.ts",
+      "status": "modified",
+      "sha256": "14644461352f2f56cb4563edcecf65542ba82e40c06fbf7b1c3f4a586563e1ff"
+    },
+    {
+      "path": "tests/renderer/legacy-canvas-readonly.test.ts",
+      "status": "deleted",
+      "sha256": null,
+      "headBlob": "499cc801c402ca9fac38168bf7b80727c4fb3d3b"
+    },
+    {
+      "path": "tests/renderer/module-panel.test.ts",
+      "status": "modified",
+      "sha256": "1ca1d28aae4e07422202adb2c0f383732f1f82ebe4939ee8bfd43b16c0cea070"
+    },
+    {
+      "path": "tests/renderer/project-status-indicator.test.ts",
+      "status": "modified",
+      "sha256": "83c95f1ec18aed8c117902f77e735eaf4c6a05269d2095df8b58e76cb92a0ae3"
+    },
+    {
+      "path": "tests/renderer/project-workspace-state.test.ts",
+      "status": "modified",
+      "sha256": "88b47e48c03a1a4d967564d04fc9381b25997749172256a043233f9777b685f0"
+    },
+    {
+      "path": "tests/renderer/workspace-layout.test.ts",
+      "status": "modified",
+      "sha256": "6e3cfa6899a455055f65e91ac486592bfbf0f68d49c06578ecbded0e952f2d67"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "status": "failed",
+  "fixture": "empty",
+  "workspaceVisibleMs": 2141,
+  "lastState": {
+    "onboardingVisible": false,
+    "nodes": 2,
+    "nodeIds": [
+      "module-75213745624312fd",
+      "module-84d8252a09142913"
+    ],
+    "viewportNodeIds": [
+      "module-75213745624312fd",
+      "module-84d8252a09142913"
+    ],
+    "groups": 0,
+    "groupCards": [],
+    "edges": [],
+    "edgePaths": 0,
+    "layoutPending": false,
+    "emptyText": "No evidenced cross-module relationships were found. The static modules remain available.",
+    "viewMode": "execution",
+    "projectStatus": "Read 2 files and generated 2 module nodes.",
+    "workspaceVisible": true,
+    "staleBanner": false,
+    "modulePanelVisible": false
+  },
+  "error": {
+    "name": "Error",
+    "message": "Graph node did not open its module details panel.",
+    "stack": "Error: Graph node did not open its module details panel.\n    at file:///private/tmp/flowweave-static-loading-module-graph-package-local-2026-10-07/mac-arm64/FlowWeave.app/Contents/Resources/app.asar/out/main/index.js:10747:47"
+  }
+}

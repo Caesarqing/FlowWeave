@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_CHANNELS } from "../../src/common/ipc-channels";
-import type { CodeflowCanvas } from "../../src/types";
+import type { ArchitectureMap, CodeflowCanvas, CodeflowProject } from "../../src/types";
 import { graphNodes } from "./graph.fixture";
+import { readProjectProtocolCanvas, readProjectProtocolOverview } from "../../src/main/storage/flowweave-store";
+import { writeArchitectureProtocolFixture } from "./protocol.fixture";
 
 const registeredHandlers = vi.hoisted(() => new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>());
 
@@ -27,27 +29,39 @@ describe("project IPC document writes", () => {
   it("preserves relationship diagnostics through Canvas save and a fresh artifact read", async () => {
     const project = await mkdtemp(join(tmpdir(), "flowweave-canvas-diagnostics-project-"));
     const userData = await mkdtemp(join(tmpdir(), "flowweave-canvas-diagnostics-registry-"));
-    await mkdir(join(project, ".flowweave"), { recursive: true });
-    await writeFile(join(project, ".flowweave", "project.json"), JSON.stringify({ scanFingerprint: "scan-1" }), "utf8");
+    const generatedAt = "2026-09-28T00:00:00.000Z";
+    const projectArtifact: CodeflowProject = {
+      version: 2, projectName: "Fixture", rootPath: project, generatedAt,
+      git: { isRepo: false }, summary: { totalFiles: 1, totalFolders: 1, languages: { TypeScript: 1 } },
+      files: [], scanFingerprint: "scan-1"
+    };
+    const sourceCanvas: CodeflowCanvas = {
+      id: "main", title: "Main Canvas", projectPath: project, generatedAt,
+      scanFingerprint: "scan-1", artifactState: "current",
+      nodes: [{ ...graphNodes[0], origin: "generated" }], edges: []
+    };
+    const architecture: ArchitectureMap = {
+      version: 3, projectName: "Fixture", rootPath: project, generatedAt, source: "local",
+      modules: [], relationships: [],
+      relationDiagnostics: [{ kind: "call", reason: "ambiguous-target", count: 1, relationIds: ["call-1"] }],
+      metadata: { source: "local", scanFingerprint: "scan-1", inputFingerprint: "scan-1" }
+    };
+    const { canvas } = await writeArchitectureProtocolFixture(project, projectArtifact, sourceCanvas, architecture);
     await configureProjectRegistry(userData);
     const projectId = await registerProject(project);
     registerProjectIpc();
     const save = registeredHandlers.get(PROJECT_CHANNELS.saveCanvas);
     const read = registeredHandlers.get(PROJECT_CHANNELS.readCanvas);
     if (!save || !read) throw new Error("Canvas IPC handlers were not registered.");
-    const canvas: CodeflowCanvas = {
-      version: 6, id: "main", title: "Main Canvas", projectPath: project, generatedAt: "2026-09-28T00:00:00.000Z", scanFingerprint: "scan-1", artifactState: "current",
-      nodes: [{ ...graphNodes[0], origin: "generated",
-        relationSummary: { dependencies: 1, internalRelations: 2, unresolvedRelations: 1, externalRelations: 0 },
-        relationDiagnostics: [{ code: "dynamic-call", severity: "warning", message: "Receiver cannot be resolved.", filePath: "src/orders.ts", relationId: "call-1", range: { start: { line: 8, column: 12 }, end: { line: 8, column: 20 } }, candidates: ["src/worker.ts"] }]
-      }], edges: []
-    };
     await save({}, projectId, canvas);
-    const persisted = JSON.parse(await readFile(join(project, ".flowweave", "canvas", "main.canvas.json"), "utf8")) as CodeflowCanvas;
-    expect(persisted.nodes).toEqual(canvas.nodes);
+    const persisted = await readProjectProtocolCanvas(project);
+    expect(persisted?.nodes[0]).toMatchObject({ id: graphNodes[0].id, title: graphNodes[0].title });
+    expect(await readProjectProtocolOverview(project)).toMatchObject({
+      relationDiagnostics: [{ kind: "call", reason: "ambiguous-target", count: 1, relationIds: ["call-1"] }]
+    });
     const reloaded = await read({}, projectId) as { mode: "editable"; canvas: CodeflowCanvas };
     expect(reloaded.mode).toBe("editable");
-    expect(reloaded.canvas.nodes).toEqual(canvas.nodes);
+    expect(reloaded.canvas.nodes[0]).toMatchObject({ id: graphNodes[0].id, title: graphNodes[0].title });
     expect(reloaded).not.toHaveProperty("quality");
   });
 

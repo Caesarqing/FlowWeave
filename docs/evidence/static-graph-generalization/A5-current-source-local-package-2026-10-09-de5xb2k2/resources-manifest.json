@@ -1,0 +1,102 @@
+[
+  {
+    "path": "Contents/Resources/app.asar",
+    "bytes": 87880123,
+    "sha256": "7e2a3fd6deace1822eca181f983904df0a90f938035a4fd5af5d10d4ad0fdf2f"
+  },
+  {
+    "path": "Contents/Resources/default_app.asar",
+    "bytes": 111073,
+    "sha256": "06d4a28be095a80eff94dbd18edcfac5b5805e1b5538e0fb7cee7c7ae81db76a"
+  },
+  {
+    "path": "Contents/Resources/flowweave-app-icon.png",
+    "bytes": 221738,
+    "sha256": "7eb4eaa2b8a89940a18899d73ab2f3e3a6ea75ff4085c32f4d13657f244a24e7"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/.claude-plugin/plugin.json",
+    "bytes": 154,
+    "sha256": "be6b562e44a1a3f9417bced4b7e64345dd5dd3235c497606a739c0f311781740"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/.codex-plugin/plugin.json",
+    "bytes": 649,
+    "sha256": "aac2701d4d64c90167eca360550b80ed9b994f4e54e9da7caec03e070c726d8d"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/hosts/claude.md",
+    "bytes": 398,
+    "sha256": "0b06bd9ca8ccc7e8d6d697e86987c3c5869ebf92d6b5b687afe60c3a372494f8"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/hosts/codex.md",
+    "bytes": 385,
+    "sha256": "9a4ce75cc4817b34be3ec9539e1e4c8654624e75fcdf396e61661fb4b57fbe00"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/hosts/cursor.md",
+    "bytes": 325,
+    "sha256": "ae127e22223cb0661c8d7de2a476b26428020c3b43d7a80722a85a204c39b732"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/hosts/gemini.md",
+    "bytes": 318,
+    "sha256": "dc80fa69d8d53ed9b1179bc405ac532b06f05ac8f4058672a2d2aa15382bed3d"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/manifest.json",
+    "bytes": 1183,
+    "sha256": "711c8819ce02c9d0d4d434bf7fecd955516b7566a06512385d69be50c931feb2"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/package.json",
+    "bytes": 173,
+    "sha256": "81df17e28e797bc5abe0e704fbd8e06c2c270d212909aa897e358d23e65b4013"
+  },
+  {
+    "path": "Contents/Resources/flowweave-plugin/skills/flowweave/SKILL.md",
+    "bytes": 2020,
+    "sha256": "962696ee1d8124b036aaf78b40a16b35343bf37140885ae98c8b1108c3627493"
+  },
+  {
+    "path": "Contents/Resources/icon.icns",
+    "bytes": 441923,
+    "sha256": "60d8cde4ab90b38cd2d1b482940e37c9cc5c9d4ef609456aed424a9e9970dce0"
+  },
+  {
+    "path": "Contents/Resources/parsers/licenses/tree-sitter-go/LICENSE",
+    "bytes": 1080,
+    "sha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1"
+  },
+  {
+    "path": "Contents/Resources/parsers/licenses/tree-sitter-java/LICENSE",
+    "bytes": 1069,
+    "sha256": "52ed137b039cd9c46409bc22e89938af911c95b157feae2d040b51e6084369a7"
+  },
+  {
+    "path": "Contents/Resources/parsers/licenses/tree-sitter-python/LICENSE",
+    "bytes": 1080,
+    "sha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f"
+  },
+  {
+    "path": "Contents/Resources/parsers/tree-sitter-go.wasm",
+    "bytes": 217182,
+    "sha256": "9504573f352b20be7f2f1911754d710622aedc15afff16d5ed8fb5645681aee7"
+  },
+  {
+    "path": "Contents/Resources/parsers/tree-sitter-java.wasm",
+    "bytes": 414641,
+    "sha256": "4fdeac4ca6ca089f06c6f7e562abcac1733cd465728cc7031ebb73c2019122c4"
+  },
+  {
+    "path": "Contents/Resources/parsers/tree-sitter-python.wasm",
+    "bytes": 457883,
+    "sha256": "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47"
+  },
+  {
+    "path": "Contents/Resources/parsers/web-tree-sitter.wasm",
+    "bytes": 200297,
+    "sha256": "1ed02fe75a60642bea084670e33267795aab26c19012805b9fb513ab458680ee"
+  }
+]

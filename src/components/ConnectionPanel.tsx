@@ -1,7 +1,8 @@
 import { Link2, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GraphEdge, GraphEdgeRelation, GraphNode } from "../types";
 import { useI18n } from "../utils/i18n";
+import { useCanvasStore } from "../stores/canvas.store";
 import { relationOptions, relationStyle } from "../utils/relation-styles";
 
 export type ConnectionDisplayDetails = {
@@ -20,6 +21,11 @@ export function buildConnectionDisplayDetails(edge: GraphEdge): ConnectionDispla
 }
 
 export function ConnectionPanel({
+  readOnly,
+  userRevision,
+  onEnsureSaved,
+  projectId,
+  generationId,
   defaultRelation,
   mode,
   modules,
@@ -29,9 +35,13 @@ export function ConnectionPanel({
   onUpdateEdgeEndpoints,
   onUpdateEdgeGuidance,
   onUpdateEdgeRelation,
-  selectedEdge,
-  readOnly
+  selectedEdge: canvasEdge
 }: {
+  readOnly: boolean;
+  userRevision: number;
+  onEnsureSaved: () => Promise<void>;
+  projectId: string;
+  generationId?: string;
   defaultRelation: GraphEdgeRelation;
   mode: "create" | "edit";
   modules: GraphNode[];
@@ -42,9 +52,33 @@ export function ConnectionPanel({
   onUpdateEdgeGuidance: (edgeId: string, guidanceNote: string) => void;
   onUpdateEdgeRelation: (edgeId: string, relation: GraphEdgeRelation) => void;
   selectedEdge?: GraphEdge;
-  readOnly: boolean;
 }) {
   const { t } = useI18n();
+  const ensureSaved = useRef(onEnsureSaved);
+  ensureSaved.current = onEnsureSaved;
+  const detailKey = `${projectId}:${generationId ?? ""}:${userRevision}:${canvasEdge?.id ?? ""}:${canvasEdge?.source ?? ""}:${canvasEdge?.target ?? ""}:${canvasEdge?.relation ?? ""}`;
+  const [detailResult, setDetailResult] = useState<{ key: string; detail?: Pick<GraphEdge, "source" | "target" | "relation" | "evidence" | "semanticKinds" | "operations" | "importUsages" | "sourceRelationIds" | "confidence">; error?: string }>();
+  useEffect(() => {
+    if (!projectId || !generationId || !canvasEdge || canvasEdge.origin === "manual") return;
+    const api = window.flowweave;
+    if (!api) {
+      setDetailResult({ key: detailKey, error: "Desktop API unavailable" });
+      return;
+    }
+    let active = true;
+    void ensureSaved.current()
+      .then(() => api.readCanvasEdgeDetail(projectId, generationId, useCanvasStore.getState().userRevision, canvasEdge.id))
+      .then((response) => {
+        if (active && response.generationId === generationId && response.edgeId === canvasEdge.id &&
+          response.userRevision === useCanvasStore.getState().userRevision) setDetailResult({ key: detailKey, detail: response.detail });
+      })
+      .catch((error) => { if (active) setDetailResult({ key: detailKey, error: error instanceof Error ? error.message : String(error) }); });
+    return () => { active = false; };
+  }, [projectId, generationId, canvasEdge?.id, canvasEdge?.origin, detailKey]);
+  const currentDetail = detailResult?.key === detailKey && canvasEdge && detailResult.detail?.source === canvasEdge.source &&
+    detailResult.detail?.target === canvasEdge.target && detailResult.detail?.relation === canvasEdge.relation
+    ? detailResult.detail : undefined;
+  const selectedEdge = useMemo(() => canvasEdge ? { ...canvasEdge, ...currentDetail } : undefined, [canvasEdge, currentDetail]);
   const [source, setSource] = useState(modules[0]?.id ?? "");
   const [target, setTarget] = useState(modules[1]?.id ?? modules[0]?.id ?? "");
   const [relation, setRelation] = useState<GraphEdgeRelation>(defaultRelation);
@@ -67,13 +101,6 @@ export function ConnectionPanel({
     setGuidanceNote(selectedEdge.guidanceNote ?? "");
   }, [mode, selectedEdge]);
 
-  useEffect(() => {
-    if (readOnly || mode !== "edit" || !selectedEdge || isProjected) return;
-    if (guidanceNote === (selectedEdge.guidanceNote ?? "")) return;
-    const timeout = window.setTimeout(() => onUpdateEdgeGuidance(selectedEdge.id, guidanceNote), 450);
-    return () => window.clearTimeout(timeout);
-  }, [guidanceNote, isProjected, mode, onUpdateEdgeGuidance, readOnly, selectedEdge]);
-
   const canCreate = mode === "create" && source && target && source !== target;
 
   function createConnection() {
@@ -91,13 +118,7 @@ export function ConnectionPanel({
     onUpdateEdgeEndpoints(edge.id, edge.source, nextTarget);
   }
 
-  function commitGuidanceNote() {
-    if (readOnly || mode !== "edit" || !selectedEdge || isProjected) return;
-    onUpdateEdgeGuidance(selectedEdge.id, guidanceNote);
-  }
-
   function closePanel() {
-    commitGuidanceNote();
     onClose();
   }
 
@@ -122,13 +143,15 @@ export function ConnectionPanel({
             <p>{t("connection.confidence", { value: t(`connection.confidence.${selectedEdgeDetails?.confidence ?? "inferred"}`) })}</p>
           </section>
           <section className="module-card connection-form">
+            {canvasEdge?.origin !== "manual" && generationId && detailResult?.key !== detailKey ? <p>{t("canvas.detailLoading")}</p> : null}
+            {detailResult?.key === detailKey && detailResult.error ? <p role="alert">{t("canvas.detailLoadFailed", { error: detailResult.error })}</p> : null}
             {isProjected ? <p>{t("connection.projectedReadOnly")}</p> : null}
             <div className="connection-endpoints">
               <span><strong>{t("connection.directionLabel")}</strong>{moduleOptionLabel(sourceNode, selectedEdge.source)} {"->"} {moduleOptionLabel(targetNode, selectedEdge.target)}</span>
               <span><strong>{t("connection.relationType")}</strong>{t(`relation.${selectedEdge.relation}`)}</span>
               <span><strong>{t("connection.confidenceLabel")}</strong>{t(`connection.confidence.${selectedEdgeDetails?.confidence ?? "inferred"}`)}</span>
             </div>
-            <fieldset disabled={readOnly || isProjected}>
+            <fieldset disabled={isProjected || readOnly}>
               <label>
                 {t("connection.source")}
                 <NodeSelect modules={modules} value={selectedEdge.source} onChange={(nextSource) => updateSource(selectedEdge, nextSource)} />
@@ -145,12 +168,9 @@ export function ConnectionPanel({
                 {t("connection.guidance")}
                 <textarea
                   value={guidanceNote}
-                  onBlur={commitGuidanceNote}
-                  onChange={(event) => setGuidanceNote(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                      commitGuidanceNote();
-                    }
+                  onChange={(event) => {
+                    setGuidanceNote(event.target.value);
+                    if (selectedEdge && !isProjected) onUpdateEdgeGuidance(selectedEdge.id, event.target.value);
                   }}
                 />
               </label>
@@ -180,7 +200,7 @@ export function ConnectionPanel({
                 {selectedEdge.aggregatedEdgeIds.map((edgeId) => <code key={edgeId}>{edgeId}</code>)}
               </div>
             ) : null}
-            <button className="ghost-button danger-button" disabled={readOnly || isProjected} type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
+            <button className="ghost-button danger-button" disabled={isProjected || readOnly} type="button" onClick={() => onDeleteEdge(selectedEdge.id)}>
               <Trash2 size={15} />
               {t("connection.delete")}
             </button>
@@ -212,7 +232,7 @@ export function ConnectionPanel({
               <textarea value={guidanceNote} onChange={(event) => setGuidanceNote(event.target.value)} />
             </label>
             </fieldset>
-            <button className="send-button" disabled={readOnly || !canCreate} type="button" onClick={createConnection}>
+            <button className="send-button" disabled={!canCreate || readOnly} type="button" onClick={createConnection}>
               <Plus size={15} />
               {t("connection.create")}
             </button>

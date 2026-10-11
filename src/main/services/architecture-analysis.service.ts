@@ -11,10 +11,11 @@ import type {
   ToolRunResult,
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { readProjectProtocolSnapshot } from "../storage/flowweave-store";
 import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
-import { generateProject, readCommittedAnalysis, assertArtifactGeneration } from "./project-generation.service";
-import { GenerationSupersededError } from "./generation-errors";
+import { readCommittedAnalysis, assertArtifactGeneration } from "./project-generation.service";
+import { ArtifactGenerationMismatchError, GenerationSupersededError } from "./generation-errors";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { parseArchitectureReviewResponse } from "./structured-output.service";
 import {
@@ -30,7 +31,7 @@ import {
 } from "./architecture-review-prompt.service";
 import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
 import {
-  architectureMapToGraph, assessArchitectureMap, buildArchitectureInputFingerprint, buildStaticArchitecture
+  architectureMapToGraph, assessArchitectureMap, buildArchitectureInputFingerprint, buildStaticArchitecture, isCurrentAgentArchitecture
 } from "./static-architecture.service";
 
 export {
@@ -65,7 +66,7 @@ async function analyzeArchitectureOnce(
   toolId: RuntimeAgentId,
   options: AnalysisGenerationOptions | undefined
 ): Promise<ArchitectureAnalysisResult> {
-  const committed = await loadAnalysisGeneration(project, options?.onProgress);
+  const committed = await loadAnalysisGeneration(project);
   const { index, localArchitecture } = committed;
   const scanFingerprint = committed.project.scanFingerprint!;
   const inputFingerprint = localArchitecture.metadata!.inputFingerprint;
@@ -134,7 +135,7 @@ async function analyzeArchitectureOnce(
     localArchitecture,
     startedAt: localArchitecture.generatedAt,
     resume: Boolean(options?.resumeArchitectureReview),
-    persistLocal: () => assertArtifactGeneration(project.rootPath, join(project.rootPath, FLOWWEAVE_DIR, "architecture-local.json"), localArchitecture),
+    persistLocal: () => assertArtifactGeneration(project.rootPath, "static-snapshot.json", localArchitecture),
     persist: (architectureMap) => writeArchitectureArtifacts(project.rootPath, architectureMap),
     toGraph: architectureMapToGraph,
     run,
@@ -152,12 +153,23 @@ async function analyzeArchitectureOnce(
 }
 
 export async function readArchitectureMap(projectPath: string): Promise<ArchitectureMap | undefined> {
+  const snapshot = await readProjectProtocolSnapshot(projectPath);
+  if (!snapshot) return undefined;
   const architecturePath = join(projectPath, FLOWWEAVE_DIR, "architecture-map.json");
   const value = await readJsonArtifact(architecturePath);
-  if (value === undefined) return undefined;
+  if (value === undefined) return snapshot.localArchitecture;
   const architectureMap = value as ArchitectureMap;
   if (architectureMap.version !== 2 && architectureMap.version !== 3) {
     throw new Error(`FlowWeave architecture artifact must be v2 or v3. Regenerate it: ${architecturePath}`);
+  }
+  if (!isCurrentAgentArchitecture(architectureMap, snapshot.localArchitecture)) return snapshot.localArchitecture;
+  try {
+    await assertArtifactGeneration(projectPath, architecturePath, architectureMap);
+  } catch (error) {
+    if (!(error instanceof ArtifactGenerationMismatchError)) throw error;
+    const latestSnapshot = await readProjectProtocolSnapshot(projectPath);
+    if (!latestSnapshot) throw error;
+    return latestSnapshot.localArchitecture;
   }
   return architectureMap;
 }
@@ -178,16 +190,14 @@ export function architectureMapToResult(
   };
 }
 
-export async function loadAnalysisGeneration(
-  project: CodeflowProject,
-  onProgress: AnalysisGenerationOptions["onProgress"]
-) {
+export async function loadAnalysisGeneration(project: CodeflowProject) {
   const committed = await readCommittedAnalysis(project.rootPath);
-  if (committed && committed.project.scanFingerprint === project.scanFingerprint &&
-      (!project.generation || committed.generation.requestId === project.generation.requestId)) return committed;
-  const generated = await generateProject(project.rootPath, { onProgress });
-  if (generated.status === "superseded") throw new GenerationSupersededError(project.rootPath, generated.requestId, "newer registered request");
-  return generated;
+  if (!committed) throw new Error(`Static project analysis has not completed: ${project.rootPath}`);
+  if (committed.project.scanFingerprint !== project.scanFingerprint ||
+      (project.generation && committed.generation.requestId !== project.generation.requestId)) {
+    throw new GenerationSupersededError(project.rootPath, committed.generation.requestId, "the requested project generation is stale");
+  }
+  return committed;
 }
 
 async function runArchitectureReview(
@@ -283,6 +293,7 @@ async function readArchitectureRun(
 
 export async function writeArchitectureArtifacts(projectPath: string, architectureMap: ArchitectureMap) {
   const root = join(projectPath, FLOWWEAVE_DIR);
+  await assertArtifactGeneration(projectPath, "architecture-map.json", architectureMap);
   await writeJsonAtomic(join(root, "architecture-map.json"), architectureMap);
   await Promise.all([
     rm(join(root, "file-insights.json"), { force: true }),

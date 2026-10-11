@@ -1151,8 +1151,6 @@ button:disabled {
 
 .flow-module-node {
   position: relative;
-  width: 248px;
-  min-height: 140px;
   padding: 12px;
   color: var(--text);
   background:
@@ -2744,6 +2742,14 @@ button:disabled {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.default-agent-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .default-agent-panel small {
@@ -4416,8 +4422,7 @@ button:disabled {
   gap: 8px;
   max-width: 100%;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   scrollbar-width: none;
 }
 
@@ -4557,6 +4562,23 @@ button:disabled {
   min-width: 0;
 }
 
+.canvas-stale-banner {
+  position: absolute;
+  z-index: 3;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: calc(100% - 32px);
+  padding: 7px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .canvas-flow-shell {
   position: relative;
   z-index: 1;
@@ -4571,6 +4593,48 @@ button:disabled {
   position: relative;
   min-width: 0;
   min-height: 0;
+}
+
+.canvas-layout-pending {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--graph-bg) 86%, transparent);
+}
+
+.canvas-readability-warning {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+  font-size: 12px;
+}
+
+.canvas-layout-pending strong {
+  color: var(--text);
+}
+
+.canvas-layout-pending.has-error {
+  color: var(--danger);
+}
+
+.flow-canvas.layout-pending {
+  visibility: hidden;
 }
 
 .canvas-edge-empty {
@@ -4597,15 +4661,6 @@ button:disabled {
   color: var(--text);
 }
 
-.canvas-layout-pending {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
 .canvas-view-tools {
   position: relative;
   top: auto;
@@ -4623,15 +4678,15 @@ button:disabled {
   border-radius: 0;
   transform: none;
   isolation: isolate;
-  scrollbar-width: thin;
 }
 
 .canvas-view-tools-content {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  width: max-content;
-  min-width: max-content;
-  margin-inline: auto;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
   gap: 6px;
 }
 
@@ -5200,6 +5255,13 @@ button:disabled {
 .canvas-module-search { position: relative; }
 .canvas-module-search label { display: flex; align-items: center; gap: 6px; }
 .canvas-module-search input { width: 190px; color: var(--text); background: var(--panel-raised); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.canvas-module-scope { position: relative; }
+.canvas-module-scope > summary { cursor: pointer; color: var(--muted); }
+.canvas-module-scope[open] > fieldset { position: absolute; z-index: 10; top: calc(100% + 7px); left: 0; display: grid; gap: 7px; width: min(280px, 80vw); max-height: min(320px, 60vh); overflow: auto; padding: 10px; color: var(--text); background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--panel-shadow); }
+.canvas-module-scope fieldset label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.canvas-module-scope fieldset label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-module-scope fieldset label small,
+.canvas-scope-empty { color: var(--muted); }
 .canvas-search-results { position: relative; width: min(600px, 100%); max-height: 240px; overflow-y: auto; margin: 4px auto; padding: 6px; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 20px #0003; }
 .canvas-search-results button { width: 100%; display: flex; flex-direction: column; text-align: left; background: transparent; color: var(--text); border: 0; padding: 7px; cursor: pointer; }
 .canvas-search-results button:hover { background: var(--surface-hover); }
@@ -5209,6 +5271,11 @@ button:disabled {
 .canvas-analysis-status summary { cursor: pointer; }
 .canvas-analysis-status article { padding: 6px 0; border-top: 1px solid var(--line); }
 .canvas-analysis-status pre { white-space: pre-wrap; user-select: text; }
+.canvas-migration-actions { display: flex; gap: 6px; padding-top: 6px; }
+.canvas-migration-item { display: grid; gap: 6px; margin: 10px 0; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.canvas-migration-item label { display: grid; gap: 4px; }
+.canvas-migration-item select { min-width: 0; max-width: 100%; }
+.canvas-migration-review > pre { max-height: 240px; overflow: auto; }
 .canvas-edge-empty details small { display: block; max-width: 340px; overflow-wrap: anywhere; }
 
 .connection-form fieldset { display: contents; }

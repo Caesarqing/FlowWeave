@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type {
@@ -18,13 +19,14 @@ import type {
   ToolRunResult
 } from "../../types";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
+import { requireProjectProtocolV7 } from "../storage/flowweave-store";
 import { readArchitectureMap, loadAnalysisGeneration } from "./architecture-analysis.service";
 import { assertArtifactGeneration, readCommittedGeneration } from "./project-generation.service";
 import { withArchitectureArtifactLock } from "./architecture-review.service";
 import { startToolPlan } from "./agent-run.service";
 import { registerProject } from "./project-registry.service";
 import { semanticIndexToStructureFacts } from "./semantic-index.service";
-import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
+import { writeJsonAtomic } from "../storage/artifact-store";
 import { extractStructuredJson } from "./structured-output.service";
 import { writeModificationDocs } from "./modification-doc.service";
 import {
@@ -33,6 +35,7 @@ import {
   type SequenceReviewRunResult
 } from "./sequence-review.service";
 import { waitForArtifactRunResponse } from "./artifact-review-wait.service";
+import { ArtifactGenerationMismatchError } from "./generation-errors";
 
 const SEQUENCE_DIAGRAM_FILE = "sequence-diagrams.json";
 export const SEQUENCE_DIAGRAM_PROMPT_TARGET_CHARS = 12_000;
@@ -119,7 +122,7 @@ async function generateSequenceDiagramsOnce(
   agentId: RuntimeAgentId,
   options: AnalysisGenerationOptions | undefined
 ): Promise<SequenceDiagramGenerationResult> {
-  const committed = await loadAnalysisGeneration(project, options?.onProgress);
+  const committed = await loadAnalysisGeneration(project);
   const { index } = committed;
   const facts = semanticIndexToStructureFacts(committed.project, index);
   const architectureMap = await withArchitectureArtifactLock(project.rootPath, async () => {
@@ -247,13 +250,14 @@ export async function reviseSequenceDiagram(
 
 export async function readSequenceDiagrams(projectPath: string): Promise<SequenceDiagramBundle | undefined> {
   const filePath = join(projectPath, FLOWWEAVE_DIR, SEQUENCE_DIAGRAM_FILE);
-  const value = await readJsonArtifact(filePath);
-  if (value === undefined) return undefined;
-  const bundle = value as SequenceDiagramBundle;
-  if (bundle.version !== 2) {
-    throw new Error(`FlowWeave sequence diagram artifact must be v2. Regenerate it: ${filePath}`);
-  }
-  return bundle;
+  return withArchitectureArtifactLock(projectPath, async () => {
+    const generation = await readCommittedGeneration(projectPath);
+    if (!generation) return undefined;
+    const stored = await readStoredSequenceDiagram(filePath);
+    if (!stored) return undefined;
+    await assertArtifactGeneration(projectPath, SEQUENCE_DIAGRAM_FILE, stored.bundle);
+    return stored.bundle;
+  });
 }
 
 export function buildSequenceDiagramPrompt(projectName: string, diagram: SequenceDiagram): SequenceDiagramPrompt {
@@ -917,9 +921,7 @@ export async function writeSequenceDiagramBundle(
   }
   const root = join(projectPath, FLOWWEAVE_DIR);
   await withArchitectureArtifactLock(projectPath, async () => {
-    const canvasPath = join(root, "canvas", "main.canvas.json");
-    const canvas = await readJsonArtifact(canvasPath) as { version?: number } | undefined;
-    if (canvas?.version === 5) throw new Error(`Legacy Canvas v5 is read-only; re-scan successfully before writing sequence diagrams: ${canvasPath}`);
+    await requireProjectProtocolV7(projectPath);
     const generation = await readCommittedGeneration(projectPath);
     if (generation) {
       if (bundle.generation?.requestId !== generation.requestId || bundle.generation.inputFingerprint !== generation.inputFingerprint) {
@@ -927,7 +929,8 @@ export async function writeSequenceDiagramBundle(
       }
       await assertArtifactGeneration(projectPath, SEQUENCE_DIAGRAM_FILE, bundle);
     }
-    await readSequenceDiagrams(projectPath);
+    const stored = await readStoredSequenceDiagram(join(root, SEQUENCE_DIAGRAM_FILE));
+    if (stored) await assertArtifactGeneration(projectPath, SEQUENCE_DIAGRAM_FILE, stored.bundle);
     await writeJsonAtomic(join(root, SEQUENCE_DIAGRAM_FILE), bundle);
   });
   await writeModificationDocs(projectPath, { sequence: bundle, sequenceInstruction });
@@ -938,6 +941,34 @@ async function writeLocalSequenceDiagramBundle(projectPath: string, bundle: Sequ
   if (previous?.source === "agent") return bundle;
   await writeSequenceDiagramBundle(projectPath, bundle, undefined);
   return bundle;
+}
+
+async function readStoredSequenceDiagram(filePath: string): Promise<{ bundle: SequenceDiagramBundle } | undefined> {
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return undefined;
+    throw new Error(`Reading FlowWeave sequence diagram artifact failed: ${filePath}`, { cause: error });
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(content) as unknown;
+  } catch (error) {
+    throw new Error(`FlowWeave artifact is unreadable and was preserved: ${filePath}`, { cause: error });
+  }
+  if (!isRecord(value) || value.version !== 2) {
+    throw new Error(`FlowWeave sequence diagram artifact must be v2. Regenerate it: ${filePath}`);
+  }
+  return { bundle: value as SequenceDiagramBundle };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 function parseFirstJsonObject(output: string): unknown {
@@ -1034,12 +1065,16 @@ function participantPriority(category: ArchitectureMap["modules"][number]["categ
 function relationPriority(relation: ArchitectureMap["relationships"][number]["relation"]) {
   const priorities: Record<ArchitectureMap["relationships"][number]["relation"], number> = {
     calls: 0,
-    depends_on: 1,
-    reads_writes: 2,
-    external_api: 3,
-    publishes_event: 4,
-    subscribes_event: 5,
-    tests: 6
+    process_invocation: 1,
+    http_contract: 2,
+    depends_on: 3,
+    reads: 4,
+    writes: 4,
+    reads_writes: 4,
+    external_api: 5,
+    publishes_event: 6,
+    subscribes_event: 7,
+    tests: 8
   };
   return priorities[relation];
 }

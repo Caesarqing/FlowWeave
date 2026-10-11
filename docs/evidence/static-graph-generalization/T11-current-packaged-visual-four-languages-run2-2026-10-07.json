@@ -1,0 +1,51 @@
+{
+  "status": "failed",
+  "fixture": "four-languages",
+  "workspaceVisibleMs": 2546,
+  "lastState": {
+    "onboardingVisible": false,
+    "nodes": 3,
+    "nodeIds": [
+      "module-105cc96e2949c3e9",
+      "module-c05bc0dca2d8b5e0",
+      "group:view:unlinked"
+    ],
+    "viewportNodeIds": [
+      "module-105cc96e2949c3e9",
+      "module-c05bc0dca2d8b5e0",
+      "group:view:unlinked"
+    ],
+    "groups": 1,
+    "groupCards": [
+      {
+        "id": "group:view:unlinked",
+        "text": "Group3 modulesNo confirmed callsExpand to inspect these modu",
+        "x": 393.1953125,
+        "y": 599.2921142578125,
+        "opacity": "1",
+        "visibility": "visible"
+      }
+    ],
+    "edges": [
+      {
+        "id": "module-105cc96e2949c3e9-module-c05bc0dca2d8b5e0-calls-confirmed",
+        "label": "Edge from module-105cc96e2949c3e9 to module-c05bc0dca2d8b5e0",
+        "path": "M307 130.8203125L327 130.8203125L363 130.8203125L363 130.8203125L399 130.8203125L419 130.8203125",
+        "markerEnd": "url('#1__color=#42f5a7&type=arrowclosed')"
+      }
+    ],
+    "edgePaths": 1,
+    "layoutPending": false,
+    "emptyText": "",
+    "viewMode": "execution",
+    "projectStatus": "Read 21 files and generated 10 module nodes.",
+    "workspaceVisible": true,
+    "staleBanner": false,
+    "modulePanelVisible": false
+  },
+  "error": {
+    "name": "Error",
+    "message": "Electron graph smoke window did not gain focus before keyboard input: {\"windowFocused\":false,\"documentHasFocus\":false,\"windowVisible\":true,\"windowFocusable\":true,\"appHidden\":false}.",
+    "stack": "Error: Electron graph smoke window did not gain focus before keyboard input: {\"windowFocused\":false,\"documentHasFocus\":false,\"windowVisible\":true,\"windowFocusable\":true,\"appHidden\":false}.\n    at verifyKeyboardGroupExpansion (file:///private/tmp/flowweave-static-loading-module-graph-package-visual-2026-10-07/mac-arm64/FlowWeave.app/Contents/Resources/app.asar/out/main/index.js:10987:11)\n    at async file:///private/tmp/flowweave-static-loading-module-graph-package-visual-2026-10-07/mac-arm64/FlowWeave.app/Contents/Resources/app.asar/out/main/index.js:10684:68"
+  }
+}

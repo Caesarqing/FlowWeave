@@ -73,7 +73,7 @@ describe('project workspace state', () => {
   });
 
   it('restores independent project, canvas, and page state after switching projects', () => {
-    useProjectStore.setState({ projectId: 'project-a', projectLabel: 'Alpha', projectPath: '/alpha', legacyCanvasReadOnly: true });
+    useProjectStore.setState({ projectId: 'project-a', projectLabel: 'Alpha', projectPath: '/alpha' });
     useCanvasStore.setState({
       selectedNodeId: 'alpha-node', expandedPaths: new Set(['src']),
       groups: [{ id: 'group:alpha', title: 'Alpha', rootPath: 'alpha', moduleIds: ['alpha-node'] }],
@@ -95,7 +95,7 @@ describe('project workspace state', () => {
     });
     const alpha = captureProjectWorkspaceState();
 
-    useProjectStore.setState({ projectId: 'project-b', projectLabel: 'Beta', projectPath: '/beta', legacyCanvasReadOnly: false });
+    useProjectStore.setState({ projectId: 'project-b', projectLabel: 'Beta', projectPath: '/beta' });
     useCanvasStore.setState({ selectedNodeId: 'beta-node', expandedPaths: new Set(['app']), groups: [], orphanedEdges: [], orphanedNodeEdits: [] });
     useNavigationStore.setState({ activePage: 'tools' });
     useGitStore.setState({ checkpointId: 'beta-checkpoint' });
@@ -104,7 +104,6 @@ describe('project workspace state', () => {
 
     restoreProjectWorkspaceState(alpha);
     expect(useProjectStore.getState().projectId).toBe('project-a');
-    expect(useProjectStore.getState().legacyCanvasReadOnly).toBe(true);
     expect(useCanvasStore.getState().selectedNodeId).toBe('alpha-node');
     expect(useCanvasStore.getState().groups[0].id).toBe('group:alpha');
     expect(useCanvasStore.getState().orphanedEdges[0].id).toBe('pending-edge');
@@ -118,7 +117,6 @@ describe('project workspace state', () => {
 
     restoreProjectWorkspaceState(beta);
     expect(useProjectStore.getState().projectId).toBe('project-b');
-    expect(useProjectStore.getState().legacyCanvasReadOnly).toBe(false);
     expect(useCanvasStore.getState().selectedNodeId).toBe('beta-node');
     expect(useNavigationStore.getState().activePage).toBe('tools');
     expect(useGitStore.getState().checkpointId).toBe('beta-checkpoint');
