@@ -14,8 +14,8 @@ describe('canvas toolbar controls', () => {
   afterEach(() => usePreferencesStore.setState({ locale: previousLocale }));
 
   it('keeps the filter toolbar compact and visually consistent', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
-    const styles = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+    const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
 
     expect(source).not.toContain('<select multiple');
     expect(source).not.toContain('canvas.functionalFilter');
@@ -27,7 +27,7 @@ describe('canvas toolbar controls', () => {
   });
 
   it('uses the persisted functional view and keeps secondary relations optional', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
 
     expect(source).toContain('canvasLayout.viewMode ?? chooseInitialGraphView(edges.map(graphEdgeFromFlow))');
     expect(source).toContain('onSetViewMode(mode)');
@@ -44,7 +44,7 @@ describe('canvas toolbar controls', () => {
   });
 
   it('wires role and technology filters into the graph while retaining area and relation filters', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
     const nodes = [
       createFlowNode(classifiedNode('billing-api', 'billing', 'api', ['backend'])),
       createFlowNode(classifiedNode('billing-ui', 'billing', 'presentation', ['frontend'])),
@@ -94,7 +94,7 @@ describe('canvas toolbar controls', () => {
   });
 
   it('keeps cached positions visible while recalculating stale view layouts', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
     const layoutEffect = source.split('if (!layoutReadyForViewport || !(layoutPending || layoutNeedsRefresh)) return;')[1]?.split('  }, [decoratedLayoutGraph.nodes')[0];
 
     expect(source).toContain('layoutGraph.nodes.some((node) =>');
@@ -105,7 +105,7 @@ describe('canvas toolbar controls', () => {
   });
 
   it('relayouts expanded groups locally and offers whole-graph arrange only when local placement fails', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
 
     expect(source).toContain('queueLocalExpansion([node]);');
     expect(source).toContain('layoutExpandedCanvasNodes(');
@@ -115,7 +115,7 @@ describe('canvas toolbar controls', () => {
   });
 
   it('measures the actual view, rejects stale layout work, and exposes group navigation to keyboard users', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
 
     expect(source).toContain('new ResizeObserver(');
     expect(source).toContain('observer.observe(element)');
@@ -135,7 +135,7 @@ describe('canvas toolbar controls', () => {
   });
 
   it('reports filter matches and moves keyboard focus from search to the selected module', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
 
     expect(source).toContain('canvas.filterMatches');
     expect(source).toContain('countCanvasModules(filteredProjectionGraph.nodes)');
@@ -144,12 +144,16 @@ describe('canvas toolbar controls', () => {
   });
 
   it('offers the existing auto-layout action from the insufficient-space warning', () => {
-    const source = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
     const warning = source.split('<div className="canvas-readability-warning"')[1]?.split('</div>')[0];
 
     expect(warning).toContain('onClick={() => void applyAutoLayout()}');
   });
 });
+
+function readSourceText(path: URL): string {
+  return readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+}
 
 function classifiedNode(
   id: string,

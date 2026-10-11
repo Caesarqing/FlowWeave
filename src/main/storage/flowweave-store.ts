@@ -11,6 +11,7 @@ import { applyAssessmentOverride, unknownAssessment } from "../../utils/module-a
 import { assertSafeProjectWritePath } from "./project-write-guard";
 import { readJsonArtifact } from "./artifact-store";
 import { FLOWWEAVE_DIR } from "./flowweave-paths";
+import { syncDirectory } from "./directory-sync";
 import { markTransactionCleanupStarted, removeTransactionAuthority, verifyTransactionAuthority, writeTransactionAuthority } from "./transaction-authority";
 import type { CodeflowProject, CodeflowWriteResult } from "./schemas";
 
@@ -1615,11 +1616,6 @@ async function cleanupJournal(projectRoot: string, journal: TransactionJournal):
 async function durableWrite(path: string, content: string): Promise<void> {
   const handle = await open(path, "w");
   try { await handle.writeFile(content, "utf8"); await handle.sync(); } finally { await handle.close(); }
-}
-
-async function syncDirectory(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
 }
 
 function contentHash(content: string | Buffer): string { return createHash("sha256").update(content).digest("hex"); }

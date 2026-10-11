@@ -71,6 +71,6 @@ describe("desktop-bridge.adapter", () => {
   });
 
   it("maps the open helper to the run directory", () => {
-    expect(getDesktopBridgeDir("/tmp/project", "run-1")).toBe("/tmp/project/.flowweave/runs/run-1");
+    expect(getDesktopBridgeDir("/tmp/project", "run-1")).toBe(join("/tmp/project", FLOWWEAVE_DIR, "runs", "run-1"));
   });
 });

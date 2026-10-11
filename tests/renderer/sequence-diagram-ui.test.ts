@@ -5,14 +5,12 @@ import { buildAgentPrompt, buildModificationContext, buildSequenceGuidanceMarkdo
 import { sequenceArtifactStateFromGenerationResult } from "../../src/hooks/useSequenceDiagramState";
 import type { SequenceDiagramBundle } from "../../src/types";
 
-const structureWorkspaceSource = readFileSync(
-  new URL("../../src/components/StructureWorkspace.tsx", import.meta.url),
-  "utf8"
-);
-const sequenceStateSource = readFileSync(
-  new URL("../../src/hooks/useSequenceDiagramState.ts", import.meta.url),
-  "utf8"
-);
+const structureWorkspaceSource = readSourceText(new URL("../../src/components/StructureWorkspace.tsx", import.meta.url));
+const sequenceStateSource = readSourceText(new URL("../../src/hooks/useSequenceDiagramState.ts", import.meta.url));
+
+function readSourceText(path: URL): string {
+  return readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+}
 
 describe("sequence diagram UI helpers", () => {
   it("lays out participants as vertical lanes and messages by sequence", () => {

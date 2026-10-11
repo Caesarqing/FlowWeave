@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import { syncDirectory } from "./directory-sync";
 
 type AuthorityRecord = {
   version: 1;
@@ -102,11 +103,6 @@ function isAuthorityRecord(value: unknown): value is AuthorityRecord {
 async function assertRegularDirectory(path: string): Promise<void> {
   const info = await lstat(path);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error(`Transaction authority directory is unsafe: ${path}`);
-}
-
-async function syncDirectory(path: string): Promise<void> {
-  const handle = await open(path, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
 }
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }

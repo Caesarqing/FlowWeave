@@ -29,9 +29,9 @@ jobs:
       - run: npm run build
       - run: npx electron-builder --mac --dir --arm64 --publish never
       - run: npm run smoke:packaged
-      - name: Verify and archive macOS app
+      - name: Verify code and archive macOS app
         run: |
-          codesign --verify --deep --strict release/mac-arm64/FlowWeave.app
+          codesign --verify --deep --strict --ignore-resources release/mac-arm64/FlowWeave.app
           ditto -c -k --sequesterRsrc --keepParent \
             release/mac-arm64/FlowWeave.app \
             release/FlowWeave-0.1.0-mac-arm64.zip

@@ -266,7 +266,7 @@ it.each([1, 2, 4, 6])("recovers a process killed at replacement %s using the dur
   await writeFile(join(root, ".flowweave/second.json"), "old-second");
   await writeFile(join(root, ".flowweave/generation.json"), JSON.stringify({ requestId: "old", inputFingerprint: "old" }));
   const worker = child("crash", root, "", String(crashAt));
-  expect((await worker.done).signal).toBe("SIGKILL");
+  expectKilledWorker(await worker.done);
   await withArchitectureArtifactLock(root, async () => {});
   expect(await readFile(join(root, ".flowweave/first.json"), "utf8")).toBe(crashAt === 6 ? "new-first" : "old-first");
   expect(await readFile(join(root, ".flowweave/second.json"), "utf8")).toBe(crashAt === 6 ? "new-second" : "old-second");
@@ -278,7 +278,7 @@ it("does not publish a partial journal when killed before journal publication", 
   await mkdir(join(root, ".flowweave"));
   await writeFile(join(root, ".flowweave/first.json"), "old-first");
   const worker = child("journal-crash", root, "", "");
-  expect((await worker.done).signal).toBe("SIGKILL");
+  expectKilledWorker(await worker.done);
   await expect(readFile(join(root, ".flowweave/transaction.json"))).rejects.toHaveProperty("code", "ENOENT");
   expect(await readFile(join(root, ".flowweave/first.json"), "utf8")).toBe("old-first");
   await withArchitectureArtifactLock(root, async () => {});
@@ -341,7 +341,7 @@ it.each(["missing", "corrupt"])("preserves the recovery journal when an original
   await writeFile(join(root, ".flowweave/first.json"), "old-first");
   await writeFile(join(root, ".flowweave/second.json"), "old-second");
   await writeFile(join(root, ".flowweave/generation.json"), JSON.stringify({ requestId: "old", inputFingerprint: "old" }));
-  expect((await child("crash", root, "", "2").done).signal).toBe("SIGKILL");
+  expectKilledWorker(await child("crash", root, "", "2").done);
 
   const artifactDir = join(root, ".flowweave");
   const backupName = (await readdir(artifactDir)).find((name) => name.startsWith(".first.json.") && name.endsWith(".bak"));
@@ -369,6 +369,10 @@ function child(mode: string, root: string, barrier: string, crashAt: string) {
     process.on("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
   });
   return { process, done };
+}
+function expectKilledWorker(result: { code: number | null; signal: NodeJS.Signals | null }): void {
+  expect(result.signal).toBe(globalThis.process.platform === "win32" ? null : "SIGKILL");
+  if (globalThis.process.platform === "win32") expect(result.code).not.toBe(0);
 }
 async function waitForFile(path: string): Promise<void> {
   const started = Date.now();
@@ -511,7 +515,7 @@ it("validates committed interrupted contents before removing recovery backups", 
   await writeFile(join(root, ".flowweave/first.json"), "old-first");
   await writeFile(join(root, ".flowweave/second.json"), "old-second");
   await writeFile(join(root, ".flowweave/generation.json"), JSON.stringify({ requestId: "old", inputFingerprint: "old" }));
-  expect((await child("crash", root, "", "6").done).signal).toBe("SIGKILL");
+  expectKilledWorker(await child("crash", root, "", "6").done);
   await writeFile(join(root, ".flowweave/first.json"), "corrupted");
   await expect(withArchitectureArtifactLock(root, async () => {})).rejects.toThrow("Committed artifact content mismatch");
   expect((await readdir(join(root, ".flowweave"))).filter((name) => name.endsWith(".bak"))).toHaveLength(3);
@@ -523,7 +527,7 @@ it("preserves a committed journal when its backup was corrupted", async () => {
   await writeFile(join(root, ".flowweave/first.json"), "old-first");
   await writeFile(join(root, ".flowweave/second.json"), "old-second");
   await writeFile(join(root, ".flowweave/generation.json"), "old-generation");
-  expect((await child("crash", root, "", "6").done).signal).toBe("SIGKILL");
+  expectKilledWorker(await child("crash", root, "", "6").done);
   const artifactDir = join(root, ".flowweave");
   const backupName = (await readdir(artifactDir)).find((name) => name.startsWith(".first.json.") && name.endsWith(".bak"));
   if (!backupName) throw new Error("Expected the committed transaction backup");

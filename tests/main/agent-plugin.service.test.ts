@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -558,16 +558,13 @@ describe("agent-plugin.service", () => {
     const originalCodexMarketplace = await readFile(codexMarketplacePath, "utf8");
     const originalClaudeMarketplace = await readFile(claudeMarketplacePath, "utf8");
     const originalState = await readFile(statePath, "utf8");
-    const originalMode = (await stat(claudeDirectory)).mode & 0o777;
+    renameFailure.sourceMarker = ".marketplace.json.";
+    renameFailure.destinationPath = claudeMarketplacePath;
+    renameFailure.message = "Injected Claude marketplace write failure.";
 
-    await chmod(claudeDirectory, 0o555);
-    try {
-      await expect(installBuiltInAgentPlugin(projectPath)).rejects.toThrow(
-        "FlowWeave plugin installation failed during update-claude-marketplace"
-      );
-    } finally {
-      await chmod(claudeDirectory, originalMode);
-    }
+    await expect(installBuiltInAgentPlugin(projectPath)).rejects.toThrow(
+      "FlowWeave plugin installation failed during update-claude-marketplace"
+    );
 
     await expect(readFile(pluginManifestPath, "utf8")).resolves.toBe(originalPluginManifest);
     await expect(readFile(codexMarketplacePath, "utf8")).resolves.toBe(originalCodexMarketplace);

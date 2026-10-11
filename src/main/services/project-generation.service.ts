@@ -1,7 +1,7 @@
 import { ArtifactGenerationMismatchError, GenerationInputChangedError } from "./generation-errors";
 import { createHash, randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { AnalysisProgressUpdate, ArchitectureMap, CodeflowCanvas, CodeflowProject, GenerationIdentity, SemanticIndex } from "../../types";
 import { readJsonArtifact, writeJsonAtomic } from "../storage/artifact-store";
 import { FLOWWEAVE_DIR } from "../storage/flowweave-paths";
@@ -176,9 +176,10 @@ async function generateRegisteredProjectInternal(request: GenerationRequest, opt
       const artifacts = await prepareFlowWeaveProject(request.projectPath, generatedProject, generatedCanvas,
         { local: localArchitecture, current: architectureMap, generation, requestId: request.requestId, semanticIndex: index,
           previousGraph });
-      const hashFor = (suffix: string) => {
-        const artifact = artifacts.updates.find((update) => update.path.endsWith(suffix));
-        if (!artifact) throw new Error(`Protocol v7 artifact was not prepared: project ${request.projectPath}, artifact ${suffix}`);
+      const hashFor = (artifactName: string) => {
+        const artifactPath = resolve(request.projectPath, FLOWWEAVE_DIR, artifactName);
+        const artifact = artifacts.updates.find((update) => resolve(update.path) === artifactPath);
+        if (!artifact) throw new Error(`Protocol v7 artifact was not prepared: project ${request.projectPath}, artifact ${artifactPath}`);
         return createHash("sha256").update(artifact.content).digest("hex");
       };
       const manifest = {
@@ -188,9 +189,9 @@ async function generateRegisteredProjectInternal(request: GenerationRequest, opt
         rulesVersion: STATIC_GRAPH_RULES_VERSION,
         analyzerVersion: SEMANTIC_INDEX_GENERATOR_VERSION,
         artifacts: {
-          staticSnapshot: hashFor("/.flowweave/static-snapshot.json"),
-          graphOverview: hashFor("/.flowweave/graph-overview.json"),
-          canvasUserState: hashFor("/.flowweave/canvas/user-state.json")
+          staticSnapshot: hashFor("static-snapshot.json"),
+          graphOverview: hashFor("graph-overview.json"),
+          canvasUserState: hashFor(join("canvas", "user-state.json"))
         },
         committedAt: new Date().toISOString()
       };

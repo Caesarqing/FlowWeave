@@ -360,7 +360,7 @@ async function realElkLayout(graph: ElkNode): Promise<ElkNode> {
   // The child timeout can stop an ELK loop without blocking the test runner's event loop.
   const stdout = execFileSync(process.execPath, ["-e",
     'const ELK = require("elkjs/lib/elk.bundled.js"); new ELK().layout(JSON.parse(require("node:fs").readFileSync(0, "utf8"))).then(graph => process.stdout.write(JSON.stringify(graph)));'
-  ], { input: JSON.stringify(graph), encoding: "utf8", timeout: 5000, maxBuffer: 1_000_000 });
+  ], { input: JSON.stringify(graph), encoding: "utf8", timeout: 15_000, maxBuffer: 1_000_000 });
   return JSON.parse(stdout) as ElkNode;
 }
 

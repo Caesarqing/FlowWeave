@@ -476,7 +476,12 @@ async function addNativeManifestChecks(
     ? "plugins/flowweave/.codex-plugin/plugin.json"
     : "plugins/flowweave/.claude-plugin/plugin.json";
   if (missingFiles.includes(filePath)) return undefined;
-  const nativeManifest = await readNativePluginManifest(resolve(projectPath, filePath), `${displayNameForHost(hostId)} plugin manifest`);
+  const manifestPath = resolve(projectPath, filePath);
+  const manifestDirectory = dirname(manifestPath);
+  if (await pathExists(manifestDirectory) && !(await lstat(manifestDirectory)).isDirectory()) {
+    throw new Error(`Plugin manifest parent path is not a directory: ${manifestDirectory}`);
+  }
+  const nativeManifest = await readNativePluginManifest(manifestPath, `${displayNameForHost(hostId)} plugin manifest`);
   if (!nativeManifest) {
     missingFiles.push(filePath);
     checks.push({

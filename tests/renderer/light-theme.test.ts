@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('light theme semantic surfaces', () => {
   it('does not leave component surfaces pinned to dark literal backgrounds', () => {
-    const styles = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+    const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
 
     expect(styles).not.toContain('background: #030607;');
     expect(styles).not.toContain('background: #020405;');
@@ -14,10 +14,10 @@ describe('light theme semantic surfaces', () => {
   });
 
   it('uses explicit light-aware Monaco and React Flow tokens and exposes build identity', () => {
-    const styles = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
-    const diffViewer = readFileSync(new URL('../../src/components/DiffViewer.tsx', import.meta.url), 'utf8');
-    const canvas = readFileSync(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url), 'utf8');
-    const settings = readFileSync(new URL('../../src/components/UtilityPanels.tsx', import.meta.url), 'utf8');
+    const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
+    const diffViewer = readSourceText(new URL('../../src/components/DiffViewer.tsx', import.meta.url));
+    const canvas = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+    const settings = readSourceText(new URL('../../src/components/UtilityPanels.tsx', import.meta.url));
 
     expect(styles).toContain(':root[data-theme="light"] .react-flow__controls');
     expect(diffViewer).toContain('resolvedTheme === "light" ? "vs" : "vs-dark"');
@@ -26,7 +26,7 @@ describe('light theme semantic surfaces', () => {
   });
 
   it('keeps agent and module detail cards on semantic theme tokens', () => {
-    const styles = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+    const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
 
     expect(styles).toContain('--surface:');
     expect(styles).toContain('.run-status {\n  display: inline-flex;');
@@ -37,3 +37,7 @@ describe('light theme semantic surfaces', () => {
     expect(styles).toContain('background: var(--surface);');
   });
 });
+
+function readSourceText(path: URL): string {
+  return readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+}
