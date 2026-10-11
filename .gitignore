@@ -16,6 +16,7 @@ out/
 release/
 build/
 .flowweave/
+/plugins/flowweave/
 
 .DS_Store
 *.log

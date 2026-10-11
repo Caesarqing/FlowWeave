@@ -10,7 +10,7 @@
     {
       "name": "flowweave",
       "description": "FlowWeave Agent Inbox",
-      "source": "./plugins/flowweave",
+      "source": "./flowweave-plugin",
       "category": "development"
     }
   ]

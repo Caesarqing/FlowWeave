@@ -8,7 +8,7 @@
       "name": "flowweave",
       "source": {
         "source": "local",
-        "path": "./plugins/flowweave"
+        "path": "./flowweave-plugin"
       },
       "policy": {
         "installation": "AVAILABLE",

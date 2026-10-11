@@ -1,6 +1,0 @@
-{
-  "name": "flowweave",
-  "version": "0.2.0",
-  "private": true,
-  "description": "Built-in FlowWeave Agent Inbox v2 plugin for Codex, Claude, Gemini, and Cursor hosts."
-}
