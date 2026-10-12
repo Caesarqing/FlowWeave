@@ -44,8 +44,8 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('canvas.relationGroup.');
     expect(source).not.toContain('canvas.toggleGroups');
     expect(source).not.toContain('canvas.moreCanvasActions');
-    expect(source).toContain('<Controls position="bottom-right"');
-    expect(source).toContain('<MiniMap position="bottom-left"');
+    expect(source).toContain('<Controls position="bottom-left"');
+    expect(source).toContain('<MiniMap position="bottom-right"');
     expect(source).not.toContain('canvas.inferredDependencyOverlay');
     expect(source).toContain('className={`canvas-layout-pending${layoutError ? " has-error" : ""}`}');
     expect(source).toContain('className={`flow-canvas${layoutPending ? " layout-pending" : ""}`}');
@@ -141,6 +141,25 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('canvas.backToOverview');
     expect(source).toContain('onClick={backToOverview}');
     expect(source).not.toContain('INITIAL_NODE_BUDGET');
+  });
+
+  it('keeps every enabled canvas control reachable at its rendered position', () => {
+    const smokeSource = readSourceText(new URL('../../src/main/index.ts', import.meta.url));
+    const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
+
+    expect(smokeSource).toContain('controls.every(elementReachable)');
+    expect(styles).not.toContain('left: 16px !important;');
+  });
+
+  it('targets the rendered fit, layout, and overview controls in the interaction smoke', () => {
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+    const smokeSource = readSourceText(new URL('../../src/main/index.ts', import.meta.url));
+
+    expect(source).toContain('className="canvas-control-back-overview"');
+    expect(smokeSource).toContain('document.querySelector(".canvas-control-back-overview")');
+    expect(smokeSource).toContain('document.querySelector(".canvas-control-auto-layout")');
+    expect(smokeSource).toContain("document.querySelector('.react-flow__controls-fitview')");
+    expect(smokeSource).toContain('fitViewButton.click()');
   });
 
   it('reports filter matches and moves keyboard focus from search to the selected module', () => {

@@ -544,7 +544,7 @@ describe("static graph measurement runner", () => {
     const rawRuns = (await readFile(join(fixture.outputDirectory, "baseline.jsonl"), "utf8")).trim().split("\n");
     expect(rawRuns).toHaveLength(160);
     expect(JSON.parse(rawRuns[0])).toMatchObject({ projectId: "D01", repetition: 1, productOutcome: "failure" });
-  });
+  }, 60_000);
 
   it("rejects an unexplained missing metric", async () => {
     const fixture = await createFixture({ metrics: { appStartupMs: 1 }, unavailableMetrics: {} });

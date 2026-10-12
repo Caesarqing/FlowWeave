@@ -1067,9 +1067,6 @@ button:disabled {
 }
 
 .react-flow__minimap {
-  left: 16px !important;
-  right: auto !important;
-  bottom: 16px !important;
   width: 146px;
   height: 104px;
 }

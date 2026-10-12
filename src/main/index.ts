@@ -1609,7 +1609,7 @@ async function captureGraphSmokeReactProfiler(window: BrowserWindow, projectId: 
       ![...document.querySelectorAll(".react-flow__node-groupNode")].some((node) => node.getAttribute("data-id") === firstGroupId) &&
       !document.querySelector(".canvas-flow.layout-pending"), "expand-group", targetGroupNodeId);
 
-    const backButton = document.querySelector(".canvas-view-tools button:has(.lucide-rotate-ccw)");
+    const backButton = document.querySelector(".canvas-control-back-overview");
     if (!(backButton instanceof HTMLButtonElement)) throw new Error("React Profiler smoke found no back-to-overview control.");
     await runAction("collapse-group", () => backButton.click(), () =>
       [...document.querySelectorAll(".react-flow__node-groupNode")].some((node) => node.getAttribute("data-id") === firstGroupId) &&
@@ -1674,7 +1674,7 @@ async function captureGraphSmokeReactProfiler(window: BrowserWindow, projectId: 
     }
 
     if (capture) {
-      const layoutButton = document.querySelector(".canvas-view-tools button:has(.lucide-layout-grid)");
+      const layoutButton = document.querySelector(".canvas-control-auto-layout");
       if (!(layoutButton instanceof HTMLButtonElement) || layoutButton.disabled) throw new Error("React Profiler smoke found no enabled whole-graph layout control.");
       await runAction("whole-graph-layout", () => layoutButton.click(), () =>
         !layoutButton.disabled && !document.querySelector(".canvas-flow.layout-pending"));
@@ -1682,10 +1682,18 @@ async function captureGraphSmokeReactProfiler(window: BrowserWindow, projectId: 
     if (technologySelect.value !== "all") {
       technologySelect.value = "all";
       technologySelect.dispatchEvent(new Event("change", { bubbles: true }));
-      const layoutButton = document.querySelector(".canvas-view-tools button:has(.lucide-layout-grid)");
+      const layoutButton = document.querySelector(".canvas-control-auto-layout");
       await waitFor(() => technologySelect.value === "all" && visibleNodeCount() > 0 &&
         !document.querySelector(".canvas-flow.layout-pending") &&
         layoutButton instanceof HTMLButtonElement && !layoutButton.disabled, "clear-smoke-filter");
+    }
+    if (layoutModeSelect.value !== "execution") {
+      layoutModeSelect.value = "execution";
+      layoutModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      const layoutButton = document.querySelector(".canvas-control-auto-layout");
+      await waitFor(() => layoutModeSelect.value === "execution" && visibleNodeCount() > 0 &&
+        !document.querySelector(".canvas-flow.layout-pending") &&
+        layoutButton instanceof HTMLButtonElement && !layoutButton.disabled, "restore-execution-view");
     }
 
     return {
@@ -2416,14 +2424,27 @@ async function captureCanvasViewports(
     for (const size of sizes) {
       window.setSize(size.width, size.height);
       await new Promise((resolve) => setTimeout(resolve, 450));
+      await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+        const startedAt = performance.now();
+        const interval = setInterval(() => {
+          const layoutButton = document.querySelector('.canvas-control-auto-layout');
+          if (layoutButton instanceof HTMLButtonElement && !layoutButton.disabled &&
+            !document.querySelector('.canvas-flow.layout-pending')) {
+            clearInterval(interval);
+            resolve(true);
+          } else if (performance.now() - startedAt > 15000) {
+            clearInterval(interval);
+            reject(new Error('Canvas auto-layout control stayed disabled after resizing.'));
+          }
+        }, 25);
+      })`);
       const sample = await window.webContents.executeJavaScript(`(() => {
         const stage = document.querySelector('.canvas-flow-stage')?.getBoundingClientRect();
         if (!stage) return undefined;
         const viewport = document.querySelector('.react-flow__viewport');
         const viewportTransform = viewport ? getComputedStyle(viewport).transform : 'none';
         const flowZoom = viewportTransform === 'none' ? 1 : new DOMMatrixReadOnly(viewportTransform).a;
-        const controlReachability = (selector) => {
-          const element = document.querySelector(selector);
+        const elementReachable = (element) => {
           if (!(element instanceof HTMLElement)) return false;
           const rect = element.getBoundingClientRect();
           const x = Math.min(window.innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
@@ -2433,6 +2454,7 @@ async function captureCanvasViewports(
             rect.right <= window.innerWidth && rect.bottom <= window.innerHeight &&
             Boolean(target && (target === element || element.contains(target)));
         };
+        const controlReachability = (selector) => elementReachable(document.querySelector(selector));
         const visibleNodes = [...document.querySelectorAll('.react-flow__node')].filter((node) => {
           const rect = node.getBoundingClientRect();
           return rect.right > stage.left && rect.left < stage.right && rect.bottom > stage.top && rect.top < stage.bottom;
@@ -2475,7 +2497,10 @@ async function captureCanvasViewports(
             relationDisplay: controlReachability('.canvas-relation-display > summary'),
             filters: controlReachability('.canvas-filter-display > summary'),
             autoLayout: controlReachability('.canvas-control-auto-layout'),
-            canvasNavigation: controlReachability('.react-flow__controls button:not([disabled])')
+            canvasNavigation: (() => {
+              const controls = [...document.querySelectorAll('.react-flow__controls button:not([disabled])')];
+              return controls.length > 0 && controls.every(elementReachable);
+            })()
           }
         };
       })()`) as Omit<CanvasViewportSmokeSample, "windowWidth" | "windowHeight"> | undefined;
@@ -2497,6 +2522,40 @@ async function captureCanvasViewports(
         await writeFile(viewportScreenshotPath, (await window.webContents.capturePage()).toPNG());
       }
     }
+    const fitViewControlWorked = await window.webContents.executeJavaScript(`new Promise((resolve) => {
+      const viewport = document.querySelector('.react-flow__viewport');
+      const zoomOutButton = document.querySelector('.react-flow__controls-zoomout');
+      const fitViewButton = document.querySelector('.react-flow__controls-fitview');
+      if (!(viewport instanceof HTMLElement) || !(zoomOutButton instanceof HTMLButtonElement) ||
+        !(fitViewButton instanceof HTMLButtonElement) || zoomOutButton.disabled) {
+        resolve(false);
+        return;
+      }
+      const originalTransform = getComputedStyle(viewport).transform;
+      zoomOutButton.click();
+      const zoomStartedAt = performance.now();
+      const zoomInterval = setInterval(() => {
+        const zoomedTransform = getComputedStyle(viewport).transform;
+        if (zoomedTransform !== originalTransform) {
+          clearInterval(zoomInterval);
+          fitViewButton.click();
+          const fitStartedAt = performance.now();
+          const fitInterval = setInterval(() => {
+            if (getComputedStyle(viewport).transform !== zoomedTransform) {
+              clearInterval(fitInterval);
+              resolve(true);
+            } else if (performance.now() - fitStartedAt > 3000) {
+              clearInterval(fitInterval);
+              resolve(false);
+            }
+          }, 25);
+        } else if (performance.now() - zoomStartedAt > 3000) {
+          clearInterval(zoomInterval);
+          resolve(false);
+        }
+      }, 25);
+    })`) as boolean;
+    if (!fitViewControlWorked) throw new Error("Canvas viewport smoke could not zoom out and restore the canvas with Fit view.");
   } finally {
     window.setSize(originalSize[0], originalSize[1]);
   }

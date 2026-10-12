@@ -802,6 +802,7 @@ function ControlledFlowCanvas({
         const handleLayout = await layoutCanvasConnectionHandles(finalNodes, decoratedLayoutGraph.edges);
         if (!active || !matchesOverviewIdentity(requestIdentity, currentViewIdentity.current) ||
           currentLayoutRequestContext.current.topologyFingerprint !== layoutTopologyFingerprint) return;
+        setIsLayoutRunning(false);
         onApplyAutoLayout(
           layoutMode,
           Object.fromEntries(positionedNodes.map((node) => [node.id, node.position])),
@@ -825,6 +826,7 @@ function ControlledFlowCanvas({
         .then((handleLayout) => {
           if (active && matchesOverviewIdentity(requestIdentity, currentViewIdentity.current) &&
             currentLayoutRequestContext.current.topologyFingerprint === layoutTopologyFingerprint) {
+            setIsLayoutRunning(false);
             onApplyAutoLayout(
               layoutMode,
               Object.fromEntries(groups.map((node) => [node.id, node.position])),
@@ -846,6 +848,7 @@ function ControlledFlowCanvas({
     void layoutCanvasNodes(nodesToLayout, layoutEdges, layoutMode, decoratedLayoutGraph.edges)
       .then((layout) => {
         if (active && matchesOverviewIdentity(requestIdentity, currentViewIdentity.current)) {
+          setIsLayoutRunning(false);
           onApplyAutoLayout(
             layoutMode,
             Object.fromEntries(layout.nodes.map((node) => [node.id, node.position])),
@@ -1478,18 +1481,18 @@ function ControlledFlowCanvas({
             proOptions={{ hideAttribution: true }}
           >
             <Background color="var(--graph-grid)" gap={28} size={1} />
-            <Controls position="bottom-right" showInteractive={false}>
+            <Controls position="bottom-left" showInteractive={false}>
               <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly} title={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
                 <LayoutGrid size={14} />
               </ControlButton>
               {canvasLayout.activeMode !== "manual" ? <ControlButton disabled={readOnly} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={onRestoreManualLayout}>
                 <RotateCcw size={14} />
               </ControlButton> : null}
-              {expandedGroupIds.length > 0 ? <ControlButton title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
+              {expandedGroupIds.length > 0 ? <ControlButton className="canvas-control-back-overview" title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
                 <ArrowLeft size={14} />
               </ControlButton> : null}
             </Controls>
-            <MiniMap position="bottom-left" maskColor="var(--minimap-mask)" nodeColor="var(--minimap-node)" pannable zoomable />
+            <MiniMap position="bottom-right" maskColor="var(--minimap-mask)" nodeColor="var(--minimap-node)" pannable zoomable />
         </ReactFlow>
       </div>
     </div>
