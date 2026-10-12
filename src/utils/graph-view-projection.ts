@@ -36,6 +36,7 @@ export type ProjectedGraph = {
 
 export type GraphProjectionOptions = {
   additionalRelations?: Array<GraphEdge["relation"] | "manual">;
+  showInferredCalls?: boolean;
 };
 
 export type OverviewFrontierInput = {
@@ -176,7 +177,7 @@ export function projectGraphForView(
   const hasExecutableNodes = executableNodes.length > 0;
   const defaultEdges = mode === "execution"
     ? edges.filter((edge) => edge.relation === "calls" &&
-      edge.confidence === "confirmed" && edge.origin !== "manual" &&
+      (edge.confidence === "confirmed" || options.showInferredCalls) && edge.origin !== "manual" &&
       (!hasExecutableNodes || (nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test")))
     : edges.filter((edge) => edge.relation === "depends_on" && edge.origin !== "manual" &&
       (!hasExecutableNodes || (nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test")));
@@ -185,7 +186,8 @@ export function projectGraphForView(
     ? selectedRelations.has("manual")
     : selectedRelations.has(edge.relation)) &&
     !defaultEdges.includes(edge) &&
-    (!hasExecutableNodes || (nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test")));
+    (!hasExecutableNodes || edge.relation === "tests" && selectedRelations.has("tests") ||
+      (nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test")));
   const visibleEdgeIds = new Set<string>();
   const visibleEdges = [...defaultEdges, ...additionalEdges].filter((edge) => {
     if (visibleEdgeIds.has(edge.id)) return false;
@@ -228,6 +230,7 @@ export function projectGraphForView(
 
   const connectedIds = new Set(projectedEdges
     .filter((edge) => edge.participatesInLayering &&
+      (edge.relation !== "calls" || edge.confidence === "confirmed") &&
       nodeById.get(edge.source)?.nodeType !== "test" && nodeById.get(edge.target)?.nodeType !== "test")
     .flatMap((edge) => [edge.source, edge.target])
     .filter((id) => nodeById.has(id)));

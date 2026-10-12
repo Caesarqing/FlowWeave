@@ -3,6 +3,7 @@ import {
   capturePersistedProjectWorkspaceContext,
   captureProjectWorkspaceState,
   clearProjectWorkspaceState,
+  isProjectWorkspaceSnapshotCurrent,
   restorePersistedProjectWorkspaceContext,
   restoreProjectWorkspaceState
 } from '../../src/stores/project-workspace-state';
@@ -12,9 +13,36 @@ import { useNavigationStore } from '../../src/stores/navigation.store';
 import { useProjectStore } from '../../src/stores/project.store';
 import { useGitStore } from '../../src/stores/git.store';
 import { useRunsStore } from '../../src/stores/runs.store';
-import type { GraphNode } from '../../src/types';
+import type { CanvasReadResult, GraphNode } from '../../src/types';
 
 describe('project workspace state', () => {
+  it('invalidates a cached tab when the committed analysis, latest edit, or project artifacts change', () => {
+    useProjectStore.setState({ projectId: 'project-a', scanFingerprint: 'scan-a', isProjectLoading: false });
+    useCanvasStore.setState({
+      generation: { requestId: 'generation-a', inputFingerprint: 'input-a' },
+      generatedAt: '2026-10-11T00:00:00.000Z', userRevision: 2
+    });
+    const snapshot = captureProjectWorkspaceState();
+    const committed: CanvasReadResult = { mode: 'editable', canvas: {
+      id: 'main', title: 'Canvas', projectPath: '/alpha', scanFingerprint: 'scan-a',
+      generatedAt: '2026-10-11T00:00:00.000Z',
+      generation: { requestId: 'generation-a', inputFingerprint: 'input-a' }, userRevision: 2,
+      nodes: [], edges: []
+    } };
+
+    expect(isProjectWorkspaceSnapshotCurrent(snapshot, committed)).toBe(true);
+    expect(isProjectWorkspaceSnapshotCurrent(snapshot, { ...committed, canvas: {
+      ...committed.canvas, generation: { requestId: 'generation-b', inputFingerprint: 'input-b' }
+    } })).toBe(false);
+    expect(isProjectWorkspaceSnapshotCurrent(snapshot, { ...committed, canvas: { ...committed.canvas, userRevision: 3 } })).toBe(false);
+    expect(isProjectWorkspaceSnapshotCurrent(snapshot, { ...committed, canvas: {
+      ...committed.canvas, generatedAt: '2026-10-11T00:00:01.000Z'
+    } })).toBe(false);
+    expect(isProjectWorkspaceSnapshotCurrent(snapshot, undefined)).toBe(false);
+    useProjectStore.setState({ isProjectLoading: true });
+    expect(isProjectWorkspaceSnapshotCurrent(captureProjectWorkspaceState(), committed)).toBe(false);
+  });
+
   it('retains relationship diagnostics in source and display nodes across snapshot restoration', () => {
     const node: GraphNode = {
       id: 'orders', title: 'Orders', subtitle: '', kind: 'module', nodeType: 'service', risk: 'unknown',
@@ -73,8 +101,10 @@ describe('project workspace state', () => {
   });
 
   it('restores independent project, canvas, and page state after switching projects', () => {
-    useProjectStore.setState({ projectId: 'project-a', projectLabel: 'Alpha', projectPath: '/alpha' });
+    useProjectStore.setState({ projectId: 'project-a', projectLabel: 'Alpha', projectPath: '/alpha', localGenerationStatus: 'local-ready' });
     useCanvasStore.setState({
+      generation: { requestId: 'generation-a', inputFingerprint: 'input-a' }, generatedAt: '2026-10-11T00:00:00.000Z',
+      userRevision: 3, hiddenGeneratedNodeIds: ['hidden-a'], migrationPendingItems: [],
       selectedNodeId: 'alpha-node', expandedPaths: new Set(['src']),
       groups: [{ id: 'group:alpha', title: 'Alpha', rootPath: 'alpha', moduleIds: ['alpha-node'] }],
       orphanedEdges: [{ id: 'pending-edge', source: 'alpha-node', target: 'gone', relation: 'calls', origin: 'manual' }],
@@ -95,8 +125,11 @@ describe('project workspace state', () => {
     });
     const alpha = captureProjectWorkspaceState();
 
-    useProjectStore.setState({ projectId: 'project-b', projectLabel: 'Beta', projectPath: '/beta' });
-    useCanvasStore.setState({ selectedNodeId: 'beta-node', expandedPaths: new Set(['app']), groups: [], orphanedEdges: [], orphanedNodeEdits: [] });
+    useProjectStore.setState({ projectId: 'project-b', projectLabel: 'Beta', projectPath: '/beta', localGenerationStatus: 'idle' });
+    useCanvasStore.setState({
+      generation: { requestId: 'generation-b', inputFingerprint: 'input-b' }, userRevision: 8,
+      selectedNodeId: 'beta-node', expandedPaths: new Set(['app']), groups: [], orphanedEdges: [], orphanedNodeEdits: []
+    });
     useNavigationStore.setState({ activePage: 'tools' });
     useGitStore.setState({ checkpointId: 'beta-checkpoint' });
     useAgentStore.setState({ pluginStatuses: [] });
@@ -105,6 +138,10 @@ describe('project workspace state', () => {
     restoreProjectWorkspaceState(alpha);
     expect(useProjectStore.getState().projectId).toBe('project-a');
     expect(useCanvasStore.getState().selectedNodeId).toBe('alpha-node');
+    expect(useCanvasStore.getState().generation?.requestId).toBe('generation-a');
+    expect(useCanvasStore.getState().userRevision).toBe(3);
+    expect(useCanvasStore.getState().hiddenGeneratedNodeIds).toEqual(['hidden-a']);
+    expect(useProjectStore.getState().localGenerationStatus).toBe('local-ready');
     expect(useCanvasStore.getState().groups[0].id).toBe('group:alpha');
     expect(useCanvasStore.getState().orphanedEdges[0].id).toBe('pending-edge');
     expect(useCanvasStore.getState().orphanedNodeEdits[0].node.guidanceDraft).toBe('Preserved instructions');
@@ -118,6 +155,8 @@ describe('project workspace state', () => {
     restoreProjectWorkspaceState(beta);
     expect(useProjectStore.getState().projectId).toBe('project-b');
     expect(useCanvasStore.getState().selectedNodeId).toBe('beta-node');
+    expect(useCanvasStore.getState().generation?.requestId).toBe('generation-b');
+    expect(useCanvasStore.getState().userRevision).toBe(8);
     expect(useNavigationStore.getState().activePage).toBe('tools');
     expect(useGitStore.getState().checkpointId).toBe('beta-checkpoint');
   });

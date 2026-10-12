@@ -1,13 +1,13 @@
 import "@xyflow/react/dist/style.css";
 import { ProjectExplorer } from "./components/ProjectExplorer";
 import { Sidebar } from "./components/Sidebar";
-import { TopBar } from "./components/TopBar";
 import { UtilityPanels } from "./components/UtilityPanels";
 import { useAppController } from "./hooks/useAppController";
 import { isArchitectureUpdateDisabled } from "./hooks/useProjectActions";
 import { useProjectWorkspaceTabs } from "./hooks/useProjectWorkspaceTabs";
 import { usePreferencesStore } from "./stores/preferences.store";
 import { useProjectStore } from "./stores/project.store";
+import { captureProjectWorkspaceState, isProjectWorkspaceSnapshotCurrent } from "./stores/project-workspace-state";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { cn } from "./utils/classnames";
 import { BrandLogo } from "./components/BrandLogo";
@@ -103,10 +103,26 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
       if (closeState.current === "saving") return;
       closeState.current = "saving";
       useProjectStore.getState().setIsCanvasTransitioning(true);
-      void app.flushCanvas().then(() => {
+      void (async () => {
+        const active = useProjectStore.getState();
+        if (active.projectId && active.artifactStatuses?.canvas === "current" && !active.isProjectLoading) {
+          if (!window.flowweave) throw new Error("FlowWeave desktop API is unavailable while closing the app.");
+          const committed = await window.flowweave.readCanvas(active.projectId);
+          if (!isProjectWorkspaceSnapshotCurrent(captureProjectWorkspaceState(), committed)) {
+            if (!window.confirm(t("app.discardStale"))) {
+              closeState.current = "idle";
+              useProjectStore.getState().setIsCanvasTransitioning(false);
+              return;
+            }
+            closeState.current = "saved";
+            window.close();
+            return;
+          }
+        }
+        await app.flushCanvas();
         closeState.current = "saved";
         window.close();
-      }).catch((error: unknown) => {
+      })().catch((error: unknown) => {
         closeState.current = "idle";
         useProjectStore.getState().setIsCanvasTransitioning(false);
         const message = error instanceof Error ? error.message : String(error);
@@ -142,13 +158,6 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
       <Sidebar activePage={app.activePage} activeUtilityPanel={utilityPanel} onPageChange={changePage} onUtilityPanelChange={setUtilityPanel} />
       <UtilityPanels activePanel={utilityPanel} onClose={() => setUtilityPanel(undefined)} projectId={app.projectId} />
       <section className="main-shell">
-        <TopBar
-          activePage={app.activePage}
-          onExport={app.onExport}
-          onSendToTool={app.onSendToTool}
-          projectLabel={app.projectLabel}
-          sendDisabled={!app.hasPendingModifications}
-        />
         <ProjectTabs
           activeProjectId={workspace.activeProjectId}
           activeProjectStatus={{
@@ -268,6 +277,7 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
               generationId={app.canvas.generationId}
               userRevision={app.canvas.userRevision}
               projectId={app.canvas.projectId}
+              projectPath={app.canvas.projectPath}
               orphanedEdges={app.canvas.orphanedEdges}
               onConnect={app.canvas.onConnect}
               onApplyAutoLayout={app.canvas.onApplyAutoLayout}
@@ -287,7 +297,14 @@ function WorkspaceApp({ workspace }: { workspace: ReturnType<typeof useProjectWo
         ) : app.activePage === "structure" ? (
           <StructureWorkspace sequence={app.sequence} />
           ) : app.activePage === "docs" ? (
-          <DocumentWorkspace projectId={app.projectId} />
+          <DocumentWorkspace
+            projectId={app.projectId}
+            guidance={app.modificationGuidance}
+            hasPendingGuidance={app.hasPendingModifications}
+            onExportGuidance={app.onExportGuidance}
+            onRefreshGuidance={app.onRefreshGuidance}
+            onSendGuidance={app.onSendGuidance}
+          />
         ) : app.activePage === "git-review" ? (
           <GitReviewWorkspace projectId={app.projectId} />
         ) : (

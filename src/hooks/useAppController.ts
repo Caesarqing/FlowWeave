@@ -91,13 +91,14 @@ export function useAppController({
   const setRunArtifactTab = useRunsStore((state) => state.setRunArtifactTab);
   const [moduleGuidanceOperation, setModuleGuidanceOperation] = useState<"save" | "send" | "">("");
   const [modificationResult, setModificationResult] = useState<import("../types").ModificationDeltaResult>();
+  const [modificationResultProjectId, setModificationResultProjectId] = useState<string>();
   const flow = useFlowWeaveState();
   const sequence = useSequenceDiagramState({
     files: flow.projectFiles,
     projectId,
     projectPath,
     selectedAgentId,
-    hasPendingInstruction: Boolean(modificationResult?.delta.sequenceInstruction),
+    hasPendingInstruction: modificationResultProjectId === projectId && Boolean(modificationResult?.delta.sequenceInstruction),
     onModificationAcknowledged: async () => {
       await refreshModificationDelta();
     }
@@ -192,9 +193,17 @@ export function useAppController({
     agentDiscoveryGuard.activate();
     return () => agentDiscoveryGuard.invalidate();
   }, [agentDiscoveryGuard]);
-  const hasPendingModifications = modificationResult?.hasChanges ?? false;
+  const hasPendingModifications = modificationResultProjectId === projectId && (modificationResult?.hasChanges ?? false);
+  const modificationGuidance = useMemo(() => {
+    if (!modificationResult || modificationResultProjectId !== projectId || isProjectLoading || artifactStatuses?.canvas !== "current") return undefined;
+    const context = createModificationGuidanceContext(projectLabel, projectPath, modificationResult);
+    return {
+      markdown: buildModificationDeltaGuidanceMarkdown(context),
+      contextJson: buildModificationDeltaContextJson(context)
+    };
+  }, [artifactStatuses?.canvas, isProjectLoading, modificationResult, modificationResultProjectId, projectId, projectLabel, projectPath]);
   const hasPendingModuleGuidance = Boolean(
-    flow.selectedNode && modificationResult && (
+    modificationResultProjectId === projectId && flow.selectedNode && modificationResult && (
       modificationResult.delta.modules.added.some((module) =>
         module.id === flow.selectedNode?.id && Boolean(module.guidanceDraft)
       ) ||
@@ -206,8 +215,9 @@ export function useAppController({
   );
 
   useEffect(() => {
-    if (!window.flowweave || !projectId || !scanFingerprint || artifactStatuses?.canvas !== "current" || flow.modules.length === 0) {
+    if (!window.flowweave || !projectId || !scanFingerprint || isProjectLoading || artifactStatuses?.canvas !== "current" || flow.modules.length === 0) {
       setModificationResult(undefined);
+      setModificationResultProjectId(undefined);
       return undefined;
     }
     const timeout = window.setTimeout(() => {
@@ -216,7 +226,7 @@ export function useAppController({
       });
     }, 100);
     return () => window.clearTimeout(timeout);
-  }, [projectId, scanFingerprint, artifactStatuses?.canvas, canvasSnapshot, sequence.instruction]);
+  }, [projectId, scanFingerprint, isProjectLoading, artifactStatuses?.canvas, canvasSnapshot, sequence.instruction]);
 
   function buildCurrentCanvas(): import("../types").CodeflowCanvas {
     const state = useCanvasStore.getState();
@@ -250,7 +260,10 @@ export function useAppController({
       sequence.instruction.trim() || undefined,
       buildCurrentCanvas()
     );
-    setModificationResult(next);
+    if (useProjectStore.getState().projectId === projectId) {
+      setModificationResult(next);
+      setModificationResultProjectId(projectId);
+    }
     return next;
   }
 
@@ -378,22 +391,28 @@ export function useAppController({
     }
   }
 
-  async function exportGuidanceFiles() {
-    if (flow.canvasMetadata.migrationPendingItems.length > 0) {
-      downloadText(
-        "flowweave-migration-pending.json",
-        JSON.stringify({
-          schemaVersion: 1,
-          projectPath,
-          items: flow.canvasMetadata.migrationPendingItems
-        }, null, 2)
-      );
+  async function refreshModificationGuidance() {
+    const api = window.flowweave;
+    if (!api || !projectId) throw new Error(t("docs.needDesktop"));
+    const { canvas } = await saveCanvasArtifacts();
+    const instruction = sequence.instruction.trim() || undefined;
+    await api.saveModificationDocs(projectId, instruction);
+    const result = await api.readModificationDelta(projectId, instruction, canvas);
+    if (useProjectStore.getState().projectId === projectId) {
+      setModificationResult(result);
+      setModificationResultProjectId(projectId);
     }
-    const result = await refreshModificationDelta();
-    if (!result) return;
     const context = createModificationGuidanceContext(projectLabel, projectPath, result);
-    downloadText("flowweave-modification-guidance.md", buildModificationDeltaGuidanceMarkdown(context));
-    downloadText("flowweave-modification-context.json", buildModificationDeltaContextJson(context));
+    return {
+      markdown: buildModificationDeltaGuidanceMarkdown(context),
+      contextJson: buildModificationDeltaContextJson(context)
+    };
+  }
+
+  async function exportModificationGuidance() {
+    const files = await refreshModificationGuidance();
+    downloadText("flowweave-modification-guidance.md", files.markdown);
+    downloadText("flowweave-modification-context.json", files.contextJson);
     setLastRunStatus(t("sequence.exported"));
   }
 
@@ -401,7 +420,7 @@ export function useAppController({
     const api = window.flowweave;
     if (!api || !projectId) {
       setLastRunStatus(t("docs.needDesktop"));
-      return;
+      return "failed" as const;
     }
     try {
       const { canvas } = await saveCanvasArtifacts();
@@ -415,9 +434,12 @@ export function useAppController({
         canvas
       );
       if (!sent.hasChanges) {
-        setLastRunStatus(t("top.noPendingGuidance"));
-        setModificationResult(sent);
-        return;
+        setLastRunStatus(t("docs.guidanceSend.no-changes"));
+        if (useProjectStore.getState().projectId === projectId) {
+          setModificationResult(sent);
+          setModificationResultProjectId(projectId);
+        }
+        return "no-changes" as const;
       }
       const context = createModificationGuidanceContext(projectLabel, projectPath, sent);
       const result = await runAgentPrompt(
@@ -433,12 +455,15 @@ export function useAppController({
         );
         await api.saveModificationDocs(projectId, sequence.instruction.trim() || undefined);
         await refreshModificationDelta();
+        return "completed" as const;
       }
+      return result ? "failed" as const : "canceled" as const;
     } catch (error) {
       setLastRunStatus(t("status.agentPlanFailed", {
         agent: selectedAgentName(),
         error: formatErrorMessage(error)
       }));
+      return "failed" as const;
     }
   }
 
@@ -659,9 +684,11 @@ export function useAppController({
     },
     isDesktopBridgeAvailable: Boolean(window.flowweave),
     hasPendingModifications,
-    onExport: exportGuidanceFiles,
+    modificationGuidance,
+    onExportGuidance: exportModificationGuidance,
+    onRefreshGuidance: refreshModificationGuidance,
     onPageChange: setActivePage,
-    onSendToTool: sendCompleteGuidanceToAgent,
+    onSendGuidance: sendCompleteGuidanceToAgent,
     projectLabel,
     projectId,
     scanFingerprint,

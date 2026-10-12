@@ -15,12 +15,16 @@ const structureWorkspaceSource = readFileSync(
   new URL("../../src/components/StructureWorkspace.tsx", import.meta.url),
   "utf8"
 );
-const topBarSource = readFileSync(
-  new URL("../../src/components/TopBar.tsx", import.meta.url),
-  "utf8"
-);
 const appSource = readFileSync(
   new URL("../../src/App.tsx", import.meta.url),
+  "utf8"
+);
+const documentWorkspaceSource = readFileSync(
+  new URL("../../src/components/DocumentWorkspace.tsx", import.meta.url),
+  "utf8"
+);
+const canvasWorkspaceSource = readFileSync(
+  new URL("../../src/components/CanvasWorkspace.tsx", import.meta.url),
   "utf8"
 );
 const sequenceStateSource = readFileSync(
@@ -50,11 +54,31 @@ describe("agent guidance interactions", () => {
     expect(modulePanelSource).not.toContain("dialog-box");
   });
 
-  it("shows the full modification send action on the Canvas page", () => {
-    expect(topBarSource).toContain('activePage === "canvas"');
-    expect(topBarSource).toContain('t("top.sendAllGuidance")');
-    expect(topBarSource).toContain("sendDisabled");
-    expect(appSource).toContain("sendDisabled={");
+  it("centralizes full guidance refresh, export, and send actions in Documents", () => {
+    expect(appSource).not.toContain("TopBar");
+    expect(appSource).toContain("<DocumentWorkspace");
+    expect(appSource).toContain("onExportGuidance={app.onExportGuidance}");
+    expect(appSource).toContain("onSendGuidance={app.onSendGuidance}");
+    expect(documentWorkspaceSource).toContain('t("docs.refreshGuidance")');
+    expect(documentWorkspaceSource).toContain('t("docs.exportGuidance")');
+    expect(documentWorkspaceSource).toContain('t("docs.sendGuidance")');
+    expect(documentWorkspaceSource).toContain("readOnly={selectedDoc.generated || isLoading}");
+  });
+
+  it("keeps migration recovery export in Canvas and exports the combined guidance from Documents", () => {
+    const controllerSource = readFileSync(
+      new URL("../../src/hooks/useAppController.ts", import.meta.url),
+      "utf8"
+    );
+    const exportStart = controllerSource.indexOf("async function exportModificationGuidance()");
+    const exportEnd = controllerSource.indexOf("async function sendCompleteGuidanceToAgent()", exportStart);
+    const exportBody = controllerSource.slice(exportStart, exportEnd);
+
+    expect(exportBody).toContain("flowweave-modification-guidance.md");
+    expect(exportBody).toContain("flowweave-modification-context.json");
+    expect(exportBody).not.toContain("migration-pending.json");
+    expect(canvasWorkspaceSource).toContain("canvas.exportMigrationPending");
+    expect(canvasWorkspaceSource).toContain("flowweave-migration-pending.json");
   });
 
   it("builds a compact prompt from pending modifications and artifact references", () => {

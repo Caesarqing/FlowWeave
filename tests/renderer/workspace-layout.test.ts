@@ -6,6 +6,7 @@ import { WorkspaceLayout } from "../../src/components/WorkspaceLayout";
 import { parseWorkspacePanels } from "../../src/stores/preferences.store";
 
 const styles = normalizeLineEndings(readFileSync(new URL("../../src/styles.css", import.meta.url), "utf8"));
+const appSource = readFileSync(new URL("../../src/App.tsx", import.meta.url), "utf8");
 
 describe("workspace panel preferences", () => {
   it("keeps collapse state isolated by page and panel side", () => {
@@ -49,8 +50,14 @@ describe("workspace panel preferences", () => {
     expect(styles).not.toContain(".workspace-host > * {\n  position: absolute;");
   });
 
-  it("keeps the application header below the macOS window edge", () => {
-    expect(styles).toContain("min-height: 58px;\n  padding: 7px 14px 5px;");
+  it("keeps the compact project tabs above the active workspace", () => {
+    const projectTabs = appSource.indexOf("<ProjectTabs");
+    const workspaceHost = appSource.indexOf('<div className="workspace-host">');
+
+    expect(projectTabs).toBeGreaterThan(-1);
+    expect(projectTabs).toBeLessThan(workspaceHost);
+    expect(styles).toContain(".project-tab-bar {\n  display: flex;");
+    expect(styles).toContain("min-height: 36px;");
   });
 
   it("keeps canvas tools compact and centered near the top of the canvas", () => {

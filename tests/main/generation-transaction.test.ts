@@ -11,7 +11,7 @@ import { expect, it } from "vitest";
 import { buildSemanticIndex } from "../../src/main/services/semantic-index.service";
 import { scanProject } from "../../src/main/services/project-scanner.service";
 import { buildArchitectureInputFingerprint } from "../../src/main/services/static-architecture.service";
-import { readProjectProtocolCanvas, readProjectProtocolOverview, readProjectProtocolSnapshot, saveProjectProtocolCanvas, writeBatchAtomic } from "../../src/main/storage/flowweave-store";
+import { readProjectGenerationManifest, readProjectProtocolCanvas, readProjectProtocolOverview, readProjectProtocolSnapshot, saveProjectProtocolCanvas, writeBatchAtomic } from "../../src/main/storage/flowweave-store";
 import { writeTransactionAuthority } from "../../src/main/storage/transaction-authority";
 import { readModificationDelta } from "../../src/main/services/modification-delta.service";
 
@@ -21,6 +21,21 @@ it("prepares semantic artifacts without independently persisting them", async ()
   const result = await buildSemanticIndex(await scanProject(root));
   expect(result).toHaveProperty("updates");
   await expect(readFile(join(root, ".flowweave/index/semantic-index.json"))).rejects.toHaveProperty("code", "ENOENT");
+});
+
+it("accepts an existing deterministic protocol v7 generation manifest", async () => {
+  const root = await mkdtemp(join(tmpdir(), "flowweave-generation-legacy-id-"));
+  await mkdir(join(root, ".flowweave"));
+  const inputFingerprint = "input-fingerprint";
+  const rulesVersion = "legacy-rules";
+  const generationId = createHash("sha256").update(JSON.stringify({ storageProtocol: 7, rulesVersion, inputFingerprint })).digest("hex");
+  const manifest = {
+    storageProtocol: 7, generationId, inputFingerprint, rulesVersion, analyzerVersion: "legacy-analyzer",
+    artifacts: { staticSnapshot: "0".repeat(64), graphOverview: "0".repeat(64), canvasUserState: "0".repeat(64) },
+    committedAt: "2026-10-11T00:00:00.000Z"
+  };
+  await writeFile(join(root, ".flowweave/generation.json"), JSON.stringify(manifest));
+  expect(await readProjectGenerationManifest(root)).toEqual(manifest);
 });
 
 it("waits for every staging operation before cleaning rejected batches", async () => {

@@ -5,6 +5,7 @@ import {
   captureProjectWorkspaceState,
   capturePersistedProjectWorkspaceContext,
   clearProjectWorkspaceState,
+  isProjectWorkspaceSnapshotCurrent,
   restorePersistedProjectWorkspaceContext,
   restoreProjectWorkspaceState
 } from '../stores/project-workspace-state';
@@ -14,6 +15,7 @@ import { useCanvasStore } from '../stores/canvas.store';
 import { useAgentStore } from '../stores/agents.store';
 import { useRunsStore } from '../stores/runs.store';
 import { useGitStore } from '../stores/git.store';
+import { useI18n } from '../utils/i18n';
 
 const EMPTY_SESSION: ProjectWorkspaceSession = {
   openProjectIds: [],
@@ -25,6 +27,7 @@ type OpenProjectWorkspaceResult = ProjectAnalysisCommittedResult |
   Extract<FlowWeaveProjectOpenResult, { status: "analyzing" }>;
 
 export function useProjectWorkspaceTabs() {
+  const { t } = useI18n();
   const [isReady, setIsReady] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string>();
   const [projects, setProjects] = useState<RegisteredProject[]>([]);
@@ -157,7 +160,12 @@ export function useProjectWorkspaceTabs() {
         setPendingAnalysisProjectId(undefined);
         setPendingWorkspaceKey(undefined);
       }
-      const snapshot = snapshots.current.get(projectId);
+      const cachedSnapshot = snapshots.current.get(projectId);
+      if (cachedSnapshot && !window.flowweave) throw new Error('FlowWeave desktop API is unavailable while switching projects.');
+      const committed = cachedSnapshot ? await window.flowweave?.readCanvas(projectId) : undefined;
+      if (serial !== transitionSerial.current) return;
+      const snapshot = cachedSnapshot && isProjectWorkspaceSnapshotCurrent(cachedSnapshot, committed) ? cachedSnapshot : undefined;
+      if (cachedSnapshot && !snapshot) snapshots.current.delete(projectId);
       if (snapshot) restoreProjectWorkspaceState(snapshot);
       else {
         clearProjectWorkspaceState();
@@ -181,7 +189,14 @@ export function useProjectWorkspaceTabs() {
     try {
       if (sessionRef.current.activeProjectId === projectId) {
         if (!canvasFlush.current) throw new Error("Canvas save barrier is unavailable while closing a project.");
-        await canvasFlush.current();
+        const active = useProjectStore.getState();
+        if (active.artifactStatuses?.canvas === 'current' && !active.isProjectLoading) {
+          if (!window.flowweave) throw new Error('FlowWeave desktop API is unavailable while closing a project.');
+          const committed = await window.flowweave.readCanvas(projectId);
+          if (!isProjectWorkspaceSnapshotCurrent(captureProjectWorkspaceState(), committed)) {
+            if (!window.confirm(t('projectTabs.discardStale'))) return;
+          } else await canvasFlush.current();
+        } else await canvasFlush.current();
       }
       if (serial !== transitionSerial.current) return;
       const current = captureActiveWorkspace();
@@ -193,19 +208,28 @@ export function useProjectWorkspaceTabs() {
         setPendingAnalysisProjectId(undefined);
         setPendingWorkspaceKey(undefined);
       }
-      snapshots.current.delete(projectId);
       const next = closeProjectTab(current, projectId);
       const nextProjectId = next.activeProjectId;
+      let nextSnapshot = nextProjectId ? snapshots.current.get(nextProjectId) : undefined;
+      if (current.activeProjectId === projectId && nextSnapshot) {
+        if (!window.flowweave || !nextProjectId) throw new Error('FlowWeave desktop API is unavailable while closing a project.');
+        const committed = await window.flowweave.readCanvas(nextProjectId);
+        if (serial !== transitionSerial.current) return;
+        if (!isProjectWorkspaceSnapshotCurrent(nextSnapshot, committed)) {
+          snapshots.current.delete(nextProjectId);
+          nextSnapshot = undefined;
+        }
+      }
+      snapshots.current.delete(projectId);
       if (current.activeProjectId === projectId) {
-        const snapshot = nextProjectId ? snapshots.current.get(nextProjectId) : undefined;
-        if (snapshot) restoreProjectWorkspaceState(snapshot);
+        if (nextSnapshot) restoreProjectWorkspaceState(nextSnapshot);
         else {
           clearProjectWorkspaceState();
           const context = nextProjectId ? next.contextsByProject[nextProjectId] : undefined;
           if (context) restorePersistedProjectWorkspaceContext(context);
           restoreSavedPage(next, nextProjectId);
         }
-        setRestoreProjectId(snapshot || !nextProjectId ? undefined : nextProjectId);
+        setRestoreProjectId(nextSnapshot || !nextProjectId ? undefined : nextProjectId);
       }
       updateSession(next);
       setWorkspaceError(undefined);
@@ -244,11 +268,17 @@ export function useProjectWorkspaceTabs() {
     }
 
     if (result.status !== "analyzing") {
-      if (isAlreadyOpen && current.activeProjectId !== projectId && existingSnapshot) {
-        restoreProjectWorkspaceState(existingSnapshot);
-      } else {
-        snapshots.current.set(projectId, captureProjectWorkspaceState());
+      if (isAlreadyOpen && current.activeProjectId !== projectId) {
+        if (existingSnapshot) {
+          const committed = captureProjectWorkspaceState();
+          restoreProjectWorkspaceState({ ...existingSnapshot, project: committed.project, canvas: committed.canvas });
+        } else {
+          const context = current.contextsByProject[projectId];
+          if (context) restorePersistedProjectWorkspaceContext(context);
+          restoreSavedPage(current, projectId);
+        }
       }
+      snapshots.current.set(projectId, captureProjectWorkspaceState());
     }
     const tabbedSession = addProjectTab(current, projectId);
     const next = {

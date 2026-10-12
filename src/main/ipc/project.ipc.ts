@@ -184,8 +184,11 @@ export function registerProjectIpc(
   });
 
   handleIpc(PROJECT_CHANNELS.listRegisteredProjects, async () => listRegisteredProjects());
-  handleIpc(PROJECT_CHANNELS.readRegisteredProject, (_event, projectId: unknown) =>
-    readStoredProject(requireString(PROJECT_CHANNELS.readRegisteredProject, projectId, "projectId")));
+  handleIpc(PROJECT_CHANNELS.readRegisteredProject, async (_event, projectId: unknown) => {
+    const safeProjectId = requireString(PROJECT_CHANNELS.readRegisteredProject, projectId, "projectId");
+    await restoreRegisteredProject(safeProjectId);
+    return readStoredProject(safeProjectId);
+  });
 
   handleIpc(PROJECT_CHANNELS.restoreRegisteredProject, async (event, projectId: unknown, options: unknown) => {
     const safeProjectId = requireString(PROJECT_CHANNELS.restoreRegisteredProject, projectId, "projectId");

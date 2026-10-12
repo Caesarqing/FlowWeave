@@ -128,7 +128,8 @@ export async function readProjectGenerationManifest(projectPath: string): Promis
   }
   if (value.storageProtocol !== 7 || typeof value.generationId !== "string" || !value.generationId ||
     typeof value.inputFingerprint !== "string" || !value.inputFingerprint || typeof value.rulesVersion !== "string" ||
-    typeof value.analyzerVersion !== "string" || typeof value.committedAt !== "string" || !isRecord(value.artifacts)) {
+    typeof value.analyzerVersion !== "string" || typeof value.committedAt !== "string" || !isRecord(value.artifacts) ||
+    (value.generationNonce !== undefined && (typeof value.generationNonce !== "string" || !/^[a-f\d-]{36}$/i.test(value.generationNonce)))) {
     throw new Error(`FlowWeave generation manifest is invalid and was preserved: ${join(projectPath, FLOWWEAVE_DIR, "generation.json")}`);
   }
   for (const key of ["staticSnapshot", "graphOverview", "canvasUserState"] as const) {
@@ -139,7 +140,8 @@ export async function readProjectGenerationManifest(projectPath: string): Promis
   const expectedGenerationId = createHash("sha256").update(JSON.stringify({
     storageProtocol: 7,
     rulesVersion: value.rulesVersion,
-    inputFingerprint: value.inputFingerprint
+    inputFingerprint: value.inputFingerprint,
+    ...(value.generationNonce ? { generationNonce: value.generationNonce } : {})
   })).digest("hex");
   if (value.generationId !== expectedGenerationId) throw new Error(`FlowWeave generation ID does not match its input and rule versions: project ${projectPath}`);
   return value as ProjectGenerationManifestV7;

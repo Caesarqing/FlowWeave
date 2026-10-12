@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import type { FlowWeaveErrorData } from "../../types";
 import { FlowWeaveError } from "../services/flowweave-error.service";
+import { ArtifactGenerationMismatchError } from "../services/generation-errors";
 
 export const FLOWWEAVE_ERROR_PREFIX = "FLOWWEAVE_ERROR:";
 
@@ -19,6 +20,16 @@ export function handleIpc(
 }
 
 export function normalizeIpcError(channel: string, error: unknown): FlowWeaveErrorData {
+  if (error instanceof ArtifactGenerationMismatchError) {
+    return {
+      code: "artifact-generation-mismatch",
+      category: "validation",
+      message: error.message,
+      context: { channel },
+      suggestedActions: ["The project changed since this tab loaded. Reopen the project to load its current analysis and saved edits."],
+      technicalDetails: error.stack
+    };
+  }
   if (error instanceof FlowWeaveError) {
     return {
       code: error.code,

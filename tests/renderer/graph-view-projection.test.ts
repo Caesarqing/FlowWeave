@@ -59,6 +59,16 @@ describe("graph view projection", () => {
     expect(projectGraphForView(nodes, edges, "execution", { additionalRelations: ["calls"] }).edges).toHaveLength(1);
   });
 
+  it("shows test relationships and test nodes only when the test relation is selected", () => {
+    const testEdge = graphEdge("test", "tests", "service", "tests", evidence);
+    const base = projectGraphForView(nodes, [testEdge], "execution", {});
+    const withTests = projectGraphForView(nodes, [testEdge], "execution", { additionalRelations: ["tests"] });
+
+    expect(base.edges).toEqual([]);
+    expect(withTests.edges.map((edge) => edge.id)).toEqual(["test"]);
+    expect(withTests.nodes.map((node) => node.id)).toContain("tests");
+  });
+
   it("keeps unrelated resources and tests off the default module graph", () => {
     const resource: GraphNode = {
       ...nodes[0], id: "external-api", files: [],
@@ -88,6 +98,21 @@ describe("graph view projection", () => {
     const projected = projectGraphForView(nodes, [inferred], "execution", {});
 
     expect(projected.edges).toEqual([]);
+  });
+
+  it("shows inferred calls only when the separate inferred-call option is enabled", () => {
+    const edges = [
+      { ...graphEdge("confirmed", "api", "service", "calls", evidence), confidence: "confirmed" as const },
+      { ...graphEdge("inferred", "api", "data", "calls", evidence), confidence: "inferred" as const }
+    ];
+
+    const defaultGraph = projectGraphForView(nodes, edges, "execution", {});
+    const withInferred = projectGraphForView(nodes, edges, "execution", { showInferredCalls: true });
+
+    expect(defaultGraph.edges.map((edge) => edge.id)).toEqual(["confirmed"]);
+    expect(withInferred.edges.map((edge) => edge.id)).toEqual(["confirmed", "inferred"]);
+    expect(withInferred.diagnostics.connectedExecutableModuleCount).toBe(2);
+    expect(withInferred.diagnostics.isolatedModuleIds).toEqual(["data"]);
   });
 
   it("chooses a visible initial view for runtime, dependency-only, and empty graphs", () => {

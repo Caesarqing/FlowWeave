@@ -108,10 +108,11 @@ async function generateRegisteredProjectInternal(request: GenerationRequest, opt
     buildSemanticIndex(project, { onProgress: options.onProgress }));
   const architectureInputFingerprint = buildArchitectureInputFingerprint(project.scanFingerprint ?? "", prepared.index);
   const inputFingerprint = createHash("sha256").update(prepared.snapshot.fingerprint()).update(architectureInputFingerprint).digest("hex");
-  const generationId = createHash("sha256").update(JSON.stringify({ storageProtocol: 7, rulesVersion: STATIC_GRAPH_RULES_VERSION, inputFingerprint })).digest("hex");
-  const generation: GenerationIdentity = { requestId: generationId, inputFingerprint };
-  const reused = await reuseCommittedGeneration(request, project, prepared, generation, architectureInputFingerprint, options);
+  const reused = await reuseCommittedGeneration(request, project, prepared, inputFingerprint, architectureInputFingerprint, options);
   if (reused) return reused;
+  const generationNonce = randomUUID();
+  const generationId = createHash("sha256").update(JSON.stringify({ storageProtocol: 7, rulesVersion: STATIC_GRAPH_RULES_VERSION, inputFingerprint, generationNonce })).digest("hex");
+  const generation: GenerationIdentity = { requestId: generationId, inputFingerprint };
 
   const built = await measureGenerationPhase(options, "clusteringMs", () => buildStaticArchitecture(project, prepared.index));
   if (!built.quality.valid) throw new Error(`Static architecture validation failed for project ${request.projectPath}, request ${request.requestId}: ${built.quality.reasons.join("; ")}`);
@@ -185,6 +186,7 @@ async function generateRegisteredProjectInternal(request: GenerationRequest, opt
       const manifest = {
         storageProtocol: 7 as const,
         generationId,
+        generationNonce,
         inputFingerprint,
         rulesVersion: STATIC_GRAPH_RULES_VERSION,
         analyzerVersion: SEMANTIC_INDEX_GENERATOR_VERSION,
@@ -246,7 +248,7 @@ async function reuseCommittedGeneration(
   request: GenerationRequest,
   project: CodeflowProject,
   prepared: Awaited<ReturnType<typeof buildSemanticIndex>>,
-  generation: GenerationIdentity,
+  inputFingerprint: string,
   architectureInputFingerprint: string,
   options: GenerationOptions
 ): Promise<GenerationResult | undefined> {
@@ -261,7 +263,7 @@ async function reuseCommittedGeneration(
     return storedIndex?.generatorVersion === SEMANTIC_INDEX_GENERATOR_VERSION &&
       storedIndex.scanFingerprint === prepared.index.scanFingerprint &&
       storedIndex.configurationFingerprint === prepared.index.configurationFingerprint &&
-      manifest?.generationId === generation.requestId && manifest.inputFingerprint === generation.inputFingerprint &&
+      manifest?.inputFingerprint === inputFingerprint &&
       manifest.rulesVersion === STATIC_GRAPH_RULES_VERSION && manifest.analyzerVersion === SEMANTIC_INDEX_GENERATOR_VERSION;
   });
   if (candidate === false || candidate === undefined) return undefined;
@@ -277,20 +279,20 @@ async function reuseCommittedGeneration(
     }
     if (latest.requestId !== request.requestId) return { status: "superseded", ...request };
     const manifest = await readProjectGenerationManifest(request.projectPath);
-    if (manifest?.generationId !== generation.requestId || manifest.inputFingerprint !== generation.inputFingerprint ||
+    if (!manifest || manifest.inputFingerprint !== inputFingerprint ||
         manifest.rulesVersion !== STATIC_GRAPH_RULES_VERSION || manifest.analyzerVersion !== SEMANTIC_INDEX_GENERATOR_VERSION) return undefined;
     const [snapshot, canvas, overview] = await Promise.all([
       readProjectProtocolSnapshot(request.projectPath, snapshotMeasurementCallback(options)),
       readProjectProtocolCanvas(request.projectPath),
       readProjectProtocolOverview(request.projectPath)
     ]);
-    if (!snapshot || !canvas || !overview) throw new Error(`Committed protocol v7 artifacts are incomplete: project ${request.projectPath}, generation ${generation.requestId}`);
+    if (!snapshot || !canvas || !overview) throw new Error(`Committed protocol v7 artifacts are incomplete: project ${request.projectPath}, generation ${manifest.generationId}`);
     if (snapshot.project.scanFingerprint !== project.scanFingerprint ||
         snapshot.semanticIndex.configurationFingerprint !== prepared.index.configurationFingerprint ||
         snapshot.localArchitecture.metadata?.inputFingerprint !== architectureInputFingerprint) return undefined;
     return {
       status: "committed",
-      generation,
+      generation: { requestId: manifest.generationId, inputFingerprint },
       project: snapshot.project,
       index: snapshot.semanticIndex,
       delta: prepared.delta,

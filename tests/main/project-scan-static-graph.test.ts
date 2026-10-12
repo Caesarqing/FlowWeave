@@ -24,7 +24,7 @@ vi.mock("electron", () => ({
 
 import { dialog } from "electron";
 import { registerProjectIpc } from "../../src/main/ipc/project.ipc";
-import { configureProjectRegistry, registerProject } from "../../src/main/services/project-registry.service";
+import { configureProjectRegistry, registerProject, resolveProjectPath } from "../../src/main/services/project-registry.service";
 import { writeArchitectureReviewStatus } from "../../src/main/services/architecture-review.service";
 import { enableProjectAgentConnection, getProjectAgentConnection, getProjectAgentContextPath } from "../../src/main/services/project-agent-connection.service";
 import { readModificationDelta } from "../../src/main/services/modification-delta.service";
@@ -74,6 +74,44 @@ afterEach(() => {
 });
 
 describe("first project open static graph", () => {
+  it("rebuilds a deleted .flowweave directory without accepting the former Canvas state", async () => {
+    const root = await projectRoot("deleted-artifacts");
+    await writeSource(root, "src/features/accounts/account.service.ts", "export function loadAccount() { return 1; }\n");
+    const first = await openProject(root);
+    if (first.status !== "committed") throw new Error("Expected the first analysis to commit.");
+    const oldCanvas = first.canvas.canvas;
+    const save = registeredHandlers.get(PROJECT_CHANNELS.saveCanvas);
+    if (!save) throw new Error("Canvas save IPC handler was not registered.");
+    await save({}, first.projectId, { ...oldCanvas, nodes: [
+      ...oldCanvas.nodes, { ...oldCanvas.nodes[0], id: "old-note", title: "Old note", files: [], origin: "manual" }
+    ] });
+
+    await rm(join(root, ".flowweave"), { recursive: true, force: true });
+    const second = await rescanProject(first.projectId);
+    if (second.status !== "committed") throw new Error("Expected the replacement analysis to commit.");
+    expect(second.generation?.requestId).not.toBe(first.generation?.requestId);
+    expect(second.generation?.inputFingerprint).toBe(first.generation?.inputFingerprint);
+    expect(second.canvas.canvas.nodes.some((node) => node.id === "old-note")).toBe(false);
+    expect(second.canvas.canvas.userRevision).toBe(0);
+    await expect(save({}, first.projectId, oldCanvas)).rejects.toThrow(/generation mismatch/i);
+  });
+
+  it("authorizes a persisted project before reading its cached state after restart", async () => {
+    const root = await projectRoot("persisted-read");
+    const userData = await mkdtemp(join(tmpdir(), "flowweave-persisted-read-registry-"));
+    await configureProjectRegistry(userData);
+    const projectId = await registerProject(root);
+    await configureProjectRegistry(userData);
+    registerProjectIpc();
+    const readStored = registeredHandlers.get(PROJECT_CHANNELS.readRegisteredProject);
+    if (!readStored) throw new Error("Stored project IPC handler was not registered.");
+
+    expect(() => resolveProjectPath(projectId)).toThrow("not authorized");
+    await expect(readStored({}, projectId)).resolves.toBeUndefined();
+    expect(resolveProjectPath(projectId)).toBe(await realpath(root));
+    await expect(readStored({}, "project-00000000-0000-0000-0000-000000000000")).rejects.toThrow("not registered");
+  });
+
   it.each([
     PROJECT_CHANNELS.openProject,
     PROJECT_CHANNELS.restoreRegisteredProject,

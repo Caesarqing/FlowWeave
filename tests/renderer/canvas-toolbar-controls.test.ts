@@ -16,14 +16,18 @@ describe('canvas toolbar controls', () => {
   it('keeps the filter toolbar compact and visually consistent', () => {
     const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
     const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
+    const smokeSource = readSourceText(new URL('../../src/main/index.ts', import.meta.url));
 
     expect(source).not.toContain('<select multiple');
     expect(source).not.toContain('canvas.functionalFilter');
     expect(source).not.toContain('canvas.traceOff');
     expect(source).toContain('proOptions={{ hideAttribution: true }}');
     expect(source).toContain('canvas-trace-controls');
-    expect(styles).toContain('.canvas-view-tools-content {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;');
+    expect(styles).toContain('.canvas-view-tools-content {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-start;');
     expect(styles).toContain('.canvas-view-tools {\n  position: relative;');
+    expect(smokeSource).toContain("controlReachability('.canvas-filter-display > summary')");
+    expect(smokeSource).toContain("controlReachability('.canvas-control-auto-layout')");
+    expect(smokeSource).not.toContain('.canvas-secondary-tools');
   });
 
   it('uses the persisted functional view and keeps secondary relations optional', () => {
@@ -36,7 +40,12 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('canvas.relationDisplay');
     expect(source).toContain('canvas.moduleScope');
     expect(source).toContain('canvas.moduleGroups');
-    expect(source).toContain('canvas.additionalRelations');
+    expect(source).toContain('canvas.inferredCalls');
+    expect(source).toContain('canvas.relationGroup.');
+    expect(source).not.toContain('canvas.toggleGroups');
+    expect(source).not.toContain('canvas.moreCanvasActions');
+    expect(source).toContain('<Controls position="bottom-right"');
+    expect(source).toContain('<MiniMap position="bottom-left"');
     expect(source).not.toContain('canvas.inferredDependencyOverlay');
     expect(source).toContain('className={`canvas-layout-pending${layoutError ? " has-error" : ""}`}');
     expect(source).toContain('className={`flow-canvas${layoutPending ? " layout-pending" : ""}`}');

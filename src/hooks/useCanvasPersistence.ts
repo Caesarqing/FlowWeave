@@ -81,7 +81,7 @@ export function useCanvasPersistence(
   }, [projectId, scanFingerprint, isProjectLoading, artifactState, hydrationVersion, signature]);
 
   async function flushCurrentCanvas(buildCanvas: () => CodeflowCanvas): Promise<void> {
-    if (!projectId || !scanFingerprint || artifactState !== "current") return;
+    if (!projectId || !scanFingerprint || isProjectLoading || artifactState !== "current") return;
     const current = state.current;
     if (current.timeout !== undefined) {
       window.clearTimeout(current.timeout);

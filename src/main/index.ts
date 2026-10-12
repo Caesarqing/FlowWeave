@@ -2472,9 +2472,9 @@ async function captureCanvasViewports(
           requiredCanvasControlsReachable: {
             search: controlReachability('.canvas-module-search input'),
             viewMode: controlReachability('.canvas-view-tools select'),
-            moduleScope: controlReachability('.canvas-module-scope > summary'),
             relationDisplay: controlReachability('.canvas-relation-display > summary'),
-            moreActions: controlReachability('.canvas-secondary-tools > summary'),
+            filters: controlReachability('.canvas-filter-display > summary'),
+            autoLayout: controlReachability('.canvas-control-auto-layout'),
             canvasNavigation: controlReachability('.react-flow__controls button:not([disabled])')
           }
         };

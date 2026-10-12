@@ -99,6 +99,7 @@ describe("rendered canvas diagnostics", () => {
     usePreferencesStore.setState({ locale: "en" });
     const rawLegacyNode = { id: "old-node", title: "Legacy secret title", files: ["src/old.ts"] };
     const html = renderToStaticMarkup(createElement(CanvasWorkspace, {
+      hiddenGeneratedCount: 0,
       canvasLayout: { activeMode: "execution", viewMode: "execution", manualPositions: {}, autoLayouts: {}, collapsedGroups: [] },
       edges: [], nodes: [], relationDiagnostics: [],
       migrationPendingItems: [{ kind: "node", sourceVersion: 4, sourceId: "old-node", raw: rawLegacyNode, reason: "Generated/user origin is unknown." }],
@@ -119,6 +120,7 @@ describe("rendered canvas diagnostics", () => {
   it("shows preserved review counts when the initial graph omits their payloads", () => {
     usePreferencesStore.setState({ locale: "en" });
     const html = renderToStaticMarkup(createElement(CanvasWorkspace, {
+      hiddenGeneratedCount: 0,
       canvasLayout: { activeMode: "execution", viewMode: "execution", manualPositions: {}, autoLayouts: {}, collapsedGroups: [] },
       edges: [], nodes: [], relationDiagnostics: [], preservedCounts: { pending: 2, nodeEdits: 3, edges: 4 },
       onApplyAutoLayout: unexpectedInteraction, onConnect: unexpectedInteraction, onEdgesChange: unexpectedInteraction,

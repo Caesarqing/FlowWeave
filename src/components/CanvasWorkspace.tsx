@@ -1,5 +1,6 @@
 import {
   Background,
+  ControlButton,
   Controls,
   MiniMap,
   ReactFlow,
@@ -13,7 +14,7 @@ import {
   type ReactFlowInstance,
   type NodeChange
 } from "@xyflow/react";
-import { BrainCircuit, ChevronsDownUp, GitBranch, Search, LayoutGrid, LoaderCircle, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, BrainCircuit, GitBranch, Search, LayoutGrid, LoaderCircle, RotateCcw } from "lucide-react";
 import { Profiler, useEffect, useMemo, useRef, useState, version as reactVersion } from "react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
@@ -72,6 +73,15 @@ function ProfiledSmoothStepEdge(props: EdgeProps<Edge>) {
 const canvasModuleNodeType = reactProfilerEnabled ? ProfiledModuleNode : ModuleNode;
 const canvasEdgeTypes = reactProfilerEnabled ? { smoothstep: ProfiledSmoothStepEdge } : undefined;
 
+const relationGroups: Array<{ id: string; relations: GraphEdgeRelation[] }> = [
+  { id: "runtime", relations: ["calls", "process_invocation"] },
+  { id: "data", relations: ["reads", "writes", "reads_writes"] },
+  { id: "integration", relations: ["http_contract", "external_api"] },
+  { id: "events", relations: ["publishes_event", "subscribes_event"] },
+  { id: "structure", relations: ["depends_on"] },
+  { id: "tests", relations: ["tests"] }
+];
+
 const nodeTypes = {
   moduleNode: canvasModuleNodeType,
   groupNode: canvasModuleNodeType,
@@ -121,6 +131,7 @@ type ControlledFlowCanvasProps = {
   canvasLayout: CanvasLayoutState;
   hiddenGeneratedCount: number;
   projectId?: string;
+  projectPath?: string;
   generationId?: string;
   userRevision?: number;
   preservedCounts?: CodeflowCanvas["preservedCounts"];
@@ -154,6 +165,7 @@ export function CanvasWorkspace({
   readOnly,
   hiddenGeneratedCount,
   projectId,
+  projectPath,
   generationId,
   userRevision,
   preservedCounts,
@@ -186,6 +198,7 @@ export function CanvasWorkspace({
   canvasLayout: CanvasLayoutState;
   hiddenGeneratedCount: number;
   projectId?: string;
+  projectPath?: string;
   generationId?: string;
   userRevision?: number;
   preservedCounts?: CodeflowCanvas["preservedCounts"];
@@ -236,6 +249,7 @@ export function CanvasWorkspace({
           readOnly={readOnly}
           hiddenGeneratedCount={hiddenGeneratedCount}
           projectId={projectId}
+          projectPath={projectPath}
           generationId={generationId}
           userRevision={userRevision}
           preservedCounts={preservedCounts}
@@ -294,6 +308,7 @@ function ControlledFlowCanvas({
   canvasLayout,
   hiddenGeneratedCount,
   projectId,
+  projectPath,
   generationId,
   userRevision,
   preservedCounts,
@@ -470,6 +485,7 @@ function ControlledFlowCanvas({
     }
   }
   const [additionalRelations, setAdditionalRelations] = useState<Array<GraphEdgeRelation | "manual">>([]);
+  const [showInferredCalls, setShowInferredCalls] = useState(false);
   const [roleFilter, setRoleFilter] = useState<ArchitectureLayer | "all">("all");
   const [technologyFilter, setTechnologyFilter] = useState<TechnologyStack | "all">("all");
   const layoutMode: CanvasLayoutMode = canvasLayout.viewMode ?? chooseInitialGraphView(edges.map(graphEdgeFromFlow));
@@ -493,8 +509,8 @@ function ControlledFlowCanvas({
   const classificationFilters = useMemo<CanvasFilters>(() => ({ role: roleFilter, runtimeTags, domain: "all" }), [roleFilter, runtimeTags]);
   const projectionViewIdentity = useMemo(() => ({
     ...viewIdentity,
-    viewRequestId: `${viewIdentity.viewRequestId}:${layoutMode}:${roleFilter}:${technologyFilter}:${canvasLayout.collapsedGroups.slice().sort().join(",")}:${expandedGroupIds.slice().sort().join(",")}:${selectedModuleGroups.slice().sort().join(",")}:${additionalRelations.slice().sort().join(",")}`
-  }), [additionalRelations, canvasLayout.collapsedGroups, expandedGroupIds, layoutMode, roleFilter, selectedModuleGroups, technologyFilter, viewIdentity]);
+    viewRequestId: `${viewIdentity.viewRequestId}:${layoutMode}:${roleFilter}:${technologyFilter}:${canvasLayout.collapsedGroups.slice().sort().join(",")}:${expandedGroupIds.slice().sort().join(",")}:${selectedModuleGroups.slice().sort().join(",")}:${additionalRelations.slice().sort().join(",")}:${showInferredCalls}`
+  }), [additionalRelations, canvasLayout.collapsedGroups, expandedGroupIds, layoutMode, roleFilter, selectedModuleGroups, showInferredCalls, technologyFilter, viewIdentity]);
   const currentViewIdentity = useRef(projectionViewIdentity);
   currentViewIdentity.current = projectionViewIdentity;
   const flowInstance = useRef<ReactFlowInstance<FlowWeaveNode> | null>(null);
@@ -517,9 +533,9 @@ function ControlledFlowCanvas({
       nodes.map((node) => node.data),
       rawGraphEdges,
       graphViewMode(layoutMode),
-      { additionalRelations }
+      { additionalRelations, showInferredCalls }
     ),
-    [additionalRelations, layoutMode, nodes, rawGraphEdges]
+    [additionalRelations, layoutMode, nodes, rawGraphEdges, showInferredCalls]
   );
   const projectedFlowGraph = useMemo(() => {
     const originalNodesById = new Map(nodes.map((node) => [node.id, node]));
@@ -568,8 +584,9 @@ function ControlledFlowCanvas({
   );
   const visibleModuleCount = countCanvasModules(filteredProjectionGraph.nodes);
   const totalModuleCount = countCanvasModules(projectedNodes);
-  const hasActiveCanvasFilters = roleFilter !== "all" || technologyFilter !== "all" || selectedModuleGroups.length > 0 || additionalRelations.length > 0;
-  const hasNoVisibleModules = filteredProjectionGraph.nodes.length === 0 && hasActiveCanvasFilters;
+  const activeModuleFilterCount = Number(roleFilter !== "all") + Number(technologyFilter !== "all") + selectedModuleGroups.length;
+  const hasActiveModuleFilters = activeModuleFilterCount > 0;
+  const hasNoVisibleModules = filteredProjectionGraph.nodes.length === 0 && hasActiveModuleFilters;
   const overviewFrontier = useMemo(() => {
     if (!hasMeasuredViewport || overviewViewport.width < 1 || overviewViewport.height < 1 || !generationId ||
       canvasLayout.activeMode === "manual" || layoutMode === "dependency") return undefined;
@@ -649,6 +666,22 @@ function ControlledFlowCanvas({
     if (rawGraphEdges.some((edge) => edge.origin === "manual")) relations.push("manual");
     return [...new Set(relations)].filter((relation) => relation !== primaryRelation);
   }, [layoutMode, rawGraphEdges]);
+  const relationCounts = useMemo(() => {
+    const generated = new Map<GraphEdgeRelation | "manual", number>();
+    const visible = new Map<GraphEdgeRelation | "manual", number>();
+    for (const edge of rawGraphEdges) {
+      const relation = edge.origin === "manual" ? "manual" : edge.relation;
+      generated.set(relation, (generated.get(relation) ?? 0) + 1);
+    }
+    for (const edge of filteredEdges) {
+      const relation = (edge.data as GraphEdge | undefined)?.origin === "manual"
+        ? "manual"
+        : (edge.data?.relation as GraphEdgeRelation | undefined);
+      if (relation) visible.set(relation, (visible.get(relation) ?? 0) + 1);
+    }
+    return { generated, visible };
+  }, [filteredEdges, rawGraphEdges]);
+  const inferredCallCount = rawGraphEdges.filter((edge) => edge.relation === "calls" && edge.confidence !== "confirmed" && edge.origin !== "manual").length;
   const skippedRelationSummary = relationDiagnostics
     .filter((diagnostic) => diagnostic.count > 0)
     .map((diagnostic) => t(`canvas.skippedRelation.${diagnostic.reason}`, { count: diagnostic.count }))
@@ -849,34 +882,6 @@ function ControlledFlowCanvas({
       fixedNodes: decoratedLayoutGraph.nodes.filter((node) => !anchorIds.has(node.id))
     };
   }
-  function toggleGroupCollapse() {
-    if (layoutMode === "dependency") return;
-    const paths = nodes.map((node) => nodeDisplayGroups(node.data, layoutMode));
-    const topGroups = [...new Set(paths.flatMap((path) => path[0] ? [path[0].id] : []))];
-    const visibleCollapsed = collapsedGraph.nodes.filter((node) => node.data.groupId).map((node) => node.data.groupId!);
-    if (visibleCollapsed.length > 0) {
-      queueLocalExpansion(collapsedGraph.nodes.filter((node) => node.data.groupId));
-      const visibleIds = new Set(visibleCollapsed);
-      onSetCollapsedGroups(canvasLayout.collapsedGroups.filter((id) => !visibleIds.has(id)));
-      setExpandedGroupIds((current) => [...new Set([...current, ...visibleCollapsed])]);
-      return;
-    }
-    const topGroupIds = new Set(topGroups);
-    if (canvasLayout.activeMode !== "manual") {
-      pendingLocalLayout.current = {
-        scope: {
-          projectId: projectId ?? "project",
-          generationId: generationId ?? "unversioned",
-          layoutMode,
-          activeMode: canvasLayout.activeMode
-        },
-        kind: "collapse",
-        previousNodeIds: new Set(decoratedLayoutGraph.nodes.map((node) => node.id))
-      };
-    } else pendingLocalLayout.current = undefined;
-    onSetCollapsedGroups([...new Set([...canvasLayout.collapsedGroups, ...topGroups])]);
-    setExpandedGroupIds((current) => current.filter((id) => !topGroupIds.has(id)));
-  }
   function expandGroup(node: FlowWeaveNode) {
     if (!node.data.groupId) return;
     queueLocalExpansion([node]);
@@ -894,6 +899,7 @@ function ControlledFlowCanvas({
     setTechnologyFilter("all");
     setSelectedModuleGroups([]);
     setAdditionalRelations([]);
+    setShowInferredCalls(false);
     setTraceDirection("off");
     const ancestors = nodeDisplayGroups(node.data, layoutMode).map((group) => group.id);
     queueLocalExpansion(decoratedLayoutGraph.nodes.filter((groupNode) =>
@@ -928,6 +934,7 @@ function ControlledFlowCanvas({
     setTechnologyFilter("all");
     setSelectedModuleGroups([]);
     setAdditionalRelations([]);
+    setShowInferredCalls(false);
     setTraceDirection("off");
     setFocusedNodeId("");
   }
@@ -976,132 +983,132 @@ function ControlledFlowCanvas({
               <Search size={14} />
               <input aria-label={t("canvas.searchModules")} placeholder={t("canvas.searchModules")} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
             </label>
-
           </div>
-          <label>
-            <span>{t("canvas.layoutMode")}</span>
+          <label className="canvas-view-mode">
             <select value={layoutMode} onChange={(event) => {
               const mode = event.target.value as GraphViewMode;
               onSetViewMode(mode);
-            }}>
+            }} aria-label={t("canvas.layoutMode")} title={t("canvas.layoutMode")}>
               <option value="execution">{t("canvas.layoutExecution")}</option>
               <option value="dependency">{t("canvas.layoutDependency")}</option>
             </select>
           </label>
-          <label>
-            <span>{t("canvas.technologyFilter")}</span>
-            <select value={technologyFilter} onChange={(event) => setTechnologyFilter(event.target.value as TechnologyStack | "all")}>
-              <option value="all">{t("canvas.filterAll")}</option>
-              {(["frontend", "mobile", "backend", "data", "infrastructure", "shared", "unknown"] as TechnologyStack[])
-                .map((stack) => <option key={stack} value={stack}>{t(`technology.${stack}`)}</option>)}
-            </select>
-          </label>
-          <label>
-            <span>{t("canvas.layerFilter")}</span>
-            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as ArchitectureLayer | "all")}>
-              <option value="all">{t("canvas.filterAll")}</option>
-              {(["presentation", "api", "domain", "data", "integration", "infrastructure", "test", "unknown"] as ArchitectureLayer[])
-                .map((layer) => <option key={layer} value={layer}>{t(`architectureLayer.${layer}`)}</option>)}
-            </select>
-          </label>
-          <Button disabled={layoutMode === "dependency"} icon={<ChevronsDownUp size={14} />} label={t("canvas.toggleGroups")} variant="subtle" type="button" onClick={toggleGroupCollapse}>
-            <span className="canvas-tool-label">{t("canvas.toggleGroups")}</span>
-          </Button>
-          {expandedGroupIds.length > 0 ? (
-            <Button icon={<RotateCcw size={14} />} label={t("canvas.backToOverview")} variant="subtle" type="button" onClick={backToOverview}>
-              <span className="canvas-tool-label">{t("canvas.backToOverview")}</span>
-            </Button>
-          ) : null}
-          <Button disabled={isLayoutRunning || readOnly} icon={<LayoutGrid size={14} />} label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} variant="subtle" type="button" onClick={() => void applyAutoLayout()}>
-            <span className="canvas-tool-label">{isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")}</span>
-          </Button>
-          <details className="canvas-module-scope">
-            <summary>{t("canvas.moduleScope")}{selectedModuleGroups.length ? ` · ${selectedModuleGroups.length}` : ""}</summary>
-            <fieldset>
-              <legend>{t("canvas.moduleGroups")}</legend>
-              {moduleGroupOptions.length ? moduleGroupOptions.map((group) => (
-                <label key={group.id}>
-                  <input
-                    checked={selectedModuleGroups.includes(group.id)}
-                    onChange={() => setSelectedModuleGroups((current) => current.includes(group.id)
-                      ? current.filter((id) => id !== group.id)
-                      : [...current, group.id])}
-                    type="checkbox"
-                  />
-                  <span>{group.title}</span>
-                  <small>{group.count}</small>
-                </label>
-              )) : <span className="canvas-scope-empty">{t("canvas.noModuleGroups")}</span>}
-              {selectedModuleGroups.length ? (
-                <Button size="tool" type="button" variant="subtle" onClick={() => setSelectedModuleGroups([])}>{t("canvas.resetModuleScope")}</Button>
-              ) : null}
-            </fieldset>
-          </details>
           <details className="canvas-relation-display">
-            <summary>{t("canvas.relationDisplay")}</summary>
-            <fieldset>
-              <legend>{t("canvas.additionalRelations")}</legend>
-              {availableRelationOverlays.map((relation) => (
-                <label key={relation}>
-                  <input
-                    checked={additionalRelations.includes(relation)}
-                    onChange={() => setAdditionalRelations((current) => current.includes(relation)
-                      ? current.filter((item) => item !== relation)
-                      : [...current, relation])}
-                    type="checkbox"
-                  />
-                  <span>{t(`relation.${relation}`)}</span>
-                </label>
-              ))}
-            </fieldset>
+            <summary>{t("canvas.relationDisplay")}{additionalRelations.length || showInferredCalls ? ` · ${additionalRelations.length + Number(showInferredCalls)}` : ""}</summary>
+            <div className="canvas-toolbar-popover">
+              {relationGroups.map((group) => {
+                const relations = group.relations.filter((relation) => availableRelationOverlays.includes(relation));
+                if (relations.length === 0) return null;
+                return (
+                  <fieldset key={group.id}>
+                    <legend>{t(`canvas.relationGroup.${group.id}`)}</legend>
+                    {relations.map((relation) => (
+                      <label key={relation}>
+                        <input
+                          checked={additionalRelations.includes(relation)}
+                          onChange={() => setAdditionalRelations((current) => current.includes(relation)
+                            ? current.filter((item) => item !== relation)
+                            : [...current, relation])}
+                          type="checkbox"
+                        />
+                        <span>{t(`relation.${relation}`)}</span>
+                        <small title={t("canvas.visibleOfDetected", { visible: relationCounts.visible.get(relation) ?? 0, detected: relationCounts.generated.get(relation) ?? 0 })}>{relationCounts.visible.get(relation) ?? 0}/{relationCounts.generated.get(relation) ?? 0}</small>
+                      </label>
+                    ))}
+                  </fieldset>
+                );
+              })}
+              {availableRelationOverlays.includes("manual") ? (
+                <fieldset>
+                  <legend>{t("canvas.relationGroup.manual")}</legend>
+                  <label>
+                    <input checked={additionalRelations.includes("manual")} onChange={() => setAdditionalRelations((current) => current.includes("manual")
+                      ? current.filter((item) => item !== "manual")
+                      : [...current, "manual"])} type="checkbox" />
+                    <span>{t("canvas.manualRelations")}</span>
+                    <small title={t("canvas.visibleOfDetected", { visible: relationCounts.visible.get("manual") ?? 0, detected: relationCounts.generated.get("manual") ?? 0 })}>{relationCounts.visible.get("manual") ?? 0}/{relationCounts.generated.get("manual") ?? 0}</small>
+                  </label>
+                </fieldset>
+              ) : null}
+              {layoutMode === "execution" && inferredCallCount > 0 ? (
+                <fieldset>
+                  <legend>{t("canvas.relationGroup.inferred")}</legend>
+                  <label>
+                    <input checked={showInferredCalls} onChange={(event) => setShowInferredCalls(event.target.checked)} type="checkbox" />
+                    <span>{t("canvas.inferredCalls")}</span>
+                    <small title={t("canvas.visibleOfDetected", { visible: showInferredCalls ? inferredCallCount : 0, detected: inferredCallCount })}>{showInferredCalls ? inferredCallCount : 0}/{inferredCallCount}</small>
+                  </label>
+                </fieldset>
+              ) : null}
+              {focusedNodeId ? (
+                <fieldset className="canvas-trace-controls" aria-label={t("canvas.traceControls")}>
+                  <legend><GitBranch size={14} /> {t("canvas.traceControls")}</legend>
+                  {(["upstream", "downstream", "all"] as TraceDirection[]).map((direction) => (
+                    <label key={direction}>
+                      <input checked={traceDirection === direction} onChange={() => setTraceDirection(direction)} type="radio" name="canvas-trace-direction" />
+                      <span>{t(`canvas.trace${direction[0].toUpperCase()}${direction.slice(1)}`)}</span>
+                    </label>
+                  ))}
+                  {tracedNodeIds ? <Button size="tool" type="button" variant="subtle" onClick={() => {
+                    setTraceDirection("off");
+                    setFocusedNodeId("");
+                  }}>{t("canvas.clearTrace")}</Button> : null}
+                </fieldset>
+              ) : null}
+              {additionalRelations.length || showInferredCalls ? <Button size="tool" type="button" variant="subtle" onClick={() => {
+                setAdditionalRelations([]);
+                setShowInferredCalls(false);
+              }}>{t("canvas.clearRelationDisplay")}</Button> : null}
+            </div>
           </details>
-          {hasActiveCanvasFilters ? (
-            <>
+          <details className="canvas-filter-display">
+            <summary>{t("canvas.filters")}{activeModuleFilterCount ? ` · ${activeModuleFilterCount}` : ""}</summary>
+            <div className="canvas-toolbar-popover">
+              <fieldset>
+                <legend>{t("canvas.classificationFilters")}</legend>
+                <label>
+                  <span>{t("canvas.technologyFilter")}</span>
+                  <select value={technologyFilter} onChange={(event) => setTechnologyFilter(event.target.value as TechnologyStack | "all")}>
+                    <option value="all">{t("canvas.filterAll")}</option>
+                    {(["frontend", "mobile", "backend", "data", "infrastructure", "shared", "unknown"] as TechnologyStack[])
+                      .map((stack) => <option key={stack} value={stack}>{t(`technology.${stack}`)}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>{t("canvas.layerFilter")}</span>
+                  <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as ArchitectureLayer | "all")}>
+                    <option value="all">{t("canvas.filterAll")}</option>
+                    {(["presentation", "api", "domain", "data", "integration", "infrastructure", "test", "unknown"] as ArchitectureLayer[])
+                      .map((layer) => <option key={layer} value={layer}>{t(`architectureLayer.${layer}`)}</option>)}
+                  </select>
+                </label>
+              </fieldset>
+              <details className="canvas-module-scope">
+                <summary>{t("canvas.moduleScope")}{selectedModuleGroups.length ? ` · ${selectedModuleGroups.length}` : ""}</summary>
+                <fieldset>
+                  <legend>{t("canvas.moduleGroups")}</legend>
+                  {moduleGroupOptions.length ? moduleGroupOptions.map((group) => (
+                    <label key={group.id}>
+                      <input
+                        checked={selectedModuleGroups.includes(group.id)}
+                        onChange={() => setSelectedModuleGroups((current) => current.includes(group.id)
+                          ? current.filter((id) => id !== group.id)
+                          : [...current, group.id])}
+                        type="checkbox"
+                      />
+                      <span>{group.title}</span>
+                      <small>{group.count}</small>
+                    </label>
+                  )) : <span className="canvas-scope-empty">{t("canvas.noModuleGroups")}</span>}
+                </fieldset>
+              </details>
               <span className="canvas-execution-summary" role="status">
                 {t("canvas.filterMatches", { visible: visibleModuleCount, total: totalModuleCount })}
               </span>
-              <Button size="tool" type="button" variant="subtle" onClick={resetCanvasFilters}>{t("canvas.clearFilters")}</Button>
-            </>
-          ) : null}
-          <details className="canvas-secondary-tools">
-            <summary>{t("canvas.moreCanvasActions")}</summary>
-            <Button disabled={readOnly || canvasLayout.activeMode === "manual"} icon={<RotateCcw size={14} />} label={t("canvas.restoreManualLayout")} variant="subtle" type="button" onClick={onRestoreManualLayout}>
-              <span className="canvas-tool-label">{t("canvas.restoreManualLayout")}</span>
-            </Button>
-            {hiddenGeneratedCount > 0 ? <Button disabled={readOnly} icon={<RotateCcw size={14} />} label={t("canvas.restoreGeneratedItems")} variant="subtle" type="button" onClick={() => {
-              setRestoreError("");
-              void onRestoreGeneratedItems().catch((error) => setRestoreError(error instanceof Error ? error.message : String(error)));
-            }}><span className="canvas-tool-label">{t("canvas.restoreGeneratedItems")}</span></Button> : null}
-          </details>
-          {restoreError ? <span className="canvas-layout-error" role="alert">{t("canvas.restoreGeneratedFailed", { error: restoreError })}</span> : null}
-          {layoutError ? <span className="canvas-layout-error" title={layoutError}>{t("canvas.layoutFailed")}</span> : null}
-          {focusedNodeId ? (
-            <div className="canvas-trace-controls" aria-label={t("canvas.traceControls")}>
-              <GitBranch size={14} />
-              {(["upstream", "downstream", "all"] as TraceDirection[]).map((direction) => (
-                <Button
-                  key={direction}
-                  aria-pressed={traceDirection === direction}
-                  className={traceDirection === direction ? "canvas-trace-active" : undefined}
-                  label={t(`canvas.trace${direction[0].toUpperCase()}${direction.slice(1)}`)}
-                  size="tool"
-                  type="button"
-                  variant="subtle"
-                  onClick={() => setTraceDirection(direction)}
-                >
-                  {t(`canvas.trace${direction[0].toUpperCase()}${direction.slice(1)}`)}
-                </Button>
-              ))}
+              {hasActiveModuleFilters ? <Button size="tool" type="button" variant="subtle" onClick={resetCanvasFilters}>{t("canvas.clearFilters")}</Button> : null}
             </div>
-          ) : null}
-          {tracedNodeIds ? (
-            <Button label={t("canvas.clearTrace")} variant="icon" type="button" onClick={() => {
-              setTraceDirection("off");
-              setFocusedNodeId("");
-            }}>
-              <X size={14} />
-            </Button>
-          ) : null}
+          </details>
+          {layoutError ? <span className="canvas-layout-error" title={layoutError}>{t("canvas.layoutFailed")}</span> : null}
         </div>
         {searchQuery.trim() ? (
           <div className="canvas-search-results">
@@ -1146,9 +1153,9 @@ function ControlledFlowCanvas({
             ))}
           </details>
         ) : null}
-        {preservedDataCount > 0 ? (
+        {preservedDataCount > 0 || hiddenGeneratedCount > 0 ? (
           <details className="canvas-analysis-status canvas-migration-review">
-            <summary>{t("canvas.migrationReview", { count: preservedDataCount })}</summary>
+            <summary>{t("canvas.migrationReview", { count: preservedDataCount + hiddenGeneratedCount })}</summary>
             <div className="canvas-migration-actions">
               <Button size="tool" type="button" variant="subtle" onClick={() => {
                 if (showPreservedData) { setShowPreservedData(false); return; }
@@ -1165,7 +1172,17 @@ function ControlledFlowCanvas({
               }}>
                 {t("canvas.exportPreservedData")}
               </Button>
+              {currentMigrationPendingItems.length ? <Button size="tool" type="button" variant="subtle" onClick={() => downloadText("flowweave-migration-pending.json", JSON.stringify({
+                schemaVersion: 1,
+                projectPath,
+                items: currentMigrationPendingItems
+              }, null, 2))}>{t("canvas.exportMigrationPending")}</Button> : null}
+              {hiddenGeneratedCount > 0 ? <Button disabled={readOnly} size="tool" type="button" variant="subtle" onClick={() => {
+                setRestoreError("");
+                void onRestoreGeneratedItems().catch((error) => setRestoreError(error instanceof Error ? error.message : String(error)));
+              }}>{t("canvas.restoreGeneratedItems")}</Button> : null}
             </div>
+            {restoreError ? <p role="alert">{t("canvas.restoreGeneratedFailed", { error: restoreError })}</p> : null}
             {preservedDataError ? <p role="alert">{preservedDataError}</p> : null}
             {migrationActionError ? <p role="alert">{migrationActionError}</p> : null}
             {showPreservedData ? (
@@ -1388,7 +1405,7 @@ function ControlledFlowCanvas({
         <details className="canvas-relation-legend">
           <summary>{t("canvas.relationLegend")}</summary>
           <div>
-            {relationOptions.map((relation) => (
+            {relationOptions.filter((relation) => rawGraphEdges.some((edge) => edge.relation === relation)).map((relation) => (
               <span key={relation}>
                 <i style={{ background: relationStyle[relation].color }} />
                 {t(`relation.${relation}Accent`)}
@@ -1461,8 +1478,18 @@ function ControlledFlowCanvas({
             proOptions={{ hideAttribution: true }}
           >
             <Background color="var(--graph-grid)" gap={28} size={1} />
-            <Controls position="bottom-left" showInteractive={false} />
-            <MiniMap maskColor="var(--minimap-mask)" nodeColor="var(--minimap-node)" pannable zoomable />
+            <Controls position="bottom-right" showInteractive={false}>
+              <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly} title={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
+                <LayoutGrid size={14} />
+              </ControlButton>
+              {canvasLayout.activeMode !== "manual" ? <ControlButton disabled={readOnly} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={onRestoreManualLayout}>
+                <RotateCcw size={14} />
+              </ControlButton> : null}
+              {expandedGroupIds.length > 0 ? <ControlButton title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
+                <ArrowLeft size={14} />
+              </ControlButton> : null}
+            </Controls>
+            <MiniMap position="bottom-left" maskColor="var(--minimap-mask)" nodeColor="var(--minimap-node)" pannable zoomable />
         </ReactFlow>
       </div>
     </div>

@@ -174,7 +174,8 @@ describe("static graph scenario preparation", () => {
     expect(migrationRecord.status).toBe("complete");
     expect(await readFile(join(prepared.projectPath, migrationRecord.backupPath, "artifacts/canvas/main.canvas.json"))).toEqual(legacyBytes);
     const migratedCanvas = await readProjectProtocolCanvas(prepared.projectPath);
-    expect(migratedCanvas?.generation?.requestId).toBe(prepared.evidence.constructedHistory?.sourceGenerationId);
+    expect(migratedCanvas?.generation?.requestId).not.toBe(prepared.evidence.constructedHistory?.sourceGenerationId);
+    expect(migratedCanvas?.generation?.inputFingerprint).toBe(legacyCanvas.generation.inputFingerprint);
 
     for (const [scenarioId, error] of [["generic-flow", /Unsupported measurement scenario/], ["incremental-source", /explicit source change/]] as const) {
       await expect(scenarios.prepareStaticGraphScenario({ ...input, scenarioId, outputDirectory: join(input.root, scenarioId), sourceChange: undefined })).rejects.toThrow(error);

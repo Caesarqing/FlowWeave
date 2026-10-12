@@ -1,4 +1,4 @@
-import type { CanvasLayoutState, ProjectWorkspaceContext } from '../types';
+import type { CanvasLayoutState, CanvasReadResult, ProjectWorkspaceContext } from '../types';
 import { useAgentStore } from './agents.store';
 import { useCanvasStore } from './canvas.store';
 import { useNavigationStore } from './navigation.store';
@@ -15,12 +15,21 @@ type ProjectWorkspaceSnapshot = {
     relationDiagnostics: ReturnType<typeof useProjectStore.getState>['relationDiagnostics'];
     artifactStatuses: ReturnType<typeof useProjectStore.getState>['artifactStatuses'];
     architectureReview: ReturnType<typeof useProjectStore.getState>['architectureReview'];
+    localGenerationStatus: ReturnType<typeof useProjectStore.getState>['localGenerationStatus'];
     sequenceReview: ReturnType<typeof useProjectStore.getState>['sequenceReview'];
     projectStatus: string;
     isProjectLoading: boolean;
   };
   canvas: {
+    hydrationVersion: number;
     canvasLayout: CanvasLayoutState;
+    generation: ReturnType<typeof useCanvasStore.getState>['generation'];
+    generatedAt: string;
+    userRevision: number;
+    hiddenGeneratedNodeIds: string[];
+    hiddenGeneratedEdgeIds: string[];
+    migrationPendingItems: ReturnType<typeof useCanvasStore.getState>['migrationPendingItems'];
+    preservedCounts: ReturnType<typeof useCanvasStore.getState>['preservedCounts'];
     orphanedEdges: ReturnType<typeof useCanvasStore.getState>['orphanedEdges'];
     groups: ReturnType<typeof useCanvasStore.getState>['groups'];
     quality: ReturnType<typeof useCanvasStore.getState>['quality'];
@@ -75,12 +84,21 @@ export function captureProjectWorkspaceState(): ProjectWorkspaceSnapshot {
       relationDiagnostics: project.relationDiagnostics,
       artifactStatuses: project.artifactStatuses,
       architectureReview: project.architectureReview,
+      localGenerationStatus: project.localGenerationStatus,
       sequenceReview: project.sequenceReview,
       projectStatus: project.projectStatus,
       isProjectLoading: project.isProjectLoading
     },
     canvas: {
+      hydrationVersion: canvas.hydrationVersion,
       canvasLayout: canvas.canvasLayout,
+      generation: canvas.generation,
+      generatedAt: canvas.generatedAt,
+      userRevision: canvas.userRevision,
+      hiddenGeneratedNodeIds: canvas.hiddenGeneratedNodeIds,
+      hiddenGeneratedEdgeIds: canvas.hiddenGeneratedEdgeIds,
+      migrationPendingItems: canvas.migrationPendingItems,
+      preservedCounts: canvas.preservedCounts,
       orphanedEdges: canvas.orphanedEdges,
       groups: canvas.groups,
       quality: canvas.quality,
@@ -127,6 +145,17 @@ export function restoreProjectWorkspaceState(snapshot: ProjectWorkspaceSnapshot)
   useAgentStore.setState(snapshot.agent);
 }
 
+export function isProjectWorkspaceSnapshotCurrent(snapshot: ProjectWorkspaceSnapshot, current: CanvasReadResult | undefined): boolean {
+  const generation = snapshot.canvas.generation;
+  const committed = current?.canvas;
+  return !snapshot.project.isProjectLoading && Boolean(generation && committed?.generation &&
+    generation.requestId === committed.generation.requestId &&
+    generation.inputFingerprint === committed.generation.inputFingerprint &&
+    snapshot.canvas.generatedAt === committed.generatedAt &&
+    snapshot.project.scanFingerprint === committed.scanFingerprint &&
+    snapshot.canvas.userRevision === committed.userRevision);
+}
+
 export function capturePersistedProjectWorkspaceContext(): ProjectWorkspaceContext {
   const canvas = useCanvasStore.getState();
   const navigation = useNavigationStore.getState();
@@ -168,12 +197,21 @@ export function clearProjectWorkspaceState(): void {
       relationDiagnostics: [],
       artifactStatuses: undefined,
       architectureReview: { state: 'missing' },
+      localGenerationStatus: 'idle',
       sequenceReview: { state: 'missing' },
       projectStatus: 'Open a local backend project first. FlowWeave will read the file tree and generate module nodes.',
       isProjectLoading: false
     },
     canvas: {
+      hydrationVersion: 0,
       canvasLayout: emptyCanvasLayout(),
+      generation: undefined,
+      generatedAt: '',
+      userRevision: 0,
+      hiddenGeneratedNodeIds: [],
+      hiddenGeneratedEdgeIds: [],
+      migrationPendingItems: [],
+      preservedCounts: { pending: 0, nodeEdits: 0, edges: 0 },
       orphanedEdges: [],
       groups: [],
       quality: undefined,

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { canvasPersistenceSignature } from "../../src/hooks/useCanvasPersistence";
+import { canvasPersistenceSignature, useCanvasPersistence } from "../../src/hooks/useCanvasPersistence";
 import type { CodeflowCanvas } from "../../src/types";
 
 const canvasPersistenceSource = readFileSync(
@@ -13,6 +15,25 @@ const appControllerSource = readFileSync(
 );
 
 describe("canvas persistence signature", () => {
+  it("does not save a read-only canvas while project analysis is loading", async () => {
+    const canvas: CodeflowCanvas = {
+      id: "main", title: "Canvas", projectPath: "/workspace/sample", scanFingerprint: "scan",
+      generation: { requestId: "old-generation", inputFingerprint: "old-input" }, userRevision: 1,
+      layout: { activeMode: "execution", manualPositions: {}, autoLayouts: {}, collapsedGroups: [] },
+      nodes: [], edges: []
+    };
+    let flush: (() => Promise<void>) | undefined;
+    function Probe() {
+      const persistence = useCanvasPersistence("project", canvas.projectPath, "scan", true, "current", 1,
+        canvas.userRevision!, [], [], canvas.layout!, [], canvas);
+      flush = () => persistence.flushCurrentCanvas(() => { throw new Error("Read-only canvas was built for saving."); });
+      return null;
+    }
+
+    renderToStaticMarkup(createElement(Probe));
+    await expect(flush?.()).resolves.toBeUndefined();
+  });
+
   it("does not treat a save receipt revision as a new user-content change", () => {
     const canvas: CodeflowCanvas = {
       id: "main",

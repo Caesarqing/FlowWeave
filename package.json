@@ -42,6 +42,7 @@
     "electron": "^42.1.0",
     "electron-builder": "26.15.6",
     "electron-vite": "^5.0.0",
+    "happy-dom": "^20.14.6",
     "tree-sitter-go": "^0.25.0",
     "tree-sitter-java": "^0.23.5",
     "tree-sitter-python": "^0.25.0",

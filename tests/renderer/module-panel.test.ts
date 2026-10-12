@@ -1,15 +1,24 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   buildModuleDisplaySummary,
   formatModuleRelation,
   relationDisplayTitle
 } from "../../src/components/ModulePanel";
 import { buildConnectionDisplayDetails } from "../../src/components/ConnectionPanel";
-import { executionCoverageSummary } from "../../src/components/CanvasWorkspace";
+import { CanvasWorkspace, executionCoverageSummary } from "../../src/components/CanvasWorkspace";
+import { usePreferencesStore } from "../../src/stores/preferences.store";
+import { createFlowEdge, createFlowNode } from "../../src/utils/graph-converters";
+import { translate } from "../../src/utils/i18n";
 import type { GraphEdge, GraphNode } from "../../src/types";
 
+const previousLocale = usePreferencesStore.getState().locale;
+
 describe("module panel display data", () => {
+  afterEach(() => usePreferencesStore.setState({ locale: previousLocale }));
+
   it("localizes Canvas node categories instead of rendering raw category enums", () => {
     const nodeSource = readFileSync(new URL("../../src/components/nodes/BaseCanvasNode.tsx", import.meta.url), "utf8");
 
@@ -17,11 +26,37 @@ describe("module panel display data", () => {
     expect(nodeSource).not.toContain("data.category ??");
   });
 
-  it("keeps the relation legend in the Canvas view alongside execution diagnostics", () => {
-    const canvasSource = readFileSync(new URL("../../src/components/CanvasWorkspace.tsx", import.meta.url), "utf8");
+  it("shows only detected relationship kinds in the Canvas legend", () => {
+    usePreferencesStore.setState({ locale: "en" });
+    const html = renderToStaticMarkup(createElement(CanvasWorkspace, {
+      readOnly: true,
+      hiddenGeneratedCount: 0,
+      canvasLayout: { activeMode: "execution", manualPositions: {}, autoLayouts: {}, collapsedGroups: [] },
+      edges: [createFlowEdge({ id: "api-call", source: "api", target: "service", relation: "calls", confidence: "confirmed", evidence: [] })],
+      nodes: [createFlowNode(moduleFixture({ id: "api" })), createFlowNode(moduleFixture({ id: "service" }))],
+      relationDiagnostics: [],
+      generatedAt: "2026-10-11T00:00:00.000Z",
+      isProjectLoading: false,
+      onApplyAutoLayout: () => undefined,
+      onConnect: () => undefined,
+      onEdgesChange: () => undefined,
+      onOpenProject: () => undefined,
+      onNodesChange: () => undefined,
+      onPaneClick: () => undefined,
+      onSelectEdge: () => undefined,
+      onSelectNode: () => undefined,
+      onRestoreManualLayout: () => undefined,
+      onRestoreGeneratedItems: async () => undefined,
+      onResolveMigrationItem: async () => { throw new Error("Not used by legend rendering."); },
+      onSetCollapsedGroups: () => undefined,
+      onSetViewMode: () => undefined
+    }));
+    const legendStart = html.indexOf('<details class="canvas-relation-legend">');
+    const legendEnd = html.indexOf("</details>", legendStart);
+    const legend = html.slice(legendStart, legendEnd);
 
-    expect(canvasSource).toContain('t("canvas.relationLegend")');
-    expect(canvasSource).toContain("relationOptions.map");
+    expect(legend).toContain(translate("en", "relation.callsAccent"));
+    expect(legend).not.toContain(translate("en", "relation.http_contractAccent"));
   });
 
   it("summarizes entry symbols, relationship counts, and source evidence", () => {

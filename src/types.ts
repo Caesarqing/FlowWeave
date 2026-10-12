@@ -768,6 +768,7 @@ export type StaticGraphDetailUiTiming = {
 export type ProjectGenerationManifestV7 = {
   storageProtocol: 7;
   generationId: string;
+  generationNonce?: string;
   inputFingerprint: string;
   rulesVersion: string;
   analyzerVersion: string;
