@@ -4523,24 +4523,6 @@ button:disabled {
   background: color-mix(in srgb, var(--graph-bg) 86%, transparent);
 }
 
-.canvas-readability-warning {
-  position: absolute;
-  z-index: 4;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: min(420px, calc(100% - 24px));
-  padding: 8px 11px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  color: var(--muted);
-  background: var(--panel);
-  box-shadow: var(--panel-shadow);
-  font-size: 12px;
-}
-
 .canvas-layout-pending strong {
   color: var(--text);
 }

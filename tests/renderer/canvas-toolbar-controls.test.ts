@@ -27,6 +27,7 @@ describe('canvas toolbar controls', () => {
     expect(styles).toContain('.canvas-view-tools {\n  position: relative;');
     expect(smokeSource).toContain("controlReachability('.canvas-filter-display > summary')");
     expect(smokeSource).toContain("controlReachability('.canvas-control-auto-layout')");
+    expect(smokeSource).toContain("controlReachability('.canvas-control-fit-view')");
     expect(smokeSource).not.toContain('.canvas-secondary-tools');
   });
 
@@ -44,7 +45,7 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('canvas.relationGroup.');
     expect(source).not.toContain('canvas.toggleGroups');
     expect(source).not.toContain('canvas.moreCanvasActions');
-    expect(source).toContain('<Controls position="bottom-left"');
+    expect(source).toContain('<Controls position="bottom-left" showFitView={false}');
     expect(source).toContain('<MiniMap position="bottom-right"');
     expect(source).not.toContain('canvas.inferredDependencyOverlay');
     expect(source).toContain('className={`canvas-layout-pending${layoutError ? " has-error" : ""}`}');
@@ -106,7 +107,7 @@ describe('canvas toolbar controls', () => {
     const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
     const layoutEffect = source.split('if (!layoutReadyForViewport || !(layoutPending || layoutNeedsRefresh)) return;')[1]?.split('  }, [decoratedLayoutGraph.nodes')[0];
 
-    expect(source).toContain('layoutGraph.nodes.some((node) =>');
+    expect(source).toContain('primaryLayoutNodes.some((node) =>');
     expect(source).toContain('node.data.origin !== "manual" && !canvasLayout.autoLayouts[layoutMode]?.[node.id]');
     expect(source).toContain('!autoLayoutIsCurrent(canvasLayout, layoutMode, layoutTopologyFingerprint)');
     expect(layoutEffect).toContain('layoutTopologyFingerprint');
@@ -156,10 +157,43 @@ describe('canvas toolbar controls', () => {
     const smokeSource = readSourceText(new URL('../../src/main/index.ts', import.meta.url));
 
     expect(source).toContain('className="canvas-control-back-overview"');
+    expect(source).toContain('className="canvas-control-restore-layout"');
+    expect(source).toContain('className="canvas-control-fit-view"');
+    expect(source).toContain('disabled={expandedGroupIds.length === 0}');
+    expect(source).toContain('onSetCollapsedGroups(displayCollapsedGroups);\n                onRestoreManualLayout();');
     expect(smokeSource).toContain('document.querySelector(".canvas-control-back-overview")');
     expect(smokeSource).toContain('document.querySelector(".canvas-control-auto-layout")');
-    expect(smokeSource).toContain("document.querySelector('.react-flow__controls-fitview')");
+    expect(smokeSource).toContain("document.querySelector('.canvas-control-fit-view')");
     expect(smokeSource).toContain('fitViewButton.click()');
+  });
+
+  it('arranges and fits only the currently visible graph and omits the readability banner', () => {
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+
+    expect(source).toContain('flowInstance.current?.getNodes().filter((node) => !node.hidden)');
+    expect(source).toContain('filteredEdges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))');
+    expect(source).toContain('window.requestAnimationFrame(() => window.requestAnimationFrame(fitCurrentView))');
+    expect(source).toContain('nodes: filteredProjectionGraph.nodes.filter((node) => !node.data.resource && !node.data.syntheticKind)');
+    expect(source).not.toContain('canvas-readability-warning');
+    expect(source).toContain('Object.fromEntries(visibleNodes.map((node) => [node.id, node.position]))');
+    expect(source).toContain('canvasLayout.manualPositions[node.id]\n        : canvasLayout.autoLayouts[layoutMode]?.[node.id]');
+    const relationPlacement = source.split('const relationOnlyNodes = positionedNodes.filter((node) =>')[1]?.split('const relationOnlyIds')[0];
+    expect(relationPlacement).not.toContain('!canvasLayout.autoLayouts[layoutMode]?.[node.id]');
+    expect(readSourceText(new URL('../../src/utils/i18n.ts', import.meta.url))).not.toContain('canvas.readabilityWarning');
+  });
+
+  it('keeps overlay relation geometry on the existing canvas and checks it in Electron smoke', () => {
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+    const smokeSource = readSourceText(new URL('../../src/main/index.ts', import.meta.url));
+
+    expect(source).toContain('data-relation={relation}');
+    expect(source).toContain('placeAdditionalCanvasNodes(');
+    expect(source).toContain('primaryLayoutNodes');
+    expect(smokeSource).toContain("input[data-relation=\"publishes_event\"]");
+    expect(smokeSource).toContain('refreshedEndpointCount === endpoints.length');
+    expect(smokeSource).toContain('preservedViewport');
+    expect(smokeSource).toContain("document.querySelector('.canvas-control-auto-layout')");
+    expect(smokeSource).toContain('allVisibleNodesFit');
   });
 
   it('reports filter matches and moves keyboard focus from search to the selected module', () => {
@@ -171,9 +205,9 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('pendingGroupFocus.current = [node.id]');
   });
 
-  it('offers the existing auto-layout action from the insufficient-space warning', () => {
+  it('offers the existing auto-layout recovery action when local expansion runs out of space', () => {
     const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
-    const warning = source.split('<div className="canvas-readability-warning"')[1]?.split('</div>')[0];
+    const warning = source.split('{localLayoutSpaceInsufficient ? (')[1]?.split('{layoutPending ? (')[0];
 
     expect(warning).toContain('onClick={() => void applyAutoLayout()}');
   });

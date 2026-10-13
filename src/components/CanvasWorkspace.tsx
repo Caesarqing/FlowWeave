@@ -14,7 +14,7 @@ import {
   type ReactFlowInstance,
   type NodeChange
 } from "@xyflow/react";
-import { ArrowLeft, BrainCircuit, GitBranch, Search, LayoutGrid, LoaderCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, BrainCircuit, GitBranch, Search, LayoutGrid, LoaderCircle, RotateCcw, Scan } from "lucide-react";
 import { Profiler, useEffect, useMemo, useRef, useState, version as reactVersion } from "react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
@@ -33,6 +33,7 @@ import {
   layoutExpandedCanvasNodes,
   layoutCanvasConnectionHandles,
   layoutCanvasNodes,
+  placeAdditionalCanvasNodes,
   canvasTopologyFingerprint,
   nodeGroupKey,
   type TraceDirection
@@ -150,7 +151,7 @@ type ControlledFlowCanvasProps = {
   ) => void;
   onConnect: (connection: Connection) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
-  onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
+  onNodesChange: (changes: NodeChange<FlowWeaveNode>[], displayedPositions: Record<string, { x: number; y: number }>) => void;
   onPaneClick: () => void;
   onSelectEdge: (edge: GraphEdge) => void;
   onSelectNode: (nodeId: string) => void;
@@ -221,7 +222,7 @@ export function CanvasWorkspace({
   ) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onOpenProject: () => void;
-  onNodesChange: (changes: NodeChange<FlowWeaveNode>[]) => void;
+  onNodesChange: (changes: NodeChange<FlowWeaveNode>[], displayedPositions: Record<string, { x: number; y: number }>) => void;
   onPaneClick: () => void;
   onSelectEdge: (edge: GraphEdge) => void;
   onSelectNode: (nodeId: string) => void;
@@ -542,7 +543,9 @@ function ControlledFlowCanvas({
     const projectedNodes = projection.nodes.map((node) => {
       const original = originalNodesById.get(node.id);
       const preservedManualPosition = node.origin === "manual" ? canvasLayout.manualPositions[node.id] : undefined;
-      const savedPosition = preservedManualPosition ?? (canvasLayout.activeMode === "manual" ? undefined : canvasLayout.autoLayouts[layoutMode]?.[node.id]);
+      const savedPosition = preservedManualPosition ?? (canvasLayout.activeMode === "manual"
+        ? canvasLayout.manualPositions[node.id]
+        : canvasLayout.autoLayouts[layoutMode]?.[node.id]);
       const flowNode = original
         ? { ...original, data: { ...original.data, ...node } }
         : createFlowNode(node);
@@ -574,7 +577,10 @@ function ControlledFlowCanvas({
         }
       };
     });
-    return { nodes: projectedNodes, edges: projectedEdges };
+    return {
+      nodes: projectedNodes,
+      edges: projectedEdges
+    };
   }, [canvasLayout.activeMode, canvasLayout.autoLayouts, canvasLayout.manualPositions, edges, layoutMode, nodes, projection]);
   const projectedNodes = projectedFlowGraph.nodes;
   const projectedEdges = projectedFlowGraph.edges;
@@ -591,7 +597,7 @@ function ControlledFlowCanvas({
     if (!hasMeasuredViewport || overviewViewport.width < 1 || overviewViewport.height < 1 || !generationId ||
       canvasLayout.activeMode === "manual" || layoutMode === "dependency") return undefined;
     return selectOverviewFrontier({
-      nodes: filteredProjectionGraph.nodes.map((node) => node.data),
+      nodes: filteredProjectionGraph.nodes.filter((node) => !node.data.resource && !node.data.syntheticKind).map((node) => node.data),
       viewport: overviewViewport,
       cardSize: { width: 280, height: 176 },
       collapsedGroupIds: canvasLayout.collapsedGroups,
@@ -602,15 +608,44 @@ function ControlledFlowCanvas({
     generationId, hasMeasuredViewport, layoutMode, overviewViewport, projectionViewIdentity]);
   const displayCollapsedGroups = overviewFrontier?.collapsedGroupIds ?? canvasLayout.collapsedGroups;
   const executionCoverage = executionCoverageSummary(projection.diagnostics);
-  const collapsedGraph = useMemo(
-    () => projectCollapsedFlowGraph(
+  const collapsedGraph = useMemo(() => {
+    const graph = projectCollapsedFlowGraph(
       filteredProjectionGraph.nodes,
       filteredProjectionGraph.edges,
       layoutMode,
       displayCollapsedGroups
-    ),
-    [displayCollapsedGroups, filteredProjectionGraph, layoutMode]
-  );
+    );
+    const positionedNodes = graph.nodes.map((node) => {
+      if (node.data.syntheticKind !== "group") return node;
+      const savedPosition = canvasLayout.activeMode === "manual"
+        ? canvasLayout.manualPositions[node.id]
+        : canvasLayout.autoLayouts[layoutMode]?.[node.id];
+      return savedPosition ? { ...node, position: savedPosition } : node;
+    });
+    const relationOnlyNodes = positionedNodes.filter((node) =>
+      !(canvasLayout.activeMode === "manual" && canvasLayout.manualPositions[node.id]) &&
+      (node.data.resource || node.data.syntheticKind === "event-boundary" || node.data.syntheticKind === "unresolved-event-boundary")
+    );
+    const relationOnlyIds = new Set(relationOnlyNodes.map((node) => node.id));
+    const savedRelationPositionIds = new Set(relationOnlyNodes.filter((node) =>
+      (node.data.origin === "manual" && canvasLayout.manualPositions[node.id]) ||
+      (canvasLayout.activeMode !== "manual" && canvasLayout.autoLayouts[layoutMode]?.[node.id])
+    ).map((node) => node.id));
+    const placedRelationNodes = placeAdditionalCanvasNodes(
+      relationOnlyNodes,
+      graph.edges,
+      positionedNodes.filter((node) => !relationOnlyIds.has(node.id)),
+      savedRelationPositionIds
+    );
+    const positionedRelationNodePositions = new Map(placedRelationNodes.map((node) => [node.id, node.position]));
+    return {
+      ...graph,
+      nodes: positionedNodes.map((node) => positionedRelationNodePositions.has(node.id)
+        ? { ...node, position: positionedRelationNodePositions.get(node.id)! }
+        : node)
+    };
+  }, [canvasLayout.activeMode, canvasLayout.autoLayouts, canvasLayout.manualPositions, displayCollapsedGroups,
+    filteredProjectionGraph, layoutMode]);
   const layoutGraph = useMemo(
     () => projectCollapsedFlowGraph(projectedNodes, projectedEdges, layoutMode, displayCollapsedGroups),
     [displayCollapsedGroups, layoutMode, projectedEdges, projectedNodes]
@@ -623,10 +658,12 @@ function ControlledFlowCanvas({
   const decoratedLayoutGraph = useMemo(
     () => decorateFlowGraph(layoutGraph.nodes.map((node) => ({
       ...node,
-      ...(node.data.syntheticKind === "group" && canvasLayout.autoLayouts[layoutMode]?.[node.id]
-        ? { position: canvasLayout.autoLayouts[layoutMode]![node.id] } : {})
+      ...(node.data.syntheticKind === "group" && canvasLayout.activeMode === "manual" && canvasLayout.manualPositions[node.id]
+        ? { position: canvasLayout.manualPositions[node.id] }
+        : node.data.syntheticKind === "group" && canvasLayout.autoLayouts[layoutMode]?.[node.id]
+          ? { position: canvasLayout.autoLayouts[layoutMode]![node.id] } : {})
     })), layoutGraph.edges, undefined, layoutHandles),
-    [canvasLayout.autoLayouts, layoutGraph, layoutHandles, layoutMode]
+    [canvasLayout.activeMode, canvasLayout.autoLayouts, canvasLayout.manualPositions, layoutGraph, layoutHandles, layoutMode]
   );
   const tracedNodeIds = useMemo(() => {
     if (!focusedNodeId || traceDirection === "off") return undefined;
@@ -636,10 +673,12 @@ function ControlledFlowCanvas({
   const decoratedCollapsedGraph = useMemo(
     () => decorateFlowGraph(collapsedGraph.nodes.map((node) => ({
       ...node,
-      ...(node.data.syntheticKind === "group" && canvasLayout.autoLayouts[layoutMode]?.[node.id]
-        ? { position: canvasLayout.autoLayouts[layoutMode]![node.id] } : {})
+      ...(node.data.syntheticKind === "group" && canvasLayout.activeMode === "manual" && canvasLayout.manualPositions[node.id]
+        ? { position: canvasLayout.manualPositions[node.id] }
+        : node.data.syntheticKind === "group" && canvasLayout.autoLayouts[layoutMode]?.[node.id]
+          ? { position: canvasLayout.autoLayouts[layoutMode]![node.id] } : {})
     })), collapsedGraph.edges, undefined, collapsedLayoutHandles),
-    [canvasLayout.autoLayouts, collapsedGraph, collapsedLayoutHandles, layoutMode]
+    [canvasLayout.activeMode, canvasLayout.autoLayouts, canvasLayout.manualPositions, collapsedGraph, collapsedLayoutHandles, layoutMode]
   );
   const filteredEdges = useMemo(
     () => decoratedCollapsedGraph.edges.filter((edge) =>
@@ -715,9 +754,16 @@ function ControlledFlowCanvas({
       manualPositionRevision
     };
   }, [generationId, hasMeasuredViewport, layoutViewport, manualPositionRevision, projectId]);
+  const primaryLayoutNodes = useMemo(() => {
+    const primaryEdgeNodeIds = new Set(layoutEdges.flatMap((edge) => [edge.source, edge.target]));
+    return decoratedLayoutGraph.nodes.filter((node) =>
+      !(node.data.resource || node.data.syntheticKind === "event-boundary" || node.data.syntheticKind === "unresolved-event-boundary") ||
+      primaryEdgeNodeIds.has(node.id)
+    );
+  }, [decoratedLayoutGraph.nodes, layoutEdges]);
   const layoutTopologyFingerprint = useMemo(
-    () => canvasTopologyFingerprint(decoratedLayoutGraph.nodes, layoutEdges, layoutContext),
-    [decoratedLayoutGraph.nodes, layoutContext, layoutEdges]
+    () => canvasTopologyFingerprint(primaryLayoutNodes, layoutEdges, layoutContext),
+    [layoutContext, layoutEdges, primaryLayoutNodes]
   );
   const layoutRequestContext = {
     identity: projectionViewIdentity,
@@ -734,7 +780,7 @@ function ControlledFlowCanvas({
     (overviewViewport.width === layoutViewport.width && overviewViewport.height === layoutViewport.height);
   const layoutNeedsRefresh = canvasLayout.activeMode !== "manual" &&
     !autoLayoutIsCurrent(canvasLayout, layoutMode, layoutTopologyFingerprint);
-  const layoutPending = canvasLayout.activeMode !== "manual" && layoutGraph.nodes.some((node) =>
+  const layoutPending = canvasLayout.activeMode !== "manual" && primaryLayoutNodes.some((node) =>
     node.data.origin !== "manual" && !canvasLayout.autoLayouts[layoutMode]?.[node.id]);
   const localizedEdges = useMemo(
     () => localizeCanvasEdgeLabels(filteredEdges, t),
@@ -744,18 +790,28 @@ function ControlledFlowCanvas({
     explicitLayoutRequest.current?.abort();
     const controller = new AbortController();
     explicitLayoutRequest.current = controller;
-    const nodesToLayout = decoratedLayoutGraph.nodes;
+    const nodesToLayout = flowInstance.current?.getNodes().filter((node) => !node.hidden) ?? visibleNodes.filter((node) => !node.hidden);
+    const visibleNodeIds = new Set(nodesToLayout.map((node) => node.id));
+    const edgesToLayout = filteredEdges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
     setIsLayoutRunning(true);
     setLayoutError("");
     setLocalLayoutSpaceInsufficient(false);
     try {
+      const visibleLayout = await layoutCanvasNodes(nodesToLayout, edgesToLayout, layoutMode, edgesToLayout);
+      const arrangedPositions = new Map(visibleLayout.nodes.map((node) => [node.id, node.position]));
+      const finalNodes = decoratedLayoutGraph.nodes.map((node) => ({
+        ...node,
+        position: arrangedPositions.get(node.id) ?? node.position
+      }));
+      const handleLayout = await layoutCanvasConnectionHandles(finalNodes, decoratedLayoutGraph.edges);
       await applyCanvasLayoutResult(
-        layoutCanvasNodes(nodesToLayout, layoutEdges, layoutMode, decoratedLayoutGraph.edges),
+        Promise.resolve({ nodes: visibleLayout.nodes, handleLayout }),
         layoutRequestContext,
         () => currentLayoutRequestContext.current,
         onApplyAutoLayout,
         controller.signal
       );
+      window.requestAnimationFrame(() => window.requestAnimationFrame(fitCurrentView));
     } catch (error) {
       if (!controller.signal.aborted) setLayoutError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -946,6 +1002,10 @@ function ControlledFlowCanvas({
     const requested = visibleNodes.filter((node) => focusRequest.includes(node.id) || node.data.memberNodeIds?.some((id) => focusRequest.includes(id)));
     if (requested.length > 0) void instance.fitView({ nodes: requested, padding: 0.25, duration: 250 }).then(() => setFocusRequest([]));
   }
+  function fitCurrentView() {
+    const currentNodes = flowInstance.current?.getNodes().filter((node) => !node.hidden) ?? [];
+    if (currentNodes.length > 0) void flowInstance.current?.fitView({ nodes: currentNodes, padding: 0.18, duration: 250 });
+  }
   useEffect(() => {
     if (!layoutPending && flowInstance.current) fitRequestedNodes(flowInstance.current);
   }, [layoutPending, focusRequest, visibleTopologyFingerprint]);
@@ -1009,6 +1069,7 @@ function ControlledFlowCanvas({
                       <label key={relation}>
                         <input
                           checked={additionalRelations.includes(relation)}
+                          data-relation={relation}
                           onChange={() => setAdditionalRelations((current) => current.includes(relation)
                             ? current.filter((item) => item !== relation)
                             : [...current, relation])}
@@ -1371,17 +1432,6 @@ function ControlledFlowCanvas({
             <Button size="tool" type="button" variant="subtle" onClick={resetCanvasFilters}>{t("canvas.clearFilters")}</Button>
           </div>
         ) : null}
-        {hasMeasuredViewport && overviewFrontier && !overviewFrontier.readability.isReadable ? (
-          <div className="canvas-readability-warning" role="status">
-            {t("canvas.readabilityWarning", {
-              visible: overviewFrontier.readability.visibleNodeCount,
-              maximum: overviewFrontier.readability.maximumReadableNodeCount
-            })}
-            <Button disabled={isLayoutRunning || readOnly} size="tool" type="button" variant="subtle" onClick={() => void applyAutoLayout()}>
-              {t("canvas.autoLayout")}
-            </Button>
-          </div>
-        ) : null}
         {localLayoutSpaceInsufficient ? (
           <div className="canvas-layout-pending has-error" role="status" aria-live="polite">
             <strong>{t("canvas.localLayoutSpaceInsufficient")}</strong>
@@ -1455,9 +1505,13 @@ function ControlledFlowCanvas({
             onEdgeClick={(_, edge) => onSelectEdge(graphEdgeFromFlow(edge))}
             onConnect={onConnect}
             onEdgesChange={onEdgesChange}
-            onNodesChange={(changes) => onNodesChange(changes.filter((change) =>
-              !("id" in change) || nodes.some((node) => node.id === change.id)
-            ))}
+            onNodesChange={(changes) => {
+              const allowed = changes.filter((change) => !("id" in change) || nodes.some((node) => node.id === change.id));
+              if (canvasLayout.activeMode !== "manual" && allowed.some((change) => change.type === "position" && "position" in change && Boolean(change.position))) {
+                onSetCollapsedGroups(displayCollapsedGroups);
+              }
+              onNodesChange(allowed, Object.fromEntries(visibleNodes.map((node) => [node.id, node.position])));
+            }}
             onInit={(instance) => {
               flowInstance.current = instance;
               fitRequestedNodes(instance);
@@ -1481,16 +1535,23 @@ function ControlledFlowCanvas({
             proOptions={{ hideAttribution: true }}
           >
             <Background color="var(--graph-grid)" gap={28} size={1} />
-            <Controls position="bottom-left" showInteractive={false}>
+            <Controls position="bottom-left" showFitView={false} showInteractive={false}>
               <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly} title={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
                 <LayoutGrid size={14} />
               </ControlButton>
-              {canvasLayout.activeMode !== "manual" ? <ControlButton disabled={readOnly} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={onRestoreManualLayout}>
+              <ControlButton className="canvas-control-restore-layout" disabled={readOnly || canvasLayout.activeMode === "manual"} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={() => {
+                onSetCollapsedGroups(displayCollapsedGroups);
+                onRestoreManualLayout();
+                window.requestAnimationFrame(() => window.requestAnimationFrame(fitCurrentView));
+              }}>
                 <RotateCcw size={14} />
-              </ControlButton> : null}
-              {expandedGroupIds.length > 0 ? <ControlButton className="canvas-control-back-overview" title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
+              </ControlButton>
+              <ControlButton className="canvas-control-back-overview" disabled={expandedGroupIds.length === 0} title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
                 <ArrowLeft size={14} />
-              </ControlButton> : null}
+              </ControlButton>
+              <ControlButton className="canvas-control-fit-view" disabled={visibleNodes.every((node) => node.hidden)} title={t("structure.fitView")} aria-label={t("structure.fitView")} onClick={fitCurrentView}>
+                <Scan size={14} />
+              </ControlButton>
             </Controls>
             <MiniMap position="bottom-right" maskColor="var(--minimap-mask)" nodeColor="var(--minimap-node)" pannable zoomable />
         </ReactFlow>

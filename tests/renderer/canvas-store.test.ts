@@ -70,6 +70,25 @@ describe("canvas store layout modes", () => {
     expect(useCanvasStore.getState().canvasLayout.autoConnectionHandles?.execution).toEqual(handleLayout);
   });
 
+  it("captures the displayed graph before recording the first manual drag", () => {
+    const secondModule = { ...moduleNode, id: "second", x: 400, y: 200 };
+    useCanvasStore.getState().setGraph([moduleNode, secondModule], [], [], {
+      ...manualLayout,
+      activeMode: "execution",
+      autoLayouts: { execution: { module: { x: 100, y: 80 }, second: { x: 500, y: 280 } } }
+    });
+    useCanvasStore.getState().syncNodePositions(
+      [{ id: "module", type: "position", position: { x: 140, y: 120 } }],
+      { module: { x: 100, y: 80 }, second: { x: 500, y: 280 }, "group:src": { x: 900, y: 80 } }
+    );
+
+    expect(useCanvasStore.getState().canvasLayout.manualPositions).toEqual({
+      module: { x: 140, y: 120 },
+      second: { x: 500, y: 280 },
+      "group:src": { x: 900, y: 80 }
+    });
+  });
+
   it("retains ELK handle geometry alongside the positions that produced it", () => {
     const autoConnectionHandles = {
       execution: {

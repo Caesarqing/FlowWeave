@@ -61,8 +61,8 @@ describe("Canvas Arrange result and store positions", () => {
     const { applied, engineResult } = requestLayout();
     const changes = [{ type: "position" as const, id: "orders", position: { x: 420, y: 360 }, dragging: false }];
     const state = useCanvasStore.getState();
+    state.syncNodePositions(changes, { orders: { x: 10, y: 20 } });
     state.setNodes(applyNodeChanges(changes, state.nodes));
-    state.syncNodePositions(changes);
 
     engineResult.resolve({ id: "flowweave-canvas", children: [{ id: "orders", x: 80, y: 120 }] });
     await applied;

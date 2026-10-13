@@ -26,6 +26,13 @@ describe("module panel display data", () => {
     expect(nodeSource).not.toContain("data.category ??");
   });
 
+  it("refreshes React Flow internals when relation handle geometry changes", () => {
+    const nodeSource = readFileSync(new URL("../../src/components/nodes/BaseCanvasNode.tsx", import.meta.url), "utf8");
+
+    expect(nodeSource).toContain("useUpdateNodeInternals");
+    expect(nodeSource).toContain("[data.id, handleLayoutSignature, updateNodeInternals]");
+  });
+
   it("shows only detected relationship kinds in the Canvas legend", () => {
     usePreferencesStore.setState({ locale: "en" });
     const html = renderToStaticMarkup(createElement(CanvasWorkspace, {

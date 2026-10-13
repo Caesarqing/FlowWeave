@@ -54,6 +54,44 @@ export function handleLayoutIsCurrent(
   });
 }
 
+export function placeAdditionalCanvasNodes(
+  nodes: FlowWeaveNode[],
+  edges: Edge[],
+  fixedNodes: FlowWeaveNode[],
+  savedPositionNodeIds: ReadonlySet<string>
+): FlowWeaveNode[] {
+  const fixedById = new Map(fixedNodes.map((node) => [node.id, node]));
+  const placed: FlowWeaveNode[] = [];
+  for (const node of [...nodes].sort((left, right) => left.id.localeCompare(right.id))) {
+    const obstacles = [...fixedNodes, ...placed];
+    const neighborIds = edges.filter((edge) => edge.source === node.id || edge.target === node.id)
+      .map((edge) => edge.source === node.id ? edge.target : edge.source);
+    const anchor = [...new Set(neighborIds)].map((id) => placed.find((item) => item.id === id) ?? fixedById.get(id))
+      .filter((candidate): candidate is FlowWeaveNode => Boolean(candidate))
+      .sort((left, right) => left.id.localeCompare(right.id))[0];
+    if (anchor) {
+      const nodeDimensions = nodeSize(node);
+      const anchorDimensions = nodeSize(anchor);
+      const centerDistanceX = Math.abs(node.position.x + nodeDimensions.width / 2 - anchor.position.x - anchorDimensions.width / 2);
+      const centerDistanceY = Math.abs(node.position.y + nodeDimensions.height / 2 - anchor.position.y - anchorDimensions.height / 2);
+      const withinLocalArea = centerDistanceX <= (Math.max(nodeDimensions.width, anchorDimensions.width) + 70) * 4 &&
+        centerDistanceY <= (Math.max(nodeDimensions.height, anchorDimensions.height) + 70) * 4;
+      if (savedPositionNodeIds.has(node.id) && withinLocalArea && hasNoLayoutOverlap([node], obstacles)) {
+        placed.push(node);
+        continue;
+      }
+    }
+    const local = anchor ? placeLayoutNearAnchor([node], anchor, obstacles) : undefined;
+    if (local) {
+      placed.push(local[0]);
+      continue;
+    }
+    const bounds = obstacles.length > 0 ? nodeBounds(obstacles) : { left: 0, top: 0, right: -70, bottom: 0 };
+    placed.push({ ...node, position: { x: bounds.right + 70, y: bounds.top } });
+  }
+  return placed;
+}
+
 export function autoLayoutIsCurrent(
   layout: CanvasLayoutState,
   mode: CanvasLayoutMode,

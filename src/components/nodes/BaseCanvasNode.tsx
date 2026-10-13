@@ -1,5 +1,5 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import type { CSSProperties } from "react";
+import { Handle, Position, type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
+import { useEffect, type CSSProperties } from "react";
 import type { ConnectionHandleSlot } from "../../types";
 import { cn } from "../../utils/classnames";
 import { CANVAS_NODE_SIZE } from "../../common/canvas-geometry";
@@ -11,6 +11,13 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
   const { t } = useI18n();
   const targetHandles = data.connectionHandles?.target ?? [{ id: `${data.id}-target-idle`, offsetPercent: 50, count: 0 }];
   const sourceHandles = data.connectionHandles?.source ?? [{ id: `${data.id}-source-idle`, offsetPercent: 50, count: 0 }];
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handleLayoutSignature = JSON.stringify([...targetHandles, ...sourceHandles]
+    .map(({ id, position, offsetPercent }) => [id, position, offsetPercent]));
+
+  useEffect(() => {
+    updateNodeInternals(data.id);
+  }, [data.id, handleLayoutSignature, updateNodeInternals]);
 
   return (
     <div

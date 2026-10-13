@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 import type { ElkNode } from "elkjs/lib/elk-api";
+import { CANVAS_NODE_SIZE } from "../../src/common/canvas-geometry";
 import {
   autoLayoutIsCurrent,
   canvasTopologyFingerprint,
@@ -10,6 +11,7 @@ import {
   handleLayoutIsCurrent,
   layoutCanvasNodesWithPortsWithEngine,
   layoutCanvasNodesWithEngine,
+  placeAdditionalCanvasNodes,
   nodeArchitectureLayer,
   nodeClassification,
   nodeFunctionalModule,
@@ -22,6 +24,101 @@ import { createFlowNode, decorateFlowGraph } from "../../src/utils/graph-convert
 import type { ArchitectureLayer, ConnectionHandleSlot, GraphNode } from "../../src/types";
 
 describe("canvas layout and tracing", () => {
+  it("places relation-only nodes near their existing neighbors without moving the graph", () => {
+    const anchor = createFlowNode(node("anchor", []));
+    const fixed = { ...createFlowNode(node("fixed", [])), position: { x: 350, y: 0 } };
+    const relationNode = { ...createFlowNode(node("resource", [])), position: { x: 0, y: 0 } };
+    const edges = [{ id: "relation", source: "anchor", target: "resource" }];
+
+    const first = placeAdditionalCanvasNodes([relationNode], edges, [anchor, fixed], new Set());
+    const second = placeAdditionalCanvasNodes([relationNode], edges, [anchor, fixed], new Set());
+
+    expect(first).toEqual(second);
+    expect(first[0].position).not.toEqual(relationNode.position);
+    expect([anchor, fixed].every((obstacle) =>
+      first[0].position.x + CANVAS_NODE_SIZE.width <= obstacle.position.x ||
+      obstacle.position.x + CANVAS_NODE_SIZE.width <= first[0].position.x ||
+      first[0].position.y + CANVAS_NODE_SIZE.height <= obstacle.position.y ||
+      obstacle.position.y + CANVAS_NODE_SIZE.height <= first[0].position.y
+    )).toBe(true);
+    expect([anchor, fixed]).toEqual([
+      createFlowNode(node("anchor", [])),
+      { ...createFlowNode(node("fixed", [])), position: { x: 350, y: 0 } }
+    ]);
+  });
+
+  it("puts a relation node beyond the graph when every nearby slot is occupied", () => {
+    const anchor = createFlowNode(node("anchor", []));
+    const blockers = Array.from({ length: 9 }, (_, row) => Array.from({ length: 9 }, (_, column) => ({ row, column })))
+      .flat()
+      .filter(({ row, column }) => row !== 4 || column !== 4)
+      .map(({ row, column }, index) => ({
+        ...createFlowNode(node(`blocker-${index}`, [])),
+        position: { x: (column - 4) * 350, y: (row - 4) * 250 }
+      }));
+    const relationNode = createFlowNode(node("resource", []));
+
+    const [placed] = placeAdditionalCanvasNodes([relationNode], [{ id: "relation", source: "anchor", target: "resource" }], [anchor, ...blockers], new Set());
+
+    expect(placed.position.x).toBeGreaterThan(Math.max(...blockers.map((blocker) => blocker.position.x + CANVAS_NODE_SIZE.width)));
+  });
+
+  it("anchors a relation node to the visible collapsed group endpoint", () => {
+    const group = {
+      ...createFlowNode(node("group:src", [])),
+      position: { x: 4200, y: 2500 },
+      data: { ...createFlowNode(node("group:src", [])).data, syntheticKind: "group" as const, groupId: "src", memberNodeIds: ["src"] }
+    };
+    const relationNode = { ...createFlowNode(node("event", [])), position: { x: 0, y: 0 } };
+
+    const [placed] = placeAdditionalCanvasNodes(
+      [relationNode],
+      [{ id: "publishes", source: group.id, target: relationNode.id }],
+      [group],
+      new Set()
+    );
+
+    expect(Math.hypot(placed.position.x - group.position.x, placed.position.y - group.position.y)).toBeLessThan(1800);
+    expect(placed.position).not.toEqual(relationNode.position);
+  });
+
+  it("places fresh relation coordinates near the group while retaining a saved position", () => {
+    const group = {
+      ...createFlowNode(node("group:src", [])),
+      position: { x: 1200, y: 700 },
+      data: { ...createFlowNode(node("group:src", [])).data, syntheticKind: "group" as const, groupId: "src", memberNodeIds: ["src"] }
+    };
+    const fresh = createFlowNode(node("event", []));
+    const saved = { ...fresh, position: { x: 500, y: 700 } };
+    const edges = [{ id: "publishes", source: group.id, target: fresh.id }];
+
+    const [placedFresh] = placeAdditionalCanvasNodes([fresh], edges, [group], new Set());
+    const [placedSaved] = placeAdditionalCanvasNodes([saved], edges, [group], new Set([saved.id]));
+
+    expect(placedFresh.position).not.toEqual({ x: 0, y: 0 });
+    expect(Math.hypot(placedFresh.position.x - group.position.x, placedFresh.position.y - group.position.y)).toBeLessThan(1200);
+    expect(placedSaved.position).toEqual(saved.position);
+  });
+
+  it("reanchors a stale saved relation position after its visible neighbor moves", () => {
+    const group = {
+      ...createFlowNode(node("group:src", [])),
+      position: { x: 1200, y: 700 },
+      data: { ...createFlowNode(node("group:src", [])).data, syntheticKind: "group" as const, groupId: "src", memberNodeIds: ["src"] }
+    };
+    const staleRelationNode = { ...createFlowNode(node("event", [])), position: { x: 8200, y: 6700 } };
+
+    const [placed] = placeAdditionalCanvasNodes(
+      [staleRelationNode],
+      [{ id: "publishes", source: group.id, target: staleRelationNode.id }],
+      [group],
+      new Set([staleRelationNode.id])
+    );
+
+    expect(Math.hypot(placed.position.x - group.position.x, placed.position.y - group.position.y)).toBeLessThan(1200);
+    expect(placed.position).not.toEqual(staleRelationNode.position);
+  });
+
   it("finishes real ELK dependency layout for dense parallel relations", async () => {
     const topology = JSON.parse(readFileSync(new URL("../fixtures/architecture-dense-layout-topology.json", import.meta.url), "utf8")) as {
       roles: ArchitectureLayer[]; edges: [number, number][];

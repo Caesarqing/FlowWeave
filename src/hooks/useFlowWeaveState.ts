@@ -101,10 +101,13 @@ export function useFlowWeaveState() {
     applyAutoLayout(mode, positions, topologyFingerprint, handleLayout);
   }
 
-  function handleCanvasNodesChange(changes: NodeChange<FlowWeaveNode>[]) {
+  function handleCanvasNodesChange(
+    changes: NodeChange<FlowWeaveNode>[],
+    displayedPositions: Record<string, { x: number; y: number }>
+  ) {
     const allowed = canvasEditingEnabled() ? changes : changes.filter((change) => change.type === "select" || change.type === "dimensions");
+    if (canvasEditingEnabled()) syncNodePositions(allowed, displayedPositions);
     setNodes((currentNodes) => applyNodeChanges(allowed, currentNodes));
-    if (canvasEditingEnabled()) syncNodePositions(allowed);
   }
 
   function handleConnect(connection: Connection) {

@@ -32,7 +32,7 @@ type CanvasState = {
   setSelectedNodeId: (selectedNodeId: string) => void;
   togglePath: (path: string) => void;
   updateModule: (nodeId: string, update: (node: GraphNode) => GraphNode) => void;
-  syncNodePositions: (changes: NodeChange<FlowWeaveNode>[]) => void;
+  syncNodePositions: (changes: NodeChange<FlowWeaveNode>[], displayedPositions: Record<string, { x: number; y: number }>) => void;
   applyAutoLayout: (mode: CanvasLayoutMode, positions: Record<string, { x: number; y: number }>, topologyFingerprint?: string, handleLayout?: AutoConnectionHandleLayout) => void;
   restoreManualLayout: () => void;
   setCollapsedGroups: (groups: string[]) => void;
@@ -105,12 +105,18 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     return { modules, nodes };
     });
   },
-  syncNodePositions: (changes) => set((state) => {
+  syncNodePositions: (changes, displayedPositions) => set((state) => {
     const positionChanges = changes.filter(
       (change): change is NodeChange<FlowWeaveNode> & { id: string; position: { x: number; y: number } } =>
         change.type === "position" && "position" in change && Boolean(change.position)
     );
     if (positionChanges.length === 0) return state;
+    const manualPositions = state.canvasLayout.activeMode === "manual"
+      ? state.canvasLayout.manualPositions
+      : {
+        ...Object.fromEntries(state.nodes.map((node) => [node.id, node.position])),
+        ...displayedPositions
+      };
     return {
       modules: state.modules.map((module) => {
         const change = positionChanges.find((item) => item.id === module.id);
@@ -120,7 +126,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         ...state.canvasLayout,
         activeMode: "manual",
         manualPositions: {
-          ...state.canvasLayout.manualPositions,
+          ...manualPositions,
           ...Object.fromEntries(positionChanges.map((change) => [change.id, change.position]))
         }
       }

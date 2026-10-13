@@ -1364,13 +1364,33 @@ type CanvasViewportSmokeSample = {
   overlappingNodePairCount: number;
   edgePaths: number;
   invalidEdgePathCount: number;
-  readabilityWarning: boolean;
-  readabilityWarningText: string;
+  readabilityBannerPresent: boolean;
   flowZoom: number;
   smallestVisibleTitleFontPx: number | null;
   smallestVisibleBodyFontPx: number | null;
   detailPanelVisible: boolean;
   requiredCanvasControlsReachable: Record<string, boolean>;
+};
+
+type CanvasRelationToggleSmoke = {
+  passed: boolean;
+  attachedEdgeCount: number;
+  refreshedEndpointCount: number;
+  preservedVisibleNodeCount: number;
+  preservedViewport: boolean;
+  attachedPeerDistancePx: number | null;
+};
+
+type CanvasArrangeSmoke = {
+  passed: boolean;
+  visibleNodeCount: number;
+  allVisibleNodesFit: boolean;
+};
+
+type CanvasViewportCapture = {
+  samples: CanvasViewportSmokeSample[];
+  relationToggle: CanvasRelationToggleSmoke;
+  autoLayout: CanvasArrangeSmoke;
 };
 
 type GraphSmokeDetailPanelSnapshot = {
@@ -1945,9 +1965,10 @@ function runGraphSmokeTest(
         const detailsRace = expected === "details-race"
           ? await verifyGraphSmokeDetailsRace(window, detailRaceControl)
           : undefined;
-        const nodeClick = expected === "migration-failure" || expected === "details-race" ? undefined : await window.webContents.executeJavaScript(`new Promise((resolve) => {
+        const nodeClick = expected === "empty" || expected === "migration-failure" || expected === "details-race" ? undefined : await window.webContents.executeJavaScript(`new Promise((resolve) => {
           const stage = document.querySelector('.canvas-flow-stage')?.getBoundingClientRect();
-          const node = [...document.querySelectorAll('.react-flow__node:not(.react-flow__node-groupNode)')].find((candidate) => {
+          const findVisibleModule = () => [...document.querySelectorAll('.react-flow__node')].find((candidate) => {
+            if (candidate.querySelector('.canvas-group-node')) return false;
             if (!stage) return false;
             const rect = candidate.getBoundingClientRect();
             const x = (Math.max(rect.left, stage.left) + Math.min(rect.right, stage.right)) / 2;
@@ -1955,21 +1976,45 @@ function runGraphSmokeTest(
             return rect.right > stage.left && rect.left < stage.right && rect.bottom > stage.top && rect.top < stage.bottom &&
               document.elementFromPoint(x, y)?.closest('.react-flow__node') === candidate;
           });
-          if (!node) { resolve({ ready: false }); return; }
+          const waitForDetails = (interaction) => {
+            const started = performance.now();
+            const interval = setInterval(() => {
+              const state = document.querySelector('.module-panel')?.getAttribute('data-detail-state');
+              if (state === 'ready' || state === 'error' || performance.now() - started > 7000) {
+                clearInterval(interval);
+                resolve({ ready: state === 'ready', interaction, elapsedMs: Math.round(performance.now() - started) });
+              }
+            }, 25);
+          };
+          const node = findVisibleModule();
+          if (node) {
+            node.click();
+            waitForDetails('visible-node');
+            return;
+          }
+          const search = document.querySelector('.canvas-module-search input');
+          if (!(search instanceof HTMLInputElement)) { resolve({ ready: false, reason: 'no-visible-module-or-search' }); return; }
+          const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+          valueSetter?.call(search, 'app');
+          search.dispatchEvent(new Event('input', { bubbles: true }));
           const started = performance.now();
-          node.click();
           const interval = setInterval(() => {
-            const state = document.querySelector('.module-panel')?.getAttribute('data-detail-state');
-            if (state === 'ready' || state === 'error' || performance.now() - started > 7000) {
+            const result = document.querySelector('.canvas-search-results button');
+            if (result instanceof HTMLButtonElement) {
               clearInterval(interval);
-              resolve({ ready: state === 'ready', elapsedMs: Math.round(performance.now() - started) });
+              result.click();
+              waitForDetails('search-result');
+            }
+            else if (performance.now() - started > 15000) {
+              clearInterval(interval);
+              resolve({ ready: false, reason: 'module search returned no result' });
             }
           }, 25);
         })`) as { ready: boolean; elapsedMs?: number };
-        if (nodeClick?.ready === false) throw new Error("Graph node did not open its module details panel.");
-        const viewportSamples = expected === "four-languages" || expected === "viewport-only"
+        if (nodeClick?.ready === false) throw new Error(`Canvas module selection did not open its details panel: ${JSON.stringify(nodeClick)}.`);
+        const viewportCapture = expected === "four-languages" || expected === "viewport-only"
           ? await captureCanvasViewports(window, screenshotPath)
-          : [];
+          : undefined;
         const closeSavedTitle = expected === "edges" ? await verifyCanvasSaveOnClose(window) : undefined;
         const failedSavePreservedEdit = expected === "save-failure" ? await verifyFailedSaveStopsRefresh(window) : undefined;
         const switchSavedTitle = expected === "tab-switch" ? await verifyProjectSwitchSaveBarrier(window) : undefined;
@@ -1988,7 +2033,9 @@ function runGraphSmokeTest(
           keyboardNavigation,
           reactProfiler: reactProfilerEvidence,
           ...(graphSmokePhaseTrace ? { phaseTrace: graphSmokePhaseTrace } : {}),
-          viewportSamples,
+          viewportSamples: viewportCapture?.samples ?? [],
+          relationToggle: viewportCapture?.relationToggle,
+          autoLayout: viewportCapture?.autoLayout,
           mainRssMiB: Math.round(process.memoryUsage().rss / 1048576)
         }, null, 2)}\n`, "utf8");
         console.log(`FlowWeave graph smoke test passed: ${expected}.`);
@@ -2412,7 +2459,7 @@ async function sendGraphSmokeKeyboardInput(window: BrowserWindow, keyCode: "ENTE
 async function captureCanvasViewports(
   window: BrowserWindow,
   baseScreenshotPath: string | undefined
-): Promise<Array<CanvasViewportSmokeSample>> {
+): Promise<CanvasViewportCapture> {
   const originalSize = window.getSize();
   const sizes = [
     { width: 960, height: 640 },
@@ -2420,16 +2467,24 @@ async function captureCanvasViewports(
     { width: 1920, height: 1080 }
   ];
   const samples: Array<CanvasViewportSmokeSample> = [];
+  let relationToggle: CanvasRelationToggleSmoke;
+  let autoLayout: CanvasArrangeSmoke;
   try {
     for (const size of sizes) {
       window.setSize(size.width, size.height);
       await new Promise((resolve) => setTimeout(resolve, 450));
       await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
         const startedAt = performance.now();
+        let readySamples = 0;
         const interval = setInterval(() => {
           const layoutButton = document.querySelector('.canvas-control-auto-layout');
           if (layoutButton instanceof HTMLButtonElement && !layoutButton.disabled &&
             !document.querySelector('.canvas-flow.layout-pending')) {
+            readySamples += 1;
+          } else {
+            readySamples = 0;
+          }
+          if (readySamples >= 8) {
             clearInterval(interval);
             resolve(true);
           } else if (performance.now() - startedAt > 15000) {
@@ -2475,8 +2530,7 @@ async function captureCanvasViewports(
           overlappingNodePairCount,
           edgePaths: paths.filter(Boolean).length,
           invalidEdgePathCount: paths.filter((path) => /NaN|Infinity/.test(path)).length,
-          readabilityWarning: Boolean(document.querySelector('.canvas-readability-warning')),
-          readabilityWarningText: document.querySelector('.canvas-readability-warning')?.textContent?.trim() ?? '',
+          readabilityBannerPresent: Boolean(document.querySelector('.canvas-readability-warning')),
           flowZoom,
           smallestVisibleTitleFontPx: (() => {
             const sizes = visibleNodes.flatMap((node) => [...node.querySelectorAll('h3')]
@@ -2497,6 +2551,7 @@ async function captureCanvasViewports(
             relationDisplay: controlReachability('.canvas-relation-display > summary'),
             filters: controlReachability('.canvas-filter-display > summary'),
             autoLayout: controlReachability('.canvas-control-auto-layout'),
+            fitView: controlReachability('.canvas-control-fit-view'),
             canvasNavigation: (() => {
               const controls = [...document.querySelectorAll('.react-flow__controls button:not([disabled])')];
               return controls.length > 0 && controls.every(elementReachable);
@@ -2525,7 +2580,7 @@ async function captureCanvasViewports(
     const fitViewControlWorked = await window.webContents.executeJavaScript(`new Promise((resolve) => {
       const viewport = document.querySelector('.react-flow__viewport');
       const zoomOutButton = document.querySelector('.react-flow__controls-zoomout');
-      const fitViewButton = document.querySelector('.react-flow__controls-fitview');
+      const fitViewButton = document.querySelector('.canvas-control-fit-view');
       if (!(viewport instanceof HTMLElement) || !(zoomOutButton instanceof HTMLButtonElement) ||
         !(fitViewButton instanceof HTMLButtonElement) || zoomOutButton.disabled) {
         resolve(false);
@@ -2540,8 +2595,16 @@ async function captureCanvasViewports(
           clearInterval(zoomInterval);
           fitViewButton.click();
           const fitStartedAt = performance.now();
+          let lastFitTransform = '';
+          let stableFitSamples = 0;
           const fitInterval = setInterval(() => {
-            if (getComputedStyle(viewport).transform !== zoomedTransform) {
+            const fitTransform = getComputedStyle(viewport).transform;
+            if (fitTransform === lastFitTransform && fitTransform !== zoomedTransform) stableFitSamples += 1;
+            else {
+              lastFitTransform = fitTransform;
+              stableFitSamples = 0;
+            }
+            if (stableFitSamples >= 8) {
               clearInterval(fitInterval);
               resolve(true);
             } else if (performance.now() - fitStartedAt > 3000) {
@@ -2556,10 +2619,130 @@ async function captureCanvasViewports(
       }, 25);
     })`) as boolean;
     if (!fitViewControlWorked) throw new Error("Canvas viewport smoke could not zoom out and restore the canvas with Fit view.");
+    relationToggle = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+      const relationDisplay = document.querySelector('.canvas-relation-display');
+      const checkbox = document.querySelector('input[data-relation="publishes_event"]');
+      const viewport = document.querySelector('.react-flow__viewport');
+      if (!(relationDisplay instanceof HTMLDetailsElement) || !(checkbox instanceof HTMLInputElement) ||
+        !(viewport instanceof HTMLElement) || checkbox.checked) {
+        resolve({ passed: false, attachedEdgeCount: 0, refreshedEndpointCount: 0, preservedVisibleNodeCount: 0, preservedViewport: false, attachedPeerDistancePx: null });
+        return;
+      }
+      const transformBefore = getComputedStyle(viewport).transform;
+      const positionsBefore = new Map([...document.querySelectorAll('.react-flow__node')].map((node) => {
+        const rect = node.getBoundingClientRect();
+        return [node.getAttribute('data-id'), { left: rect.left, top: rect.top }];
+      }));
+      relationDisplay.open = true;
+      checkbox.click();
+      relationDisplay.open = false;
+      const startedAt = performance.now();
+      const interval = setInterval(() => {
+        const eventNode = [...document.querySelectorAll('.react-flow__node')]
+          .find((node) => node.querySelector('h3')?.textContent?.trim() === 'graph-smoke-ready');
+        if (!eventNode || document.querySelector('.canvas-flow.layout-pending')) {
+          if (performance.now() - startedAt > 15000) {
+            clearInterval(interval);
+            reject(new Error('Canvas did not render the selected event relation.'));
+          }
+          return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          clearInterval(interval);
+          const handles = [...document.querySelectorAll('.flow-handle')].map((handle) => {
+            const rect = handle.getBoundingClientRect();
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+          });
+          const paths = [...document.querySelectorAll('.react-flow__edge-path')].filter((path) => path.getAttribute('d'));
+          const edgeEndpoints = paths.flatMap((path) => {
+            const matrix = path.getScreenCTM();
+            if (!matrix || path.getTotalLength() <= 0) return [];
+            return [[0, path.getTotalLength()].map((length) => {
+              const point = new DOMPoint(path.getPointAtLength(length).x, path.getPointAtLength(length).y).matrixTransform(matrix);
+              return { x: point.x, y: point.y };
+            })];
+          });
+          const endpoints = edgeEndpoints.flat();
+          const endpointHandleTolerancePx = 8;
+          const refreshedEndpointCount = endpoints.filter((endpoint) => handles.some((handle) =>
+            Math.hypot(endpoint.x - handle.x, endpoint.y - handle.y) <= endpointHandleTolerancePx
+          )).length;
+          const eventRect = eventNode.getBoundingClientRect();
+          const endpointTouchesEvent = (endpoint) => endpoint.x >= eventRect.left - 5 && endpoint.x <= eventRect.right + 5 &&
+            endpoint.y >= eventRect.top - 5 && endpoint.y <= eventRect.bottom + 5;
+          const attachedPairs = edgeEndpoints.filter(([source, target]) => endpointTouchesEvent(source) || endpointTouchesEvent(target))
+            .map(([source, target]) => endpointTouchesEvent(source) ? target : source);
+          const attachedEdgeCount = attachedPairs.length;
+          const visiblePeers = [...document.querySelectorAll('.react-flow__node')].filter((node) => {
+            const rect = node.getBoundingClientRect();
+            return node !== eventNode && rect.width > 0 && rect.height > 0;
+          });
+          const attachedPeerDistancePx = attachedPairs.length === 0 ? null : Math.min(...attachedPairs.map((endpoint) => {
+            const peer = visiblePeers.map((node) => {
+              const rect = node.getBoundingClientRect();
+              const dx = Math.max(rect.left - endpoint.x, 0, endpoint.x - rect.right);
+              const dy = Math.max(rect.top - endpoint.y, 0, endpoint.y - rect.bottom);
+              return { node, rect, distance: Math.hypot(dx, dy) };
+            }).sort((left, right) => left.distance - right.distance)[0];
+            if (!peer) return Number.POSITIVE_INFINITY;
+            return Math.hypot((peer.rect.left + peer.rect.width / 2) - (eventRect.left + eventRect.width / 2),
+              (peer.rect.top + peer.rect.height / 2) - (eventRect.top + eventRect.height / 2));
+          }));
+          const preservedVisibleNodeCount = [...positionsBefore].filter(([id, position]) => {
+            const current = [...document.querySelectorAll('.react-flow__node')].find((node) => node.getAttribute('data-id') === id);
+            if (!current) return false;
+            const rect = current.getBoundingClientRect();
+            return Math.abs(rect.left - position.left) <= 1 && Math.abs(rect.top - position.top) <= 1;
+          }).length;
+          const preservedViewport = getComputedStyle(viewport).transform === transformBefore;
+          resolve({
+            passed: endpoints.length > 0 && refreshedEndpointCount === endpoints.length && attachedEdgeCount > 0 &&
+              attachedPeerDistancePx !== null && attachedPeerDistancePx < 1600 &&
+              preservedVisibleNodeCount === positionsBefore.size && preservedViewport,
+            attachedEdgeCount,
+            refreshedEndpointCount,
+            preservedVisibleNodeCount,
+            preservedViewport,
+            attachedPeerDistancePx
+          });
+        }));
+      }, 25);
+    })`) as CanvasRelationToggleSmoke;
+    if (!relationToggle.passed) throw new Error(`Canvas relation toggle left incomplete edge endpoints or moved existing content: ${JSON.stringify(relationToggle)}.`);
+    autoLayout = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+      const button = document.querySelector('.canvas-control-auto-layout');
+      if (!(button instanceof HTMLButtonElement) || button.disabled) {
+        resolve({ passed: false, visibleNodeCount: 0, allVisibleNodesFit: false });
+        return;
+      }
+      button.click();
+      const startedAt = performance.now();
+      let readySamples = 0;
+      const interval = setInterval(() => {
+        if (!button.disabled && !document.querySelector('.canvas-flow.layout-pending')) readySamples += 1;
+        else readySamples = 0;
+        if (readySamples >= 3) {
+          clearInterval(interval);
+          setTimeout(() => {
+            const stage = document.querySelector('.canvas-flow-stage')?.getBoundingClientRect();
+            const nodes = [...document.querySelectorAll('.react-flow__node')];
+            const allVisibleNodesFit = Boolean(stage) && nodes.every((node) => {
+              const rect = node.getBoundingClientRect();
+              return rect.left >= stage.left - 2 && rect.top >= stage.top - 2 && rect.right <= stage.right + 2 && rect.bottom <= stage.bottom + 2;
+            });
+            resolve({ passed: nodes.length > 0 && allVisibleNodesFit, visibleNodeCount: nodes.length, allVisibleNodesFit });
+          }, 400);
+        } else if (performance.now() - startedAt > 15000) {
+          clearInterval(interval);
+          reject(new Error('Canvas auto-layout did not finish and fit the visible graph.'));
+        }
+      }, 25);
+    })`) as CanvasArrangeSmoke;
+    if (!autoLayout.passed) throw new Error(`Canvas auto-layout did not fit the current visible nodes: ${JSON.stringify(autoLayout)}.`);
   } finally {
     window.setSize(originalSize[0], originalSize[1]);
   }
-  return samples;
+  return { samples, relationToggle, autoLayout };
 }
 
 async function verifyCanvasSaveOnClose(window: BrowserWindow): Promise<string> {

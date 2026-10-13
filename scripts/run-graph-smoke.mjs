@@ -88,17 +88,28 @@ for (const fixture of fixtures) {
           !Number.isFinite(sample.stageWidth) || !Number.isFinite(sample.stageHeight) ||
           sample.stageWidth < 1 || sample.stageHeight < 1 || sample.detailPanelVisible !== true ||
           sample.overlappingNodePairCount !== 0 ||
-          !sample.requiredCanvasControlsReachable || Object.keys(sample.requiredCanvasControlsReachable).length !== 6 ||
+          !sample.requiredCanvasControlsReachable || Object.keys(sample.requiredCanvasControlsReachable).length !== 7 ||
           Object.values(sample.requiredCanvasControlsReachable).some((reachable) => reachable !== true) ||
           !Number.isFinite(sample.flowZoom) || sample.flowZoom <= 0 ||
           !Number.isFinite(sample.smallestVisibleTitleFontPx) || sample.smallestVisibleTitleFontPx < 14 ||
           !Number.isFinite(sample.smallestVisibleBodyFontPx) || sample.smallestVisibleBodyFontPx < 12 ||
-          typeof sample.readabilityWarning !== "boolean" || typeof sample.readabilityWarningText !== "string" ||
+          sample.readabilityBannerPresent !== false ||
           sample.smallestVisibleTitleFontPx === null || sample.smallestVisibleBodyFontPx === null) {
           throw new Error(`Graph smoke viewport sample ${index} is incomplete: ${JSON.stringify(sample)}.`);
         }
       }
-      console.log(`Canvas stage measurements in target app windows (${fixture}): ${JSON.stringify(rendered.viewportSamples.map(({ windowWidth, windowHeight, stageWidth, stageHeight, visibleNodeCount, overlappingNodePairCount, flowZoom, smallestVisibleTitleFontPx, smallestVisibleBodyFontPx, detailPanelVisible, requiredCanvasControlsReachable, readabilityWarning, readabilityWarningText }) => ({ windowWidth, windowHeight, stageWidth, stageHeight, visibleNodeCount, overlappingNodePairCount, flowZoom, smallestVisibleTitleFontPx, smallestVisibleBodyFontPx, detailPanelVisible, requiredCanvasControlsReachable, readabilityWarning, readabilityWarningText })))}.`);
+      if (rendered.relationToggle?.passed !== true || rendered.relationToggle.refreshedEndpointCount < 1 ||
+        rendered.relationToggle.attachedEdgeCount < 1 || rendered.relationToggle.preservedViewport !== true ||
+        rendered.relationToggle.preservedVisibleNodeCount < 1 ||
+        !Number.isFinite(rendered.relationToggle.attachedPeerDistancePx) || rendered.relationToggle.attachedPeerDistancePx >= 1600) {
+        throw new Error(`Graph smoke did not verify relation handle refresh and stable positioning: ${JSON.stringify(rendered.relationToggle)}.`);
+      }
+      if (rendered.autoLayout?.passed !== true || rendered.autoLayout.visibleNodeCount < 1 || rendered.autoLayout.allVisibleNodesFit !== true) {
+        throw new Error(`Graph smoke did not verify auto-layout completion and current-view fitting: ${JSON.stringify(rendered.autoLayout)}.`);
+      }
+      console.log(`Canvas stage measurements in target app windows (${fixture}): ${JSON.stringify(rendered.viewportSamples.map(({ windowWidth, windowHeight, stageWidth, stageHeight, visibleNodeCount, overlappingNodePairCount, flowZoom, smallestVisibleTitleFontPx, smallestVisibleBodyFontPx, detailPanelVisible, requiredCanvasControlsReachable, readabilityBannerPresent }) => ({ windowWidth, windowHeight, stageWidth, stageHeight, visibleNodeCount, overlappingNodePairCount, flowZoom, smallestVisibleTitleFontPx, smallestVisibleBodyFontPx, detailPanelVisible, requiredCanvasControlsReachable, readabilityBannerPresent })))}.`);
+      console.log(`Canvas relation toggle geometry passed: ${JSON.stringify(rendered.relationToggle)}.`);
+      console.log(`Canvas auto-layout action passed: ${JSON.stringify(rendered.autoLayout)}.`);
     }
     if (fixture === "edges" && !rendered.closeSavedTitle) throw new Error("Graph smoke did not verify the close save barrier.");
     if (fixture === "save-failure" && !rendered.failedSavePreservedEdit) {
