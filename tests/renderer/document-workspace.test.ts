@@ -53,8 +53,11 @@ describe("document workspace", () => {
     await act(async () => {
       readmeButton.click();
     });
+    expect(readmeButton.classList.contains("active")).toBe(true);
+    expect(readmeButton.getAttribute("aria-current")).toBe("page");
     const editor = container.querySelector<HTMLTextAreaElement>(".doc-editor");
     if (!editor) throw new Error("Document editor was not rendered.");
+    expect(editor.getAttribute("aria-label")).toBe("Document editor");
 
     await act(async () => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;

@@ -21,6 +21,11 @@ export function ErrorCenter() {
   }, []);
 
   if (!error) return null;
+  const isGenerationMismatch = error.code === "artifact-generation-mismatch";
+  const technicalDetails = isGenerationMismatch
+    ? `${error.message}${error.technicalDetails ? `\n\n${error.technicalDetails}` : ""}`
+    : error.technicalDetails;
+
   return (
     <aside className="error-center" aria-live="assertive">
       <header>
@@ -29,17 +34,17 @@ export function ErrorCenter() {
           <X size={14} />
         </button>
       </header>
-      <strong>{error.message}</strong>
-      {error.suggestedActions.length > 0 ? (
+      <strong>{isGenerationMismatch ? t("error.artifactGenerationMismatch") : error.message}</strong>
+      {!isGenerationMismatch && error.suggestedActions.length > 0 ? (
         <section>
           <small>{t("error.actions")}</small>
           <ul>{error.suggestedActions.map((action) => <li key={action}>{action}</li>)}</ul>
         </section>
       ) : null}
-      {error.technicalDetails ? (
+      {technicalDetails ? (
         <details>
           <summary>{t("error.technicalDetails")}</summary>
-          <pre>{error.technicalDetails}</pre>
+          <pre>{technicalDetails}</pre>
         </details>
       ) : null}
       <code>{error.code}</code>

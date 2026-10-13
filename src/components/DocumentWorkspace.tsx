@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cn } from "../utils/classnames";
 import { useI18n } from "../utils/i18n";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { Button } from "./Button";
@@ -201,7 +202,14 @@ export function DocumentWorkspace({
         <div className="panel-header"><span>{t("docs.list")}</span></div>
         <div className="doc-list">
           {docTypes.map((docType) => (
-            <button className="tree-row" disabled={isLoading} key={docType.id} onClick={() => selectDocument(docType.id)} type="button">
+            <button
+              aria-current={docId === docType.id ? "page" : undefined}
+              className={cn("tree-row", docId === docType.id && "active")}
+              disabled={isLoading}
+              key={docType.id}
+              onClick={() => selectDocument(docType.id)}
+              type="button"
+            >
               <span>{t(docType.labelKey)}</span>
               {docType.generated ? <small>{t("docs.generated")}</small> : null}
             </button>
@@ -221,7 +229,13 @@ export function DocumentWorkspace({
       title={t("nav.docs")}
     >
       <section className="workspace-main">
-        <textarea className="doc-editor" value={content} readOnly={selectedDoc.generated || isLoading} onChange={(event) => setContent(event.target.value)} />
+        <textarea
+          aria-label={t("docs.editor")}
+          className="doc-editor"
+          value={content}
+          readOnly={selectedDoc.generated || isLoading}
+          onChange={(event) => setContent(event.target.value)}
+        />
         <p className="project-status">{status}</p>
       </section>
     </WorkspaceLayout>

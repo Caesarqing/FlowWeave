@@ -107,6 +107,10 @@ describe("AgentPage readiness", () => {
     }]);
 
     expect(html).toContain("View instructions");
+    expect(html).toContain('<details class="agent-plugin-panel">');
+    expect(html).toContain('<span class="agent-plugin-summary-statuses">');
+    expect(html).toContain("Default Agent");
+    expect(html).toContain('aria-label="Default Agent"');
     expect(html).not.toContain("hosts/codex.md");
   });
 
@@ -158,7 +162,9 @@ describe("AgentPage readiness", () => {
     expect(html).toContain("Native plugin manifest is missing");
     expect(html).toContain("Install the Codex plugin");
     expect(html).toContain("Repair host");
-    expect(html.slice(html.indexOf("Claude:"))).not.toContain("Install the Codex plugin");
+    const claudeCardStart = html.indexOf('<article class="agent-plugin-status-card installed">');
+    const claudeCardEnd = html.indexOf("</article>", claudeCardStart);
+    expect(html.slice(claudeCardStart, claudeCardEnd)).not.toContain("Install the Codex plugin");
   });
 });
 

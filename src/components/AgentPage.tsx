@@ -227,29 +227,28 @@ export function AgentPage({
         </div>
       </section>
 
-      <section className="default-agent-panel">
-        <div>
-          <small>{t("agent.defaultAgent")}</small>
-          <strong>{selectedAgent?.name ?? t("agent.notSelected")}</strong>
-          <span>{selectedAgent ? commandLabel(selectedAgent) : t("agent.addOrSelect")}</span>
+      <section className="agent-workflow-panel">
+        <div className="default-agent-panel">
+          <div>
+            <small>{t("agent.defaultAgent")}</small>
+            <strong>{selectedAgent?.name ?? t("agent.notSelected")}</strong>
+            <span>{selectedAgent ? commandLabel(selectedAgent) : t("agent.addOrSelect")}</span>
+          </div>
+          <div className="default-agent-actions">
+            <Button disabled={!canGenerateTaskArtifact || isGeneratingTask} icon={<FileText size={14} />} onClick={() => void generateTaskArtifact()}>
+              {isGeneratingTask ? t("agent.generatingTask") : t("agent.generateTask")}
+            </Button>
+            <button className="send-button" disabled={!projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
+              <Play size={14} />
+              {isArchitectureReviewing
+                ? t("agent.waitingForRun", { runId: architectureReview.runId ?? architectureReview.reviewId ?? "" })
+                : t("agent.analyzeProject")}
+            </button>
+          </div>
         </div>
-        <div className="default-agent-actions">
-          <Button disabled={!canGenerateTaskArtifact || isGeneratingTask} icon={<FileText size={14} />} onClick={() => void generateTaskArtifact()}>
-            {isGeneratingTask ? t("agent.generatingTask") : t("agent.generateTask")}
-          </Button>
-          <button className="send-button" disabled={!projectPath || !selectedAgent || isArchitectureReviewing} type="button" onClick={() => onAnalyzeCurrentProject()}>
-            <Play size={14} />
-            {isArchitectureReviewing
-              ? t("agent.waitingForRun", { runId: architectureReview.runId ?? architectureReview.reviewId ?? "" })
-              : t("agent.analyzeProject")}
-          </button>
-        </div>
-      </section>
 
-      <section className="agent-selector-panel">
-        <label>
-          <span>{t("agent.defaultAgent")}</span>
-          <select value={selectedAgent?.id ?? ""} onChange={(event) => onSelectAgent(event.target.value as AgentId)}>
+        <div className="agent-selector-panel">
+          <select aria-label={t("agent.defaultAgent")} value={selectedAgent?.id ?? ""} onChange={(event) => onSelectAgent(event.target.value as AgentId)}>
             {visibleAgents.map((agent) => {
               const status = toolStatuses[agent.id] ?? createUnknownStatus(agent.id);
               return (
@@ -259,26 +258,25 @@ export function AgentPage({
               );
             })}
           </select>
-        </label>
-        <span>{t("agent.intro")}</span>
-      </section>
-
-      <section className="execution-mode-panel">
-        <div>
-          <strong>{t("agent.executionMode")}</strong>
-          <span>{t("agent.executionModeHelp")}</span>
         </div>
-        <div className="segmented-control">
-          <button className={cn(executionMode === "plan" && "active")} type="button" onClick={() => onExecutionModeChange("plan")}>
-            {t("agent.mode.plan")}
-          </button>
-          <button
-            className={cn("danger", executionMode === "execute" && "active")}
-            type="button"
-            onClick={() => onExecutionModeChange("execute")}
-          >
-            {t("agent.mode.execute")}
-          </button>
+
+        <div className="execution-mode-panel">
+          <div>
+            <strong>{t("agent.executionMode")}</strong>
+            <span>{t("agent.executionModeHelp")}</span>
+          </div>
+          <div className="segmented-control">
+            <button className={cn(executionMode === "plan" && "active")} type="button" onClick={() => onExecutionModeChange("plan")}>
+              {t("agent.mode.plan")}
+            </button>
+            <button
+              className={cn("danger", executionMode === "execute" && "active")}
+              type="button"
+              onClick={() => onExecutionModeChange("execute")}
+            >
+              {t("agent.mode.execute")}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -288,64 +286,71 @@ export function AgentPage({
         </section>
       ) : null}
 
-      <section className="agent-plugin-panel">
-        <div>
+      <details className="agent-plugin-panel">
+        <summary>
           <strong>{t("agent.pluginPanelTitle")}</strong>
-          <span>{t("agent.pluginPanelBody")}</span>
+          <span className="agent-plugin-summary-statuses">
+            {pluginStatuses.length > 0
+              ? pluginStatuses.map((status) => `${status.displayName}: ${t(`agent.pluginStatus.${status.status}`)}`).join(" · ")
+              : t("agent.pluginStatusUnknown")}
+          </span>
+        </summary>
+        <div className="agent-plugin-content">
+          <p>{t("agent.pluginPanelBody")}</p>
+          <div className="agent-plugin-statuses">
+            {pluginStatuses.length > 0 ? pluginStatuses.map((status) => (
+              <article className={cn("agent-plugin-status-card", status.status)} key={status.hostId}>
+                <div className="agent-plugin-status-heading">
+                  <strong className={cn("agent-plugin-status", status.status)}>
+                    {status.displayName}: {t(`agent.pluginStatus.${status.status}`)} · {status.installedVersion ?? status.bundledVersion}
+                  </strong>
+                  <button className="inline-link-button" type="button" onClick={() => onOpenAgentPluginInstructions(status.hostId)}>
+                    <FileText size={13} />
+                    {t("agent.pluginOpenInstructions")}
+                  </button>
+                </div>
+                {status.checks.map((check, index) => (
+                  <small className={cn("agent-plugin-check", check.status)} key={`${check.code}-${index}`}>
+                    {t(`agent.pluginCheck.${check.code}`)}
+                    {check.filePath ? <code>{check.filePath}</code> : null}
+                  </small>
+                ))}
+                {status.missingFiles.length > 0 ? (
+                  <small className="agent-plugin-missing-files">
+                    <strong>{t("agent.pluginMissingFiles")}</strong>
+                    {status.missingFiles.map((filePath) => <code key={filePath}>{filePath}</code>)}
+                  </small>
+                ) : null}
+                {status.suggestedActions.map((action) => (
+                  <small className="agent-plugin-action" key={action}>{t(`agent.pluginAction.${action}`, { host: status.displayName })}</small>
+                ))}
+                {status.suggestedActions.some((action) => action !== "connect") ? (
+                  <button className="inline-link-button" type="button" onClick={onInstallAgentPlugins}>
+                    <Settings2 size={13} />
+                    {t("agent.pluginRepairHost")}
+                  </button>
+                ) : null}
+              </article>
+            )) : (
+              <span>{t("agent.pluginStatusUnknown")}</span>
+            )}
+          </div>
+          <div className="agent-actions">
+            <button className="ghost-button" disabled={!projectPath} type="button" onClick={onRefreshAgentPlugins}>
+              <RefreshCw size={14} />
+              {t("agent.pluginRefresh")}
+            </button>
+            <button className="ghost-button" disabled={!projectPath} type="button" onClick={onInstallAgentPlugins}>
+              <Settings2 size={14} />
+              {t("agent.pluginInstall")}
+            </button>
+            <button className="ghost-button" disabled={!projectPath} type="button" onClick={onOpenAgentPluginFolder}>
+              <Folder size={14} />
+              {t("agent.pluginOpen")}
+            </button>
+          </div>
         </div>
-        <div className="agent-plugin-statuses">
-          {pluginStatuses.length > 0 ? pluginStatuses.map((status) => (
-            <article className={cn("agent-plugin-status-card", status.status)} key={status.hostId}>
-              <div className="agent-plugin-status-heading">
-                <strong className={cn("agent-plugin-status", status.status)}>
-                  {status.displayName}: {t(`agent.pluginStatus.${status.status}`)} · {status.installedVersion ?? status.bundledVersion}
-                </strong>
-                <button className="inline-link-button" type="button" onClick={() => onOpenAgentPluginInstructions(status.hostId)}>
-                  <FileText size={13} />
-                  {t("agent.pluginOpenInstructions")}
-                </button>
-              </div>
-              {status.checks.map((check, index) => (
-                <small className={cn("agent-plugin-check", check.status)} key={`${check.code}-${index}`}>
-                  {t(`agent.pluginCheck.${check.code}`)}
-                  {check.filePath ? <code>{check.filePath}</code> : null}
-                </small>
-              ))}
-              {status.missingFiles.length > 0 ? (
-                <small className="agent-plugin-missing-files">
-                  <strong>{t("agent.pluginMissingFiles")}</strong>
-                  {status.missingFiles.map((filePath) => <code key={filePath}>{filePath}</code>)}
-                </small>
-              ) : null}
-              {status.suggestedActions.map((action) => (
-                <small className="agent-plugin-action" key={action}>{t(`agent.pluginAction.${action}`, { host: status.displayName })}</small>
-              ))}
-              {status.suggestedActions.some((action) => action !== "connect") ? (
-                <button className="inline-link-button" type="button" onClick={onInstallAgentPlugins}>
-                  <Settings2 size={13} />
-                  {t("agent.pluginRepairHost")}
-                </button>
-              ) : null}
-            </article>
-          )) : (
-            <span>{t("agent.pluginStatusUnknown")}</span>
-          )}
-        </div>
-        <div className="agent-actions">
-          <button className="ghost-button" disabled={!projectPath} type="button" onClick={onRefreshAgentPlugins}>
-            <RefreshCw size={14} />
-            {t("agent.pluginRefresh")}
-          </button>
-          <button className="ghost-button" disabled={!projectPath} type="button" onClick={onInstallAgentPlugins}>
-            <Settings2 size={14} />
-            {t("agent.pluginInstall")}
-          </button>
-          <button className="ghost-button" disabled={!projectPath} type="button" onClick={onOpenAgentPluginFolder}>
-            <Folder size={14} />
-            {t("agent.pluginOpen")}
-          </button>
-        </div>
-      </section>
+      </details>
 
       <section className="agent-grid">
         {(selectedAgent ? [selectedAgent] : []).map((agent) => {

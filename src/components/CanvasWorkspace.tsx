@@ -1181,7 +1181,8 @@ function ControlledFlowCanvas({
             )) : <span>{t("canvas.filterEmpty")}</span>}
           </div>
         ) : null}
-        {quality || currentPreservedNodeEditCount ? (
+        <div className="canvas-status-strip">
+          {quality || currentPreservedNodeEditCount ? (
           <details className="canvas-analysis-status" onToggle={(event) => {
             if (event.currentTarget.open && !loadedFullCanvas &&
               (quality?.factOutcomes?.some((outcome) => outcome.count > 0 && outcome.relationIds.length === 0) || currentPreservedNodeEditCount)) {
@@ -1216,8 +1217,8 @@ function ControlledFlowCanvas({
               </article>
             ))}
           </details>
-        ) : null}
-        {preservedDataCount > 0 || hiddenGeneratedCount > 0 ? (
+          ) : null}
+          {preservedDataCount > 0 || hiddenGeneratedCount > 0 ? (
           <details className="canvas-analysis-status canvas-migration-review">
             <summary>{t("canvas.migrationReview", { count: preservedDataCount + hiddenGeneratedCount })}</summary>
             <div className="canvas-migration-actions">
@@ -1404,8 +1405,8 @@ function ControlledFlowCanvas({
               </>
             ) : null}
           </details>
-        ) : null}
-        {layoutMode === "execution" ? (
+          ) : null}
+          {layoutMode === "execution" ? (
           <div className="canvas-execution-info">
             <span className="canvas-execution-summary" role="status">
               {t("canvas.executionCoverage", {
@@ -1423,7 +1424,8 @@ function ControlledFlowCanvas({
                 : ""}
             </span>
           </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
       <div className="canvas-flow-stage" ref={overviewViewportRef}>
         {hasNoVisibleModules ? (
@@ -1493,7 +1495,7 @@ function ControlledFlowCanvas({
             className={`flow-canvas${layoutPending ? " layout-pending" : ""}`}
             edges={localizedEdges}
             fitView
-            fitViewOptions={{ padding: 0.18 }}
+            fitViewOptions={{ minZoom: 0.65, padding: 0.18 }}
             maxZoom={1.35}
             minZoom={0.05}
             nodes={visibleNodes}

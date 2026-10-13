@@ -23,8 +23,9 @@ describe('canvas toolbar controls', () => {
     expect(source).not.toContain('canvas.traceOff');
     expect(source).toContain('proOptions={{ hideAttribution: true }}');
     expect(source).toContain('canvas-trace-controls');
+    expect(source).toContain('fitViewOptions={{ minZoom: 0.65, padding: 0.18 }}');
     expect(styles).toContain('.canvas-view-tools-content {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-start;');
-    expect(styles).toContain('.canvas-view-tools {\n  position: relative;');
+    expect(styles).toContain('.canvas-view-tools {\n  display: flex;\n  flex-direction: column;');
     expect(smokeSource).toContain("controlReachability('.canvas-filter-display > summary')");
     expect(smokeSource).toContain("controlReachability('.canvas-control-auto-layout')");
     expect(smokeSource).toContain("controlReachability('.canvas-control-fit-view')");

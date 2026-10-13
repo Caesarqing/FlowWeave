@@ -62,7 +62,7 @@ describe("workspace panel preferences", () => {
 
   it("keeps canvas tools compact and centered near the top of the canvas", () => {
     expect(styles.match(/^\.canvas-view-tools \{/gm)).toHaveLength(1);
-    expect(styles).toContain(".canvas-view-tools {\n  position: relative;");
+    expect(styles).toContain(".canvas-view-tools {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  position: relative;");
     expect(styles).toContain(".canvas-view-tools-content {\n  display: flex;");
     expect(styles).toContain("flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;");
     expect(styles).toContain(".workspace-layout:not(.left-panel-collapsed) .canvas-tool-label");

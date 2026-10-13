@@ -135,7 +135,10 @@ export function GitReviewWorkspace({ projectId }: { projectId: string }) {
       title={t("git.diff")}
     >
       <section className="workspace-main">
-        <DiffViewer patch={diff?.patch ?? ""} />
+        <DiffViewer
+          emptyMessage={t(diff && !diff.isRepo ? "git.notRepo" : "git.noDiff")}
+          patch={diff?.patch ?? ""}
+        />
       </section>
     </WorkspaceLayout>
     {rollbackPreview ? (
