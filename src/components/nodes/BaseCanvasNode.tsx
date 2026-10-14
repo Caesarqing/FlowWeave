@@ -7,7 +7,7 @@ import type { FlowWeaveNode } from "../../utils/graph-converters";
 import { useI18n } from "../../utils/i18n";
 import { localizedArchitectureCategory } from "../../utils/module-text";
 
-export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
+export function BaseCanvasNode({ data, selected, isConnectable }: NodeProps<FlowWeaveNode>) {
   const { t } = useI18n();
   const targetHandles = data.connectionHandles?.target ?? [{ id: `${data.id}-target-idle`, offsetPercent: 50, count: 0 }];
   const sourceHandles = data.connectionHandles?.source ?? [{ id: `${data.id}-source-idle`, offsetPercent: 50, count: 0 }];
@@ -38,7 +38,7 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
         ...(data.selectedEdgeColor ? { "--selected-edge-color": data.selectedEdgeColor } : {})
       } as CSSProperties}
     >
-      <ConnectionHandles handles={targetHandles} position={Position.Left} selectedEdgeId={data.selectedEdgeId} type="target" />
+      <ConnectionHandles handles={targetHandles} isConnectable={isConnectable} position={Position.Left} selectedEdgeId={data.selectedEdgeId} type="target" />
       <div className="node-meta-line">
         <span>{data.syntheticKind === "group" ? t("canvas.group") : data.resource ? t(`canvas.resource.${data.resource.kind}`) : localizedArchitectureCategory(data.category, data.nodeType, t)}</span>
         {data.syntheticKind === "group" ? <strong>{data.memberModuleCount ? t("canvas.groupModuleCount", { count: data.memberModuleCount }) : t("canvas.groupResourceCount", { count: data.memberResourceCount ?? 0 })}{data.memberModuleCount && data.memberResourceCount ? ` · ${t("canvas.groupResourceCount", { count: data.memberResourceCount })}` : ""}</strong> : !data.resource ? <strong>{data.assessmentPending ? t("module.assessmentPending") : t(`risk.${data.risk}`)}</strong> : null}
@@ -58,18 +58,20 @@ export function BaseCanvasNode({ data, selected }: NodeProps<FlowWeaveNode>) {
         </button> : null}
         <small>{data.symbols?.length ? t("module.symbolCount", { count: data.symbols.length }) : data.files[0] ?? data.subtitle}</small>
       </div>
-      <ConnectionHandles handles={sourceHandles} position={Position.Right} selectedEdgeId={data.selectedEdgeId} type="source" />
+      <ConnectionHandles handles={sourceHandles} isConnectable={isConnectable} position={Position.Right} selectedEdgeId={data.selectedEdgeId} type="source" />
     </div>
   );
 }
 
 function ConnectionHandles({
   handles,
+  isConnectable,
   position,
   selectedEdgeId,
   type
 }: {
   handles: ConnectionHandleSlot[];
+  isConnectable: boolean;
   position: Position.Left | Position.Right;
   selectedEdgeId?: string;
   type: "source" | "target";
@@ -86,6 +88,9 @@ function ConnectionHandles({
             handle.count > 0 ? "connected" : "idle"
           )}
           id={handle.id}
+          isConnectable={isConnectable}
+          isConnectableStart={isConnectable}
+          isConnectableEnd={isConnectable}
           key={handle.id}
           position={handlePosition(handle, position)}
           style={handleStyle(handle, position)}

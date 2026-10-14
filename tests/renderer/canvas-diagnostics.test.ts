@@ -46,7 +46,7 @@ describe("rendered canvas diagnostics", () => {
     };
     const html = renderToStaticMarkup(createElement(CanvasWorkspace, props));
     expect(html).toContain("Preparing module layout...");
-    expect(html).toContain('class="react-flow flow-canvas layout-pending');
+    expect(html).toContain('class="react-flow flow-canvas canvas-tool-select layout-pending');
     expect(html).not.toContain("Legacy generated result");
     expect(html).not.toContain("Binding diagnostics were not provided");
     expect(html).not.toContain("File parsing complete:");

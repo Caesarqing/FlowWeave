@@ -1389,6 +1389,9 @@ type CanvasArrangeSmoke = {
 
 type CanvasViewportCapture = {
   samples: CanvasViewportSmokeSample[];
+  mouseWheelZoom: boolean;
+  handPan: boolean;
+  arrowNodeMove: boolean;
   relationToggle: CanvasRelationToggleSmoke;
   autoLayout: CanvasArrangeSmoke;
 };
@@ -1693,12 +1696,23 @@ async function captureGraphSmokeReactProfiler(window: BrowserWindow, projectId: 
       };
     }
 
-    if (capture) {
-      const layoutButton = document.querySelector(".canvas-control-auto-layout");
-      if (!(layoutButton instanceof HTMLButtonElement) || layoutButton.disabled) throw new Error("React Profiler smoke found no enabled whole-graph layout control.");
-      await runAction("whole-graph-layout", () => layoutButton.click(), () =>
-        !layoutButton.disabled && !document.querySelector(".canvas-flow.layout-pending"));
+    if (technologySelect.value !== "all") {
+      technologySelect.value = "all";
+      technologySelect.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(() => technologySelect.value === "all" && visibleNodeCount() > 0 &&
+        !document.querySelector(".canvas-flow.layout-pending"), "restore-graph-for-layout-controls");
     }
+    const restoreLayoutButton = document.querySelector(".canvas-control-restore-layout");
+    if (!(restoreLayoutButton instanceof HTMLButtonElement) || restoreLayoutButton.disabled) {
+      throw new Error("React Profiler smoke found no enabled restore-manual-layout control.");
+    }
+    await runAction("restore-manual-layout", () => restoreLayoutButton.click(), () =>
+      restoreLayoutButton.disabled && visibleNodeCount() > 0 && !document.querySelector(".canvas-flow.layout-pending"));
+    const layoutButton = document.querySelector(".canvas-control-auto-layout");
+    if (!(layoutButton instanceof HTMLButtonElement) || layoutButton.disabled) throw new Error("React Profiler smoke found no enabled whole-graph layout control.");
+    await runAction("whole-graph-layout", () => layoutButton.click(), () =>
+      !layoutButton.disabled && !restoreLayoutButton.disabled && visibleNodeCount() > 0 &&
+      !document.querySelector(".canvas-flow.layout-pending"));
     if (technologySelect.value !== "all") {
       technologySelect.value = "all";
       technologySelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -2034,6 +2048,9 @@ function runGraphSmokeTest(
           reactProfiler: reactProfilerEvidence,
           ...(graphSmokePhaseTrace ? { phaseTrace: graphSmokePhaseTrace } : {}),
           viewportSamples: viewportCapture?.samples ?? [],
+          mouseWheelZoom: viewportCapture?.mouseWheelZoom,
+          handPan: viewportCapture?.handPan,
+          arrowNodeMove: viewportCapture?.arrowNodeMove,
           relationToggle: viewportCapture?.relationToggle,
           autoLayout: viewportCapture?.autoLayout,
           mainRssMiB: Math.round(process.memoryUsage().rss / 1048576)
@@ -2467,6 +2484,9 @@ async function captureCanvasViewports(
     { width: 1920, height: 1080 }
   ];
   const samples: Array<CanvasViewportSmokeSample> = [];
+  let mouseWheelZoom = false;
+  let handPan = false;
+  let arrowNodeMove = false;
   let relationToggle: CanvasRelationToggleSmoke;
   let autoLayout: CanvasArrangeSmoke;
   try {
@@ -2550,6 +2570,8 @@ async function captureCanvasViewports(
             viewMode: controlReachability('.canvas-view-tools select'),
             relationDisplay: controlReachability('.canvas-relation-display > summary'),
             filters: controlReachability('.canvas-filter-display > summary'),
+            selectTool: controlReachability('.canvas-control-tool-select'),
+            panTool: controlReachability('.canvas-control-tool-pan'),
             autoLayout: controlReachability('.canvas-control-auto-layout'),
             fitView: controlReachability('.canvas-control-fit-view'),
             canvasNavigation: (() => {
@@ -2577,6 +2599,64 @@ async function captureCanvasViewports(
         await writeFile(viewportScreenshotPath, (await window.webContents.capturePage()).toPNG());
       }
     }
+    const zoomInControlWorked = await window.webContents.executeJavaScript(`new Promise((resolve) => {
+      const viewport = document.querySelector('.react-flow__viewport');
+      const zoomInButton = document.querySelector('.react-flow__controls-zoomin');
+      const zoomOutButton = document.querySelector('.react-flow__controls-zoomout');
+      if (!(viewport instanceof HTMLElement) || !(zoomInButton instanceof HTMLButtonElement) ||
+        !(zoomOutButton instanceof HTMLButtonElement) || zoomInButton.disabled || zoomOutButton.disabled) {
+        resolve(false);
+        return;
+      }
+      const initialTransform = getComputedStyle(viewport).transform;
+      zoomInButton.click();
+      const startedAt = performance.now();
+      let zoomedInTransform = '';
+      const interval = setInterval(() => {
+        const currentTransform = getComputedStyle(viewport).transform;
+        if (!zoomedInTransform && currentTransform !== initialTransform) {
+          zoomedInTransform = currentTransform;
+          zoomOutButton.click();
+        } else if (zoomedInTransform && currentTransform !== zoomedInTransform) {
+          clearInterval(interval);
+          resolve(true);
+        } else if (performance.now() - startedAt > 3000) {
+          clearInterval(interval);
+          resolve(false);
+        }
+      }, 25);
+    })`) as boolean;
+    if (!zoomInControlWorked) throw new Error("Canvas viewport smoke could not zoom in and back out with the Canvas controls.");
+    const wheelPoint = await window.webContents.executeJavaScript(`(() => {
+      const stage = document.querySelector('.canvas-flow-stage');
+      if (!(stage instanceof HTMLElement)) return undefined;
+      const rect = stage.getBoundingClientRect();
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+    })()`) as { x: number; y: number } | undefined;
+    if (!wheelPoint) throw new Error("Canvas viewport smoke could not locate the mouse-wheel zoom target.");
+    const initialWheelZoom = await window.webContents.executeJavaScript(`(() => {
+      const viewport = document.querySelector('.react-flow__viewport');
+      return viewport instanceof HTMLElement ? new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a : 0;
+    })()`);
+    window.webContents.sendInputEvent({ type: "mouseWheel", x: wheelPoint.x, y: wheelPoint.y, deltaY: 120, wheelTicksY: 1, canScroll: true });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const zoomedWheelScale = await window.webContents.executeJavaScript(`(() => {
+      const viewport = document.querySelector('.react-flow__viewport');
+      return viewport instanceof HTMLElement ? new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a : 0;
+    })()`);
+    if (Math.abs(zoomedWheelScale - initialWheelZoom) < 0.001) {
+      throw new Error(`Canvas viewport smoke could not zoom with the mouse wheel: initial=${initialWheelZoom} current=${zoomedWheelScale}.`);
+    }
+    window.webContents.sendInputEvent({ type: "mouseWheel", x: wheelPoint.x, y: wheelPoint.y, deltaY: -120, wheelTicksY: -1, canScroll: true });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const restoredWheelScale = await window.webContents.executeJavaScript(`(() => {
+      const viewport = document.querySelector('.react-flow__viewport');
+      return viewport instanceof HTMLElement ? new DOMMatrixReadOnly(getComputedStyle(viewport).transform).a : 0;
+    })()`);
+    if (Math.abs(restoredWheelScale - zoomedWheelScale) < 0.001) {
+      throw new Error(`Canvas viewport smoke could not zoom with the opposite mouse-wheel direction: first=${zoomedWheelScale} current=${restoredWheelScale}.`);
+    }
+    mouseWheelZoom = true;
     const fitViewControlWorked = await window.webContents.executeJavaScript(`new Promise((resolve) => {
       const viewport = document.querySelector('.react-flow__viewport');
       const zoomOutButton = document.querySelector('.react-flow__controls-zoomout');
@@ -2619,6 +2699,85 @@ async function captureCanvasViewports(
       }, 25);
     })`) as boolean;
     if (!fitViewControlWorked) throw new Error("Canvas viewport smoke could not zoom out and restore the canvas with Fit view.");
+    const handPanStart = await window.webContents.executeJavaScript(`new Promise((resolve) => {
+      const button = document.querySelector('.canvas-control-tool-pan');
+      if (!(button instanceof HTMLButtonElement) || button.disabled) { resolve(undefined); return; }
+      button.click();
+      const startedAt = performance.now();
+      const interval = setInterval(() => {
+        const pane = document.querySelector('.react-flow__pane');
+        const heading = [...document.querySelectorAll('.react-flow__node h3')].find((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        if (button.getAttribute('aria-pressed') === 'true' && pane?.classList.contains('draggable') && heading) {
+          clearInterval(interval);
+          const rect = heading.getBoundingClientRect();
+          const viewport = document.querySelector('.react-flow__viewport');
+          const transform = viewport instanceof HTMLElement ? new DOMMatrixReadOnly(getComputedStyle(viewport).transform) : undefined;
+          resolve({ x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), translateX: transform?.e, translateY: transform?.f });
+        } else if (performance.now() - startedAt > 3000) {
+          clearInterval(interval);
+          resolve(undefined);
+        }
+      }, 25);
+    })`) as { x: number; y: number; translateX?: number; translateY?: number } | undefined;
+    if (!handPanStart || handPanStart.translateX === undefined || handPanStart.translateY === undefined) {
+      throw new Error("Canvas viewport smoke could not activate the hand tool on a visible canvas node.");
+    }
+    window.webContents.sendInputEvent({ type: "mouseDown", x: handPanStart.x, y: handPanStart.y, button: "left", clickCount: 1 });
+    window.webContents.sendInputEvent({ type: "mouseMove", x: handPanStart.x + 60, y: handPanStart.y + 35, movementX: 60, movementY: 35 });
+    window.webContents.sendInputEvent({ type: "mouseMove", x: handPanStart.x + 120, y: handPanStart.y + 70, movementX: 60, movementY: 35 });
+    window.webContents.sendInputEvent({ type: "mouseUp", x: handPanStart.x + 120, y: handPanStart.y + 70, button: "left", clickCount: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const pannedViewport = await window.webContents.executeJavaScript(`(() => {
+      const viewport = document.querySelector('.react-flow__viewport');
+      if (!(viewport instanceof HTMLElement)) return undefined;
+      const transform = new DOMMatrixReadOnly(getComputedStyle(viewport).transform);
+      return { x: transform.e, y: transform.f };
+    })()`);
+    if (!pannedViewport || Math.hypot(pannedViewport.x - handPanStart.translateX, pannedViewport.y - handPanStart.translateY) < 1) {
+      throw new Error("Canvas viewport smoke could not pan the graph with the hand tool.");
+    }
+    handPan = true;
+    const arrowDragStart = await window.webContents.executeJavaScript(`new Promise((resolve) => {
+      const button = document.querySelector('.canvas-control-tool-select');
+      if (!(button instanceof HTMLButtonElement) || button.disabled) { resolve(undefined); return; }
+      button.click();
+      const startedAt = performance.now();
+      const interval = setInterval(() => {
+        const node = [...document.querySelectorAll('.react-flow__node.draggable')].find((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && element.querySelector('h3');
+        });
+        if (button.getAttribute('aria-pressed') === 'true' && node) {
+          clearInterval(interval);
+          const heading = node.querySelector('h3');
+          const rect = heading.getBoundingClientRect();
+          resolve({ id: node.getAttribute('data-id'), x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), transform: getComputedStyle(node).transform });
+        } else if (performance.now() - startedAt > 3000) {
+          clearInterval(interval);
+          resolve(undefined);
+        }
+      }, 25);
+    })`) as { id: string; x: number; y: number; transform: string } | undefined;
+    if (!arrowDragStart) throw new Error("Canvas viewport smoke could not activate the select tool on a draggable node.");
+    window.webContents.sendInputEvent({ type: "mouseDown", x: arrowDragStart.x, y: arrowDragStart.y, button: "left", clickCount: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    window.webContents.sendInputEvent({ type: "mouseMove", x: arrowDragStart.x + 60, y: arrowDragStart.y + 35, movementX: 60, movementY: 35 });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    window.webContents.sendInputEvent({ type: "mouseMove", x: arrowDragStart.x + 120, y: arrowDragStart.y + 70, movementX: 60, movementY: 35 });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    window.webContents.sendInputEvent({ type: "mouseUp", x: arrowDragStart.x + 120, y: arrowDragStart.y + 70, button: "left", clickCount: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const movedNodeTransform = await window.webContents.executeJavaScript(`(() => {
+      const node = [...document.querySelectorAll('.react-flow__node')].find((element) => element.getAttribute('data-id') === ${JSON.stringify(arrowDragStart.id)});
+      return node ? getComputedStyle(node).transform : undefined;
+    })()`);
+    if (!movedNodeTransform || movedNodeTransform === arrowDragStart.transform) {
+      throw new Error(`Canvas viewport smoke could not move node ${arrowDragStart.id}: before=${arrowDragStart.transform} after=${movedNodeTransform ?? "missing"}.`);
+    }
+    arrowNodeMove = true;
     relationToggle = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
       const relationDisplay = document.querySelector('.canvas-relation-display');
       const checkbox = document.querySelector('input[data-relation="publishes_event"]');
@@ -2742,7 +2901,7 @@ async function captureCanvasViewports(
   } finally {
     window.setSize(originalSize[0], originalSize[1]);
   }
-  return { samples, relationToggle, autoLayout };
+  return { samples, mouseWheelZoom, handPan, arrowNodeMove, relationToggle, autoLayout };
 }
 
 async function verifyCanvasSaveOnClose(window: BrowserWindow): Promise<string> {

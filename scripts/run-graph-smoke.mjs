@@ -73,6 +73,12 @@ for (const fixture of fixtures) {
         navigation.overviewFocusedNodeId !== navigation.groupNodeId) {
         throw new Error(`Graph smoke did not verify Enter expansion and Escape focus restoration: ${JSON.stringify(navigation)}.`);
       }
+      if (process.env.FLOWWEAVE_GRAPH_SMOKE_REACT_PROFILE === "1") {
+        const actions = new Set(rendered.reactProfiler?.actions?.map((action) => action.name) ?? []);
+        for (const action of ["collapse-group", "restore-manual-layout", "whole-graph-layout"]) {
+          if (!actions.has(action)) throw new Error(`Canvas controls smoke did not exercise ${action}: ${JSON.stringify([...actions])}.`);
+        }
+      }
     }
     if (fixture === "four-languages" || fixture === "viewport-only") {
       if (fixture === "viewport-only" && (rendered.status !== "completed" || rendered.fixture !== fixture)) {
@@ -88,7 +94,7 @@ for (const fixture of fixtures) {
           !Number.isFinite(sample.stageWidth) || !Number.isFinite(sample.stageHeight) ||
           sample.stageWidth < 1 || sample.stageHeight < 1 || sample.detailPanelVisible !== true ||
           sample.overlappingNodePairCount !== 0 ||
-          !sample.requiredCanvasControlsReachable || Object.keys(sample.requiredCanvasControlsReachable).length !== 7 ||
+          !sample.requiredCanvasControlsReachable || Object.keys(sample.requiredCanvasControlsReachable).length !== 9 ||
           Object.values(sample.requiredCanvasControlsReachable).some((reachable) => reachable !== true) ||
           !Number.isFinite(sample.flowZoom) || sample.flowZoom <= 0 ||
           !Number.isFinite(sample.smallestVisibleTitleFontPx) || sample.smallestVisibleTitleFontPx < 14 ||
@@ -97,6 +103,13 @@ for (const fixture of fixtures) {
           sample.smallestVisibleTitleFontPx === null || sample.smallestVisibleBodyFontPx === null) {
           throw new Error(`Graph smoke viewport sample ${index} is incomplete: ${JSON.stringify(sample)}.`);
         }
+      }
+      if (rendered.mouseWheelZoom !== true || rendered.handPan !== true || rendered.arrowNodeMove !== true) {
+        throw new Error(`Graph smoke did not verify mouse wheel zoom, hand panning, and arrow node movement: ${JSON.stringify({
+          mouseWheelZoom: rendered.mouseWheelZoom,
+          handPan: rendered.handPan,
+          arrowNodeMove: rendered.arrowNodeMove
+        })}.`);
       }
       if (rendered.relationToggle?.passed !== true || rendered.relationToggle.refreshedEndpointCount < 1 ||
         rendered.relationToggle.attachedEdgeCount < 1 || rendered.relationToggle.preservedViewport !== true ||

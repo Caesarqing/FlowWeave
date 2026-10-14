@@ -14,7 +14,7 @@ import {
   type ReactFlowInstance,
   type NodeChange
 } from "@xyflow/react";
-import { ArrowLeft, BrainCircuit, GitBranch, Search, LayoutGrid, LoaderCircle, RotateCcw, Scan } from "lucide-react";
+import { ArrowLeft, BrainCircuit, GitBranch, Hand, LayoutGrid, LoaderCircle, MousePointer2, RotateCcw, Scan, Search } from "lucide-react";
 import { Profiler, useEffect, useMemo, useRef, useState, version as reactVersion } from "react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
@@ -337,7 +337,10 @@ function ControlledFlowCanvas({
    * FlowWeave persists Canvas state in Zustand so autosave and Agent export can use
    * the same graph. Keep the controlled React Flow boundary isolated here.
   */
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const [canvasTool, setCanvasTool] = useState<"select" | "pan">("select");
+  const selectToolLabel = locale === "zh-CN" ? "选择并移动节点" : "Select and move nodes";
+  const panToolLabel = locale === "zh-CN" ? "平移画布" : "Pan canvas";
   const [showPreservedData, setShowPreservedData] = useState(false);
   const [loadedFullCanvas, setLoadedFullCanvas] = useState<CodeflowCanvas>();
   const [preservedDataError, setPreservedDataError] = useState("");
@@ -395,6 +398,7 @@ function ControlledFlowCanvas({
     setMigrationNodeTargets({});
     setMigrationEdgeEndpoints({});
     setQualityError("");
+    setCanvasTool("select");
     setExpandedGroupIds([]);
     overviewCollapseSnapshot.current = undefined;
     overviewFocusGroupNodeId.current = undefined;
@@ -728,6 +732,7 @@ function ControlledFlowCanvas({
   const visibleNodes = useMemo(
     () => decoratedCollapsedGraph.nodes.map((node) => ({
       ...node,
+      ...(node.data.syntheticKind === "group" ? { draggable: !readOnly && canvasTool === "select" } : {}),
       hidden: !collapsedVisibleNodeIds.has(node.id) || Boolean(tracedNodeIds && !tracedNodeIds.has(node.id)),
       data: {
         ...node.data,
@@ -737,8 +742,9 @@ function ControlledFlowCanvas({
         })
       }
     })),
-    [decoratedCollapsedGraph.nodes, collapsedVisibleNodeIds, displayCollapsedGroups, expandedGroupIds, filteredEdges, rawGraphEdges, t, tracedNodeIds]
+    [canvasTool, decoratedCollapsedGraph.nodes, collapsedVisibleNodeIds, displayCollapsedGroups, expandedGroupIds, filteredEdges, rawGraphEdges, readOnly, t, tracedNodeIds]
   );
+  const hasVisibleNodes = visibleNodes.some((node) => !node.hidden);
   const visibleTopologyFingerprint = useMemo(
     () => canvasTopologyFingerprint(visibleNodes.filter((node) => !node.hidden), layoutEdges),
     [layoutEdges, visibleNodes]
@@ -1004,7 +1010,7 @@ function ControlledFlowCanvas({
   }
   function fitCurrentView() {
     const currentNodes = flowInstance.current?.getNodes().filter((node) => !node.hidden) ?? [];
-    if (currentNodes.length > 0) void flowInstance.current?.fitView({ nodes: currentNodes, padding: 0.18, duration: 250 });
+    if (currentNodes.length > 0) void flowInstance.current?.fitView({ nodes: currentNodes, padding: 0.02, duration: 250 });
   }
   useEffect(() => {
     if (!layoutPending && flowInstance.current) fitRequestedNodes(flowInstance.current);
@@ -1492,23 +1498,23 @@ function ControlledFlowCanvas({
           </div>
         ) : null}
         <ReactFlow<FlowWeaveNode, Edge>
-            className={`flow-canvas${layoutPending ? " layout-pending" : ""}`}
+            className={`flow-canvas canvas-tool-${canvasTool}${layoutPending ? " layout-pending" : ""}`}
             edges={localizedEdges}
             fitView
-            fitViewOptions={{ minZoom: 0.65, padding: 0.18 }}
+            fitViewOptions={{ minZoom: 0.65, padding: 0.02 }}
             maxZoom={1.35}
             minZoom={0.05}
             nodes={visibleNodes}
             nodeTypes={nodeTypes as NodeTypes}
             edgeTypes={canvasEdgeTypes}
-            nodesDraggable={!readOnly}
-            nodesConnectable={!readOnly}
+            nodesDraggable={!readOnly && canvasTool === "select"}
+            nodesConnectable={!readOnly && canvasTool === "select"}
             deleteKeyCode={readOnly ? null : "Backspace"}
             onEdgeClick={(_, edge) => onSelectEdge(graphEdgeFromFlow(edge))}
             onConnect={onConnect}
             onEdgesChange={onEdgesChange}
             onNodesChange={(changes) => {
-              const allowed = changes.filter((change) => !("id" in change) || nodes.some((node) => node.id === change.id));
+              const allowed = changes.filter((change) => !("id" in change) || visibleNodes.some((node) => node.id === change.id && !node.hidden));
               if (canvasLayout.activeMode !== "manual" && allowed.some((change) => change.type === "position" && "position" in change && Boolean(change.position))) {
                 onSetCollapsedGroups(displayCollapsedGroups);
               }
@@ -1532,16 +1538,23 @@ function ControlledFlowCanvas({
               setTraceDirection("off");
               onPaneClick();
             }}
-            panOnDrag
-            panOnScroll
+            panOnDrag={canvasTool === "pan"}
+            panOnScroll={false}
+            zoomOnScroll
             proOptions={{ hideAttribution: true }}
           >
             <Background color="var(--graph-grid)" gap={28} size={1} />
-            <Controls position="bottom-left" showFitView={false} showInteractive={false}>
-              <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly} title={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
+            <Controls position="bottom-left" showFitView={false} showInteractive={false} showZoom={hasVisibleNodes}>
+              <ControlButton className="canvas-control-tool-select" disabled={!hasVisibleNodes} title={selectToolLabel} aria-label={selectToolLabel} aria-pressed={canvasTool === "select"} onClick={() => setCanvasTool("select")}>
+                <MousePointer2 size={14} />
+              </ControlButton>
+              <ControlButton className="canvas-control-tool-pan" disabled={!hasVisibleNodes} title={panToolLabel} aria-label={panToolLabel} aria-pressed={canvasTool === "pan"} onClick={() => setCanvasTool("pan")}>
+                <Hand size={14} />
+              </ControlButton>
+              <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly || !hasVisibleNodes} title={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
                 <LayoutGrid size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-restore-layout" disabled={readOnly || canvasLayout.activeMode === "manual"} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={() => {
+              <ControlButton className="canvas-control-restore-layout" disabled={readOnly || canvasLayout.activeMode === "manual" || !hasVisibleNodes} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={() => {
                 onSetCollapsedGroups(displayCollapsedGroups);
                 onRestoreManualLayout();
                 window.requestAnimationFrame(() => window.requestAnimationFrame(fitCurrentView));
@@ -1551,7 +1564,7 @@ function ControlledFlowCanvas({
               <ControlButton className="canvas-control-back-overview" disabled={expandedGroupIds.length === 0} title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
                 <ArrowLeft size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-fit-view" disabled={visibleNodes.every((node) => node.hidden)} title={t("structure.fitView")} aria-label={t("structure.fitView")} onClick={fitCurrentView}>
+              <ControlButton className="canvas-control-fit-view" disabled={!hasVisibleNodes} title={t("structure.fitView")} aria-label={t("structure.fitView")} onClick={fitCurrentView}>
                 <Scan size={14} />
               </ControlButton>
             </Controls>

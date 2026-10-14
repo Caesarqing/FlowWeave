@@ -23,7 +23,7 @@ describe('canvas toolbar controls', () => {
     expect(source).not.toContain('canvas.traceOff');
     expect(source).toContain('proOptions={{ hideAttribution: true }}');
     expect(source).toContain('canvas-trace-controls');
-    expect(source).toContain('fitViewOptions={{ minZoom: 0.65, padding: 0.18 }}');
+    expect(source).toContain('fitViewOptions={{ minZoom: 0.65, padding: 0.02 }}');
     expect(styles).toContain('.canvas-view-tools-content {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-start;');
     expect(styles).toContain('.canvas-view-tools {\n  display: flex;\n  flex-direction: column;');
     expect(smokeSource).toContain("controlReachability('.canvas-filter-display > summary')");
@@ -50,7 +50,7 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('<MiniMap position="bottom-right"');
     expect(source).not.toContain('canvas.inferredDependencyOverlay');
     expect(source).toContain('className={`canvas-layout-pending${layoutError ? " has-error" : ""}`}');
-    expect(source).toContain('className={`flow-canvas${layoutPending ? " layout-pending" : ""}`}');
+    expect(source).toContain('className={`flow-canvas canvas-tool-${canvasTool}${layoutPending ? " layout-pending" : ""}`}');
     expect(source).toContain('projectGraphForView(');
   });
 
@@ -150,7 +150,40 @@ describe('canvas toolbar controls', () => {
     const styles = readSourceText(new URL('../../src/styles.css', import.meta.url));
 
     expect(smokeSource).toContain('controls.every(elementReachable)');
+    expect(smokeSource).toContain('zoomInControlWorked');
+    expect(smokeSource).toContain('type: "mouseWheel"');
+    expect(smokeSource).toContain('handPanStart');
+    expect(smokeSource).toContain('arrowDragStart');
+    expect(smokeSource).toContain('runAction("restore-manual-layout"');
     expect(styles).not.toContain('left: 16px !important;');
+  });
+
+  it('disables canvas actions when there are no visible nodes', () => {
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+
+    expect(source).toContain('const hasVisibleNodes = visibleNodes.some((node) => !node.hidden);');
+    expect(source).toContain('showZoom={hasVisibleNodes}');
+    expect(source).toContain('disabled={isLayoutRunning || readOnly || !hasVisibleNodes}');
+    expect(source).toContain('disabled={readOnly || canvasLayout.activeMode === "manual" || !hasVisibleNodes}');
+  });
+
+  it('switches between node movement and canvas panning while keeping wheel zoom enabled', () => {
+    const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
+    const nodeSource = readSourceText(new URL('../../src/components/nodes/BaseCanvasNode.tsx', import.meta.url));
+
+    expect(source).toContain('panOnDrag={canvasTool === "pan"}');
+    expect(source).toContain('panOnScroll={false}');
+    expect(source).toContain('zoomOnScroll');
+    expect(source).toContain('nodesDraggable={!readOnly && canvasTool === "select"}');
+    expect(source).toContain('draggable: !readOnly && canvasTool === "select"');
+    expect(source).toContain('visibleNodes.some((node) => node.id === change.id && !node.hidden)');
+    expect(source).toContain('className="canvas-control-tool-select"');
+    expect(source).toContain('className="canvas-control-tool-pan"');
+    expect(source).toContain('aria-pressed={canvasTool === "select"}');
+    expect(source).toContain('aria-pressed={canvasTool === "pan"}');
+    expect(nodeSource).toContain('isConnectableStart={isConnectable}');
+    expect(source).toContain('const selectToolLabel = locale === "zh-CN" ? "选择并移动节点" : "Select and move nodes";');
+    expect(source).toContain('const panToolLabel = locale === "zh-CN" ? "平移画布" : "Pan canvas";');
   });
 
   it('targets the rendered fit, layout, and overview controls in the interaction smoke', () => {
