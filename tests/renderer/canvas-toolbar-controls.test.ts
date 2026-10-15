@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, type ComponentProps } from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -54,7 +54,7 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('projectGraphForView(');
   });
 
-  it('wires role and technology filters into the graph while retaining area and relation filters', () => {
+  it('wires graph filters and skips cached graph rendering while loading', () => {
     const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
     const nodes = [
       createFlowNode(classifiedNode('billing-api', 'billing', 'api', ['backend'])),
@@ -75,7 +75,7 @@ describe('canvas toolbar controls', () => {
       .toMatchObject({ nodes: [{ id: 'billing-api' }], edges: [] });
 
     usePreferencesStore.setState({ locale: 'en' });
-    const markup = renderToStaticMarkup(createElement(CanvasWorkspace, {
+    const props: ComponentProps<typeof CanvasWorkspace> = {
       readOnly: false,
       canvasLayout: { activeMode: 'execution', manualPositions: {}, autoLayouts: {}, collapsedGroups: [] },
       hiddenGeneratedCount: 0,
@@ -97,11 +97,15 @@ describe('canvas toolbar controls', () => {
       onResolveMigrationItem: async () => { throw new Error('Not used by toolbar rendering.'); },
       onSetCollapsedGroups: () => undefined,
       onSetViewMode: () => undefined
-    }));
+    };
+    const markup = renderToStaticMarkup(createElement(CanvasWorkspace, props));
     expect(markup).toContain(translate('en', 'canvas.technologyFilter'));
     expect(markup).toContain(translate('en', 'canvas.layerFilter'));
     expect(markup).toContain(translate('en', 'canvas.moduleScope'));
     expect(markup).toContain(translate('en', 'canvas.relationDisplay'));
+    const loadingMarkup = renderToStaticMarkup(createElement(CanvasWorkspace, { ...props, isProjectLoading: true }));
+    expect(loadingMarkup).toContain('canvas-shell');
+    expect(loadingMarkup).not.toContain('canvas-flow-shell');
   });
 
   it('keeps cached positions visible while recalculating stale view layouts', () => {

@@ -25,6 +25,7 @@ import { ModuleNode } from "./nodes/ModuleNode";
 import { RequirementNode } from "./nodes/RequirementNode";
 import { TaskNode } from "./nodes/TaskNode";
 import { createFlowEdge, createFlowNode, decorateFlowGraph, expandedGroupsForGroup, expandedGroupsForNode, graphEdgeFromFlow, nodeDisplayGroups, projectCollapsedFlowGraph, traceDisplayNodeIds, type FlowWeaveNode } from "../utils/graph-converters";
+import { CANVAS_NODE_SIZE } from "../common/canvas-geometry";
 import { useI18n } from "../utils/i18n";
 import type { ArchitectureLayer, ArchitectureRelationDiagnostic, AutoConnectionHandleLayout, CanvasLayoutMode, CanvasLayoutState, CanvasMigrationReviewRequest, CodeflowCanvas, GraphEdge, GraphEdgeRelation, GraphViewMode, ProjectArtifactState, TechnologyStack } from "../types";
 import {
@@ -246,7 +247,7 @@ export function CanvasWorkspace({
     >
       <section className="graph-stage" aria-label={t("canvas.graphAria")}>
         <HologridScene />
-        <ControlledFlowCanvas
+        {!isProjectLoading ? <ControlledFlowCanvas
           readOnly={readOnly}
           hiddenGeneratedCount={hiddenGeneratedCount}
           projectId={projectId}
@@ -274,7 +275,7 @@ export function CanvasWorkspace({
           onResolveMigrationItem={onResolveMigrationItem}
           onSetCollapsedGroups={onSetCollapsedGroups}
           onSetViewMode={onSetViewMode}
-        />
+        /> : null}
         {nodes.length > 0 && graphStatus === "stale" ? (
           <CanvasStalePreviewBanner generatedAt={generatedAt} />
         ) : null}
@@ -362,6 +363,9 @@ function ControlledFlowCanvas({
   const overviewFocusGroupNodeId = useRef<string | undefined>(undefined);
   const pendingGroupFocus = useRef<string[]>([]);
   const pendingLocalLayout = useRef<PendingLocalLayout | undefined>(undefined);
+  const initialLargeGraphFocusDone = useRef(false);
+  const onApplyAutoLayoutRef = useRef(onApplyAutoLayout);
+  onApplyAutoLayoutRef.current = onApplyAutoLayout;
   const viewIdentity = useMemo(() => ({
     generationId: generationId ?? "unversioned",
     userRevision: userRevision ?? 0,
@@ -404,6 +408,7 @@ function ControlledFlowCanvas({
     overviewFocusGroupNodeId.current = undefined;
     pendingGroupFocus.current = [];
     pendingLocalLayout.current = undefined;
+    initialLargeGraphFocusDone.current = false;
   }, [projectId, generationId]);
   const inlinePreservedData = {
     schemaVersion: 1,
@@ -732,6 +737,8 @@ function ControlledFlowCanvas({
   const visibleNodes = useMemo(
     () => decoratedCollapsedGraph.nodes.map((node) => ({
       ...node,
+      initialWidth: CANVAS_NODE_SIZE.width,
+      initialHeight: CANVAS_NODE_SIZE.height,
       ...(node.data.syntheticKind === "group" ? { draggable: !readOnly && canvasTool === "select" } : {}),
       hidden: !collapsedVisibleNodeIds.has(node.id) || Boolean(tracedNodeIds && !tracedNodeIds.has(node.id)),
       data: {
@@ -782,7 +789,7 @@ function ControlledFlowCanvas({
   currentLayoutRequestContext.current = layoutRequestContext;
   const explicitLayoutRequest = useRef<AbortController | null>(null);
   useEffect(() => () => { explicitLayoutRequest.current?.abort(); }, []);
-  const layoutReadyForViewport = !hasMeasuredViewport ||
+  const layoutReadyForViewport = hasMeasuredViewport &&
     (overviewViewport.width === layoutViewport.width && overviewViewport.height === layoutViewport.height);
   const layoutNeedsRefresh = canvasLayout.activeMode !== "manual" &&
     !autoLayoutIsCurrent(canvasLayout, layoutMode, layoutTopologyFingerprint);
@@ -865,7 +872,7 @@ function ControlledFlowCanvas({
         if (!active || !matchesOverviewIdentity(requestIdentity, currentViewIdentity.current) ||
           currentLayoutRequestContext.current.topologyFingerprint !== layoutTopologyFingerprint) return;
         setIsLayoutRunning(false);
-        onApplyAutoLayout(
+        onApplyAutoLayoutRef.current(
           layoutMode,
           Object.fromEntries(positionedNodes.map((node) => [node.id, node.position])),
           layoutTopologyFingerprint,
@@ -889,7 +896,7 @@ function ControlledFlowCanvas({
           if (active && matchesOverviewIdentity(requestIdentity, currentViewIdentity.current) &&
             currentLayoutRequestContext.current.topologyFingerprint === layoutTopologyFingerprint) {
             setIsLayoutRunning(false);
-            onApplyAutoLayout(
+            onApplyAutoLayoutRef.current(
               layoutMode,
               Object.fromEntries(groups.map((node) => [node.id, node.position])),
               layoutTopologyFingerprint,
@@ -911,7 +918,7 @@ function ControlledFlowCanvas({
       .then((layout) => {
         if (active && matchesOverviewIdentity(requestIdentity, currentViewIdentity.current)) {
           setIsLayoutRunning(false);
-          onApplyAutoLayout(
+          onApplyAutoLayoutRef.current(
             layoutMode,
             Object.fromEntries(layout.nodes.map((node) => [node.id, node.position])),
             layoutTopologyFingerprint,
@@ -926,7 +933,7 @@ function ControlledFlowCanvas({
         if (active) setIsLayoutRunning(false);
       });
     return () => { active = false; };
-  }, [decoratedLayoutGraph.nodes, layoutEdges, layoutMode, layoutNeedsRefresh, layoutPending, layoutReadyForViewport, onApplyAutoLayout, overviewFrontier, projectionViewIdentity, layoutTopologyFingerprint, canvasLayout.activeMode, generationId, projectId]);
+  }, [decoratedLayoutGraph.nodes, layoutEdges, layoutMode, layoutNeedsRefresh, layoutPending, layoutReadyForViewport, overviewFrontier, projectionViewIdentity, layoutTopologyFingerprint, canvasLayout.activeMode, generationId, projectId]);
   function queueLocalExpansion(anchors: FlowWeaveNode[]) {
     if (canvasLayout.activeMode === "manual" || anchors.length === 0) {
       pendingLocalLayout.current = undefined;
@@ -1015,6 +1022,20 @@ function ControlledFlowCanvas({
   useEffect(() => {
     if (!layoutPending && flowInstance.current) fitRequestedNodes(flowInstance.current);
   }, [layoutPending, focusRequest, visibleTopologyFingerprint]);
+  useEffect(() => {
+    if (!layoutReadyForViewport || layoutPending || layoutNeedsRefresh || initialLargeGraphFocusDone.current || visibleNodes.length <= 100 || focusRequest.length > 0) return;
+    const firstNode = visibleNodes.find((node) => !node.hidden && !node.data.resource);
+    if (!firstNode || !flowInstance.current) return;
+    const timeout = window.setTimeout(() => {
+      initialLargeGraphFocusDone.current = true;
+      void flowInstance.current?.setCenter(
+        firstNode.position.x + CANVAS_NODE_SIZE.width / 2,
+        firstNode.position.y + CANVAS_NODE_SIZE.height / 2,
+        { zoom: 0.65 }
+      );
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [focusRequest, layoutNeedsRefresh, layoutPending, layoutReadyForViewport, visibleNodes]);
   useEffect(() => {
     if (layoutPending || pendingGroupFocus.current.length === 0) return;
     const memberIds = new Set(pendingGroupFocus.current);
@@ -1500,6 +1521,7 @@ function ControlledFlowCanvas({
         <ReactFlow<FlowWeaveNode, Edge>
             className={`flow-canvas canvas-tool-${canvasTool}${layoutPending ? " layout-pending" : ""}`}
             edges={localizedEdges}
+            onlyRenderVisibleElements
             fitView
             fitViewOptions={{ minZoom: 0.65, padding: 0.02 }}
             maxZoom={1.35}
