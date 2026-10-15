@@ -19,19 +19,9 @@ FlowWeave helps developers inspect a local repository, explore its functional ar
 
 FlowWeave is designed to sit alongside an IDE and the agent tools you already use. It does not replace either one. Project analysis and FlowWeave records are kept on the local machine; a selected agent may communicate with its own model provider according to that agent's configuration.
 
-## Download and install
+## Installation
 
-The latest available desktop packages were built from [`7a5347a`](https://github.com/Caesarqing/FlowWeave/commit/7a5347acf42e9e9d9437cefe3aeb45c0cf45fa0b) on **October 15, 2026**. All three native packaging jobs passed in the [same CI run](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411).
-
-| Your computer | Download | Package contents |
-| --- | --- | --- |
-| macOS, Apple silicon (M-series) | [Download macOS ARM64](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411/artifacts/11953025887) | `FlowWeave-0.1.0-mac-arm64.zip` and its SHA-256 checksum |
-| Windows, Intel or AMD 64-bit | [Download Windows x64](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411/artifacts/11953331302) | `FlowWeave-0.1.0-win-x64-setup.exe` and its SHA-256 checksum |
-| Windows, ARM64 | [Download Windows ARM64](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411/artifacts/11952879283) | `FlowWeave-0.1.0-win-arm64-setup.exe` and its SHA-256 checksum |
-
-These are temporary GitHub Actions downloads, which require a GitHub sign-in and expire on **October 16, 2026**. If a link has expired, check the [Desktop packages workflow](https://github.com/Caesarqing/FlowWeave/actions/workflows/windows-build.yml) for a newer successful run. There is currently no published GitHub Release. Intel Mac and Linux packages are not provided by this workflow.
-
-Extract the downloaded artifact archive first. On macOS, also extract the inner app ZIP, then move `FlowWeave.app` to Applications. On Windows, run the matching `setup.exe`. The packages include the desktop runtime; Node.js and npm are only needed when running from source. Install Git to use Git review, checkpoints, and rollback. External agents are optional for project scanning and graph exploration.
+To run from source, follow [Run from source](#run-from-source). If you already have a packaged build, extract its artifact archive first. On macOS, also extract the inner app ZIP, then move `FlowWeave.app` to Applications. On Windows, run the matching `setup.exe`. The packages include the desktop runtime; Node.js and npm are only needed when running from source. Install Git to use Git review, checkpoints, and rollback. External agents are optional for project scanning and graph exploration.
 
 The macOS CI check verifies the app's code signature integrity; it does not establish Apple Developer ID signing or notarization. macOS may require explicit approval to open the downloaded app.
 
@@ -47,7 +37,7 @@ Analysis is static: a displayed connection is source-code evidence, not a record
 
 ## Contents
 
-- [Download and install](#download-and-install)
+- [Installation](#installation)
 - [First project](#first-project)
 - [Workspaces](#workspaces)
 - [How project analysis works](#how-project-analysis-works)
