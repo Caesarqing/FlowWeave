@@ -5,7 +5,7 @@
 <h1 align="center">FlowWeave</h1>
 
 <p align="center">
-  A local-first desktop workbench for understanding codebases and coordinating AI coding agents.
+  See how your codebase fits together, plan changes, and give AI agents clearer context.
 </p>
 
 <p align="center">
@@ -15,9 +15,42 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6" />
 </p>
 
-FlowWeave helps developers inspect a local repository, explore its functional architecture, prepare context for coding agents, and review the resulting work. It brings project analysis, an editable module canvas, sequence diagrams, project notes, agent run records, and Git review into one Electron desktop application.
+FlowWeave turns a local code repository into an interactive module map. It helps you understand what the project contains, trace relationships back to source files, adjust the map as you explore, and prepare a focused task for an AI coding agent. After a run, you can inspect its output and review the code changes in the same desktop workbench.
 
-FlowWeave is designed to sit alongside an IDE and the agent tools you already use. It does not replace either one. Project analysis and FlowWeave records are kept on the local machine; a selected agent may communicate with its own model provider according to that agent's configuration.
+Think of the canvas as a navigation map for your project: modules are places to investigate, connections describe relationships, and the underlying files and evidence show where to look next. The goal is to make both human understanding and agent navigation more focused.
+
+Project analysis and FlowWeave records stay on your machine. You can explore a repository without installing an AI agent. When you choose to use an external agent, its provider access and data handling follow that agent's configuration.
+
+## What FlowWeave helps you do
+
+| When you need to… | FlowWeave helps by… |
+| --- | --- |
+| Understand an unfamiliar repository | Organizing files into functional modules so you can start with the overall structure and then inspect specific code. |
+| See how parts of a project connect | Showing static evidence for calls, dependencies, data access, interfaces, and other relationships. |
+| Work out where a change should begin | Letting you follow related modules and inspect their files to identify a useful starting point and areas to review. |
+| Organize your understanding and intended changes | Providing an editable canvas, manual layout, project notes, and sequence diagrams. |
+| Give an AI coding agent a clearer task | Helping you identify relevant modules, source locations, and relationships to include in the request. |
+| Review the result of an AI-assisted change | Keeping run requests, plans, outputs, Git diffs, and checkpoint recovery available for inspection. |
+
+FlowWeave is especially useful when taking over an existing project, exploring a repository with several languages, or preparing a change that crosses module boundaries. Static relationships provide investigation leads; they do not guarantee that every affected part of a project has been found.
+
+## From understanding to adjustment
+
+**Explore the map → inspect the evidence → organize the change → prepare agent context → review the result.**
+
+Start with the generated graph, select a module or connection, and read its supporting files and evidence. Arrange nodes manually or use automatic layout, expand groups, and add notes or manual canvas items to make the relevant structure easier to follow.
+
+Canvas edits adjust the project's visual model and saved layout. Moving a node or adding a connection does not itself refactor source code. To change the implementation, use your editor or a configured coding agent, review the Git diff, then refresh the analysis to inspect the updated project.
+
+## Focused context for AI agents
+
+A coding agent needs to locate relevant code before it can make a useful change. FlowWeave gives you a project map and source-backed details to help narrow that search and explain the task more precisely.
+
+For example, when changing a notification feature, use the map to locate the relevant module, inspect its files and connections, and prepare a request with the behavior to change, useful source paths, and relationships the agent should check. The agent can use those pointers as starting points and inspect additional code when necessary.
+
+The goal is to help agents locate relevant code sooner and avoid repeated exploration or unrelated context, potentially reducing token use. Token and time savings have not yet been benchmarked; they depend on the repository, task, chosen context, and agent behavior.
+
+Keep the task scope explicit and ask the agent to verify its assumptions against current source code. Review the returned plan and Git changes before accepting the result.
 
 ## Installation
 
@@ -37,6 +70,9 @@ Analysis is static: a displayed connection is source-code evidence, not a record
 
 ## Contents
 
+- [What FlowWeave helps you do](#what-flowweave-helps-you-do)
+- [From understanding to adjustment](#from-understanding-to-adjustment)
+- [Focused context for AI agents](#focused-context-for-ai-agents)
 - [Installation](#installation)
 - [First project](#first-project)
 - [Workspaces](#workspaces)
