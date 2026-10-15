@@ -1051,6 +1051,46 @@ button:disabled {
   fill: currentColor;
 }
 
+.canvas-flow-stage .react-flow__controls {
+  overflow: visible;
+}
+
+.canvas-flow-stage .react-flow__controls-button {
+  position: relative;
+}
+
+.canvas-flow-stage .react-flow__controls-button svg.lucide {
+  width: 17px;
+  height: 17px;
+  max-width: 17px;
+  max-height: 17px;
+  fill: none;
+}
+
+.canvas-flow-stage .react-flow__controls-button:disabled {
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
+.canvas-flow-stage .react-flow__controls-button:not(.react-flow__controls-zoomin):not(.react-flow__controls-zoomout):is(:hover, :focus-visible)::after {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: calc(100% + 10px);
+  transform: translateY(-50%);
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 8px 20px var(--control-shadow);
+  color: var(--text);
+  content: attr(aria-label);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .react-flow__minimap {
   width: 146px;
   height: 104px;

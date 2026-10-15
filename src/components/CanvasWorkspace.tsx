@@ -14,7 +14,7 @@ import {
   type ReactFlowInstance,
   type NodeChange
 } from "@xyflow/react";
-import { ArrowLeft, BrainCircuit, GitBranch, Hand, LayoutGrid, LoaderCircle, MousePointer2, RotateCcw, Scan, Search } from "lucide-react";
+import { ArrowLeft, BrainCircuit, GitBranch, LayoutGrid, LoaderCircle, MousePointer2, Move, Scan, Search, Undo2 } from "lucide-react";
 import { Profiler, useEffect, useMemo, useRef, useState, version as reactVersion } from "react";
 import { AgentNode } from "./nodes/AgentNode";
 import { DiffNode } from "./nodes/DiffNode";
@@ -341,7 +341,7 @@ function ControlledFlowCanvas({
   const { locale, t } = useI18n();
   const [canvasTool, setCanvasTool] = useState<"select" | "pan">("select");
   const selectToolLabel = locale === "zh-CN" ? "选择并移动节点" : "Select and move nodes";
-  const panToolLabel = locale === "zh-CN" ? "平移画布" : "Pan canvas";
+  const panToolLabel = locale === "zh-CN" ? "拖动画布" : "Drag canvas";
   const [showPreservedData, setShowPreservedData] = useState(false);
   const [loadedFullCanvas, setLoadedFullCanvas] = useState<CodeflowCanvas>();
   const [preservedDataError, setPreservedDataError] = useState("");
@@ -739,6 +739,11 @@ function ControlledFlowCanvas({
       ...node,
       initialWidth: CANVAS_NODE_SIZE.width,
       initialHeight: CANVAS_NODE_SIZE.height,
+      // Offscreen nodes must have dimensions for React Flow viewport actions.
+      measured: {
+        width: node.measured?.width ?? CANVAS_NODE_SIZE.width,
+        height: node.measured?.height ?? CANVAS_NODE_SIZE.height
+      },
       ...(node.data.syntheticKind === "group" ? { draggable: !readOnly && canvasTool === "select" } : {}),
       hidden: !collapsedVisibleNodeIds.has(node.id) || Boolean(tracedNodeIds && !tracedNodeIds.has(node.id)),
       data: {
@@ -1016,8 +1021,9 @@ function ControlledFlowCanvas({
     if (requested.length > 0) void instance.fitView({ nodes: requested, padding: 0.25, duration: 250 }).then(() => setFocusRequest([]));
   }
   function fitCurrentView() {
-    const currentNodes = flowInstance.current?.getNodes().filter((node) => !node.hidden) ?? [];
-    if (currentNodes.length > 0) void flowInstance.current?.fitView({ nodes: currentNodes, padding: 0.02, duration: 250 });
+    const instance = flowInstance.current;
+    const currentNodes = instance?.getNodes().filter((node) => !node.hidden) ?? [];
+    if (instance && currentNodes.length > 0) void instance.fitBounds(instance.getNodesBounds(currentNodes), { padding: 0.02, duration: 250 });
   }
   useEffect(() => {
     if (!layoutPending && flowInstance.current) fitRequestedNodes(flowInstance.current);
@@ -1567,26 +1573,26 @@ function ControlledFlowCanvas({
           >
             <Background color="var(--graph-grid)" gap={28} size={1} />
             <Controls position="bottom-left" showFitView={false} showInteractive={false} showZoom={hasVisibleNodes}>
-              <ControlButton className="canvas-control-tool-select" disabled={!hasVisibleNodes} title={selectToolLabel} aria-label={selectToolLabel} aria-pressed={canvasTool === "select"} onClick={() => setCanvasTool("select")}>
+              <ControlButton className="canvas-control-tool-select" disabled={!hasVisibleNodes} aria-label={selectToolLabel} aria-pressed={canvasTool === "select"} onClick={() => setCanvasTool("select")}>
                 <MousePointer2 size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-tool-pan" disabled={!hasVisibleNodes} title={panToolLabel} aria-label={panToolLabel} aria-pressed={canvasTool === "pan"} onClick={() => setCanvasTool("pan")}>
-                <Hand size={14} />
+              <ControlButton className="canvas-control-tool-pan" disabled={!hasVisibleNodes} aria-label={panToolLabel} aria-pressed={canvasTool === "pan"} onClick={() => setCanvasTool("pan")}>
+                <Move size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly || !hasVisibleNodes} title={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
+              <ControlButton className="canvas-control-auto-layout" disabled={isLayoutRunning || readOnly || !hasVisibleNodes} aria-label={isLayoutRunning ? t("canvas.layoutRunning") : t("canvas.autoLayout")} onClick={() => void applyAutoLayout()}>
                 <LayoutGrid size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-restore-layout" disabled={readOnly || canvasLayout.activeMode === "manual" || !hasVisibleNodes} title={t("canvas.restoreManualLayout")} aria-label={t("canvas.restoreManualLayout")} onClick={() => {
+              <ControlButton className="canvas-control-restore-layout" disabled={readOnly || canvasLayout.activeMode === "manual" || !hasVisibleNodes} aria-label={t("canvas.restoreManualLayout")} onClick={() => {
                 onSetCollapsedGroups(displayCollapsedGroups);
                 onRestoreManualLayout();
                 window.requestAnimationFrame(() => window.requestAnimationFrame(fitCurrentView));
               }}>
-                <RotateCcw size={14} />
+                <Undo2 size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-back-overview" disabled={expandedGroupIds.length === 0} title={t("canvas.backToOverview")} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
+              <ControlButton className="canvas-control-back-overview" disabled={expandedGroupIds.length === 0} aria-label={t("canvas.backToOverview")} onClick={backToOverview}>
                 <ArrowLeft size={14} />
               </ControlButton>
-              <ControlButton className="canvas-control-fit-view" disabled={!hasVisibleNodes} title={t("structure.fitView")} aria-label={t("structure.fitView")} onClick={fitCurrentView}>
+              <ControlButton className="canvas-control-fit-view" disabled={!hasVisibleNodes} aria-label={t("structure.fitView")} onClick={fitCurrentView}>
                 <Scan size={14} />
               </ControlButton>
             </Controls>

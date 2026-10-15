@@ -187,7 +187,7 @@ describe('canvas toolbar controls', () => {
     expect(source).toContain('aria-pressed={canvasTool === "pan"}');
     expect(nodeSource).toContain('isConnectableStart={isConnectable}');
     expect(source).toContain('const selectToolLabel = locale === "zh-CN" ? "选择并移动节点" : "Select and move nodes";');
-    expect(source).toContain('const panToolLabel = locale === "zh-CN" ? "平移画布" : "Pan canvas";');
+    expect(source).toContain('const panToolLabel = locale === "zh-CN" ? "拖动画布" : "Drag canvas";');
   });
 
   it('targets the rendered fit, layout, and overview controls in the interaction smoke', () => {
@@ -208,7 +208,8 @@ describe('canvas toolbar controls', () => {
   it('arranges and fits only the currently visible graph and omits the readability banner', () => {
     const source = readSourceText(new URL('../../src/components/CanvasWorkspace.tsx', import.meta.url));
 
-    expect(source).toContain('flowInstance.current?.getNodes().filter((node) => !node.hidden)');
+    expect(source).toContain('instance?.getNodes().filter((node) => !node.hidden)');
+    expect(source).toContain('instance.fitBounds(instance.getNodesBounds(currentNodes), { padding: 0.02, duration: 250 })');
     expect(source).toContain('filteredEdges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))');
     expect(source).toContain('window.requestAnimationFrame(() => window.requestAnimationFrame(fitCurrentView))');
     expect(source).toContain('nodes: filteredProjectionGraph.nodes.filter((node) => !node.data.resource && !node.data.syntheticKind)');
