@@ -19,14 +19,42 @@ FlowWeave helps developers inspect a local repository, explore its functional ar
 
 FlowWeave is designed to sit alongside an IDE and the agent tools you already use. It does not replace either one. Project analysis and FlowWeave records are kept on the local machine; a selected agent may communicate with its own model provider according to that agent's configuration.
 
+## Download and install
+
+The latest available desktop packages were built from [`7a5347a`](https://github.com/Caesarqing/FlowWeave/commit/7a5347acf42e9e9d9437cefe3aeb45c0cf45fa0b) on **October 15, 2026**. All three native packaging jobs passed in the [same CI run](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411).
+
+| Your computer | Download | Package contents |
+| --- | --- | --- |
+| macOS, Apple silicon (M-series) | [Download macOS ARM64](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411/artifacts/11953025887) | `FlowWeave-0.1.0-mac-arm64.zip` and its SHA-256 checksum |
+| Windows, Intel or AMD 64-bit | [Download Windows x64](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411/artifacts/11953331302) | `FlowWeave-0.1.0-win-x64-setup.exe` and its SHA-256 checksum |
+| Windows, ARM64 | [Download Windows ARM64](https://github.com/Caesarqing/FlowWeave/actions/runs/38692398411/artifacts/11952879283) | `FlowWeave-0.1.0-win-arm64-setup.exe` and its SHA-256 checksum |
+
+These are temporary GitHub Actions downloads, which require a GitHub sign-in and expire on **October 16, 2026**. If a link has expired, check the [Desktop packages workflow](https://github.com/Caesarqing/FlowWeave/actions/workflows/windows-build.yml) for a newer successful run. There is currently no published GitHub Release. Intel Mac and Linux packages are not provided by this workflow.
+
+Extract the downloaded artifact archive first. On macOS, also extract the inner app ZIP, then move `FlowWeave.app` to Applications. On Windows, run the matching `setup.exe`. The packages include the desktop runtime; Node.js and npm are only needed when running from source. Install Git to use Git review, checkpoints, and rollback. External agents are optional for project scanning and graph exploration.
+
+The macOS CI check verifies the app's code signature integrity; it does not establish Apple Developer ID signing or notarization. macOS may require explicit approval to open the downloaded app.
+
+## First project
+
+1. Launch FlowWeave and open a local repository.
+2. Let the project check and analysis complete, then explore its module graph in **Canvas**. Select a module or connection to inspect the supporting files and evidence.
+3. Use **Select and move nodes** to adjust individual nodes, or **Drag canvas** to move the viewport. Hover over a toolbar button to see its name; **Fit view** brings the current graph into view.
+4. Open **Sequence**, **Docs**, or **Git** to work with the same project's diagrams, notes, and changes.
+5. To use an agent, configure an installed client in **Agents**, check its readiness, and start with a plan request.
+
+Analysis is static: a displayed connection is source-code evidence, not a recorded runtime trace. Project data is saved under `.flowweave/`; see [Project data and persistence](#project-data-and-persistence) before removing it.
+
 ## Contents
 
+- [Download and install](#download-and-install)
+- [First project](#first-project)
 - [Workspaces](#workspaces)
 - [How project analysis works](#how-project-analysis-works)
 - [Project data and persistence](#project-data-and-persistence)
 - [Agent workflow](#agent-workflow)
 - [Safety and operating boundaries](#safety-and-operating-boundaries)
-- [Getting started](#getting-started)
+- [Run from source](#run-from-source)
 - [Development and verification](#development-and-verification)
 - [Builds and CI packages](#builds-and-ci-packages)
 - [Repository layout](#repository-layout)
@@ -46,6 +74,22 @@ FlowWeave's sidebar is organized around a project workflow:
 | **Git** | Inspect the working tree and diffs, compare changes with FlowWeave checkpoints, and preview a checkpoint rollback before confirming it. |
 
 The usual path is to open a repository, analyze it, inspect the graph and its evidence, then prepare an agent request. The request, plan, output, and Git changes remain reviewable so you can decide what to keep.
+
+### Canvas controls
+
+Toolbar names appear on hover; custom canvas controls also show their names when focused with the keyboard.
+
+| Control | What it does |
+| --- | --- |
+| Plus / minus | Zoom in or out. The mouse wheel also controls zoom. |
+| Pointer — Select and move nodes | Select, drag, and connect nodes when the canvas is editable. |
+| Four-way arrows — Drag canvas | Pan the canvas without moving individual nodes. |
+| Grid — Auto layout | Arrange the current graph automatically. |
+| Undo arrow — Manual layout | Restore the saved manual layout. |
+| Left arrow — Back to overview | Return from expanded groups to the overview. |
+| Frame corners — Fit view | Fit the currently visible graph into the viewport. |
+
+Some controls are disabled when their action is unavailable, such as restoring a manual layout that is already active.
 
 ## How project analysis works
 
@@ -169,7 +213,7 @@ The scanner excludes common credential and private-key file patterns and skips s
 
 Plan mode is intended for inspection, but its effective restrictions are agent-specific. Execute mode can modify the project through the selected external agent. The Git checkpoint provides a review and recovery point for tracked and untracked project files; FlowWeave excludes its own `.flowweave/` records from the rollback. A checkpoint is not a substitute for a separate backup or version-control practices.
 
-## Getting started
+## Run from source
 
 ### Requirements
 
@@ -177,7 +221,7 @@ Plan mode is intended for inspection, but its effective restrictions are agent-s
 - Git for project status, checkpoints, and rollback features.
 - A supported local CLI or desktop agent only if you plan to use agent workflows. Project scanning and graph exploration do not require an agent installation.
 
-### Install and run
+### Clone and start
 
 ```bash
 git clone https://github.com/Caesarqing/FlowWeave.git
