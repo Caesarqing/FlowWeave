@@ -43,11 +43,7 @@ docs/plans/*
 !docs/plans/2026-09-20-module-connection-remediation.md
 !docs/evidence/static-graph-generalization/
 docs/evidence/static-graph-generalization/*
-!docs/evidence/static-graph-generalization/A5-current-source-local-package-2026-10-09-de5xb2k2/
-!docs/evidence/static-graph-generalization/A5-current-source-local-package-2026-10-09-de5xb2k2/**
 !docs/evidence/static-graph-generalization/baseline-context.json
-!docs/evidence/static-graph-generalization/baseline-tests.log
-!docs/evidence/static-graph-generalization/baseline-graph-smoke.log
 !docs/evidence/static-graph-generalization/corpus.json
 !docs/evidence/static-graph-generalization/acceptance-contract.json
 !docs/evidence/static-graph-generalization/baseline-run.json
@@ -87,7 +83,6 @@ docs/evidence/static-graph-generalization/*
 !docs/evidence/static-graph-generalization/T7-layout-action-snapshots-assertions-2026-10-06.json
 !docs/evidence/static-graph-generalization/T7-layout-action-snapshots-dependency-refresh-2026-10-06.json
 !docs/evidence/static-graph-generalization/T7-react-profiler-dev-interactions-2026-10-06.json
-!docs/evidence/static-graph-generalization/T7-react-profiler-dev-interactions-2026-10-06.log
 !docs/evidence/static-graph-generalization/T7-react-profiler-correct-launch-2026-10-06.json
 !docs/evidence/static-graph-generalization/T7-react-profiler-isolated-renderer-2026-10-06.json
 !docs/evidence/static-graph-generalization/T2-scip-java-seatbelt-minimal-lookup-2026-10-06.json
@@ -113,14 +108,9 @@ docs/evidence/static-graph-generalization/*
 !docs/evidence/static-graph-generalization/T7-react-profiler-component-dev-summary-2026-10-06.md
 !docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-summary-2026-10-08.json
 !docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-01.json
-!docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-01.log
 !docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-02.json
-!docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-02.log
 !docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-03.json
-!docs/evidence/static-graph-generalization/T7-react-profiler-matched-layout-state-dev-2026-10-08-run-03.log
 !docs/evidence/static-graph-generalization/T7-react-profiler-matched-dev-2026-10-08-run-01.json
-!docs/evidence/static-graph-generalization/T7-react-profiler-matched-dev-2026-10-08-run-01.log
-!docs/evidence/static-graph-generalization/T7-react-profiler-matched-dev-2026-10-08-preflight.log
 !docs/evidence/static-graph-generalization/T11-post-strictmode-packaged-edges-2026-10-06.json
 !docs/evidence/static-graph-generalization/T11-post-toml-package-2026-10-06.json
 !docs/evidence/static-graph-generalization/T11-post-toml-package-audit-2026-10-06.json
@@ -138,8 +128,6 @@ docs/evidence/static-graph-generalization/*
 !docs/evidence/static-graph-generalization/T11-post-strictmode-package-audit-2026-10-06.json
 !docs/evidence/static-graph-generalization/T10-review-sidecar-migration-2026-10-06.json
 !docs/evidence/static-graph-generalization/T11-current-packaged*.json
-!docs/evidence/static-graph-generalization/T11-current-packaged-visual-*.png
-!docs/evidence/static-graph-generalization/T11-current-packaged-viewport-*.png
 !docs/evidence/static-graph-generalization/D02-font-asset-sha256-2026-10-07.jsonl
 !docs/evidence/static-graph-generalization/D02-font-asset-hash-audit-2026-10-07.md
 !docs/evidence/static-graph-generalization/holdout-boundary-process-deviations-2026-10-07.md
