@@ -307,7 +307,7 @@ If the native Windows ARM64 job fails, the workflow can produce a separate cross
 ├── flowweave-plugin/          # Bundled Agent Inbox protocol plugin source
 ├── scripts/                   # Build checks, smoke tests, and benchmarks
 ├── tests/                     # Main-process, renderer, integration, and smoke coverage
-├── docs/                      # Selected design documents and acceptance evidence
+├── docs/                      # Static-analysis architecture note and test fixtures
 ├── logo/                      # Application and README assets
 ├── electron.vite.config.ts    # Main, preload, and renderer build configuration
 └── package.json               # Scripts, dependencies, and electron-builder targets
@@ -315,12 +315,9 @@ If the native Windows ARM64 job fails, the workflow can produce a separate cross
 
 ## Design notes and project scope
 
-The README describes the user-facing workflow. More detailed implementation decisions and evidence live in these documents:
+The README describes the user-facing workflow. Static-analysis implementation details and supported boundaries are documented here:
 
 - [Static analysis and architecture graph](docs/STATIC_ARCHITECTURE_GRAPH_REFACTOR.md) — analysis stages, binding rules, evidence, and known static-analysis boundaries.
-- [Static loading module graph design](docs/STATIC_LOADING_MODULE_GRAPH_DEEP_DESIGN.md) — graph overview, on-demand detail loading, and persistence design.
-- [Implementation plan](docs/STATIC_LOADING_MODULE_GRAPH_IMPLEMENTATION_PLAN.md) and [remediation notes](docs/STATIC_LOADING_MODULE_GRAPH_REMEDIATION.md) — engineering plan and related implementation constraints.
-- [Architecture graph progress and validation record](docs/plans/2026-09-23-static-architecture-graph-refactor-progress.md) — recorded results and limits for that validation round.
 
 FlowWeave currently focuses on local project understanding, local agent orchestration, artifact review, and Git review. It does not provide cloud sync, multi-user collaboration, remote pull-request diff import, or a full IDE editing experience. Static graph edges describe analyzed evidence and should not be read as a runtime trace.
 

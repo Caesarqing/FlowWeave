@@ -1,9 +1,0 @@
-{
-  "nodes": 3,
-  "edges": 2,
-  "communities": {
-    "src/app.ts": 0,
-    "src/core/index.ts": 0,
-    "src/core/service.ts": 0
-  }
-}

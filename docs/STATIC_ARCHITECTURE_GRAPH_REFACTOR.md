@@ -1,6 +1,6 @@
 # FlowWeave 静态分析与架构画布
 
-当前链路采用 Semantic Index v5（生成规则 5.0.1）、ArchitectureMap v3（生成规则 3.0.1、聚合规则 5、审阅输入契约 3）与 Canvas v6。实现及验收状态见[验收记录](plans/2026-09-23-static-architecture-graph-refactor-progress.md)，逐条事实、诊断及真实项目检查见[验收证据](plans/static-analysis-v5-validation.json)。模块数量、单文件比例和依赖边比例是观察数据；完成标准是关系可解释、证据可定位、归属可理解、用户数据可恢复。
+当前链路采用 Semantic Index v5（生成规则 5.0.1）、ArchitectureMap v3（生成规则 3.0.1、聚合规则 5、审阅输入契约 3）与 Canvas v6。模块数量、单文件比例和依赖边比例是观察数据；完成标准是关系可解释、证据可定位、归属可理解、用户数据可恢复。
 
 ## 1. 主链与运行边界
 
