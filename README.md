@@ -307,17 +307,13 @@ If the native Windows ARM64 job fails, the workflow can produce a separate cross
 ├── flowweave-plugin/          # Bundled Agent Inbox protocol plugin source
 ├── scripts/                   # Build checks, smoke tests, and benchmarks
 ├── tests/                     # Main-process, renderer, integration, and smoke coverage
-├── docs/                      # Static-analysis architecture note and test fixtures
+├── docs/                      # Static-analysis test corpus
 ├── logo/                      # Application and README assets
 ├── electron.vite.config.ts    # Main, preload, and renderer build configuration
 └── package.json               # Scripts, dependencies, and electron-builder targets
 ```
 
-## Design notes and project scope
-
-The README describes the user-facing workflow. Static-analysis implementation details and supported boundaries are documented here:
-
-- [Static analysis and architecture graph](docs/STATIC_ARCHITECTURE_GRAPH_REFACTOR.md) — analysis stages, binding rules, evidence, and known static-analysis boundaries.
+## Project scope
 
 FlowWeave currently focuses on local project understanding, local agent orchestration, artifact review, and Git review. It does not provide cloud sync, multi-user collaboration, remote pull-request diff import, or a full IDE editing experience. Static graph edges describe analyzed evidence and should not be read as a runtime trace.
 

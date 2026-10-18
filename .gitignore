@@ -22,7 +22,6 @@ build/
 *.log
 artifacts-flowweave-*.png
 docs/*
-!docs/STATIC_ARCHITECTURE_GRAPH_REFACTOR.md
 !docs/evidence/
 docs/evidence/*
 !docs/evidence/static-graph-generalization/
