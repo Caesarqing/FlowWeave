@@ -45,7 +45,21 @@ npm ci
 npm run dev
 ```
 
-Open a local repository in FlowWeave, wait for analysis to finish, then select a module or connection to inspect its source evidence. Use **Sequence**, **Docs**, **Agents**, and **Git** from the sidebar as needed.
+### Open your first project
+
+1. Launch FlowWeave and open a local repository.
+2. Wait for analysis to finish, then explore **Canvas** and select a module or connection to inspect its source evidence.
+3. Use the other workspaces to document your findings, plan a change, or review your Git working tree.
+
+## Workspaces
+
+| Workspace | Use it to |
+| --- | --- |
+| **Canvas** | Explore modules and relationships, inspect source evidence, and organize the graph. |
+| **Sequence** | Create and review architecture or detailed-design sequence diagrams. |
+| **Docs** | Draft project documentation and keep task context with the project. |
+| **Agents** | Check local agent integrations, prepare requests, and review runs. |
+| **Git** | Inspect changes and diffs, and review FlowWeave checkpoints. |
 
 ## How it works
 
