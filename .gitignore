@@ -27,3 +27,6 @@ docs/evidence/*
 !docs/evidence/static-graph-generalization/
 docs/evidence/static-graph-generalization/*
 !docs/evidence/static-graph-generalization/corpus.json
+!docs/video/
+docs/video/*
+!docs/video/FlowWeave-overview.mp4
